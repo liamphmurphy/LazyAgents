@@ -14,6 +14,7 @@ import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
 import { THEMES, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
@@ -409,6 +410,11 @@ export function DeckScreen({ id }: { id: string }) {
     },
     setFill: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
     setStroke: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
+    // One update, so the whole selection restyles as one undo step.
+    applyStyle: (sid) => {
+      const ids = new Set(selected ? [selected] : []);
+      if (ids.size) update((d) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (ids.has(e.id) ? applyStyle(e, sid) : e)) })) }));
+    },
     remove: removeSelected,
   };
 

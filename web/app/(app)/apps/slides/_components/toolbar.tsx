@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
+import { STYLES, styleOf, type StyleId } from "@/lib/slides/styles";
 
 export type TextFormat =
   | { kind: "mark"; mark: "bold" | "italic" | "underline" }
@@ -29,6 +30,8 @@ export type ToolbarActions = {
   format: (f: TextFormat) => void;
   setFill: (c: ColorRef | undefined) => void;
   setStroke: (c: ColorRef | undefined) => void;
+  /** Applies a style preset to every selected shape and line, as one undo step. */
+  applyStyle: (s: StyleId) => void;
   remove: () => void;
 };
 
@@ -72,6 +75,54 @@ function Swatches({ theme, onPick, none }: { theme: Theme; onPick: (c: ColorRef 
         </DropdownMenu.Item>
       ))}
     </>
+  );
+}
+
+/** A preset's tile: the style drawn with the deck's theme on its background. */
+function StyleTile({ theme, id, line }: { theme: Theme; id: StyleId; line: boolean }) {
+  const s = STYLES.find((x) => x.id === id)!;
+  const c = (t: string | undefined) => (t ? resolveColor(theme, t) : "none");
+  return (
+    <svg aria-hidden width="92" height={line ? 28 : 46} viewBox={line ? "0 0 92 28" : "0 0 92 46"} className="rounded-md border border-border-strong" style={{ background: theme.colors.background }}>
+      {line ? (
+        <line x1="10" y1="14" x2="82" y2="14" stroke={c(s.line.stroke)} strokeWidth={Math.max(1.5, s.line.strokeWidth / 2)} strokeLinecap="round" />
+      ) : (
+        <>
+          <rect x="10" y="7" width="72" height="32" rx="5" fill={c(s.fill)} stroke={c(s.stroke)} strokeWidth={s.stroke ? Math.max(1.5, (s.strokeWidth ?? 0) / 2) : 0} />
+          <text x="46" y="27.5" textAnchor="middle" fontSize="12" fill={c(s.text)}>Abc</text>
+        </>
+      )}
+    </svg>
+  );
+}
+
+function StyleGallery({ theme, current, line, onPick }: { theme: Theme; current?: StyleId; line: boolean; onPick: (s: StyleId) => void }) {
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" aria-label={line ? "Line style" : "Shape style"} className={chip} onMouseDown={keep}>
+          <span className="size-3 rounded-sm border border-border-strong" style={{ background: resolveColor(theme, "accent") }} />Style ▾
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-[348px] p-3")} onCloseAutoFocus={(e) => e.preventDefault()}>
+          <DropdownMenu.Label className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-3">{line ? "Line style" : "Shape style"} · theme {theme.name}</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={current ?? ""} onValueChange={(v) => onPick(v as StyleId)} className="grid grid-cols-3 gap-2">
+            {STYLES.map((s) => (
+              <DropdownMenu.RadioItem
+                key={s.id}
+                value={s.id}
+                title={s.label}
+                className={cx("flex cursor-pointer select-none flex-col items-center gap-1 rounded-lg border border-transparent p-1.5 text-[11.5px] text-fg-2 outline-none data-[highlighted]:bg-hover", s.id === current && "border-accent")}
+              >
+                <StyleTile theme={theme} id={s.id} line={line} />
+                {s.label}
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -151,6 +202,7 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
       ) : null}
       {selected?.type === "shape" && (
         <>
+          <StyleGallery theme={theme} current={styleOf(selected)} line={false} onPick={a.applyStyle} />
           <Menu label="Fill" trigger={<><span className="size-3 rounded-sm border border-border-strong" style={{ background: selected.fill ? resolveColor(theme, selected.fill) : "transparent" }} />Fill ▾</>}>
             <Swatches theme={theme} onPick={a.setFill} none="No fill" />
           </Menu>
@@ -159,6 +211,7 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
           </Menu>
         </>
       )}
+      {selected?.type === "line" && <StyleGallery theme={theme} current={styleOf(selected)} line onPick={a.applyStyle} />}
       {selected?.type === "line" && (
         <Menu label="Line colour" trigger={<>Colour ▾</>}>
           <Swatches theme={theme} onPick={(c) => c && a.setStroke(c)} />
