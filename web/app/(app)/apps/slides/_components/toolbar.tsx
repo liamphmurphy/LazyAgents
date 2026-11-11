@@ -4,12 +4,13 @@ import { DropdownMenu } from "radix-ui";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import type { AlignOp, ZOrder } from "@/lib/slides/arrange";
-import { LAYOUTS, THEME_COLORS, THEMES, THEME_ORDER, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme } from "@/lib/slides/schema";
+import { LAYOUTS, THEME_COLORS, THEMES, THEME_ORDER, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type ShapeKind, type Slot, type Theme } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
 import { LayoutGrid } from "./layout-picker";
 import { STYLES, styleOf, type StyleId } from "@/lib/slides/styles";
 import { LIMITS, parseFontSize, parseHex, parseInRange } from "@/lib/slides/edit";
 import { FAMILY } from "@/lib/slides/fonts";
+import { ShapePicker } from "./shape-picker";
 
 export type TextFormat =
   | { kind: "mark"; mark: "bold" | "italic" | "underline" | "strike" }
@@ -28,7 +29,7 @@ export type ToolbarActions = {
   canUndo: boolean;
   canRedo: boolean;
   insertText: () => void;
-  insertShape: (shape: "rect" | "roundRect" | "ellipse") => void;
+  insertShape: (shape: ShapeKind) => void;
   insertImage: () => void;
   insertLine: () => void;
   setLayout: (l: Layout) => void;
@@ -337,11 +338,7 @@ export function Toolbar({ theme, themeKey, layout, selection, editing, disabled,
       <button type="button" className={chip} onMouseDown={keep} onClick={a.redo} disabled={!a.canRedo} aria-label="Redo" title="Redo (⇧⌘Z)">↷</button>
       {sep}
       <button type="button" className={chip} onClick={a.insertText}>T Text</button>
-      <Menu label="Insert shape" trigger={<>◻ Shape ▾</>}>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("rect")}>Rectangle</DropdownMenu.Item>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("roundRect")}>Rounded rectangle</DropdownMenu.Item>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("ellipse")}>Ellipse</DropdownMenu.Item>
-      </Menu>
+      <ShapePicker chip={chip} onPick={a.insertShape} />
       <button type="button" className={chip} onClick={a.insertImage}>▨ Image</button>
       <button type="button" className={chip} onClick={a.insertLine}>╱ Line</button>
       {sep}

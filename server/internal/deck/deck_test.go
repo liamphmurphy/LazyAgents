@@ -36,7 +36,7 @@ func TestNormalizeAcceptanceDeck(t *testing.T) {
 		t.Fatalf("normalize isn't idempotent: %v", err)
 	}
 	d, _ := Parse(body)
-	if len(d.Slides) != 15 || d.Slides[2].Elements[2].Crop.L != 0.3 {
+	if len(d.Slides) != 16 || d.Slides[2].Elements[2].Crop.L != 0.3 {
 		t.Fatalf("lost content: %+v", d.Slides[2].Elements[2])
 	}
 }
@@ -75,7 +75,7 @@ func TestApplyOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := Parse(out)
-	if len(d.Slides) != 16 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
+	if len(d.Slides) != 17 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
 		t.Fatalf("unexpected slides: %+v", d.Slides)
 	}
 	if d.Slides[1].Elements[0].Paragraphs[0].Runs[0].Text != "Q4 review" || d.Theme.Name != "Dark" {
@@ -253,5 +253,46 @@ func TestRelayoutToNewLayouts(t *testing.T) {
 	r := roles(d.Slides[0])
 	if _, ok := r["image:text"]; ok || len(r) != 2 {
 		t.Fatalf("empty image slot kept on agenda: %+v", r)
+	}
+}
+
+// Every preset shape is accepted through the persona's insert_element op with
+// fill, outline, rotation and text; anything else is refused.
+func TestShapeEnum(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	shape := func(name string) Op {
+		return Op{Op: "insert_element", Slide: "s_bullets", Value: map[string]any{
+			"type": "shape", "shape": name, "frame": map[string]any{"x": 100, "y": 100, "w": 400, "h": 300},
+			"rotation": 15, "fill": "accent", "stroke": "text", "strokeWidth": 4,
+			"text": map[string]any{"valign": "middle", "paragraphs": []any{map[string]any{"runs": []any{map[string]any{"text": name, "size": 40}}}}},
+		}}
+	}
+	if len(Shapes) != 21 {
+		t.Fatalf("want 21 shapes, got %d", len(Shapes))
+	}
+	var ops []Op
+	for _, s := range Shapes {
+		ops = append(ops, shape(s))
+	}
+	out, err := Apply(body, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	got := map[string]bool{}
+	for _, s := range d.Slides {
+		for _, e := range s.Elements {
+			got[e.Shape] = true
+		}
+	}
+	for _, s := range Shapes {
+		if !got[s] {
+			t.Errorf("%s: lost after insert", s)
+		}
+	}
+	for _, bad := range []string{"star", "Triangle", "rightarrow", "cloud", ""} {
+		if _, err := Apply(body, []Op{shape(bad)}); err == nil || !strings.Contains(err.Error(), "shape must be one of") {
+			t.Errorf("%q: accepted or wrong error: %v", bad, err)
+		}
 	}
 }

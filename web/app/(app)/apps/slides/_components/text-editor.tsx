@@ -141,8 +141,9 @@ function shiftBlocks(blocks: HTMLElement[], delta: number): boolean {
  * with the same fonts, insets and line heights as the layout so lines break
  * where the slide will break them. Commits on blur or Escape.
  */
-export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: TextBox; frame: { x: number; y: number; w: number; h: number }; rotation?: number; scale: number; onCommit: (paragraphs: Paragraph[]) => void }>(
-  function TextEditor({ theme, box, frame, rotation, scale, onCommit }, ref) {
+export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: TextBox; frame: { x: number; y: number; w: number; h: number }; rotation?: number; pivot?: { x: number; y: number }; scale: number; onCommit: (paragraphs: Paragraph[]) => void }>(
+  /** pivot: the slide point the element rotates about, when the text box isn't the whole element (a preset shape's text rectangle). */
+  function TextEditor({ theme, box, frame, rotation, pivot, scale, onCommit }, ref) {
     const el = useRef<HTMLDivElement>(null);
     const fallback = useRef<Run>(box.paragraphs[0]?.runs[0] ?? { text: "", size: 44 });
     const committed = useRef(false);
@@ -207,7 +208,7 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
           aria-label="Slide text"
           spellCheck
           className="flex flex-col outline outline-2 outline-accent"
-          style={{ minHeight: frame.h, padding: INSET, justifyContent: justify, transform: rotation ? `rotate(${rotation}deg)` : undefined, fontKerning: "none", whiteSpace: "pre-wrap", wordBreak: "break-word", caretColor: resolveColor(theme, "text") }}
+          style={{ minHeight: frame.h, padding: INSET, justifyContent: justify, transform: rotation ? `rotate(${rotation}deg)` : undefined, transformOrigin: pivot ? `${pivot.x - frame.x}px ${pivot.y - frame.y}px` : undefined, fontKerning: "none", whiteSpace: "pre-wrap", wordBreak: "break-word", caretColor: resolveColor(theme, "text") }}
           onBlur={commit}
           onPaste={(e) => {
             e.preventDefault();
