@@ -80,8 +80,8 @@ export function align(frames: Record<string, Frame>, op: AlignOp, to: Box): Reco
  * furthest to the start and the one reaching furthest to the end stay put and
  * the rest move between them, in the order of their centres. When the boxes
  * are too big to fit between those two without overlapping (or one box spans
- * them all), their centres are spaced evenly instead, so nothing ever leaves
- * the span the selection already covers.
+ * them all), their centres are spaced evenly between the outermost centres
+ * instead, so no gap goes negative and no centre leaves the selection.
  */
 export function distribute(frames: Record<string, Frame>, axis: "x" | "y"): Record<string, Frame> {
   const items = Object.entries(frames).map(([id, f]) => ({ id, f, b: boxOf(f) }));
