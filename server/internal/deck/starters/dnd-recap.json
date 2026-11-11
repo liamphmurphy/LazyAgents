@@ -1,0 +1,708 @@
+{
+ "schema": 1,
+ "size": {
+  "w": 1920,
+  "h": 1080
+ },
+ "theme": {
+  "name": "Light",
+  "fonts": {
+   "heading": "sans",
+   "body": "sans"
+  },
+  "colors": {
+   "background": "#FFFFFF",
+   "text": "#1F2328",
+   "heading": "#111418",
+   "accent": "#3B6FE0",
+   "accent2": "#E8A33D",
+   "muted": "#5F6673",
+   "surface": "#F3F5F9"
+  }
+ },
+ "assets": {},
+ "slides": [
+  {
+   "id": "s_dndrec_1",
+   "layout": "title",
+   "elements": [
+    {
+     "id": "e_dndrec_1",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Session 12: The Sunken Archive",
+         "size": 96,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_2",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 600,
+      "w": 1600,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Previously, on our campaign…",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_2",
+   "layout": "title-body",
+   "elements": [
+    {
+     "id": "e_dndrec_3",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Where we left off",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_4",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The party escaped Port Vella with the stolen map",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Captain Imra demanded half of any treasure",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "A storm drove the ship onto the drowned reef",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_3",
+   "layout": "three-column",
+   "elements": [
+    {
+     "id": "e_dndrec_5",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The party",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_6",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 120,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Thessa",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_dndrec_7",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 700,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent2",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Brom",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_dndrec_8",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 1280,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "surface",
+     "stroke": "muted",
+     "strokeWidth": 3,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Wick",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_dndrec_9",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Half-elf ranger",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Owes the Thieves' Guild a favour",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_10",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 700,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Dwarf cleric",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Still won't explain the cursed ring",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_11",
+     "type": "text",
+     "placeholder": "body3",
+     "frame": {
+      "x": 1280,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Gnome wizard",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Has read too many forbidden books",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_4",
+   "layout": "quote",
+   "elements": [
+    {
+     "id": "e_dndrec_12",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 200,
+      "y": 220,
+      "w": 1520,
+      "h": 480
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "“I cast fireball. Underwater. What do you mean, no?”",
+         "size": 72,
+         "italic": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_13",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 200,
+      "y": 740,
+      "w": 1520,
+      "h": 100
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Wick, moments before the bubble spell",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_14",
+     "type": "line",
+     "frame": {
+      "x": 200,
+      "y": 735,
+      "w": 240,
+      "h": 0
+     },
+     "stroke": "accent",
+     "strokeWidth": 6
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_5",
+   "layout": "two-column",
+   "elements": [
+    {
+     "id": "e_dndrec_15",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Loot and losses",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_16",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "+ Tide-glass lantern (sees through illusions)",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "+ 340 gold in old Vellan crowns",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "+ Half of a key, carved from coral",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_17",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 990,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "− Brom's mule, Turnip (we will remember)",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "− One rope, cut by a sahuagin",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "− Thessa's patience with Wick",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_6",
+   "layout": "big-number",
+   "elements": [
+    {
+     "id": "e_dndrec_18",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 220,
+      "w": 1600,
+      "h": 420
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "3",
+         "size": 280,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_19",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 680,
+      "w": 1600,
+      "h": 160
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "natural 20s rolled this session, all by Brom",
+         "size": 56,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_dndrec_7",
+   "layout": "closing",
+   "elements": [
+    {
+     "id": "e_dndrec_20",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Next time…",
+         "size": 128,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_dndrec_21",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 620,
+      "w": 1600,
+      "h": 140
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The archive door opens only to those who carry both halves of the key.",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

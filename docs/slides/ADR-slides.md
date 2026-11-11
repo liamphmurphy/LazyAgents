@@ -47,16 +47,19 @@ The deck is one JSON document, stored as the body of a canvas with the new kind 
 Deck      { schema: 1, size: {w:1920,h:1080}, theme: Theme, assets: {[assetId]: AssetRef}, slides: Slide[] }
 Theme     { name, fonts: {heading: Slot, body: Slot}, colors: {background,text,heading,accent,accent2,muted,surface: "#RRGGBB"} }
 Slot      "sans" | "serif" | "mono"
-Slide     { id, layout: Layout, background?: {color: ColorRef}, notes?: string, hidden?: false, elements: Element[] }   // paint order = array order
+Slide     { id, layout: Layout, background?: {color: Paint}, notes?: string, hidden?: false, elements: Element[] }   // paint order = array order
 Layout    "title" | "title-body" | "two-column" | "image-right" | "section" | "blank"
 Element   common { id, type, frame: {x,y,w,h}, rotation?: deg, placeholder?: "title"|"subtitle"|"body"|"body2"|"image" }
   text    { paragraphs: Paragraph[], valign?: "top"|"middle"|"bottom" }
-  shape   { shape: "rect"|"roundRect"|"ellipse", fill?, stroke?, strokeWidth?, radius?, text?: {paragraphs, valign} }
-  line    { stroke, strokeWidth, endArrow?: bool, startArrow?: bool }   // frame gives the two end points
-  image   { asset: assetId, crop?: {l,t,r,b} (fractions of the source), alt: string }   // always "cover" inside the frame after the crop
+  shape   { shape: "rect"|"roundRect"|"ellipse"|<18 PowerPoint presets, see shapes/README.md>, fill?: Paint, fillOpacity?, stroke?, strokeWidth?, strokeOpacity?, dash?: Dash, radius?, text?: {paragraphs, valign} }
+  line    { stroke, strokeWidth, strokeOpacity?, dash?: Dash, endArrow?: bool, startArrow?: bool }   // frame gives the two end points
+  image   { asset: assetId, crop?: {l,t,r,b} (fractions of the source), alt: string, opacity? }   // always "cover" inside the frame after the crop
 Paragraph { runs: Run[], align?: "left"|"center"|"right", bullet?: "disc"|"number", level?: 0..4, spaceBefore?: units }
 Run       { text, size: units, bold?, italic?, underline?, color?: ColorRef, font?: "heading"|"body"|Slot }
 ColorRef  theme token name | "#RRGGBB"
+Paint     ColorRef | { type: "linear", angle: 0..360 (deg, clockwise from left→right), stops: [ColorRef, ColorRef] }   // LAZYAGENTS-118
+Dash      "solid" | "dash" | "dot" | "dashDot" | "longDash"   // ×strokeWidth: 4·3, 1·1, 4·3·1·3, 8·3 (PowerPoint's dash, sysDot, dashDot, lgDash)
+*Opacity  0..1, absent = 1   // PPTX a:alpha on the colour, a:alphaModFix on a picture; PDF ExtGState ca/CA; gradients are a PDF axial shading and PPTX a:gradFill
 AssetRef  { mime: "image/png"|"image/jpeg", w, h, alt }   // pixel size; the bytes live in the blob store (§3.5)
 ```
 
@@ -236,7 +239,7 @@ The menu item says "Downloads a PDF", not "Opens the print dialog". The button s
 | text element | text box `p:sp`, `wrap="square"`, insets of 8 pt, no autofit, `anchor` from valign |
 | run | `a:r` with `b`, `i`, `u="sng"`, `sz` (pt × 100), `solidFill`, `latin typeface` (the slot's Office font) |
 | paragraph | `algn`, exact `a:lnSpc/spcPts`, `spcBef`, `buChar •` or `buAutoNum arabicPeriod`, `lvl` with `marL`/`indent` |
-| shape | `prstGeom rect | roundRect (adj from radius) | ellipse`, fill and line; text inside the same `p:sp` |
+| shape | `prstGeom` named after the shape (`rect`, `roundRect` with adj from radius, `ellipse`, and the presets in shapes/README.md at default adjust values), fill and line; text inside the same `p:sp` |
 | line | `prstGeom line` with `tailEnd type="triangle"` |
 | image | `p:pic`, `a:srcRect` from crop + cover (fractions), `descr` = alt |
 | rotation | `a:xfrm rot` |
@@ -251,7 +254,7 @@ The menu item says "Downloads a PDF", not "Opens the print dialog". The button s
 
 ### 4.3 Features neither export can carry faithfully (so they're out of the v1 matrix)
 
-Justified text, letter spacing, gradients, shadows, custom shape paths, tables, charts, image filters, and text on a path.
+Letter spacing, shadows, custom shape paths, tables, charts, image filters, and text on a path.
 
 **Glyph coverage:** Liberation covers Latin, Greek and Cyrillic. Emoji and CJK are missing from Liberation, so they would fall back in the browser but render as missing glyphs in the PDF. In v1 the editor warns when text contains code points the slot font lacks. A Noto fallback face is a candidate follow-up.
 
@@ -341,26 +344,44 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 - **MCP tool lists** change. Update the exact lists in `httpapi/mcp_profiles_test.go` and `chat_tools_test.go`.
 - **Docs regression:** Docs code paths aren't modified, except moving `reviewBase` and adding the reviewed alias. `web/e2e/docs-app.spec.ts` must stay green.
 
-## 7. Initial feature matrix (v1)
+## 7. Feature matrix
 
-✓ = supported and verified against the acceptance deck · ⚠ = supported with the noted limitation · — = not in v1
+✓ = supported and verified against the acceptance deck · ⚠ = supported with the noted limitation · — = not supported · n/a = an editing tool, nothing to output
+
+v1 rows come from the first Slides epic; rows marked ² came with the second ("shapes, styles, presets and arranging", verified in [[LAZYAGENTS-124]]: `acceptance/README.md`, LibreOffice 7.4.7.2, 0 failures).
 
 | Feature | Editor | Present | PDF | PPTX (editable) |
 |---|---|---|---|---|
 | Add, duplicate, delete, reorder slides; hidden slides | ✓ | ✓ (skips hidden) | ✓ (skips hidden) | ✓ (hidden → `show="0"`) |
 | Layouts: title, title-body, two-column, image-right, section, blank | ✓ | ✓ | ✓ | ✓ (placeholders become plain text boxes) |
-| Themes (4 built-in; font slots and colour tokens) | ✓ | ✓ | ✓ | ⚠ colours flattened |
+| ² Layouts: quote, big number, three-column, comparison, full-bleed image, image-left, agenda, closing; thumbnail picker; re-layout of existing slides | ✓ | ✓ | ✓ | ✓ (plain text boxes; an unfilled image slot isn't exported) |
+| Themes: font slots and colour tokens | ✓ | ✓ | ✓ | ⚠ colours flattened |
+| ² Ten built-in themes (all text colours ≥ 4.5:1); custom themes (7 colours, heading and body fonts) saved per person and reused across decks, with a contrast warning | ✓ | ✓ | ✓ | ⚠ colours flattened |
 | Solid slide background | ✓ | ✓ | ✓ | ✓ |
+| ² Two-stop linear gradient fill (shapes and backgrounds), any angle | ✓ | ✓ | ✓ (native axial shading) | ✓ (`a:gradFill`) |
+| ² Fill, outline and image transparency | ✓ | ✓ | ✓ | ✓ (`a:alpha`, `a:alphaModFix`) |
+| ² Dashed, dotted, dash-dot and long-dash lines and outlines | ✓ | ✓ | ✓ | ✓ (`a:prstDash`) |
 | Text box: wrap, valign, insets | ✓ | ✓ | ✓ | ⚠ line breaks can differ by a word where the Office font is missing |
 | Runs: bold, italic, underline, colour, size; sans/serif/mono | ✓ | ✓ | ✓ (embedded) | ✓ (Arial / Times New Roman / Courier New) |
+| ² Runs: strikethrough, highlight colour; any typed font size (4–200 pt) | ✓ | ✓ | ✓ | ✓ (`sngStrike`, `a:highlight`) |
 | Paragraphs: left/centre/right, disc/number bullets, 5 levels, space before | ✓ | ✓ | ✓ | ✓ |
+| ² Paragraphs: justified, line spacing 0.8–3×, indent/outdent from the toolbar | ✓ | ✓ | ✓ | ✓ (`algn="just"`; exact `a:spcPts`) |
 | Overflow | ✓ flagged | spills | spills, clipped at page | spills |
-| Shapes: rect, rounded rect, ellipse; fill, stroke; text inside | ✓ | ✓ | ✓ | ✓ |
-| Lines with arrowheads | ✓ | ✓ | ✓ | ✓ |
+| Shapes: rect, rounded rect, ellipse; fill, outline; text inside | ✓ | ✓ | ✓ | ✓ |
+| ² 18 preset shapes (basics, arrows, callouts, accents; `shapes/README.md`) from a grid picker, holding text in PowerPoint's text rectangle | ✓ | ✓ | ✓ | ✓ (native `prstGeom`) |
+| ² Custom colours (any hex) with recent colours in every colour menu; outline width; corner radius | ✓ | ✓ | ✓ | ✓ |
+| ² Shape style presets from theme colours, re-colouring with the theme | ✓ | ✓ | ✓ | ✓ (colours flattened at export) |
+| Lines with arrowheads (start, end or both) | ✓ | ✓ | ✓ | ✓ |
 | Rotation | ✓ | ✓ | ✓ | ✓ |
-| Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`) |
-| Speaker notes | ✓ (notes pane) | — (no presenter view in v1) | — | ✓ |
+| ² Groups (two or more elements; not nested, not rotated) | ✓ (⌘G / ⇧⌘G; double-click to enter) | ✓ | ✓ | ✓ (`p:grpSp`) |
+| ² Multi-select, z-order, duplicate, align and distribute, snap guides | ✓ | n/a | n/a | n/a (the result exports) |
+| Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`; frame size fixed in LAZYAGENTS-124) |
+| Speaker notes | ✓ (notes pane) | — (no presenter view) | — | ✓ |
+| ² Starter decks (project update, pitch, retro, teaching, D&D session recap) | ✓ | ✓ | ✓ | ✓ |
+| ² Persona drafts slides from an outline, as per-slide suggestions to review | ✓ | n/a | n/a | n/a |
 | Emoji / CJK | ⚠ warned | ⚠ | ⚠ missing glyphs | ⚠ font substitution |
+
+**PowerPoint itself** hasn't opened the second epic's export yet: no PowerPoint is available to agents. LibreOffice opens and round-trips it without error (`acceptance/README.md`). The manual PowerPoint check in §5 still applies.
 
 **Deferred (confirm):**
 - PPTX import;
@@ -368,20 +389,27 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 - animations and transitions;
 - embedded audio/video;
 - presenter view with notes and timer;
-- tables, charts, gradients, shadows, custom shapes, justified text;
+- tables, charts, shadows, custom (freeform) shapes, more than two gradient stops and radial gradients;
+- nested or rotated groups;
+- adjustable preset handles (presets draw at PowerPoint's default adjust values);
+- theme colours kept as theme references in the PPTX (they're flattened to hex);
 - 4:3 and custom sizes;
 - comments on slides;
-- custom theme editor and uploaded fonts.
+- uploaded fonts.
 
 ## 8. Representative acceptance deck
 
-`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Five slides, used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
+`docs/slides/fixtures/acceptance-deck.json` plus `fixtures/landscape.png`. Sixteen slides (the PoC evidence below covers the first five; the toolbar-controls, text-styles, layout and groups slides came with later tickets), used unchanged by the editor tests, presentation tests, PDF tests and PPTX tests in every later ticket:
 
 1. **Title:** surface background, bold heading-slot title aligned to the bottom, subtitle with mixed colour and italic runs, accent rule shape, speaker notes.
 2. **Title + body:** disc bullets at levels 0 and 1, bold, italic, underline and literal-colour runs, a bullet long enough to wrap three lines, a numbered paragraph.
 3. **Image right:** a 3:2 PNG cropped (`l=0.3`) and covered into a near-square frame, alt text, a serif italic paragraph with space before.
 4. **Shapes:** rounded rect with centred bold white text, ellipse with stroke, a rectangle rotated 8° with text, an arrow line, and an over-full text box (the overflow case).
 5. **Section:** dark background token, centred title, a mono run.
+6. **Toolbar controls:** custom hex background, fill, outline and text colours; a rounded rect with radius 96 and a 20 px outline; a 2 px outline; a diagonal line with both arrowheads and a 1 px line with a start arrowhead; bullets at levels 0, 1, 2 and 4 in typed sizes (21, 15.5, 13 and 9 pt).
+7. **Text styles:** a justified paragraph at 1.5 line spacing with strikethrough, hex and theme-colour highlight runs, and a double-spaced box that overflows only because of its line spacing. Line spacing exports as exact points (`a:spcPts`), not `a:spcPct`, since PowerPoint's 100% is the font's own line gap rather than the layout's 1.2.
+8–15. **Layouts** ([[LAZYAGENTS-121]]): one slide per layout added in the second Slides epic, each placed exactly where its layout puts the placeholders: quote (italic heading-font body over a muted attribution), big number (a 280-unit accent stat over a centred caption), three columns (`body3`), comparison (`label`/`label2` headings over two bodies), full-bleed image (the landscape filling the slide under a white `#FFFFFF` title), image left, agenda (numbered body) and closing (centred title and contact line). The image layouts' images carry the `image` placeholder role. An unfilled image placeholder is a text element with that role and no text: every renderer draws it as nothing (the PPTX export skips it), the editor alone shows a "click to add image" box, and re-laying out to a layout without an image slot drops it.
+16. **Groups:** an icon-and-label group (ellipse and text) and a diagram group (a rounded rect with text, an arrow line and a rotated rect with text), next to an ungrouped shape. Groups hold their children in slide coordinates, and their frame is the children's box; they draw as SVG `<g>` and export to PowerPoint as `p:grpSp`.
 
 ## 9. Consequences
 

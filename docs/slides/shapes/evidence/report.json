@@ -1,0 +1,92 @@
+{
+  "libreoffice": "LibreOffice 7.4.7.2 40(Build:2)",
+  "shapes": [
+    {
+      "shape": "rect",
+      "iou": 1.0
+    },
+    {
+      "shape": "roundRect",
+      "iou": 0.9983
+    },
+    {
+      "shape": "ellipse",
+      "iou": 0.9992
+    },
+    {
+      "shape": "triangle",
+      "iou": 0.9985
+    },
+    {
+      "shape": "rtTriangle",
+      "iou": 0.9986
+    },
+    {
+      "shape": "diamond",
+      "iou": 0.9989
+    },
+    {
+      "shape": "pentagon",
+      "iou": 0.9993
+    },
+    {
+      "shape": "hexagon",
+      "iou": 0.9999
+    },
+    {
+      "shape": "octagon",
+      "iou": 1.0
+    },
+    {
+      "shape": "rightArrow",
+      "iou": 0.9993
+    },
+    {
+      "shape": "leftArrow",
+      "iou": 0.9993
+    },
+    {
+      "shape": "upArrow",
+      "iou": 0.9984
+    },
+    {
+      "shape": "downArrow",
+      "iou": 0.999
+    },
+    {
+      "shape": "chevron",
+      "iou": 0.9981
+    },
+    {
+      "shape": "homePlate",
+      "iou": 0.9999
+    },
+    {
+      "shape": "wedgeRectCallout",
+      "iou": 0.9999
+    },
+    {
+      "shape": "wedgeRoundRectCallout",
+      "iou": 0.9997
+    },
+    {
+      "shape": "star5",
+      "iou": 0.9939
+    },
+    {
+      "shape": "plus",
+      "iou": 1.0
+    },
+    {
+      "shape": "donut",
+      "iou": 0.9976
+    },
+    {
+      "shape": "heart",
+      "iou": 0.9988
+    }
+  ],
+  "failures": [],
+  "shapes.pptx": "convert /work/shapes.pptx -> /work/lo/shapes.pdf using filter : impress_pdf_Export\nWarning: failed to launch javaldx - java may not function correctly",
+  "shapes-bare.pptx": "convert /work/shapes-bare.pptx -> /work/lo/shapes-bare.pdf using filter : impress_pdf_Export\nWarning: failed to launch javaldx - java may not function correctly"
+}

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog, DropdownMenu } from "radix-ui";
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useCreateDeck, useDecks, useDeleteDeck, useDuplicateDeck, useRenameDeck, type DeckSummary } from "@/lib/api/slides-hooks";
+import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCreateDeck, useDecks, useDeleteDeck, useDuplicateDeck, useRenameDeck, useSlideStarters, type DeckSummary, type SlideStarter, type StarterKey } from "@/lib/api/slides-hooks";
 import { ago } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { assetHref, SlideSvg, useSlideFonts } from "@/lib/slides/render";
-import { THEMES, parseDeck, type Deck, type ThemeKey } from "@/lib/slides/schema";
+import { MAX_OUTLINE, outlineTitle } from "@/lib/slides/outline";
+import { H, THEMES, W, parseDeck, placeholders, type Deck, type ThemeKey } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -24,18 +25,39 @@ const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5
  */
 const isBrief = (s: string) => s.trim().split(/\s+/).length > 8 || /^(make|create|draft|build|write|turn|a deck|slides)\b/i.test(s.trim());
 
-/** The Slides app: the person's decks and a way to start one (mockup 1/6). */
+/** What a new deck starts from: one blank title slide, a starter deck, or an outline the persona drafts. */
+type Start = "blank" | "outline" | StarterKey;
+
+/** The Slides app: the person's decks and a way to start one (mockup 1/6; chooser: New deck chooser mockup). */
 export function DecksScreen() {
   const decks = useDecks();
   const create = useCreateDeck();
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [theme, setTheme] = useState<ThemeKey>("light");
+  const [from, setFrom] = useState<Start>("blank");
+  const [outline, setOutline] = useState("");
+  const [outlineError, setOutlineError] = useState("");
   const fonts = useSlideFonts();
 
   const start = (e?: FormEvent) => {
     e?.preventDefault();
     if (create.isPending) return;
+    if (from === "outline") {
+      // With no title, the outline's first line titles the deck and the persona drafts the rest.
+      const lines = outline.split("\n");
+      const first = lines.findIndex((l) => l.trim());
+      const deckTitle = title.trim() || outlineTitle(outline);
+      const rest = (title.trim() ? outline : lines.slice(first + 1).join("\n")).trim();
+      if (!rest) return setOutlineError("Add at least one line for a slide after the title.");
+      setOutlineError("");
+      create.mutate({ title: deckTitle, theme: theme as "light" }, { onSuccess: (d) => router.push(`/apps/slides/${d.id}?outline=${encodeURIComponent(rest)}`) });
+      return;
+    }
+    if (from !== "blank") {
+      create.mutate({ title, theme: theme as "light", starter: from }, { onSuccess: (d) => router.push(`/apps/slides/${d.id}`) });
+      return;
+    }
     const brief = isBrief(title) ? title.trim() : "";
     create.mutate(
       { title: brief ? "" : title, theme: theme as "light" },
@@ -90,6 +112,35 @@ export function DecksScreen() {
             </Button>
           </form>
           {create.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(create.error)}</p>}
+          <StartChooser value={from} onChange={setFrom} theme={theme} fonts={fonts} />
+          {from === "outline" && (
+            <form onSubmit={start} className="flex flex-col gap-2 rounded-xl border border-accent bg-surface p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <label htmlFor="deck-outline" className="text-[12px] font-medium text-fg-2">Outline</label>
+                <span className="text-[11.5px] text-fg-tertiary">One slide per top-level line · indented lines become its points</span>
+              </div>
+              <textarea
+                id="deck-outline"
+                autoFocus
+                rows={6}
+                maxLength={MAX_OUTLINE}
+                placeholder={"Q3 roadmap\nWhy now\n  - churn up 4% in EU\nPlan: three bets"}
+                className="resize-y rounded-md border border-border bg-surface-sunken px-3 py-2 font-mono text-[12.5px] text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
+                value={outline}
+                onChange={(e) => setOutline(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) start();
+                }}
+              />
+              {outlineError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{outlineError}</p>}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11.5px] text-fg-secondary">The deck opens with its title slide; your persona drafts the rest as suggestions. Nothing is added until you accept.</p>
+                <Button type="submit" variant="primary" disabled={create.isPending || !outline.trim()}>
+                  {create.isPending ? "Creating…" : "✦ Create & draft"}
+                </Button>
+              </div>
+            </form>
+          )}
 
           <div className="flex items-baseline justify-between">
             <h2 className="text-[12.5px] font-medium text-fg-secondary">Recent</h2>
@@ -123,6 +174,93 @@ export function DecksScreen() {
         </div>
       </main>
     </div>
+  );
+}
+
+const BLANK_COVER: Deck = { schema: 1, size: { w: W, h: H }, theme: THEMES.light, assets: {}, slides: [{ id: "s_blank", layout: "title", elements: placeholders("title") }] };
+
+/**
+ * Start from: Blank, the starter decks and Draft from outline, as a radio
+ * group (arrow keys move and pick). Previews draw in the chosen theme.
+ */
+function StartChooser({ value, onChange, theme, fonts }: { value: Start; onChange: (s: Start) => void; theme: ThemeKey; fonts: boolean }) {
+  const starters = useSlideStarters();
+  const group = useRef<HTMLDivElement>(null);
+  const covers = useMemo(
+    () =>
+      (starters.data ?? []).flatMap((s: SlideStarter) => {
+        try {
+          return [{ s, deck: parseDeck(s.cover) }];
+        } catch {
+          return [];
+        }
+      }),
+    [starters.data],
+  );
+  const options: { key: Start; label: string; detail: string; deck?: Deck }[] = [
+    { key: "blank", label: "Blank", detail: "1 slide", deck: BLANK_COVER },
+    ...covers.map(({ s, deck }) => ({ key: s.key as Start, label: s.name, detail: `${s.slide_count} slides`, deck })),
+    { key: "outline", label: "✦ Draft from outline", detail: "Persona suggests slides" },
+  ];
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = options.findIndex((o) => o.key === value);
+    const next = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const o = options[(next + options.length) % options.length];
+    onChange(o.key);
+    group.current?.querySelector<HTMLButtonElement>(`[data-start="${o.key}"]`)?.focus();
+  };
+
+  return (
+    <section aria-labelledby="start-from" className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between">
+        <h2 id="start-from" className="text-[12.5px] font-medium text-fg-secondary">Start from</h2>
+        <span className="text-[12px] text-fg-tertiary max-sm:hidden">Previews use the theme you picked</span>
+      </div>
+      <div ref={group} role="radiogroup" aria-labelledby="start-from" onKeyDown={onKey} className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-2.5">
+        {options.map((o) => {
+          const on = o.key === value;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              data-start={o.key}
+              tabIndex={on ? 0 : -1}
+              onClick={() => onChange(o.key)}
+              className={cx(
+                "relative flex flex-col rounded-xl border bg-surface p-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/35",
+                on ? "border-accent ring-1 ring-accent" : "border-border hover:border-border-hover",
+                o.key === "outline" && !on && "border-dashed",
+              )}
+            >
+              <span className="block overflow-hidden rounded-[4px] border border-border">
+                {o.deck ? (
+                  <SlideSvg deck={{ ...o.deck, theme: THEMES[theme] }} slide={o.deck.slides[0]} assetUrl={() => ""} fontsReady={fonts} className="block aspect-video w-full" label={`${o.label} preview`} />
+                ) : (
+                  <span aria-hidden className="block aspect-video w-full bg-surface-sunken px-2 py-1.5 font-mono text-[10px] leading-[1.45] text-fg-secondary">
+                    • Intro
+                    <br />
+                    &nbsp;&nbsp;– why now
+                    <br />• Plan
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 block truncate text-[12.5px] font-medium text-fg">{o.label}</span>
+              <span className="block text-[11px] text-fg-tertiary">{o.detail}</span>
+              {on && (
+                <span aria-hidden className="absolute right-3 top-3 grid size-4 place-items-center rounded-full bg-accent text-[10px] text-[#fff]">
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {starters.isError && <p className="text-[12px] text-fg-tertiary">Starter decks couldn’t load; you can still start blank or from an outline.</p>}
+    </section>
   );
 }
 

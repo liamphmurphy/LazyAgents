@@ -4286,7 +4286,10 @@ paths:
       description: |
         Makes a deck canvas with one title slide (the title, unless it is
         empty) in a new chat in the person's Slides space. theme is a built-in
-        theme: light (default), dark, paper or contrast.
+        theme (light by default). With starter, the deck is a copy of that
+        starter deck (see listSlideStarters) in the theme, with fresh ids; an
+        empty title then takes the starter's name, and a title replaces the
+        first slide's title.
       tags: [slides]
       requestBody:
         required: true
@@ -4296,7 +4299,8 @@ paths:
               type: object
               properties:
                 title: { type: string, maxLength: 200, description: "Empty starts an untitled deck" }
-                theme: { type: string, enum: [light, dark, paper, contrast] }
+                theme: { type: string, enum: [light, dark, paper, contrast, dusk, ocean, forest, sunset, mono, blueprint] }
+                starter: { type: string, enum: [project-update, pitch, retro, teaching, dnd-recap], description: "Start from this starter deck instead of one blank title slide" }
       responses:
         "201":
           description: The deck
@@ -4404,6 +4408,100 @@ paths:
           content:
             image/*:
               schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slide-starters:
+    get:
+      operationId: listSlideStarters
+      summary: The starter decks a new deck can start from, in chooser order
+      tags: [slides]
+      responses:
+        "200":
+          description: The starter decks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [starters]
+                properties:
+                  starters: { type: array, items: { $ref: "#/components/schemas/SlideStarter" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slide-themes:
+    get:
+      operationId: listSlideThemes
+      summary: The signed-in person's saved Slides themes, by name
+      tags: [slides]
+      responses:
+        "200":
+          description: Their saved themes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [themes]
+                properties:
+                  themes: { type: array, items: { $ref: "#/components/schemas/SlideTheme" } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createSlideTheme
+      summary: Save a theme for use in any of the person's decks
+      description: |
+        Names are unique per person, ignoring case (409 otherwise); a person
+        keeps at most 100 themes. Decks embed a copy of their theme, so a saved
+        theme is applied by copying it into the deck.
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SlideThemeInput" }
+      responses:
+        "201":
+          description: The saved theme
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlideTheme" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /slide-themes/{themeId}:
+    parameters:
+      - { name: themeId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateSlideTheme
+      summary: Rename or change a saved theme
+      description: Only the fields given change. Decks already using the theme keep their copy. 404 for anyone else's theme.
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 60 }
+                fonts: { $ref: "#/components/schemas/SlideThemeFonts" }
+                colors: { $ref: "#/components/schemas/SlideThemeColors" }
+      responses:
+        "200":
+          description: The theme
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlideTheme" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteSlideTheme
+      summary: Delete a saved theme (decks using it keep their copy)
+      description: 404 for anyone else's theme.
+      tags: [slides]
+      responses:
+        "204": { description: Deleted }
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
@@ -5493,6 +5591,50 @@ components:
         updated_at: { type: string, format: date-time }
         slide_count: { type: integer }
         cover: { type: string, description: "The deck JSON cut down to its first slide, for the list's thumbnail" }
+    SlideThemeFonts:
+      type: object
+      required: [heading, body]
+      additionalProperties: false
+      properties:
+        heading: { type: string, enum: [sans, serif, mono], x-enum-varnames: [SlideFontSans, SlideFontSerif, SlideFontMono] }
+        body: { type: string, enum: [sans, serif, mono], x-enum-varnames: [SlideBodyFontSans, SlideBodyFontSerif, SlideBodyFontMono] }
+    SlideThemeColors:
+      type: object
+      required: [background, text, heading, accent, accent2, muted, surface]
+      additionalProperties: false
+      properties:
+        background: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        text: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        heading: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        accent: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        accent2: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        muted: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        surface: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+    SlideThemeInput:
+      type: object
+      required: [name, fonts, colors]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        fonts: { $ref: "#/components/schemas/SlideThemeFonts" }
+        colors: { $ref: "#/components/schemas/SlideThemeColors" }
+    SlideStarter:
+      type: object
+      required: [key, name, description, slide_count, cover]
+      properties:
+        key: { type: string, description: "Pass as createDeck's starter" }
+        name: { type: string }
+        description: { type: string }
+        slide_count: { type: integer }
+        cover: { type: string, description: "The starter deck JSON cut down to its first slide, in the light theme, for the chooser's preview" }
+    SlideTheme:
+      type: object
+      required: [id, name, fonts, colors, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        fonts: { $ref: "#/components/schemas/SlideThemeFonts" }
+        colors: { $ref: "#/components/schemas/SlideThemeColors" }
+        updated_at: { type: string, format: date-time }
     DeckAsset:
       type: object
       required: [id, mime, w, h]

@@ -3,6 +3,7 @@ package deck
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -35,7 +36,7 @@ func TestNormalizeAcceptanceDeck(t *testing.T) {
 		t.Fatalf("normalize isn't idempotent: %v", err)
 	}
 	d, _ := Parse(body)
-	if len(d.Slides) != 5 || d.Slides[2].Elements[2].Crop.L != 0.3 {
+	if len(d.Slides) != 18 || d.Slides[2].Elements[2].Crop.L != 0.3 {
 		t.Fatalf("lost content: %+v", d.Slides[2].Elements[2])
 	}
 }
@@ -74,7 +75,7 @@ func TestApplyOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := Parse(out)
-	if len(d.Slides) != 6 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
+	if len(d.Slides) != 19 || d.Slides[0].ID != "s_section" || d.Slides[3].Layout != "title-body" || len(d.Slides[3].Elements) != 2 {
 		t.Fatalf("unexpected slides: %+v", d.Slides)
 	}
 	if d.Slides[1].Elements[0].Paragraphs[0].Runs[0].Text != "Q4 review" || d.Theme.Name != "Dark" {
@@ -130,6 +131,254 @@ func TestFieldsForOtherTypesAreRefused(t *testing.T) {
 			t.Fatalf("%s: mutation didn't apply", name)
 		}
 		if _, err := Normalize(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestTextStyleFields(t *testing.T) {
+	body, err := Normalize(fixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(body)
+	p := d.Slides[6].Elements[1].Paragraphs[0]
+	if d.Slides[6].ID != "s_text" || p.Align != "justify" || p.LineSpacing != 1.5 || !p.Runs[1].Strike || p.Runs[3].Highlight != "#FDE68A" || p.Runs[5].Highlight != "surface" {
+		t.Fatalf("lost text styles: %+v", p)
+	}
+	// Single spacing is the default, so it isn't stored; spacing rounds like every number.
+	for src, want := range map[string]float64{`"lineSpacing":1,`: 0, `"lineSpacing":1.234,`: 1.23} {
+		out, err := Normalize(strings.Replace(fixture(t), `"lineSpacing":2,`, src, 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, _ := Parse(out)
+		if got := d.Slides[6].Elements[2].Paragraphs[0].LineSpacing; got != want {
+			t.Errorf("%s: lineSpacing %v, want %v", src, got, want)
+		}
+	}
+	for name, mut := range map[string][2]string{
+		"spacing too tight":   {`"lineSpacing":2,`, `"lineSpacing":0.5,`},
+		"spacing too loose":   {`"lineSpacing":2,`, `"lineSpacing":3.5,`},
+		"spacing negative":    {`"lineSpacing":2,`, `"lineSpacing":-1,`},
+		"bad align":           {`"align":"justify"`, `"align":"full"`},
+		"bad highlight":       {`"highlight":"#FDE68A"`, `"highlight":"yellow"`},
+		"short hex highlight": {`"highlight":"#FDE68A"`, `"highlight":"#FDE"`},
+		"strike as string":    {`"strike":true`, `"strike":"sngStrike"`},
+	} {
+		good := fixture(t)
+		bad := strings.Replace(good, mut[0], mut[1], 1)
+		if bad == good {
+			t.Fatalf("%s: mutation didn't apply", name)
+		}
+		if _, err := Normalize(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestNewLayoutsAndRolesValidate(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	for _, l := range []string{"quote", "big-number", "three-column", "comparison", "image-full", "image-left", "agenda", "closing"} {
+		out, err := Apply(body, []Op{{Op: "insert_slide", Value: map[string]any{"layout": l}}})
+		if err != nil {
+			t.Fatalf("%s: %v", l, err)
+		}
+		d, _ := Parse(out)
+		s := d.Slides[0]
+		if s.Layout != l || len(s.Elements) == 0 {
+			t.Fatalf("%s: got %+v", l, s)
+		}
+	}
+	for _, role := range []string{"body3", "label", "label2"} {
+		if _, err := Normalize(strings.Replace(body, `"placeholder":"subtitle"`, `"placeholder":"`+role+`"`, 1)); err != nil {
+			t.Errorf("%s refused: %v", role, err)
+		}
+	}
+	for name, bad := range map[string]string{
+		"unknown layout": strings.Replace(body, `"layout":"quote"`, `"layout":"pull-quote"`, 1),
+		"unknown role":   strings.Replace(body, `"placeholder":"label2"`, `"placeholder":"label3"`, 1),
+	} {
+		if bad == body {
+			t.Fatalf("%s: mutation didn't apply", name)
+		}
+		if _, err := Normalize(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestRelayoutToNewLayouts(t *testing.T) {
+	roles := func(s Slide) map[string]Frame {
+		m := map[string]Frame{}
+		for _, e := range s.Elements {
+			m[e.Placeholder+":"+e.Type] = e.Frame
+		}
+		return m
+	}
+	body, _ := Normalize(fixture(t))
+	// Two columns → three: both bodies keep their text and move; body3 is added.
+	out, err := Apply(body, []Op{{Op: "set_slide", ID: "s_three", Value: map[string]any{"layout": "two-column"}}, {Op: "set_slide", ID: "s_three", Value: map[string]any{"layout": "three-column"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	s := d.Slides[9]
+	if len(s.Elements) != 4 || s.Elements[1].Paragraphs[0].Runs[0].Text != "Plan" || s.Elements[1].Frame != (Frame{120, 280, 520, 700}) {
+		t.Fatalf("three-column relayout: %+v", roles(s))
+	}
+	// A filled image moves with its role; an empty image slot is dropped
+	// when the new layout has none.
+	out, err = Apply(body, []Op{
+		{Op: "set_slide", ID: "s_imageleft", Value: map[string]any{"layout": "image-right"}},
+		{Op: "insert_slide", Value: map[string]any{"layout": "image-left"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ = Parse(out)
+	moved := d.Slides[slices.IndexFunc(d.Slides, func(s Slide) bool { return s.ID == "s_imageleft" })]
+	if f := roles(moved)["image:image"]; f != (Frame{1000, 120, 800, 840}) {
+		t.Fatalf("filled image didn't move: %+v", roles(moved))
+	}
+	last := d.Slides[0]
+	if _, ok := roles(last)["image:text"]; !ok {
+		t.Fatalf("image-left has no image slot: %+v", roles(last))
+	}
+	out, err = Apply(out, []Op{{Op: "set_slide", ID: last.ID, Value: map[string]any{"layout": "agenda"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ = Parse(out)
+	r := roles(d.Slides[0])
+	if _, ok := r["image:text"]; ok || len(r) != 2 {
+		t.Fatalf("empty image slot kept on agenda: %+v", r)
+	}
+}
+
+// Every preset shape is accepted through the persona's insert_element op with
+// fill, outline, rotation and text; anything else is refused.
+func TestShapeEnum(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	shape := func(name string) Op {
+		return Op{Op: "insert_element", Slide: "s_bullets", Value: map[string]any{
+			"type": "shape", "shape": name, "frame": map[string]any{"x": 100, "y": 100, "w": 400, "h": 300},
+			"rotation": 15, "fill": "accent", "stroke": "text", "strokeWidth": 4,
+			"text": map[string]any{"valign": "middle", "paragraphs": []any{map[string]any{"runs": []any{map[string]any{"text": name, "size": 40}}}}},
+		}}
+	}
+	if len(Shapes) != 21 {
+		t.Fatalf("want 21 shapes, got %d", len(Shapes))
+	}
+	var ops []Op
+	for _, s := range Shapes {
+		ops = append(ops, shape(s))
+	}
+	out, err := Apply(body, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	got := map[string]bool{}
+	for _, s := range d.Slides {
+		for _, e := range s.Elements {
+			got[e.Shape] = true
+		}
+	}
+	for _, s := range Shapes {
+		if !got[s] {
+			t.Errorf("%s: lost after insert", s)
+		}
+	}
+	for _, bad := range []string{"star", "Triangle", "rightarrow", "cloud", ""} {
+		if _, err := Apply(body, []Op{shape(bad)}); err == nil || !strings.Contains(err.Error(), "shape must be one of") {
+			t.Errorf("%q: accepted or wrong error: %v", bad, err)
+		}
+	}
+}
+
+// styled is a one-slide deck whose single element (or background) is el.
+func styled(t *testing.T, background, el string) string {
+	t.Helper()
+	d := New("", "light")
+	d.Assets = map[string]Asset{"a_pic": {Mime: "image/png", W: 10, H: 10}}
+	body, err := d.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	_ = json.Unmarshal([]byte(body), &m)
+	s := map[string]any{"id": "s_x", "layout": "blank", "elements": []any{}}
+	if background != "" {
+		var bg any
+		if err := json.Unmarshal([]byte(background), &bg); err != nil {
+			t.Fatal(err)
+		}
+		s["background"] = bg
+	}
+	if el != "" {
+		var e any
+		if err := json.Unmarshal([]byte(el), &e); err != nil {
+			t.Fatal(err)
+		}
+		s["elements"] = []any{e}
+	}
+	m["slides"] = []any{s}
+	out, _ := json.Marshal(m)
+	return string(out)
+}
+
+const frame = `"frame":{"x":0,"y":0,"w":100,"h":100}`
+
+func TestStyleFieldsNormalize(t *testing.T) {
+	for name, c := range map[string]struct{ bg, el, want string }{
+		"v1 string fill stays a string": {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":"accent"}`, `"fill":"accent"`},
+		"gradient fill": {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":{"type":"linear","angle":45.004,"stops":["accent","#00ff00"]},"fillOpacity":0.5}`,
+			`"fill":{"type":"linear","angle":45,"stops":["accent","#00ff00"]},"fillOpacity":0.5`},
+		"angle 360 is 0":       {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":{"type":"linear","angle":360,"stops":["accent","muted"]}}`, `"angle":0,`},
+		"opaque is left out":   {"", `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,"fill":"accent","fillOpacity":1,"stroke":"text","strokeWidth":4,"strokeOpacity":1,"dash":"solid"}`, `"fill":"accent","stroke":"text","strokeWidth":4}`},
+		"transparent is kept":  {"", `{"id":"e_a","type":"shape","shape":"ellipse",` + frame + `,"fill":"accent","fillOpacity":0}`, `"fillOpacity":0`},
+		"dashed line":          {"", `{"id":"e_a","type":"line",` + frame + `,"stroke":"text","strokeWidth":4,"strokeOpacity":0.25,"dash":"dashDot"}`, `"strokeOpacity":0.25,"dash":"dashDot"`},
+		"image opacity":        {"", `{"id":"e_a","type":"image",` + frame + `,"asset":"a_pic","opacity":0.4}`, `"opacity":0.4`},
+		"gradient background":  {`{"color":{"type":"linear","angle":90,"stops":["background","surface"]}}`, "", `"background":{"color":{"type":"linear","angle":90,"stops":["background","surface"]}}`},
+		"v1 colour background": {`{"color":"surface"}`, "", `"background":{"color":"surface"}`},
+	} {
+		out, err := Normalize(styled(t, c.bg, c.el))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: want %s in %s", name, c.want, out)
+		}
+		if again, err := Normalize(out); err != nil || again != out {
+			t.Errorf("%s: not idempotent: %v", name, err)
+		}
+	}
+}
+
+func TestStyleFieldsRefused(t *testing.T) {
+	shape := func(extra string) string {
+		return `{"id":"e_a","type":"shape","shape":"rect",` + frame + `,` + extra + `}`
+	}
+	for name, c := range map[string]struct{ bg, el string }{
+		"opacity above 1":        {"", shape(`"fillOpacity":1.5`)},
+		"negative opacity":       {"", shape(`"strokeOpacity":-0.1`)},
+		"unknown dash":           {"", shape(`"dash":"wavy"`)},
+		"radial gradient":        {"", shape(`"fill":{"type":"radial","angle":0,"stops":["accent","muted"]}`)},
+		"three stops":            {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","muted","text"]}`)},
+		"one stop":               {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent"]}`)},
+		"bad stop colour":        {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","blue"]}`)},
+		"angle out of range":     {"", shape(`"fill":{"type":"linear","angle":400,"stops":["accent","muted"]}`)},
+		"unknown gradient field": {"", shape(`"fill":{"type":"linear","angle":0,"stops":["accent","muted"],"spread":1}`)},
+		"fill is a number":       {"", shape(`"fill":3`)},
+		"opacity on a shape":     {"", shape(`"opacity":0.5`)},
+		"fillOpacity on a line":  {"", `{"id":"e_a","type":"line",` + frame + `,"stroke":"text","strokeWidth":4,"fillOpacity":0.5}`},
+		"dash on an image":       {"", `{"id":"e_a","type":"image",` + frame + `,"asset":"a_pic","dash":"dot"}`},
+		"opacity on text":        {"", `{"id":"e_a","type":"text",` + frame + `,"paragraphs":[{"runs":[{"text":"x","size":40}]}],"fillOpacity":0.5}`},
+		"bad background stop":    {`{"color":{"type":"linear","angle":0,"stops":["#12345","muted"]}}`, ""},
+	} {
+		if _, err := Normalize(styled(t, c.bg, c.el)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
