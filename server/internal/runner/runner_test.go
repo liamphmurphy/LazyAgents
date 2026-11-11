@@ -612,6 +612,13 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 	e.until("approved workspace ready", e.state("PAY-224=running"))
 	run := e.run("PAY-224")
 	root := e.runner.Backend.WorkspaceDir(run.ID.String())
+	// The dispatcher's primary profile address overrides machine defaults and
+	// the agent's synthetic identity when preparing a ticket checkout.
+	cmd := exec.Command("git", "-C", root, "config", "user.email")
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != e.me.Email {
+		t.Fatalf("ticket commit author: %q %v", out, err)
+	}
 	content, err := os.ReadFile(filepath.Join(root, "develop.txt"))
 	if err != nil || string(content) != "approved develop source" {
 		t.Fatalf("did not clone approved base: %q %v", content, err)

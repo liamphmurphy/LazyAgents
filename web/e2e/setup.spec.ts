@@ -120,9 +120,10 @@ test("a new workspace sees the checklist and a health banner naming missing secr
   await expect(setup.getByRole("link", { name: "Agents →" })).toHaveAttribute("href", "/customization?who=agents");
   await expect(setup.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 
-  // Opening Agents (in Customization) ticks "Review the default agents" in the same session.
+  // The URL changes before the Agents screen mounts and records the visit.
   await setup.getByRole("link", { name: "Agents →" }).click();
   await expect(page).toHaveURL(/\/customization\?who=agents$/);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("la:setup:workspace:agents-reviewed"))).toBe("1");
   await page.goBack();
   await expect(page.getByRole("region", { name: "Get set up" })).toContainText("1 of 5 done");
 

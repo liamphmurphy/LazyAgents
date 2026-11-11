@@ -886,7 +886,13 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			epic = c.spec.Repository.EpicBranch
 		}
 	}
-	script := SetupScriptWithCheckpoint(repo, base, epic, checkpoint, branch, c.agent.Name+" (Vesper)", c.agent.Handle+"@agents.lazyagents.local", c.spec.Setup)
+	ident, err := runCommitEnv(ctx, r.q(), c)
+	if err != nil {
+		fail("Couldn't load the commit author: " + err.Error())
+		return
+	}
+	maps.Copy(env, ident)
+	script := SetupScriptWithCheckpoint(repo, base, epic, checkpoint, branch, ident["GIT_AUTHOR_NAME"], ident["GIT_AUTHOR_EMAIL"], c.spec.Setup)
 	if c.run.Purpose == "chat" {
 		if script, err = chatSetupScript(ctx, r.q(), c); err != nil {
 			fail("Couldn't prepare the chat workspace: " + err.Error())
@@ -1351,12 +1357,16 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	sensitive := sensitiveEnv(env)
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
-	if chatRepo != "" {
+	if c.run.Purpose != "chat" || chatRepo != "" {
 		// After sensitiveEnv: the person's name and email aren't secrets to
 		// scrub from the transcript.
-		ident, err := chatCommitEnv(ctx, q, c)
+		ident, err := runCommitEnv(ctx, q, c)
 		if err != nil {
-			r.failChat(ctx, c, "Could not load the chat's commit author.")
+			if c.run.Purpose == "chat" {
+				r.failChat(ctx, c, "Could not load the chat's commit author.")
+			} else {
+				r.end(ctx, c, "failed", "Could not load the commit author: "+err.Error(), runs.VerbRunFailed)
+			}
 			return
 		}
 		maps.Copy(env, ident)

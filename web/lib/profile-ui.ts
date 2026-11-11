@@ -9,6 +9,11 @@ const EMAIL_LENGTH_MAX = 254;
 export type ProfileDraft = { name: string; role_title: string; emails: string[] };
 export type ProfileErrors = { name?: string; role_title?: string; emails?: string };
 
+/** The first-boot placeholders are not an identity to author commits with. */
+export function needsProfileSetup(profile: { name: string; email: string }): boolean {
+  return profile.name === "Local user" || ["me@localhost", "me@localhost.com"].includes(profile.email.toLowerCase());
+}
+
 // A light check; the server parses each address properly.
 const EMAIL_SHAPE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+$/;
 

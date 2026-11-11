@@ -14,6 +14,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/personas"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -77,7 +78,13 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	mobTicket := mt.Key
 
-	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", Title: "Tools", Message: &runs.ChatMessageInput{Body: "hello"}})
+	// Exercise capability denials with an explicitly restricted persona; the
+	// initial Assistant grants every capability on a fresh installation.
+	reader, err := (&personas.Service{Pool: pool}).Create(ctx, personas.Owner{WorkspaceID: ws, UserID: me.ID}, personas.NewInput{Name: "Reader"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat, err := rs.StartChat(ctx, ws, me.ID, runs.ChatInput{Project: "PAY", Title: "Tools", PersonaID: &reader.ID, Message: &runs.ChatMessageInput{Body: "hello"}})
 	if err != nil {
 		t.Fatal(err)
 	}

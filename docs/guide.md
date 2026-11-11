@@ -11,10 +11,15 @@ cp .env.example .env
 docker compose up --build      # → http://localhost:8080
 ```
 
-The first boot seeds the Northwind Labs demo from the design mockups. There are
-no accounts: a signed-in browser acts as the workspace's first user (Maya Chen in
-the demo). Set `SEED=false` and `LOCAL_USER_NAME` in `.env` to start with an empty
-workspace instead.
+The first boot creates an empty workspace with one local user and an Assistant
+with all persona permissions enabled. A signed-in browser acts as that user.
+Setup opens on the first visit to an empty workspace, or while the profile
+still has a placeholder name or primary email. Continue to chat remembers that
+visit per workspace in your browser. Save your own details there; ticket agents use your primary email
+for commits, and coding chats can choose among your profile's addresses. Set
+`LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` before first boot to supply them up front.
+Settings → Open setup returns to the profile and connection checklist anytime.
+The Northwind Labs demo is opt-in with `SEED=true`; existing databases are left as-is.
 
 ### Signing in
 

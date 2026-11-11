@@ -89,7 +89,7 @@ export function setupChecklist(s: SetupState): SetupStep[] {
     },
     {
       key: "agents",
-      label: "Review the default agents",
+      label: s.agents > 0 ? "Review your agents" : "Create your first agent",
       href: "/customization?who=agents",
       link: "Agents",
       // Someone who already ran a plan has used the agents.

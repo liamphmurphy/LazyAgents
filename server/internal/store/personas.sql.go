@@ -549,8 +549,10 @@ func (q *Queries) PromoteDefaultPersona(ctx context.Context, arg PromoteDefaultP
 }
 
 const seedDefaultPersona = `-- name: SeedDefaultPersona :one
-INSERT INTO personas (workspace_id, user_id, name, is_default)
-VALUES ($1, $2, 'Assistant', true)
+INSERT INTO personas (workspace_id, user_id, name, is_default,
+    can_code, can_generate_images, can_create_personas, can_create_svgs,
+    can_create_workflows, can_create_connectors)
+VALUES ($1, $2, 'Assistant', true, true, true, true, true, true, true)
 ON CONFLICT DO NOTHING RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos, can_create_personas, can_create_svgs, can_create_workflows, can_create_connectors
 `
 
