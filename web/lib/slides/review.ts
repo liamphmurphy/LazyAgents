@@ -11,10 +11,13 @@ import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schem
  * server normalises what it stores, so comparing raw JSON would see changes
  * that aren't there.
  */
-function canon(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(canon);
+const COLOR_KEYS = new Set(["color", "fill", "stroke"]);
+
+function canon(v: unknown, colour = false): unknown {
+  if (Array.isArray(v)) return v.map((x) => canon(x));
   if (typeof v === "number") return Math.round(v * 100) / 100;
-  if (typeof v === "string") return /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : v;
+  // Only colour fields are upper-cased: run text that looks like "#abcdef" is content.
+  if (typeof v === "string") return colour && /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : v;
   if (v && typeof v === "object") {
     const o = v as Record<string, unknown>;
     const out: Record<string, unknown> = {};
@@ -24,12 +27,15 @@ function canon(v: unknown): unknown {
       if (k === "align" && x === "left") continue;
       if ((k === "level" || k === "spaceBefore" || k === "rotation" || k === "strokeWidth" || k === "radius") && x === 0) continue;
       if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
-      out[k] = canon(x);
+      out[k] = canon(x, COLOR_KEYS.has(k) || (k !== "text" && colourMap(o)));
     }
     return out;
   }
   return v;
 }
+
+/** A theme's colours map (every value a hex colour). */
+const colourMap = (o: Record<string, unknown>) => Object.values(o).length > 0 && Object.values(o).every((x) => typeof x === "string" && /^#[0-9a-f]{6}$/i.test(x));
 
 /** Whether two deck values are the same once both are in canonical form. */
 export const same = (a: unknown, b: unknown) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));

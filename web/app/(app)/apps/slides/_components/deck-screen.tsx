@@ -294,6 +294,13 @@ export function DeckScreen({ id }: { id: string }) {
   const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[Math.max(0, Math.min(deck.slides.length - 1, startAt - 1))];
   const selectedEl = slide?.elements.find((e) => e.id === selected);
   const readOnly = live || archived || reviewing || !!conflict;
+  // For async work (uploads) that finishes after later renders.
+  const readOnlyRef = useRef(readOnly);
+  const slideIdRef = useRef(slide?.id);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+    slideIdRef.current = slide?.id;
+  }, [readOnly, slide?.id]);
 
   const laid = useMemo(() => (deck && fonts ? deck.slides.map((s) => ({ id: s.id, overflow: layoutSlide(deck, s, measure).overflow })) : []), [deck, fonts]);
   const overflowingSlides = useMemo(() => new Set(laid.filter((l) => l.overflow.size).map((l) => l.id)), [laid]);
@@ -302,7 +309,7 @@ export function DeckScreen({ id }: { id: string }) {
   // ---- Changing the deck.
   const update = (fn: (d: Deck) => Deck, key?: string) => {
     const cur = deckRef.current;
-    if (!cur || readOnly) return;
+    if (!cur || readOnly || readOnlyRef.current) return;
     const next = fn(cur);
     if (next === cur) return;
     const h = history.current;
@@ -364,9 +371,10 @@ export function DeckScreen({ id }: { id: string }) {
       const k = Math.min(1200 / a.w, 800 / a.h, 1);
       const w = Math.round(a.w * k), h = Math.round(a.h * k);
       const el: Element = { id: newId("e"), type: "image", asset: a.id, frame: { x: Math.round((1920 - w) / 2), y: Math.round((1080 - h) / 2), w, h }, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
-      if (readOnly) throw new Error("the deck became read-only while uploading; add it again once you can edit");
+      // Read now, not from when the upload started.
+      if (readOnlyRef.current) throw new Error("the deck became read-only while uploading; add it again once you can edit");
       update((d) => mapSlide(target, (s) => ({ ...s, elements: [...s.elements, el] }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
-      if (slide?.id === target) setSelected(el.id);
+      if (slideIdRef.current === target) setSelected(el.id);
     } catch (e) {
       setNotice(`Couldn't add ${file.name}: ${errorText(e)}`);
     } finally {
@@ -621,6 +629,7 @@ export function DeckScreen({ id }: { id: string }) {
                                 conflicted.current = false;
                                 markSaved(conflict.seq, conflict.theirs);
                                 setDeck(conflict.theirs);
+                                resetHist();
                                 setDirty(false);
                                 setConflict(null);
                                 setSaveState({ s: "saved" });
