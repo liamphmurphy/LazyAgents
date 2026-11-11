@@ -50,8 +50,8 @@ export function ShapePicker({ chip, onPick }: { chip: string; onPick: (s: ShapeK
     onPick(id);
   };
   const onGridKey = (e: KeyboardEvent) => {
-    if (!focus) return;
-    const r = rows.findIndex((row) => row.includes(focus));
+    const r = focus ? rows.findIndex((row) => row.includes(focus)) : -1;
+    if (!focus || r < 0) return;
     const c = rows[r].indexOf(focus);
     const i = flat.indexOf(focus);
     let next: ShapeKind | undefined;
@@ -95,7 +95,10 @@ export function ShapePicker({ chip, onPick }: { chip: string; onPick: (s: ShapeK
             id="shape-search"
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setFocus(undefined);
+            }}
             placeholder="Search shapes…"
             aria-label="Search shapes"
             aria-controls="shape-grid"
