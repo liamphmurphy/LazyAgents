@@ -408,8 +408,9 @@ paths:
         (harness:anthropic for claude-code, harness:openai for codex), replacing
         any earlier one only when it works: an API key is checked before it is
         stored; a plan login is stored, listed through a runner, and the earlier
-        value put back when the listing fails (not while it is still pending:
-        verify again without a credential to follow it). Only models listed
+        value put back when the listing fails, or is still pending (a first
+        login stays while pending: verify again without a credential to follow
+        it). Only models listed
         for the new login count. Without a credential, only checks what is
         already configured (a stored key, or the host's CLI login when runs use
         it). A credential is refused (422) when runs use the host's CLI

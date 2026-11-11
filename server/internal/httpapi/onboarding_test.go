@@ -52,6 +52,9 @@ func TestVerifyHarnessStoresKeyAndDiscovers(t *testing.T) {
 			if key == "sk-ant-api03-revoked" || key == "sk-ant-oat01-expired" || strings.Contains(key, "expired") {
 				return nil, context.DeadlineExceeded
 			}
+			if strings.Contains(key, "pending") {
+				return nil, chatmodels.ErrStillChecking
+			}
 			return []chatmodels.Model{{ID: "opus", Label: "Opus", Default: true}, {ID: "sonnet", Label: "Sonnet"}, {ID: "haiku", Label: "Haiku"}}, nil
 		}
 	}, func(s *Server) { srv = s })
@@ -110,6 +113,18 @@ func TestVerifyHarnessStoresKeyAndDiscovers(t *testing.T) {
 	out = e.want("POST", "/harness/claude-code/verify", map[string]any{"kind": "subscription", "credential": "sk-ant-oat01-expired"}, http.StatusOK)
 	if out["ok"] != false || stored("harness:anthropic") != "sk-ant-api03-good" {
 		t.Fatalf("failed plan login: %v, stored %q", out, stored("harness:anthropic"))
+	}
+	// A login the runner hasn't listed yet doesn't replace a working one either.
+	if _, err := box.Set(context.Background(), e.me.WorkspaceID, e.me.ID, secrets.SetInput{Name: "harness:openai", Value: "sk-proj-working"}); err != nil {
+		t.Fatal(err)
+	}
+	pending := `{"auth_mode":"chatgpt","tokens":{"refresh_token":"pending","account_id":"a"}}`
+	out = e.want("POST", "/harness/codex/verify", map[string]any{"kind": "subscription", "credential": pending}, http.StatusOK)
+	if out["ok"] != false || out["checking"] != nil || !strings.Contains(fmt.Sprint(out["error"]), "working one stays") || stored("harness:openai") != "sk-proj-working" {
+		t.Fatalf("pending replacement: %v, stored %q", out, stored("harness:openai"))
+	}
+	if _, err := e.pool.Exec(context.Background(), `DELETE FROM secrets WHERE name = 'harness:openai'`); err != nil {
+		t.Fatal(err)
 	}
 	// ...and with nothing before it, it is removed again.
 	login := `{"auth_mode":"chatgpt","tokens":{"refresh_token":"expired","account_id":"a"}}`

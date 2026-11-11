@@ -115,8 +115,9 @@ func verifyFailure(err error) string {
 // storeHarnessKey stores v as the harness's key and lists its models. A plan
 // login can only be listed once stored (a runner reads it), so when that
 // fails the earlier value is put back, or the new one removed: a bad paste
-// never replaces a working credential. A listing still pending keeps it, for
-// the next Verify (without a credential) to follow.
+// never replaces a working credential. A listing still pending keeps a first
+// login, for the next Verify (without a credential) to follow, but never
+// replaces an earlier one: nothing would be left to restore if it then failed.
 func (s *Server) storeHarnessKey(ctx context.Context, cat chatmodels.Catalog, ws uuid.UUID, name, v string) (api.VerifyHarnessResponseObject, error) {
 	u, _, _ := me(ctx)
 	secret := chatmodels.KeySecret[name]
@@ -126,8 +127,9 @@ func (s *Server) storeHarnessKey(ctx context.Context, cat chatmodels.Catalog, ws
 	}
 	var prev string
 	if had {
+		// An unreadable earlier value is nothing worth restoring.
 		if prev, err = s.Secrets.Reveal(ctx, ws, nil, secret); err != nil {
-			return nil, err
+			had = false
 		}
 	}
 	saved, err := s.Secrets.Set(ctx, ws, u.ID, secrets.SetInput{Name: secret, Value: v})
@@ -135,8 +137,11 @@ func (s *Server) storeHarnessKey(ctx context.Context, cat chatmodels.Catalog, ws
 		return nil, err
 	}
 	h, _, err := cat.Check(ctx, s.Q, ws, name)
-	if err == nil && (h.Available && len(h.Models) > 0 || h.Checking) {
+	if err == nil && (h.Available && len(h.Models) > 0 || h.Checking && !had) {
 		return verifyResult(h), nil
+	}
+	if err == nil && h.Checking {
+		h = chatmodels.Harness{UnavailableReason: "The runner hasn't listed the new login's models yet, so the working one stays. Try again once the runner is up, or replace it in Settings → Provider credentials."}
 	}
 	// Restore with a fresh context: the request's may be what failed.
 	rctx := context.WithoutCancel(ctx)

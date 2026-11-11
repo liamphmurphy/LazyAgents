@@ -17,6 +17,9 @@ import (
 // errStillChecking is shown while no runner has answered yet.
 var errStillChecking = errors.New("Vesper is still checking which models your plan offers. Try again in a moment, and check that the runner is running.")
 
+// ErrStillChecking is errStillChecking for a Discover that reports a pending listing.
+var ErrStillChecking = errStillChecking
+
 // errListingUnavailable stands in for a database failure, which the person
 // can't act on.
 var errListingUnavailable = errors.New("Vesper couldn't check which models your plan offers.")
