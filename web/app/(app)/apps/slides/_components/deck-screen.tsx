@@ -15,7 +15,7 @@ import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
-import { H, THEMES, W, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { H, THEMES, W, encodeDeck, isImageSlot, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
@@ -433,11 +433,20 @@ export function DeckScreen({ id }: { id: string }) {
     }, key);
 
   const fileInput = useRef<HTMLInputElement>(null);
+  // The image placeholder the next picked file fills, if any.
+  const fillTarget = useRef<string | undefined>(undefined);
+  const fillImage = (eid: string) => {
+    if (readOnly) return;
+    fillTarget.current = eid;
+    fileInput.current?.click();
+  };
   const [notice, setNotice] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const onImage = async (file: File) => {
     // The slide it was added on, even if the person moves on while it uploads.
     const target = slide?.id;
+    const slot = fillTarget.current;
+    fillTarget.current = undefined;
     if (!target) return;
     setNotice(undefined);
     setUploading(true);
@@ -450,7 +459,15 @@ export function DeckScreen({ id }: { id: string }) {
       const el: Element = { id: newId("e"), type: "image", asset: a.id, frame: { x: Math.round((1920 - w) / 2), y: Math.round((1080 - h) / 2), w, h }, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
       // Read now, not from when the upload started.
       if (readOnlyRef.current) throw new Error("the deck became read-only while uploading; add it again once you can edit");
-      update((d) => mapSlide(target, (s) => ({ ...s, elements: [...s.elements, el] }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
+      // Filling a placeholder: the image takes its frame and role (the
+      // renderers centre-crop it to cover) and its place in paint order.
+      const place = (els: Element[]) => {
+        const i = slot ? els.findIndex((x) => x.id === slot && isImageSlot(x)) : -1;
+        if (i < 0) return [...els, el];
+        Object.assign(el, { frame: els[i].frame, placeholder: "image" });
+        return els.map((x, k) => (k === i ? el : x));
+      };
+      update((d) => mapSlide(target, (s) => ({ ...s, elements: place(s.elements) }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
       if (slideIdRef.current === target) setSelected([el.id]);
     } catch (e) {
       setNotice(`Couldn't add ${file.name}: ${errorText(e)}`);
@@ -467,7 +484,10 @@ export function DeckScreen({ id }: { id: string }) {
     insertText: () => addElement({ id: newId("e"), type: "text", frame: { x: 560, y: 440, w: 800, h: 200 }, paragraphs: [{ runs: [{ text: "", size: 44, font: "body", color: "text" }] }] }, true),
     insertShape: (shape) =>
       addElement({ id: newId("e"), type: "shape", shape, frame: { x: 760, y: 390, w: 400, h: 300 }, fill: "accent", radius: shape === "roundRect" ? 32 : undefined, text: { valign: "middle", paragraphs: [{ align: "center", runs: [{ text: "", size: 40, color: "background", font: "body" }] }] } }),
-    insertImage: () => fileInput.current?.click(),
+    insertImage: () => {
+      fillTarget.current = undefined;
+      fileInput.current?.click();
+    },
     insertLine: () => addElement({ id: newId("e"), type: "line", frame: { x: 560, y: 540, w: 800, h: 0 }, stroke: "text", strokeWidth: 6 }),
     setLayout: (l) => slide && update(mapSlide(slide.id, (s) => relayout(s, l))),
     setTheme: (k) => update((d) => ({ ...d, theme: structuredClone(THEMES[k]) })),
@@ -562,6 +582,9 @@ export function DeckScreen({ id }: { id: string }) {
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       removeSelected();
+    } else if (e.key === "Enter" && selectedEl && isImageSlot(selectedEl)) {
+      e.preventDefault();
+      fillImage(selectedEl.id);
     } else if (e.key === "Enter" && selectedEl && textOf(selectedEl)) {
       e.preventDefault();
       setEditing(selectedEl.id);
@@ -578,9 +601,9 @@ export function DeckScreen({ id }: { id: string }) {
   };
 
   // ---- Slides.
-  const addSlide = () => {
+  const addSlide = (layout?: Layout) => {
     if (!slide) return;
-    const s = newSlide(slide.layout === "title" ? "title-body" : slide.layout);
+    const s = newSlide(layout ?? (slide.layout === "title" ? "title-body" : slide.layout));
     update((d) => {
       const i = d.slides.findIndex((x) => x.id === slide.id);
       return { ...d, slides: [...d.slides.slice(0, i + 1), s, ...d.slides.slice(i + 1)] };
@@ -692,7 +715,8 @@ export function DeckScreen({ id }: { id: string }) {
               onMove={moveSlide}
               onDuplicate={duplicateSlide}
               onRemove={removeSlide}
-              onAdd={addSlide}
+              onAdd={() => addSlide()}
+              onAddLayout={addSlide}
               assetUrl={assetUrl}
               fontsReady={fonts}
               overflowing={overflowingSlides}
@@ -781,6 +805,7 @@ export function DeckScreen({ id }: { id: string }) {
                       onSelect={setSelected}
                       editing={editing}
                       onEdit={setEditing}
+                      onFillImage={fillImage}
                       onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => ({ ...e, ...live[e.id] })))}
                       onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
                       readOnly={readOnly}

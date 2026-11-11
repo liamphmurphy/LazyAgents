@@ -39,6 +39,14 @@ func textEl(placeholder string, f Frame, valign string, ps ...Paragraph) Element
 	return Element{ID: NewID("e"), Type: "text", Placeholder: placeholder, Frame: f, VAlign: valign, Paragraphs: ps}
 }
 
+// imageSlot is an empty image placeholder: a text element with the image
+// role and no text, so it draws nothing in presentation, PDF and PPTX. The
+// editor shows it as a "click to add image" box and swaps in an image
+// element with the same frame and role.
+func imageSlot(f Frame) Element {
+	return textEl("image", f, "middle", para("", 40, false, "body", "muted", ""))
+}
+
 // Placeholders are the elements a layout starts with. Text is the prompt the
 // editor shows until the person types; title is used for the title slide.
 func Placeholders(layout, title string) []Element {
@@ -65,9 +73,56 @@ func Placeholders(layout, title string) []Element {
 		return []Element{
 			heading("", 72, Frame{120, 120, 800, 300}, "top", ""),
 			textEl("body", Frame{120, 460, 800, 480}, "top", para("", 40, false, "body", "text", "")),
+			imageSlot(Frame{1000, 120, 800, 840}),
 		}
 	case "section":
 		return []Element{heading("", 128, Frame{160, 380, 1600, 320}, "middle", "center")}
+	case "quote":
+		q := para("", 72, false, "heading", "heading", "")
+		q.Runs[0].Italic = true
+		return []Element{
+			textEl("body", Frame{200, 220, 1520, 480}, "bottom", q),
+			textEl("subtitle", Frame{200, 740, 1520, 100}, "top", para("", 44, false, "body", "muted", "")),
+		}
+	case "big-number":
+		return []Element{
+			heading("", 280, Frame{160, 220, 1600, 420}, "bottom", "center"),
+			textEl("subtitle", Frame{160, 680, 1600, 160}, "top", para("", 56, false, "body", "muted", "center")),
+		}
+	case "three-column":
+		return []Element{heading("", 80, Frame{120, 80, 1680, 160}, "middle", ""), body("body", Frame{120, 280, 520, 700}), body("body2", Frame{700, 280, 520, 700}), body("body3", Frame{1280, 280, 520, 700})}
+	case "comparison":
+		return []Element{
+			heading("", 80, Frame{120, 80, 1680, 160}, "middle", ""),
+			textEl("label", Frame{120, 280, 810, 90}, "middle", para("", 52, true, "heading", "accent", "")),
+			textEl("label2", Frame{990, 280, 810, 90}, "middle", para("", 52, true, "heading", "accent", "")),
+			body("body", Frame{120, 390, 810, 590}),
+			body("body2", Frame{990, 390, 810, 590}),
+		}
+	case "image-full":
+		return []Element{
+			imageSlot(Frame{0, 0, 1920, 1080}),
+			textEl("title", Frame{120, 780, 1680, 200}, "bottom", para("", 96, true, "heading", "#FFFFFF", "")),
+		}
+	case "image-left":
+		return []Element{
+			imageSlot(Frame{120, 120, 800, 840}),
+			heading("", 72, Frame{1000, 120, 800, 300}, "top", ""),
+			textEl("body", Frame{1000, 460, 800, 480}, "top", para("", 40, false, "body", "text", "")),
+		}
+	case "agenda":
+		return []Element{
+			heading("", 80, Frame{120, 80, 1680, 160}, "middle", ""),
+			textEl("body", Frame{120, 280, 1680, 700}, "top", Paragraph{Bullet: "number", Runs: []Run{{Text: "", Size: 52, Font: "body", Color: "text"}}}),
+		}
+	case "closing":
+		if title == "" {
+			title = "Thank you"
+		}
+		return []Element{
+			heading(title, 128, Frame{160, 300, 1600, 280}, "bottom", "center"),
+			textEl("subtitle", Frame{160, 620, 1600, 140}, "top", para("", 44, false, "body", "muted", "center")),
+		}
 	}
 	return []Element{}
 }

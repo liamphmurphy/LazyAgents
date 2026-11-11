@@ -227,6 +227,11 @@ func (d *Deck) apply(op Op) error {
 func relayout(s *Slide) {
 	fresh := Placeholders(s.Layout, "")
 	used := map[string]bool{}
+	// An unfilled image placeholder has nothing to keep: drop it when the
+	// new layout has no image slot, rather than leave an invisible box.
+	if !slices.ContainsFunc(fresh, func(f Element) bool { return f.Placeholder == "image" }) {
+		s.Elements = slices.DeleteFunc(s.Elements, func(e Element) bool { return e.Placeholder == "image" && e.Type == "text" })
+	}
 	for k := range s.Elements {
 		e := &s.Elements[k]
 		if e.Placeholder == "" {

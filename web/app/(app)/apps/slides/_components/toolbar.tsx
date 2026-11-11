@@ -6,6 +6,7 @@ import { cx } from "@/lib/cx";
 import type { AlignOp, ZOrder } from "@/lib/slides/arrange";
 import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
+import { LayoutGrid } from "./layout-picker";
 import { STYLES, styleOf, type StyleId } from "@/lib/slides/styles";
 import { LIMITS, parseFontSize, parseHex, parseInRange } from "@/lib/slides/edit";
 
@@ -326,9 +327,7 @@ export function Toolbar({ theme, themeKey, layout, selection, editing, disabled,
       <button type="button" className={chip} onClick={a.insertLine}>╱ Line</button>
       {sep}
       <Menu label="Slide layout" trigger={<>▤ {LAYOUTS.find((l) => l.id === layout)?.label ?? "Layout"} ▾</>}>
-        {LAYOUTS.map((l) => (
-          <DropdownMenu.Item key={l.id} className={cx(item, l.id === layout && "font-semibold")} onSelect={() => a.setLayout(l.id)}>{l.label}</DropdownMenu.Item>
-        ))}
+        <LayoutGrid theme={theme} current={layout} onPick={a.setLayout} title="Slide layout" />
       </Menu>
       {sep}
       {box && run ? (
