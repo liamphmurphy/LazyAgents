@@ -131,7 +131,11 @@ func chatRepositoryNote(ctx context.Context, q *store.Queries, chat store.ChatSe
 			b.WriteString("More saved sources are available through search_repositories.\n")
 			break
 		}
-		b.WriteString("- Saved " + source.Kind + ": " + source.Name + "\n")
+		kind := source.Kind
+		if kind == "organization" {
+			kind = "GitHub owner"
+		}
+		b.WriteString("- Saved " + kind + ": " + source.Name + "\n")
 	}
 	if len(repos) == 0 {
 		b.WriteString("No repository selected yet. You can use_repository now; coding credentials are available.\n")

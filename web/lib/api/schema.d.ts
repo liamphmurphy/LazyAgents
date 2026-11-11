@@ -4099,6 +4099,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Connected GitHub account and organization presets */
+        get: operations["getRepositoryPresets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories/sources": {
         parameters: {
             query?: never;
@@ -4151,8 +4168,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RepositoryOwnerPreset: {
+            login: string;
+            organization: boolean;
+        };
+        RepositoryPresets: {
+            owners: components["schemas"]["RepositoryOwnerPreset"][];
+            /** @description A partial discovery failure; the connected account and successfully discovered organizations remain available */
+            warning?: string;
+        };
+        /** @description Save one repository, or all repositories under an account or organization. A repository name ending in /* is saved as an owner source. */
         RepositorySource: {
-            /** @enum {string} */
+            /**
+             * @description organization is the legacy wire name for a GitHub owner, including personal accounts
+             * @enum {string}
+             */
             kind: "repository" | "organization";
             name: string;
         };
@@ -15051,6 +15081,27 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getRepositoryPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owners visible to the configured GitHub token; does not save sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryPresets"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

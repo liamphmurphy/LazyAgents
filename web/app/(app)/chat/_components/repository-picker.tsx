@@ -32,7 +32,7 @@ export function RepositoryPicker({ value, pending, onPick, disabled, error, sign
       <ul aria-label="Available repositories" className="mt-2 max-h-60 overflow-y-auto">
         {(repos.data ?? []).filter((r) => r.name.toLowerCase().includes(text.toLowerCase())).slice(0, 50).map((r) => <li key={r.url}><button type="button" onClick={() => choose(r.url)} className="w-full rounded px-2 py-2 text-left text-fg hover:bg-hover">{r.name}</button></li>)}
       </ul>
-      <p className="mt-2 text-fg-tertiary">Use any repository your GitHub credential can access. <a href="/settings#repositories" className="text-accent">Manage saved repos and organizations</a></p>
+      <p className="mt-2 text-fg-tertiary">Use any repository your GitHub credential can access. <a href="/settings#repositories" className="text-accent">Manage saved repos and owners</a></p>
     </div>}
     {error && <p role="alert" className="mt-1 text-pill-blocked-fg">{error.message}</p>}
   </div>;

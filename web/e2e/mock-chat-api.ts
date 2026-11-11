@@ -625,9 +625,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
 
     if (path === "/planning-sessions" && method === "GET") return json({ sessions: [], has_more: false });
+    if (path === "/repositories/presets" && method === "GET") return json({ owners: [{ login: "liamphmurphy", organization: false }, { login: "acme", organization: true }] });
     if (path === "/repositories/sources") {
       if (method === "GET") return json(repositorySources);
       const b = body() as { kind: "repository" | "organization"; name: string };
+      if (b.kind === "organization" || b.name.trim().endsWith("/*")) { b.kind = "organization"; b.name = b.name.trim().toLowerCase().replace("https://github.com/", "").replace(/\/\*$/, "").replace(/\/$/, ""); }
       if (method === "PUT") { if (!repositorySources.some((s) => s.kind === b.kind && s.name === b.name)) repositorySources.push(b); }
       if (method === "DELETE") { const i = repositorySources.findIndex((s) => s.kind === b.kind && s.name === b.name); if (i >= 0) repositorySources.splice(i, 1); }
       return route.fulfill({ status: 204 });

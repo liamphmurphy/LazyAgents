@@ -527,11 +527,14 @@ export function useSecrets() {
 /**
  * A secret change can make harnesses available or unavailable: refresh the
  * secrets list (and the sidebar dot), chat model availability and dispatch
- * previews, which list the secrets a run would receive.
+ * previews, which list the secrets a run would receive. GitHub changes also
+ * refresh account presets and repository discovery.
  */
 function invalidateSecretDependents(qc: ReturnType<typeof useQueryClient>) {
   return Promise.all([
     qc.invalidateQueries({ queryKey: ["secrets"] }),
+    qc.invalidateQueries({ queryKey: ["repository-presets"] }),
+    qc.invalidateQueries({ queryKey: ["repositories"] }),
     qc.invalidateQueries({ queryKey: chatKeys.models }),
     qc.invalidateQueries({ queryKey: ["tickets", "dispatch"] }),
   ]);

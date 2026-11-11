@@ -293,17 +293,109 @@ test("repository discovery saves repositories and organizations shared by all pe
   const mock = await installSettingsApi(page);
   await page.goto("/settings#repositories");
   const section = page.locator("#repositories");
+  await section.getByText("Enter a repository or owner manually", { exact: true }).click();
   await expect(section).toContainText("Access comes from your GitHub credential");
-  await section.getByLabel("Repository or organization", { exact: true }).fill("acme/app");
+  await section.getByLabel("GitHub repository", { exact: true }).fill("acme/app");
   await section.getByRole("button", { name: "Save source" }).click();
   await expect(section.getByRole("button", { name: "Remove acme/app", exact: true })).toBeVisible();
   await section.getByLabel("Repository source type").selectOption("organization");
-  await section.getByLabel("Repository or organization", { exact: true }).fill("acme");
+  await section.getByLabel("GitHub username or organization", { exact: true }).fill("acme");
   await section.getByRole("button", { name: "Save source" }).click();
   await expect(section.getByRole("button", { name: "Remove acme", exact: true })).toBeVisible();
-  await section.getByRole("button", { name: "Refresh organization repositories" }).click();
-  await expect(section.getByRole("button", { name: "Refresh organization repositories" })).toBeEnabled();
+  await section.getByRole("button", { name: "Refresh owner repositories" }).click();
+  await expect(section.getByRole("button", { name: "Refresh owner repositories" })).toBeEnabled();
   await section.getByRole("button", { name: "Remove acme/app", exact: true }).click();
   await expect(section.getByRole("button", { name: "Remove acme/app", exact: true })).toHaveCount(0);
+  expect(mock.api.unhandled).toEqual([]);
+});
+
+
+test("repository discovery saves all repositories under a plain username", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  await section.getByText("Enter a repository or owner manually", { exact: true }).click();
+  await section.getByLabel("Repository source type").selectOption({ label: "All repos under a username or organization" });
+  await section.getByLabel("GitHub username or organization", { exact: true }).fill("liamphmurphy");
+  await section.getByRole("button", { name: "Save source" }).click();
+  await expect(section.getByRole("list", { name: "Saved repository sources" }).getByText("liamphmurphy", { exact: true })).toBeVisible();
+  await expect(section.getByText("All repositories", { exact: true })).toBeVisible();
+  await section.getByRole("button", { name: "Refresh owner repositories" }).click();
+  await expect(section.getByRole("button", { name: "Refresh owner repositories" })).toBeEnabled();
+  await section.getByRole("button", { name: "Remove liamphmurphy", exact: true }).click();
+  await expect(section.getByRole("list", { name: "Saved repository sources" }).getByText("liamphmurphy", { exact: true })).toHaveCount(0);
+  expect(mock.api.unhandled).toEqual([]);
+});
+
+
+test("repository discovery offers connected account and org presets without automatically adding them", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  const saved = section.getByRole("list", { name: "Saved repository sources" });
+  const account = section.getByRole("button", { name: "Add all repositories under liamphmurphy", exact: true });
+  const org = section.getByRole("button", { name: "Add all repositories under acme", exact: true });
+  await expect(account).toContainText("Your account");
+  await expect(org).toContainText("Organization");
+  await expect(saved.locator("li")).toHaveCount(0);
+  await account.click();
+  await expect(account).toBeDisabled();
+  await expect(saved.getByText("liamphmurphy", { exact: true })).toBeVisible();
+  await org.click();
+  await expect(org).toBeDisabled();
+  await expect(saved.locator("li")).toHaveCount(2);
+  await page.reload();
+  await expect(account).toBeDisabled();
+  await expect(org).toBeDisabled();
+  expect(mock.api.unhandled).toEqual([]);
+});
+
+test("partial GitHub discovery keeps the account preset and manual owner entry usable", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.route("**/api/v1/repositories/presets", (route) => route.fulfill({ json: { owners: [{ login: "liamphmurphy", organization: false }], warning: "Some organizations could not be listed with this GitHub connection." } }));
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  await expect(section.getByRole("status")).toContainText("Some organizations could not be listed");
+  await section.getByRole("button", { name: "Add all repositories under liamphmurphy" }).click();
+  await expect(section.getByRole("button", { name: "Remove liamphmurphy", exact: true })).toBeVisible();
+  await section.getByText("Enter a repository or owner manually", { exact: true }).click();
+  await section.getByLabel("Repository source type").selectOption("organization");
+  await section.getByLabel("GitHub username or organization").fill("other-team");
+  await section.getByRole("button", { name: "Save source" }).click();
+  await expect(section.getByRole("button", { name: "Remove other-team", exact: true })).toBeVisible();
+  expect(mock.api.unhandled).toEqual([]);
+});
+
+test("manual repository entry works when no GitHub presets can be loaded", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.route("**/api/v1/repositories/presets", (route) => route.fulfill({ status: 409, json: { code: "conflict", message: "Add a GitHub token in Settings." } }));
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  await expect(section.getByRole("status")).toContainText("Add a GitHub token");
+  await section.getByText("Enter a repository or owner manually", { exact: true }).click();
+  await section.getByLabel("GitHub repository", { exact: true }).fill("acme/manual");
+  await section.getByRole("button", { name: "Save source" }).click();
+  await expect(section.getByRole("button", { name: "Remove acme/manual", exact: true })).toBeVisible();
+  expect(mock.api.unhandled).toEqual([]);
+});
+
+
+test("GitHub presets refresh after credentials change", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  let lookups = 0;
+  await page.route("**/api/v1/repositories/presets", (route) => {
+    lookups++;
+    return route.fulfill({ json: { owners: [{ login: lookups === 1 ? "previous-account" : "new-account", organization: false }] } });
+  });
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  await expect(section.getByRole("button", { name: "Add all repositories under previous-account" })).toBeVisible();
+  await page.getByRole("button", { name: "Add credential", exact: true }).click();
+  const secrets = page.locator("#secrets");
+  await secrets.getByLabel("Name", { exact: true }).fill("git:pat");
+  await secrets.getByLabel("Value", { exact: true }).fill("fixture-github-token");
+  await secrets.getByRole("button", { name: "Save credential", exact: true }).click();
+  await expect(section.getByRole("button", { name: "Add all repositories under new-account" })).toBeVisible();
+  await expect(section.getByRole("button", { name: "Add all repositories under previous-account" })).toHaveCount(0);
   expect(mock.api.unhandled).toEqual([]);
 });

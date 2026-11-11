@@ -4936,6 +4936,18 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /repositories/presets:
+    get:
+      operationId: getRepositoryPresets
+      summary: Connected GitHub account and organization presets
+      responses:
+        "200":
+          description: Owners visible to the configured GitHub token; does not save sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryPresets" }
+        default: { $ref: "#/components/responses/Error" }
+
   /repositories/sources:
     get:
       operationId: listRepositorySources
@@ -5054,11 +5066,24 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    RepositoryOwnerPreset:
+      type: object
+      required: [login, organization]
+      properties:
+        login: { type: string }
+        organization: { type: boolean }
+    RepositoryPresets:
+      type: object
+      required: [owners]
+      properties:
+        owners: { type: array, items: { $ref: "#/components/schemas/RepositoryOwnerPreset" } }
+        warning: { type: string, description: "A partial discovery failure; the connected account and successfully discovered organizations remain available" }
     RepositorySource:
       type: object
       required: [kind, name]
+      description: "Save one repository, or all repositories under an account or organization. A repository name ending in /* is saved as an owner source."
       properties:
-        kind: { type: string, enum: [repository, organization] }
+        kind: { type: string, enum: [repository, organization], description: "organization is the legacy wire name for a GitHub owner, including personal accounts" }
         name: { type: string }
     RepositoryEntry:
       type: object

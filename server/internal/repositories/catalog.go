@@ -24,12 +24,15 @@ import (
 var ownerRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}$`)
 var repoRE = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
+// Organization retains the existing source kind while accepting any GitHub owner.
 func Organization(raw string) (string, error) {
-	name := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(raw), "https://github.com/"), "/")
+	name := strings.ToLower(strings.TrimSpace(raw))
+	name = strings.TrimPrefix(name, "https://github.com/")
+	name = strings.TrimSuffix(strings.TrimSuffix(name, "/"), "/*")
 	if !ownerRE.MatchString(name) {
-		return "", apperr.Invalid("name", "enter a GitHub organization name")
+		return "", apperr.Invalid("name", "enter a GitHub account or organization, optionally followed by /*")
 	}
-	return strings.ToLower(name), nil
+	return name, nil
 }
 
 func Canonical(raw string) (string, error) {
@@ -88,6 +91,9 @@ func (s *Service) Sources(ctx context.Context, o Owner) ([]Source, error) {
 }
 func (s *Service) Save(ctx context.Context, o Owner, kind, name string, remove bool) error {
 	original := strings.TrimSpace(name)
+	if kind == "repository" && strings.HasSuffix(strings.TrimRight(original, "/"), "/*") {
+		kind = "organization"
+	}
 	var err error
 	switch kind {
 	case "repository":
@@ -124,12 +130,12 @@ func (s *Service) Save(ctx context.Context, o Owner, kind, name string, remove b
 	return s.Q.AddRepositorySource(ctx, store.AddRepositorySourceParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Kind: kind, Name: name})
 }
 
-var orgCache = struct {
+var ownerCache = struct {
 	sync.Mutex
-	rows map[string]cachedOrg
-}{rows: map[string]cachedOrg{}}
+	rows map[string]cachedOwner
+}{rows: map[string]cachedOwner{}}
 
-type cachedOrg struct {
+type cachedOwner struct {
 	Entries []Entry
 	Expires time.Time
 }
@@ -161,48 +167,79 @@ func (s *Service) get(ctx context.Context, token, path string, dst any) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return apperr.Invalid("repository", "GitHub returned %d; check the repository or organization name and token access", res.StatusCode)
+		return apperr.Invalid("repository", "GitHub returned %d; check the repository or account name and token access", res.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(dst)
 }
-func (s *Service) organizationRepos(ctx context.Context, o Owner, org string, refresh bool) ([]Entry, error) {
+
+// ownerRepos includes public and token-visible private repositories. The
+// users/{owner}/repos endpoint alone only lists public repositories.
+func (s *Service) ownerRepos(ctx context.Context, o Owner, owner string, refresh bool) ([]Entry, error) {
 	token, err := s.token(ctx, o)
 	if err != nil {
 		return nil, err
 	}
-	key := fmt.Sprintf("%s/%s/%s/%x", o.WorkspaceID, o.UserID, org, sha256.Sum256([]byte(token)))
-	orgCache.Lock()
-	cached, ok := orgCache.rows[key]
-	orgCache.Unlock()
+	key := fmt.Sprintf("%s/%s/%s/%x", o.WorkspaceID, o.UserID, owner, sha256.Sum256([]byte(token)))
+	ownerCache.Lock()
+	cached, ok := ownerCache.rows[key]
+	ownerCache.Unlock()
 	if ok && !refresh && time.Now().Before(cached.Expires) {
 		return slices.Clone(cached.Entries), nil
 	}
+	var account struct {
+		Type string `json:"type"`
+	}
+	if err := s.get(ctx, token, "users/"+owner, &account); err != nil {
+		return nil, err
+	}
+	var endpoints []string
+	switch account.Type {
+	case "Organization":
+		endpoints = []string{"orgs/" + owner + "/repos?type=all"}
+	case "User":
+		endpoints = []string{"users/" + owner + "/repos?type=owner", "user/repos?affiliation=owner,collaborator&visibility=all"}
+	default:
+		return nil, apperr.Invalid("name", "GitHub owner must be a user account or organization")
+	}
 	out := []Entry{}
-	for page := 1; page <= 100; page++ {
-		var rows []struct {
-			FullName string `json:"full_name"`
-		}
-		if err := s.get(ctx, token, fmt.Sprintf("orgs/%s/repos?per_page=100&type=all&page=%d", org, page), &rows); err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			u, err := Canonical(row.FullName)
-			if err != nil {
-				return nil, errors.New("GitHub returned an invalid repository name")
+	seen := map[string]bool{}
+	for _, endpoint := range endpoints {
+		complete := false
+		for page := 1; page <= 100; page++ {
+			var rows []struct {
+				FullName string `json:"full_name"`
 			}
-			out = append(out, Entry{Name: Name(u), URL: u})
-		}
-		if len(rows) < 100 {
-			orgCache.Lock()
-			if len(orgCache.rows) >= 128 {
-				clear(orgCache.rows)
+			if err := s.get(ctx, token, fmt.Sprintf("%s&per_page=100&sort=full_name&direction=asc&page=%d", endpoint, page), &rows); err != nil {
+				return nil, err
 			}
-			orgCache.rows[key] = cachedOrg{Entries: slices.Clone(out), Expires: time.Now().Add(5 * time.Minute)}
-			orgCache.Unlock()
-			return out, nil
+			for _, row := range rows {
+				url, err := Canonical(row.FullName)
+				if err != nil {
+					return nil, errors.New("GitHub returned an invalid repository name")
+				}
+				name := Name(url)
+				repoOwner, _, _ := strings.Cut(name, "/")
+				if repoOwner == owner && !seen[url] {
+					out = append(out, Entry{Name: name, URL: url})
+					seen[url] = true
+				}
+			}
+			if len(rows) < 100 {
+				complete = true
+				break
+			}
+		}
+		if !complete {
+			return nil, apperr.Conflict("owner has too many repositories to list; use owner/repository")
 		}
 	}
-	return nil, apperr.Conflict("organization has too many repositories to list; use owner/repository")
+	ownerCache.Lock()
+	if len(ownerCache.rows) >= 128 {
+		clear(ownerCache.rows)
+	}
+	ownerCache.rows[key] = cachedOwner{Entries: slices.Clone(out), Expires: time.Now().Add(5 * time.Minute)}
+	ownerCache.Unlock()
+	return out, nil
 }
 
 func (s *Service) Search(ctx context.Context, o Owner, query string, refresh bool) ([]Entry, error) {
@@ -227,7 +264,7 @@ func (s *Service) Search(ctx context.Context, o Owner, query string, refresh boo
 			add(source.Name)
 			continue
 		}
-		repos, err := s.organizationRepos(ctx, o, source.Name, refresh)
+		repos, err := s.ownerRepos(ctx, o, source.Name, refresh)
 		if err != nil {
 			return nil, err
 		}

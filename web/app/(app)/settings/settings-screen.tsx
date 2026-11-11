@@ -69,7 +69,7 @@ export function SettingsScreen() {
           >
             <SecretsSection />
           </Section>
-          <Section id="repositories" title="Repositories & organizations"><RepositorySourcesSection /></Section>
+          <Section id="repositories" title="Repositories & GitHub owners"><RepositorySourcesSection /></Section>
           <Section id="projects" title="Projects" lead="One project maps to one GitHub repository. Without one, runs start in an empty workspace and can’t push.">
             <ProjectsSection />
           </Section>
