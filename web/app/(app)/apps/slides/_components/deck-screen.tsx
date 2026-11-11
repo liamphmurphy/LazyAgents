@@ -15,6 +15,7 @@ import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
+import { outlinePrompt } from "@/lib/slides/outline";
 import { H, THEMES, W, encodeDeck, isImageSlot, type Theme, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
@@ -671,15 +672,17 @@ export function DeckScreen({ id }: { id: string }) {
       return { ...d, slides: [...rest.slice(0, to), s, ...rest.slice(to)] };
     });
 
-  // A deck started from a description asks the persona to draft it, once.
+  // A deck started from a description or an outline asks the persona to draft it, once.
   const brief = search.get("brief");
+  const outline = search.get("outline");
   const briefSent = useRef(false);
   useEffect(() => {
-    if (!brief || !chatId || briefSent.current) return;
+    const ask = brief ? `Draft this deck: ${brief}` : outline ? outlinePrompt(outline) : "";
+    if (!ask || !chatId || briefSent.current) return;
     briefSent.current = true;
     router.replace(`/apps/slides/${id}`);
-    void send.mutateAsync({ body: `Draft this deck: ${brief}` }).catch((e) => setNotice(`Couldn't ask ${persona} to draft the deck: ${errorText(e)}`));
-  }, [brief, chatId, id, persona, router, send]);
+    void send.mutateAsync({ body: ask }).catch((e) => setNotice(`Couldn't ask ${persona} to draft the deck: ${errorText(e)}`));
+  }, [brief, outline, chatId, id, persona, router, send]);
 
   const title = ref.data?.title ?? c?.title ?? "Deck";
   const loadError = ref.error ?? head.error;

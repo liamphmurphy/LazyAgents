@@ -101,7 +101,8 @@ stack_env() {
     S3_ENDPOINT="$S3_ENDPOINT" SEED=false PR_SYNC_INTERVAL_S=0 \
     SECRETS_KEY="$SECRETS_KEY" PUBLIC_URL="$WEB_URL" \
     RUNNER_BACKEND=local RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
-    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" "$@"
+    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" \
+    FAKE_HARNESS_MODE=chat-read "$@"
 }
 
 echo ">> starting api on :$API_PORT (runs migrations and first-boot seed)"
