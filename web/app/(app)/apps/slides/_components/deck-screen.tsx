@@ -61,6 +61,8 @@ function formatElement(e: Element, f: TextFormat): Element {
   if (f.kind === "size") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, size: f.size }));
   if (f.kind === "font") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, font: f.font }));
   if (f.kind === "color") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, color: f.color }));
+  if (f.kind === "highlight") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, highlight: f.highlight }));
+  if (f.kind === "lineSpacing") paragraphs = paragraphs.map((p) => ({ ...p, lineSpacing: f.lineSpacing === 1 ? undefined : f.lineSpacing }));
   if (f.kind === "align") paragraphs = paragraphs.map((p) => ({ ...p, align: f.align === "left" ? undefined : f.align }));
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
   if (f.kind === "indent") paragraphs = shiftLevel(paragraphs, f.delta);
@@ -426,6 +428,7 @@ export function DeckScreen({ id }: { id: string }) {
       if (editing && editorRef.current) {
         if (f.kind === "mark") return editorRef.current.format(f.mark);
         if (f.kind === "color") return editorRef.current.color(f.color);
+        if (f.kind === "highlight") return editorRef.current.highlight(f.highlight);
         if (f.kind === "indent") return editorRef.current.indent(f.delta);
         const paragraphs = editorRef.current.read();
         setEditing(undefined);
@@ -493,7 +496,10 @@ export function DeckScreen({ id }: { id: string }) {
       e.preventDefault();
       setEditing(selectedEl.id);
     } else if (e.key === "Escape") setSelected(undefined);
-    else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+    else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "x" && textOf(selectedEl)) {
+      e.preventDefault();
+      tools.format({ kind: "mark", mark: "strike" });
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
       e.preventDefault();
       const copy = { ...structuredClone(selectedEl), id: newId("e"), frame: { ...selectedEl.frame, x: selectedEl.frame.x + 40, y: selectedEl.frame.y + 40 }, placeholder: undefined };
       addElement(copy);

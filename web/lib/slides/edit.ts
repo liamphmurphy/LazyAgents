@@ -14,6 +14,8 @@ export const LIMITS = {
   /** 0 is omitted on save and reads back as the default 24, so the controls start at 1. */
   radius: { min: 1, max: 1000 },
   level: { min: 0, max: 4 },
+  /** Paragraph line spacing, a multiple of the default; the server allows the same range. */
+  lineSpacing: { min: 0.8, max: 3 },
 } as const;
 
 export const RECENT_COLORS = 8;

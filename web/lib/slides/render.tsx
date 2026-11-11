@@ -72,6 +72,8 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
         </g>
       );
     }
+    case "highlight":
+      return <rect key={i} x={o.x} y={o.y} width={o.w} height={o.h} fill={o.fill} transform={t} />;
     case "text":
       return (
         <text
@@ -83,7 +85,7 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
           fontWeight={o.style.includes("bold") ? 700 : 400}
           fontStyle={o.style.includes("italic") ? "italic" : "normal"}
           fill={o.color}
-          textDecoration={o.underline ? "underline" : undefined}
+          textDecoration={[o.underline && "underline", o.strike && "line-through"].filter(Boolean).join(" ") || undefined}
           style={{ fontKerning: "none", whiteSpace: "pre" }}
           transform={t}
         >
@@ -117,7 +119,7 @@ export function SlideSvg({ deck, slide, assetUrl, className, label, marks, showO
   return (
     // geometricPrecision: unhinted glyph advances, so text is as wide as the layout measured at any scale.
     <svg viewBox={`0 0 ${W} ${H}`} className={className} textRendering="geometricPrecision" role="img" aria-label={label ?? (slideText(slide) || "Empty slide")} preserveAspectRatio="xMidYMid meet">
-      {laid.ops.map((o, i) => (hideTextOf && o.op === "text" && o.el === hideTextOf ? null : draw(o, i, deck, assetUrl, uid)))}
+      {laid.ops.map((o, i) => (hideTextOf && (o.op === "text" || o.op === "highlight") && o.el === hideTextOf ? null : draw(o, i, deck, assetUrl, uid)))}
       {showOverflow &&
         [...laid.overflow].map((id) => {
           const f = outline(id);

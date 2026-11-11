@@ -33,6 +33,8 @@ const (
 	minFontSize    = 8
 	maxFontSize    = 400
 	maxStrokeWidth = 100
+	minLineSpacing = 0.8
+	maxLineSpacing = 3
 )
 
 type Frame struct {
@@ -48,7 +50,9 @@ type Run struct {
 	Bold      bool    `json:"bold,omitempty"`
 	Italic    bool    `json:"italic,omitempty"`
 	Underline bool    `json:"underline,omitempty"`
+	Strike    bool    `json:"strike,omitempty"`
 	Color     string  `json:"color,omitempty"`
+	Highlight string  `json:"highlight,omitempty"`
 	Font      string  `json:"font,omitempty"`
 }
 
@@ -58,6 +62,8 @@ type Paragraph struct {
 	Bullet      string  `json:"bullet,omitempty"`
 	Level       int     `json:"level,omitempty"`
 	SpaceBefore float64 `json:"spaceBefore,omitempty"`
+	// LineSpacing multiplies the default line height (1.2 × the largest run); 0 means 1.
+	LineSpacing float64 `json:"lineSpacing,omitempty"`
 }
 
 type TextBox struct {
@@ -209,8 +215,8 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 	for i := range ps {
 		p := &ps[i]
 		w := fmt.Sprintf("%s paragraph %d", where, i+1)
-		if !in(p.Align, "", "left", "center", "right") {
-			return invalid("%s: align must be left, center or right", w)
+		if !in(p.Align, "", "left", "center", "right", "justify") {
+			return invalid("%s: align must be left, center, right or justify", w)
 		}
 		if p.Align == "left" {
 			p.Align = ""
@@ -223,6 +229,14 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 		}
 		if err := checkNumber(&p.SpaceBefore, 0, 400, w+" spaceBefore"); err != nil {
 			return err
+		}
+		if p.LineSpacing != 0 {
+			if err := checkNumber(&p.LineSpacing, minLineSpacing, maxLineSpacing, w+" lineSpacing"); err != nil {
+				return err
+			}
+			if p.LineSpacing == 1 {
+				p.LineSpacing = 0
+			}
 		}
 		if len(p.Runs) == 0 {
 			return invalid("%s: give at least one run (an empty paragraph is one run with empty text)", w)
@@ -238,6 +252,9 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 				return err
 			}
 			if err := checkColor(theme, r.Color, rw, false); err != nil {
+				return err
+			}
+			if err := checkColor(theme, r.Highlight, rw+" highlight", false); err != nil {
 				return err
 			}
 			if !in(r.Font, "", "heading", "body", "sans", "serif", "mono") {

@@ -9,10 +9,12 @@ import { STYLES, styleOf, type StyleId } from "@/lib/slides/styles";
 import { LIMITS, parseFontSize, parseHex, parseInRange } from "@/lib/slides/edit";
 
 export type TextFormat =
-  | { kind: "mark"; mark: "bold" | "italic" | "underline" }
+  | { kind: "mark"; mark: "bold" | "italic" | "underline" | "strike" }
   | { kind: "size"; size: number }
   | { kind: "font"; font: "heading" | "body" | Slot }
   | { kind: "color"; color: ColorRef }
+  | { kind: "highlight"; highlight: ColorRef | undefined }
+  | { kind: "lineSpacing"; lineSpacing: number }
   | { kind: "align"; align: NonNullable<Paragraph["align"]> }
   | { kind: "bullet"; bullet: Paragraph["bullet"] | undefined }
   | { kind: "indent"; delta: 1 | -1 };
@@ -48,6 +50,13 @@ const on = "border-accent bg-selected text-fg";
 const item = "flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
 const sep = <span aria-hidden className="mx-1 h-5 w-px bg-border-strong" />;
 const SIZES = [24, 32, 40, 44, 48, 56, 64, 72, 80, 96, 112, 128, 160];
+const SPACINGS = [1, 1.15, 1.5, 2];
+const MARKS = [
+  { m: "bold", label: "Bold", glyph: "B", key: "⌘B", cls: "font-bold" },
+  { m: "italic", label: "Italic", glyph: "I", key: "⌘I", cls: "italic" },
+  { m: "underline", label: "Underline", glyph: "U", key: "⌘U", cls: "underline" },
+  { m: "strike", label: "Strikethrough", glyph: "S", key: "⇧⌘X", cls: "line-through" },
+] as const;
 const WIDTHS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 40];
 const RADII = [8, 16, 24, 32, 48, 64, 96, 160];
 const field = "h-7 min-w-0 flex-1 rounded-md border border-border-strong bg-transparent px-2 text-[12.5px] text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent";
@@ -234,6 +243,11 @@ function NumberMenu({ label, trigger, presets, show, value, onPick, field: f, di
 const px = (v: number) => `${v} px`;
 const widthField = { item: "Custom width…", parse: (raw: string) => parseInRange(raw, LIMITS.strokeWidth.min, LIMITS.strokeWidth.max, " px") };
 
+const spacingField = { item: "Custom spacing…", parse: (raw: string) => {
+  const r = parseInRange(raw, LIMITS.lineSpacing.min, LIMITS.lineSpacing.max, "×");
+  return "value" in r ? { value: Math.round(r.value * 100) / 100 } : r;
+} };
+
 /**
  * The editor's toolbar (mockup 2/6). Undo/redo, insert and layout are always
  * there; text controls show for text, fill and stroke for shapes, theme and
@@ -272,28 +286,30 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
             ))}
           </Menu>
           <NumberMenu label="Text size" trigger={<span className="font-mono">{run.size / 2}</span>} presets={SIZES} show={(s) => `${s / 2} pt`} value={run.size} onPick={(size) => a.format({ kind: "size", size })} field={{ item: "Custom size (pt)…", parse: parseFontSize }} />
-          {(["bold", "italic", "underline"] as const).map((m) => (
+          {MARKS.map(({ m, label, glyph, key, cls }) => (
             <button
               key={m}
               type="button"
-              aria-label={m[0].toUpperCase() + m.slice(1)}
+              aria-label={label}
               aria-pressed={!editing && !!run[m]}
-              title={`${m[0].toUpperCase() + m.slice(1)} (⌘${m[0].toUpperCase()})`}
-              className={cx(chip, "w-7 justify-center", !editing && run[m] && on, m === "bold" && "font-bold", m === "italic" && "italic", m === "underline" && "underline")}
+              title={`${label} (${key})`}
+              className={cx(chip, "w-7 justify-center", !editing && run[m] && on, cls)}
               onMouseDown={keep}
               onClick={() => a.format({ kind: "mark", mark: m })}
             >
-              {m[0].toUpperCase()}
+              {glyph}
             </button>
           ))}
           <ColorMenu label="Text colour" trigger={<><span className="size-3 rounded-sm border border-border-strong" style={{ background: resolveColor(theme, run.color) }} />▾</>} theme={theme} onPick={(c) => c && a.format({ kind: "color", color: c })} recent={a.recentColors} remember={a.rememberColor} />
+          <ColorMenu label="Highlight colour" trigger={<><span className="size-3 rounded-sm border border-border-strong" style={{ background: run.highlight ? resolveColor(theme, run.highlight) : "transparent" }} />Highlight ▾</>} theme={theme} onPick={(c) => a.format({ kind: "highlight", highlight: c })} none="None" recent={a.recentColors} remember={a.rememberColor} />
           {!editing && (
             <>
               <Menu label="Alignment" trigger={<>≡ ▾</>}>
-                {(["left", "center", "right"] as const).map((al) => (
+                {(["left", "center", "right", "justify"] as const).map((al) => (
                   <DropdownMenu.Item key={al} className={cx(item, (para?.align ?? "left") === al && "font-semibold")} onSelect={() => a.format({ kind: "align", align: al })}>{al[0].toUpperCase() + al.slice(1)}</DropdownMenu.Item>
                 ))}
               </Menu>
+              <NumberMenu label="Line spacing" trigger={<>↕ {para?.lineSpacing ?? 1} ▾</>} presets={SPACINGS} show={(n) => n.toFixed(n === 1.15 ? 2 : 1)} value={para?.lineSpacing ?? 1} onPick={(lineSpacing) => a.format({ kind: "lineSpacing", lineSpacing })} field={spacingField} />
               <Menu label="Bullets" trigger={<>•≡ ▾</>}>
                 <DropdownMenu.Item className={item} onSelect={() => a.format({ kind: "bullet", bullet: undefined })}>No bullets</DropdownMenu.Item>
                 <DropdownMenu.Item className={item} onSelect={() => a.format({ kind: "bullet", bullet: "disc" })}>Bullets</DropdownMenu.Item>
