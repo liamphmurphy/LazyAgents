@@ -10,7 +10,10 @@
 //	approval (default)  claim, plan, request db:migrate approval, end turn
 //	complete            claim, plan, complete_run
 //	chat-read           chat turn; a prompt "read <artifact id> [section]" reads it through MCP,
-//	                    saying FAKE_HARNESS_OPENING first when set
+//	                    saying FAKE_HARNESS_OPENING first when set. A Slides prompt
+//	                    "Draft slides from this outline…" (web/lib/slides/outline.ts) adds one
+//	                    slide per top-level outline line to the chat's deck with canvas_patch
+//	                    (see fakeOutlineDraft)
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	chat-image          chat turn on Claude; a prompt "image: <text>" calls generate_image
@@ -605,6 +608,12 @@ func main() {
 	}
 	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
+		if _, outline, ok := strings.Cut(prompt, "Draft slides from this outline"); ok {
+			answer := fakeOutlineDraft(call, outline)
+			text(answer)
+			result(false, answer)
+			return
+		}
 		if f := strings.Fields(prompt); len(f) >= 2 && f[0] == "read" {
 			args := map[string]any{"artifact": f[1]}
 			if len(f) > 2 {
@@ -883,4 +892,78 @@ func firstLine(s string) string {
 		s = s[:80]
 	}
 	return s
+}
+
+// fakeOutlineDraft drafts the chat's deck from the outline after the prompt's
+// first blank line: one title-body slide per top-level line with its indented
+// lines as bullets (a section slide when it has none), added after the deck's
+// last slide in one canvas_patch, as a persona would.
+func fakeOutlineDraft(call func(string, map[string]any) map[string]any, prompt string) string {
+	_, outline, _ := strings.Cut(prompt, "\n\n")
+	outline, _, _ = strings.Cut(outline, "\n\n(Vesper:")
+	type item struct {
+		title  string
+		points []string
+	}
+	var items []item
+	for _, l := range strings.Split(outline, "\n") {
+		t := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-*•"))
+		switch {
+		case t == "":
+		case (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t")) && len(items) > 0:
+			items[len(items)-1].points = append(items[len(items)-1].points, t)
+		default:
+			items = append(items, item{title: t})
+		}
+	}
+	var deckID string
+	var version float64
+	if list, ok := call("canvas_list", map[string]any{})["canvases"].([]any); ok {
+		for _, c := range list {
+			if m, _ := c.(map[string]any); m["kind"] == "deck" {
+				deckID, _ = m["canvas_id"].(string)
+			}
+		}
+	}
+	if deckID == "" || len(items) == 0 {
+		return "I couldn't find a deck or an outline to draft from."
+	}
+	read := call("canvas_read", map[string]any{"canvas_id": deckID})
+	version, _ = read["version"].(float64)
+	var d struct {
+		Slides []struct {
+			ID string `json:"id"`
+		} `json:"slides"`
+	}
+	body, _ := read["body"].(string)
+	if err := json.Unmarshal([]byte(body), &d); err != nil || len(d.Slides) == 0 {
+		return "I couldn't read the deck."
+	}
+	last := d.Slides[len(d.Slides)-1].ID
+	frame := func(x, y, w, h int) map[string]any { return map[string]any{"x": x, "y": y, "w": w, "h": h} }
+	run := func(t string, size int, font, color string, bold bool) map[string]any {
+		return map[string]any{"text": t, "size": size, "font": font, "color": color, "bold": bold}
+	}
+	// Inserted in reverse after the last slide, so they end up in outline order.
+	ops := []any{}
+	for i := len(items) - 1; i >= 0; i-- {
+		it := items[i]
+		var slide map[string]any
+		if len(it.points) == 0 {
+			slide = map[string]any{"layout": "section", "elements": []any{map[string]any{"type": "text", "placeholder": "title", "frame": frame(160, 380, 1600, 320), "valign": "middle",
+				"paragraphs": []any{map[string]any{"align": "center", "runs": []any{run(it.title, 128, "heading", "heading", true)}}}}}}
+		} else {
+			paras := []any{}
+			for _, p := range it.points {
+				paras = append(paras, map[string]any{"bullet": "disc", "runs": []any{run(p, 44, "body", "text", false)}})
+			}
+			slide = map[string]any{"layout": "title-body", "elements": []any{
+				map[string]any{"type": "text", "placeholder": "title", "frame": frame(120, 80, 1680, 160), "valign": "middle", "paragraphs": []any{map[string]any{"runs": []any{run(it.title, 80, "heading", "heading", true)}}}},
+				map[string]any{"type": "text", "placeholder": "body", "frame": frame(120, 280, 1680, 700), "valign": "top", "paragraphs": paras},
+			}}
+		}
+		ops = append(ops, map[string]any{"op": "insert_slide", "after": last, "value": slide})
+	}
+	call("canvas_patch", map[string]any{"canvas_id": deckID, "base_version": int(version), "ops": ops, "note": "Drafted from your outline"})
+	return fmt.Sprintf("Drafted %d slides from your outline.", len(items))
 }
