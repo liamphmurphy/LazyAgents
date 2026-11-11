@@ -3831,6 +3831,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/followups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Your follow-ups queued behind the running reply, next to send first */
+        get: operations["listChatFollowups"];
+        put?: never;
+        /**
+         * Queue a message to send once the running reply ends
+         * @description Unlike posting a message, this doesn't interrupt the running reply.
+         *     When a turn ends with a reply, the oldest queued follow-up is sent as
+         *     the next message, one per turn. After a turn that was stopped or
+         *     failed the queue is held until the person sends something. A follow-up
+         *     queued while nothing runs and nothing else is queued is sent at once.
+         *     409 when the chat is archived, is an aside, or already has 20 queued.
+         */
+        post: operations["queueChatFollowup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/followups/{followupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                followupId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a queued follow-up before it is sent
+         * @description 404 once it has been sent or removed.
+         */
+        delete: operations["deleteChatFollowup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/asides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chat's asides, oldest first
+         * @description Each aside is a hidden chat (parent_chat_id is this chat); read its messages from /chats/{id}/messages.
+         */
+        get: operations["listChatAsides"];
+        put?: never;
+        /**
+         * Ask about the running reply without interrupting it
+         * @description Starts an aside: a hidden chat whose first turn answers the question.
+         *     The same persona answers in a fresh session that gets the chat's
+         *     recent conversation and a snapshot of the running reply (what it has
+         *     written and which tools it called, with their output). An aside only
+         *     reads: no shell, images, connectors or secrets, and no Vesper tool that
+         *     changes anything. Neither conversation sees the other afterwards.
+         *     409 when nothing is running, the chat is archived or is itself an
+         *     aside, or 3 asides are still answering.
+         */
+        post: operations["startChatAside"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/persona-proposals": {
         parameters: {
             query?: never;
@@ -6863,6 +6947,11 @@ export interface components {
             archived: boolean;
             /** @description A temporary chat: it doesn't use the person's memory or past chats, stays out of search, and is deleted after a day without messages */
             temporary?: boolean;
+            /**
+             * Format: uuid
+             * @description Set on an aside: the chat whose running reply it answers a question about
+             */
+            parent_chat_id?: string;
             revision: number;
             message_count: number;
             /** Format: date-time */
@@ -6946,6 +7035,19 @@ export interface components {
         };
         ChatMessageEdit: {
             body: string;
+        };
+        ChatFollowup: {
+            /** Format: uuid */
+            id: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatFollowupList: {
+            followups: components["schemas"]["ChatFollowup"][];
+        };
+        ChatAsideList: {
+            asides: components["schemas"]["ChatSession"][];
         };
         ChatSearchHit: {
             /** Format: uuid */
@@ -14661,6 +14763,137 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatFollowups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatFollowupList"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    queueChatFollowup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Queued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatFollowup"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChatFollowup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                followupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatAsides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The asides */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAsideList"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startChatAside: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageEdit"];
+            };
+        };
+        responses: {
+            /** @description The aside, answering */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

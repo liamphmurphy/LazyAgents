@@ -1035,6 +1035,18 @@
   box-shadow: 0 0 12px var(--accent);
   animation: video-sweep 1.2s linear infinite;
 }
+/* An aside's waiting line (chat/_components/asides.tsx): light passes over the text. */
+.text-shimmer {
+  background: linear-gradient(90deg, var(--text-tertiary) 30%, var(--text) 50%, var(--text-tertiary) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: video-shimmer 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer { animation: none; background: none; color: var(--text-tertiary); }
+}
 @media (prefers-reduced-motion: reduce) {
   .video-spin, .video-shimmer, .video-blink { animation: none; }
   .video-sweep { display: none; }

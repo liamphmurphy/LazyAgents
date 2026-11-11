@@ -40,6 +40,9 @@ type ChatCaps struct {
 	// Secrets is whether the persona may use any of the person's API secrets
 	// here; their values stay in Vesper (agentapi.SecretsHandler).
 	Secrets bool
+	// Aside is a chat answering a question about its parent's running reply:
+	// it reads, and changes nothing (see chat_asides.go).
+	Aside bool
 }
 
 // Coding reports whether the chat may write and run code in its workspace.
@@ -96,6 +99,9 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	if images {
 		r.HarnessOptions[agentdef.OptionImageGeneration] = "true"
 	}
+	if caps.Aside {
+		r.HarnessOptions[agentdef.OptionAside] = "true"
+	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
@@ -107,6 +113,11 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 // speaker, else its host), which must belong to the chat's creator (a deleted
 // persona gives none).
 func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
+	if chat.ParentChatID != nil {
+		// None of the persona's capabilities: no shell, images, connectors or
+		// secrets, whatever the persona answering the parent may use.
+		return ChatCaps{Aside: true}, nil
+	}
 	id := ChatSpeakerID(chat)
 	if id == nil {
 		return ChatCaps{}, nil
@@ -149,7 +160,7 @@ func sameCapabilities(a, b agentdef.Resolved) bool {
 			modes[scope] = r.Mode(scope)
 		}
 		opts := map[string]string{}
-		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch} {
+		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch, agentdef.OptionAside} {
 			opts[k] = r.HarnessOptions[k]
 		}
 		connectors := []string{}
@@ -218,6 +229,9 @@ type ChatMessageInput struct {
 	AttachmentIDs []uuid.UUID
 	// Research asks for a plan to approve instead of an answer.
 	Research bool
+	// preamble goes ahead of Body in the turn's prompt only; the stored
+	// message is what the person wrote. Set by Vesper, never by a request.
+	preamble string
 }
 
 // ChatCatalog is the harness/model catalog chats validate against.
@@ -485,7 +499,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 		}
 	}
-	prompt := body
+	prompt := in.preamble + body
 	if interrupt {
 		var stopped bool
 		var dropped *store.RunTurn
@@ -512,7 +526,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 				return chat, msg, err
 			}
 		}
-		prompt = note + body
+		prompt = note + prompt
 	} else if chat.InterruptMessageID != nil {
 		// Left by a stop or failure that never resumed it.
 		if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID}); err != nil {
@@ -698,7 +712,8 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 		if err != nil {
 			return chat, run, turn, err
 		}
-		if total == 0 && !relay {
+		// An aside is named for its question and never retitled.
+		if total == 0 && !relay && chat.ParentChatID == nil {
 			prompt += firstTurnNote
 		}
 		if total > 0 {
@@ -1061,6 +1076,19 @@ func (s *Service) DeleteIdleTemporaryChat(ctx context.Context, ws, id uuid.UUID,
 
 // deleteChat removes a locked chat; see DeleteChat.
 func deleteChat(ctx context.Context, q *store.Queries, chat store.ChatSession) error {
+	// Its asides go with it, each stopping its own reply first.
+	asides, err := q.ListChatAsides(ctx, &chat.ID)
+	if err != nil {
+		return err
+	}
+	for _, a := range asides {
+		if a, err = q.LockChatSessionByID(ctx, a.ID); err != nil {
+			return err
+		}
+		if err = deleteChat(ctx, q, a); err != nil {
+			return err
+		}
+	}
 	if err := q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}); err != nil {
 		return err
 	}

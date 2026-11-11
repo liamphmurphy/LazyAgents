@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cx } from "@/lib/cx";
@@ -24,9 +24,22 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   );
 }
 
+/**
+ * How the composer sends while a reply runs, in color: accent queues (and is the
+ * ordinary Send), review blue asks an aside, and human amber interrupts.
+ */
+export type SendTone = "accent" | "aside" | "interrupt";
+
+const frameFocus: Record<SendTone, string> = {
+  accent: "focus-within:border-accent focus-within:ring-accent/30",
+  aside: "focus-within:border-state-review focus-within:ring-state-review/30",
+  interrupt: "focus-within:border-state-human focus-within:ring-state-human/30",
+};
+
 /** The composer's frame: the message box and its options share one border, which takes the focus ring. */
-export const composerFrame =
-  "flex flex-col gap-2.5 rounded-[18px] border border-border-strong bg-surface p-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30";
+export const composerFrameFor = (tone: SendTone = "accent") =>
+  cx("flex flex-col gap-2.5 rounded-[18px] border border-border-strong bg-surface p-2.5 focus-within:ring-2", frameFocus[tone]);
+export const composerFrame = composerFrameFor();
 /** The message box inside the frame: the frame draws the border and focus, so the box doesn't. */
 export const composerInput = "!border-0 !bg-transparent !px-2 !py-1 !text-[15px] focus-visible:!outline-none";
 /** A round 30px icon button in the composer's option row (add context, attach). */
@@ -42,28 +55,40 @@ export const composerPill = (on = false) =>
 export const composerGhost =
   "flex h-[30px] max-w-full items-center gap-1 rounded-full px-2 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
 
-/** The round send button. Its name says what pressing it does: Send, Plan it or Interrupt. */
-export function SendButton({ label, disabled, title }: { label: string; disabled?: boolean; title?: string }) {
+const sendFill: Record<SendTone, string> = { accent: "bg-accent", aside: "bg-state-review", interrupt: "bg-state-human" };
+
+/** The round send button. Its name says what pressing it does: Send, Plan it, Queue, Ask aside or Interrupt. */
+export function SendButton({ label, disabled, title, tone = "accent" }: { label: string; disabled?: boolean; title?: string; tone?: SendTone }) {
   return (
     <button
       type="submit"
       aria-label={label}
       title={title ?? label}
       disabled={disabled}
-      className="grid size-[34px] flex-none place-items-center rounded-full bg-accent text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:bg-border-strong disabled:text-fg-tertiary"
+      data-tone={tone}
+      className={cx(
+        "grid size-[34px] flex-none place-items-center rounded-full text-on-accent hover:brightness-110 disabled:cursor-not-allowed disabled:bg-border-strong disabled:text-fg-tertiary",
+        sendFill[tone],
+      )}
     >
-      <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />
-      </svg>
+      {tone === "aside" ? (
+        <Icon name="branch" size={16} strokeWidth={1.9} />
+      ) : tone === "interrupt" ? (
+        <Icon name="bolt" size={16} strokeWidth={1.9} />
+      ) : (
+        <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />
+        </svg>
+      )}
     </button>
   );
 }
 
-/** What the message box understands, under it rather than in its placeholder. */
-export function ComposerHints({ commands = true }: { commands?: boolean }) {
+/** What the message box understands, under it rather than in its placeholder; children replace the usual line. */
+export function ComposerHints({ commands = true, children }: { commands?: boolean; children?: ReactNode }) {
   return (
     <p className="text-center text-xs text-fg-tertiary" data-testid="composer-hints">
-      {commands ? "/ commands  ·  @ personas  ·  [[ context  ·  " : ""}Shift+Enter for a new line
+      {children ?? `${commands ? "/ commands  ·  @ personas  ·  [[ context  ·  " : ""}Shift+Enter for a new line`}
     </p>
   );
 }

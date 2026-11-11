@@ -190,6 +190,11 @@ const OptionImageGeneration = "image_generation"
 // carry a person's private context and have no run to scope tools to.
 const OptionNoTools = "no_tools"
 
+// OptionAside ("true") marks a chat segment that answers an aside: a question
+// about another chat's running reply. Only the Personal Assistant's chat spec
+// sets it, and the MCP surface it gets is read-only.
+const OptionAside = "aside"
+
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
@@ -199,6 +204,9 @@ func validOptions(field string, opts map[string]string) error {
 	}
 	if _, ok := opts[OptionImageGeneration]; ok {
 		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionImageGeneration)
+	}
+	if _, ok := opts[OptionAside]; ok {
+		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionAside)
 	}
 	if e, ok := opts["effort"]; ok && !slices.Contains(Efforts, e) {
 		return invalid(field, "effort must be one of %s", strings.Join(Efforts, ", "))
