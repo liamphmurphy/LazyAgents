@@ -316,6 +316,7 @@ type ChatSession struct {
 	SecretIds          []uuid.UUID
 	Temporary          bool
 	PendingRepoUrl     *string
+	AutoModel          bool
 }
 
 type ChatSpace struct {

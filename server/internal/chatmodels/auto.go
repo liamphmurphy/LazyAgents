@@ -67,6 +67,85 @@ func rememberOffered(ws uuid.UUID, list []Harness) {
 	}
 }
 
+// ModelAuto in a request routes the chat's model per turn (AutoModel) until the
+// person picks one.
+const ModelAuto = "auto"
+
+// Model tiers, cheapest first. A harness's default model is always standard;
+// others are placed by name, since the catalogs (Claude Code aliases, provider
+// ids, Codex's list) share no tier field.
+const (
+	tierSmall = iota
+	tierStandard
+	tierLarge
+)
+
+var (
+	smallModel = regexp.MustCompile(`\b(haiku|mini|nano)\b`)
+	largeModel = regexp.MustCompile(`\b(fable|max|pro)\b`)
+)
+
+func modelTier(m Model) int {
+	name := strings.ToLower(m.ID + " " + m.Label)
+	switch {
+	case m.Default:
+		return tierStandard
+	case smallModel.MatchString(name):
+		return tierSmall
+	case largeModel.MatchString(name):
+		return tierLarge
+	}
+	return tierStandard
+}
+
+func levelTier(level string) int {
+	switch level {
+	case "low":
+		return tierSmall
+	case "xhigh", "max":
+		return tierLarge
+	}
+	return tierStandard
+}
+
+// AutoModel is the model an automatic chat runs its next turn on. A fresh
+// segment has no prompt cache yet, so it starts on the tier level calls for.
+// An ongoing one only moves up: a model's cache doesn't carry over, so
+// stepping down for a light turn would re-read the whole conversation
+// uncached, usually costing more than staying. A tier the harness doesn't
+// offer falls back to its default model. Before the catalog is listed it
+// keeps current.
+func AutoModel(ws uuid.UUID, harness, current, level string, fresh bool) string {
+	offered.Lock()
+	models := offered.byHarness[offeredKey(ws, harness)]
+	offered.Unlock()
+	if len(models) == 0 {
+		return current
+	}
+	byTier := map[int]string{}
+	have := tierStandard
+	for _, m := range models {
+		t := modelTier(m)
+		if _, ok := byTier[t]; !ok || m.Default {
+			byTier[t] = m.ID
+		}
+		if m.ID == current {
+			have = t
+		}
+	}
+	want := levelTier(level)
+	if !fresh && want <= have {
+		return current
+	}
+	if id, ok := byTier[want]; ok {
+		return id
+	}
+	if id, ok := byTier[tierStandard]; ok && (fresh || have < tierStandard) {
+		return id
+	}
+	return current
+}
+
 // AutoEffort is the effort to run at for level, limited to what the model
 // offers: the highest one at or below level, else the lowest it has. It is
 // empty (the harness default) when the model has no effort control or the
