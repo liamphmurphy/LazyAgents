@@ -102,6 +102,20 @@ func (q *Queries) DeckAssetBytes(ctx context.Context, arg DeckAssetBytesParams) 
 	return total, err
 }
 
+const deleteDeckAsset = `-- name: DeleteDeckAsset :exec
+DELETE FROM deck_assets WHERE canvas_id = $1 AND id = $2
+`
+
+type DeleteDeckAssetParams struct {
+	CanvasID uuid.UUID
+	ID       string
+}
+
+func (q *Queries) DeleteDeckAsset(ctx context.Context, arg DeleteDeckAssetParams) error {
+	_, err := q.db.Exec(ctx, deleteDeckAsset, arg.CanvasID, arg.ID)
+	return err
+}
+
 const getDeckAsset = `-- name: GetDeckAsset :one
 SELECT canvas_id, id, workspace_id, user_id, blob_key, mime, width, height, size_bytes, created_at FROM deck_assets WHERE canvas_id = $1 AND id = $2
 `
@@ -226,4 +240,22 @@ type RenameCanvasParams struct {
 func (q *Queries) RenameCanvas(ctx context.Context, arg RenameCanvasParams) error {
 	_, err := q.db.Exec(ctx, renameCanvas, arg.Title, arg.ID)
 	return err
+}
+
+const userHasDeckBlob = `-- name: UserHasDeckBlob :one
+SELECT EXISTS (SELECT 1 FROM deck_assets WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3)
+`
+
+type UserHasDeckBlobParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+}
+
+// Whether this person already stores this image (in any deck), so it doesn't count twice.
+func (q *Queries) UserHasDeckBlob(ctx context.Context, arg UserHasDeckBlobParams) (bool, error) {
+	row := q.db.QueryRow(ctx, userHasDeckBlob, arg.WorkspaceID, arg.UserID, arg.BlobKey)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

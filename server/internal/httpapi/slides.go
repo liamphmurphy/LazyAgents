@@ -177,23 +177,34 @@ func (s *Server) UploadDeckAsset(ctx context.Context, req api.UploadDeckAssetReq
 	if err != nil {
 		return nil, err
 	}
-	generated, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
+	// The same image already stored for this person costs nothing more.
+	have, err := s.Q.UserHasDeckBlob(ctx, store.UserHasDeckBlobParams{WorkspaceID: ws, UserID: u.ID, BlobKey: a.Key})
 	if err != nil {
 		return nil, err
 	}
-	decks, err := s.Q.DeckAssetBytes(ctx, store.DeckAssetBytesParams{WorkspaceID: ws, UserID: u.ID})
-	if err != nil {
-		return nil, err
+	if !have {
+		generated, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		decks, err := s.Q.DeckAssetBytes(ctx, store.DeckAssetBytesParams{WorkspaceID: ws, UserID: u.ID})
+		if err != nil {
+			return nil, err
+		}
+		// Best effort: parallel uploads can each pass this check (as with Library saves).
+		if generated+decks+int64(len(a.Bytes)) > runs.MaxGeneratedImageStorageBytes {
+			return nil, apperr.Invalid("file", "your Library is full (1 GB): remove decks or items you no longer need")
+		}
 	}
-	if generated+decks+int64(len(a.Bytes)) > runs.MaxGeneratedImageStorageBytes {
-		return nil, apperr.Invalid("file", "your Library is full (1 GB): remove decks or items you no longer need")
-	}
-	if err := s.Blobs.Put(ctx, s.ArtifactBucket, a.Key, bytes.NewReader(a.Bytes), int64(len(a.Bytes)), a.Mime); err != nil {
-		return nil, err
-	}
+	// The row goes in before the blob is written, so a deck deleted meanwhile
+	// sees this reference and leaves the shared blob alone.
 	row, err := s.Q.CreateDeckAsset(ctx, store.CreateDeckAssetParams{CanvasID: cv.ID, ID: deck.NewID("a"), WorkspaceID: ws, UserID: u.ID,
 		BlobKey: a.Key, Mime: a.Mime, Width: int32(a.Width), Height: int32(a.Height), SizeBytes: int64(len(a.Bytes))})
 	if err != nil {
+		return nil, err
+	}
+	if err := s.Blobs.Put(ctx, s.ArtifactBucket, a.Key, bytes.NewReader(a.Bytes), int64(len(a.Bytes)), a.Mime); err != nil {
+		_ = s.Q.DeleteDeckAsset(ctx, store.DeleteDeckAssetParams{CanvasID: cv.ID, ID: row.ID})
 		return nil, err
 	}
 	return api.UploadDeckAsset201JSONResponse{Id: row.ID, Mime: api.DeckAssetMime(row.Mime), W: int(row.Width), H: int(row.Height)}, nil

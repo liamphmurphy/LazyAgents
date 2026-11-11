@@ -99,3 +99,32 @@ func TestNewDeckIsValid(t *testing.T) {
 		}
 	}
 }
+
+func TestPatchesCannotExceedTheBodyCap(t *testing.T) {
+	body, _ := Normalize(fixture(t))
+	notes := strings.Repeat("n", MaxNotesRunes)
+	var ops []Op
+	for i := 0; i < 80; i++ {
+		ops = append(ops, Op{Op: "insert_slide", Value: map[string]any{"layout": "blank", "notes": notes}})
+	}
+	if _, err := Apply(body, ops); err == nil || !strings.Contains(err.Error(), "at most 512 KB") {
+		t.Fatalf("oversized patch accepted or wrong error: %v", err)
+	}
+}
+
+func TestFieldsForOtherTypesAreRefused(t *testing.T) {
+	good := fixture(t)
+	for name, mut := range map[string]func(string) string{
+		"image with shape": func(s string) string { return strings.Replace(s, `"asset":"a_landscape"`, `"asset":"a_landscape","shape":"rect"`, 1) },
+		"line with crop":   func(s string) string { return strings.Replace(s, `"endArrow":true`, `"endArrow":true,"crop":{"l":0.1,"t":0,"r":0,"b":0}`, 1) },
+		"long asset alt":   func(s string) string { return strings.Replace(s, `"alt":"Stylised`, `"alt":"`+strings.Repeat("x", 600)+`Stylised`, 1) },
+	} {
+		bad := mut(good)
+		if bad == good {
+			t.Fatalf("%s: mutation didn't apply", name)
+		}
+		if _, err := Normalize(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

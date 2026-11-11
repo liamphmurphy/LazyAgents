@@ -200,11 +200,12 @@ func (r avatarResponse) VisitGetPersonaAvatarResponse(w http.ResponseWriter) err
 	return r.write(w)
 }
 
-// VisitGetUserAvatarResponse serves a profile picture with the same headers.
+// VisitGetDeckAssetResponse serves a deck image with the same headers.
 func (r avatarResponse) VisitGetDeckAssetResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }
 
+// VisitGetUserAvatarResponse serves a profile picture with the same headers.
 func (r avatarResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }

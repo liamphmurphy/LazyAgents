@@ -24,7 +24,10 @@ CREATE INDEX deck_assets_owner ON deck_assets (workspace_id, user_id);
 CREATE INDEX deck_assets_blob ON deck_assets (blob_key);
 
 -- +goose Down
+-- Lossy by design: decks, their chats and their spaces go. Their image
+-- blobs stay in storage (nothing references them any more).
 DROP TABLE deck_assets;
+DELETE FROM chat_sessions WHERE space_id IN (SELECT id FROM chat_spaces WHERE app = 'slides');
 DELETE FROM chat_canvases WHERE kind = 'deck';
 DELETE FROM chat_spaces WHERE app = 'slides';
 ALTER TABLE chat_spaces DROP CONSTRAINT chat_spaces_app_check;

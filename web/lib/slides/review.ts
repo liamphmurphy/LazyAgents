@@ -4,7 +4,35 @@
  */
 import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schema";
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/**
+ * A value in the server's canonical form for comparing: keys sorted, unset
+ * and default fields dropped (false, empty, left alignment, a zero crop),
+ * hex colours upper-cased and numbers rounded as the server rounds them. The
+ * server normalises what it stores, so comparing raw JSON would see changes
+ * that aren't there.
+ */
+function canon(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canon);
+  if (typeof v === "number") return Math.round(v * 100) / 100;
+  if (typeof v === "string") return /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(o).sort()) {
+      const x = o[k];
+      if (x === undefined || x === null || x === false || x === "") continue;
+      if (k === "align" && x === "left") continue;
+      if ((k === "level" || k === "spaceBefore" || k === "rotation" || k === "strokeWidth" || k === "radius") && x === 0) continue;
+      if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
+      out[k] = canon(x);
+    }
+    return out;
+  }
+  return v;
+}
+
+/** Whether two deck values are the same once both are in canonical form. */
+export const same = (a: unknown, b: unknown) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
 export type Mark = "added" | "removed" | "changed";
 

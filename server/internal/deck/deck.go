@@ -27,6 +27,8 @@ const (
 	MaxTextRunes   = 5000
 	MaxParagraphs  = 200
 	MaxNotesRunes  = 10000
+	// MaxBody bounds a deck's canonical JSON, like every canvas version (canvas maxBody).
+	MaxBody        = 512 * 1024
 	maxCoordinate  = 10000
 	minFontSize    = 8
 	maxFontSize    = 400
@@ -283,6 +285,9 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 	}
 	switch e.Type {
 	case "text":
+		if err := notFor(e.StrokeWidth != 0 || e.Radius != 0 || e.EndArrow || e.StartArrow || e.Alt != "", "strokeWidth, radius, arrows or alt"); err != nil {
+			return err
+		}
 		if f.W < 1 || f.H < 1 {
 			return invalid("%s: a text box needs a width and height", where)
 		}
@@ -302,7 +307,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if err := notFor(len(e.Paragraphs) > 0, "paragraphs (put them in text)"); err != nil {
 			return err
 		}
-		if err := notFor(e.Asset != "" || e.Crop != nil, "asset or crop"); err != nil {
+		if err := notFor(e.Asset != "" || e.Crop != nil || e.VAlign != "" || e.EndArrow || e.StartArrow || e.Alt != "", "asset, crop, valign (put it in text), arrows or alt"); err != nil {
 			return err
 		}
 		if err := checkColor(d.Theme, e.Fill, where+" fill", false); err != nil {
@@ -325,7 +330,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if e.StrokeWidth <= 0 {
 			return invalid("%s: a line needs a strokeWidth", where)
 		}
-		return notFor(e.Fill != "" || e.Text != nil || len(e.Paragraphs) > 0 || e.Asset != "", "fill, text or asset")
+		return notFor(e.Fill != "" || e.Text != nil || len(e.Paragraphs) > 0 || e.Asset != "" || e.Crop != nil || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.Alt != "", "fill, text, asset, crop, shape, radius, valign or alt")
 	case "image":
 		if _, ok := d.Assets[e.Asset]; !ok {
 			return invalid("%s: asset %q isn't in the deck's assets", where, e.Asset)
@@ -350,7 +355,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		if utf8.RuneCountInString(e.Alt) > 500 {
 			return invalid("%s: alt text is at most 500 characters", where)
 		}
-		return notFor(e.Fill != "" || e.Stroke != "" || e.Text != nil || len(e.Paragraphs) > 0, "fill, stroke or text")
+		return notFor(e.Fill != "" || e.Stroke != "" || e.StrokeWidth != 0 || e.Text != nil || len(e.Paragraphs) > 0 || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.EndArrow || e.StartArrow, "fill, stroke, text, shape, radius, valign or arrows")
 	default:
 		return invalid("%s: type must be text, shape, line or image", where)
 	}
@@ -422,6 +427,9 @@ func (d *Deck) Validate() error {
 		if !in(a.Mime, "image/png", "image/jpeg") || a.W < 1 || a.H < 1 || a.W > 20000 || a.H > 20000 {
 			return invalid("asset %s: needs mime image/png or image/jpeg and its pixel size", id)
 		}
+		if utf8.RuneCountInString(a.Alt) > 500 {
+			return invalid("asset %s: alt text is at most 500 characters", id)
+		}
 	}
 	if len(d.Slides) == 0 {
 		return invalid("a deck needs at least one slide")
@@ -471,13 +479,18 @@ func (d *Deck) Validate() error {
 	return nil
 }
 
-// Encode is the canonical JSON of a validated deck.
+// Encode is the canonical JSON of a validated deck, refused over MaxBody.
+// Every path that writes a deck (Normalize, Apply, New) ends here, so the cap
+// holds however the deck was built.
 func (d Deck) Encode() (string, error) {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(d); err != nil {
 		return "", err
+	}
+	if b.Len() > MaxBody {
+		return "", invalid("the deck is %d KB; a deck is at most %d KB (images don't count: shorten text or notes, or split the deck)", b.Len()/1024, MaxBody/1024)
 	}
 	return strings.TrimSuffix(b.String(), "\n"), nil
 }

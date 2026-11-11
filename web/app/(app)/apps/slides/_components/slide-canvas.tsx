@@ -88,6 +88,8 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
     if (readOnly || e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
+    // Keyboard shortcuts (nudge, delete, Enter to edit) follow the selection.
+    box.current?.focus({ preventScroll: true });
     onSelect(el.id);
     const x0 = e.clientX, y0 = e.clientY, f0 = el.frame, r0 = el.rotation ?? 0;
     const rect = box.current!.getBoundingClientRect();
@@ -143,7 +145,11 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       role="group"
       aria-label="Slide canvas. Tab selects elements; arrow keys move the selection; Enter edits its text."
       onKeyDown={onKey}
-      onPointerDown={() => !editing && onSelect(undefined)}
+      onPointerDown={() => {
+        if (editing) return;
+        box.current?.focus({ preventScroll: true });
+        onSelect(undefined);
+      }}
       className="relative aspect-video w-full select-none overflow-hidden rounded-[4px] border border-border bg-[#fff] shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       <SlideSvg deck={deck} slide={shown} assetUrl={assetUrl} fontsReady={fontsReady} className="absolute inset-0 h-full w-full" showOverflow hideTextOf={editing} />

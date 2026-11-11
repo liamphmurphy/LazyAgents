@@ -33,3 +33,10 @@ SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM (
 
 -- name: DeckAssetBlobInUse :one
 SELECT EXISTS (SELECT 1 FROM deck_assets WHERE blob_key = $1);
+
+-- name: DeleteDeckAsset :exec
+DELETE FROM deck_assets WHERE canvas_id = $1 AND id = $2;
+
+-- name: UserHasDeckBlob :one
+-- Whether this person already stores this image (in any deck), so it doesn't count twice.
+SELECT EXISTS (SELECT 1 FROM deck_assets WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3);

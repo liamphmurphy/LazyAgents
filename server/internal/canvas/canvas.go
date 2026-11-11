@@ -91,6 +91,7 @@ func Apply(kind, body string, ops []Op) (string, error) {
 		for i, op := range ops {
 			dops[i] = deck.Op{Op: op.Op, ID: op.ID, After: op.After, Slide: op.Slide, Value: op.Value}
 		}
+		// deck.Apply validates the result and enforces deck.MaxBody (= maxBody) in Encode.
 		return deck.Apply(body, dops)
 	}
 	for i, op := range ops {

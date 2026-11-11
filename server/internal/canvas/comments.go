@@ -337,12 +337,12 @@ func addReply(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur sto
 	return q.CreateChatCanvasComment(ctx, store.CreateChatCanvasCommentParams{CanvasID: c.ID, ParentID: &p.ID, Seq: cur.Seq, AuthorType: by.Type, AuthorID: by.ID, Body: body, Anchor: []byte("{}"), Status: "open"})
 }
 
-// AddComment adds a person's draft comment, or a reply to an existing thread,
-// which goes back to open if it had been addressed.
 // Decks have no comments yet (ADR: deferred); the persona's suggestions are
 // reviewed as changes instead.
 var errNoDeckComments = apperr.Invalid("canvas_id", "a slide deck can't take comments yet")
 
+// AddComment adds a person's draft comment, or a reply to an existing thread,
+// which goes back to open if it had been addressed.
 func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComment, by Actor) (store.ChatCanvasComment, error) {
 	var out store.ChatCanvasComment
 	body, err := cleanBody(in.Body)

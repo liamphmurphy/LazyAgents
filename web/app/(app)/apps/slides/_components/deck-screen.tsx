@@ -12,7 +12,7 @@ import { reviewBase } from "@/lib/doc-review";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
-import { mergeDecks } from "@/lib/slides/review";
+import { mergeDecks, same } from "@/lib/slides/review";
 import { THEMES, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
@@ -89,6 +89,8 @@ export function DeckScreen({ id }: { id: string }) {
   const c = head.data;
   const fonts = useSlideFonts();
   const actions = useCanvasActions(chatId, id);
+  // mutateAsync is stable across renders; the mutation result object isn't.
+  const saveVersion = actions.save.mutateAsync;
   const reviewed = useMarkDocReviewed(id);
   const send = useSendChatMessage(chatId);
   const assetUrl = useCallback((a: string) => assetHref(id, a), [id]);
@@ -123,6 +125,15 @@ export function DeckScreen({ id }: { id: string }) {
     setSavedSeq(seq);
   };
   const syncHist = () => setHist({ undo: history.current.past.length, redo: history.current.future.length });
+  // Undo steps are only valid against the draft they were taken from: once
+  // the server or a merge replaces the draft, undoing would quietly revert
+  // someone else's changes, so the history starts again.
+  const resetHist = () => {
+    history.current = { past: [], future: [], at: 0 };
+    syncHist();
+  };
+  const retries = useRef(0);
+  const retryRef = useRef<() => void>(() => undefined);
 
   // Follow the server while there's nothing unsaved here (the persona's live edits included).
   useEffect(() => {
@@ -133,10 +144,12 @@ export function DeckScreen({ id }: { id: string }) {
       const d = parseDeck(c.body);
       saved.current = { seq: c.seq, deck: d };
       deckRef.current = d;
+      history.current = { past: [], future: [], at: 0 };
       // Syncing the editable draft from the server query, an external store.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSavedSeq(c.seq);
       setDeckState(d);
+      setHist({ undo: 0, redo: 0 });
     } catch {
       setSaveState({ s: "error", message: "This deck's content couldn't be read." });
     }
@@ -148,15 +161,16 @@ export function DeckScreen({ id }: { id: string }) {
       const mine = deckRef.current;
       const at = saved.current;
       if (!mine || !at || !dirty.current || conflicted.current) return;
-      if (encodeDeck(mine) === encodeDeck(at.deck)) {
+      if (same(mine, at.deck)) {
         setDirty(false);
         setSaveState({ s: "saved" });
         return;
       }
       setSaveState({ s: "saving" });
       try {
-        const v = await actions.save.mutateAsync({ base_seq: at.seq, body: encodeDeck(mine), note: "Edited" });
+        const v = await saveVersion({ base_seq: at.seq, body: encodeDeck(mine), note: "Edited" });
         markSaved(v.seq, mine);
+        retries.current = 0;
         if (deckRef.current === mine) {
           setDirty(false);
           setSaveState({ s: "saved" });
@@ -165,12 +179,20 @@ export function DeckScreen({ id }: { id: string }) {
       } catch (e) {
         if (e instanceof ApiError && e.status === 409) {
           // Someone (the persona) saved in between: merge per slide, or ask.
-          const latest = await unwrap(api.GET("/chats/{id}/canvases/{canvasId}", { params: { path: { id: chatId, canvasId: id } } }));
-          const theirs = parseDeck(latest.body);
+          let latest, theirs;
+          try {
+            latest = await unwrap(api.GET("/chats/{id}/canvases/{canvasId}", { params: { path: { id: chatId, canvasId: id } } }));
+            theirs = parseDeck(latest.body);
+          } catch (err) {
+            setSaveState({ s: "error", message: `Couldn't load the newer version: ${errorText(err)}` });
+            retryRef.current();
+            return;
+          }
           const merged = mergeDecks(at.deck, deckRef.current ?? mine, theirs);
           markSaved(latest.seq, theirs);
           if (merged) {
             setDeck(merged);
+            resetHist();
             setSaveState({ s: "unsaved" });
             continue;
           }
@@ -181,11 +203,18 @@ export function DeckScreen({ id }: { id: string }) {
         } else if (e instanceof ApiError && e.status === 422 && /changes nothing/.test(e.message)) {
           setDirty(false);
           setSaveState({ s: "saved" });
-        } else setSaveState({ s: "error", message: errorText(e) });
+        } else {
+          setSaveState({ s: "error", message: errorText(e) });
+          retryRef.current();
+        }
         return;
       }
     }
-  }, [actions.save, chatId, id]);
+    // Still behind after three merges: try again shortly rather than give up.
+    setSaveState({ s: "error", message: "The deck kept changing while saving." });
+    retryRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the helpers only touch refs and state setters
+  }, [saveVersion, chatId, id]);
 
   /** Saves now (after any save in flight) and returns the deck as saved. */
   const flush = useCallback(async () => {
@@ -199,22 +228,37 @@ export function DeckScreen({ id }: { id: string }) {
     return { deck: saved.current!.deck, seq: saved.current!.seq };
   }, [runSave]);
 
-  const schedule = useCallback(() => {
-    clearTimeout(timer.current);
-    const tick = () => {
-      if (saving.current) {
-        timer.current = setTimeout(tick, AUTOSAVE_MS);
-        return;
-      }
-      saving.current = runSave().finally(() => (saving.current = null));
+  const schedule = useCallback(
+    (delay = AUTOSAVE_MS) => {
+      clearTimeout(timer.current);
+      const tick = () => {
+        if (saving.current) {
+          timer.current = setTimeout(tick, AUTOSAVE_MS);
+          return;
+        }
+        saving.current = runSave().finally(() => (saving.current = null));
+      };
+      timer.current = setTimeout(tick, delay);
+    },
+    [runSave],
+  );
+  // A failed save tries again by itself, backing off to 30 s; any edit or Retry saves sooner.
+  useEffect(() => {
+    retryRef.current = () => {
+      retries.current += 1;
+      schedule(Math.min(30_000, 2_000 * 2 ** (retries.current - 1)));
     };
-    timer.current = setTimeout(tick, AUTOSAVE_MS);
-  }, [runSave]);
+  }, [schedule]);
 
-  // Save on the way out: hidden tab, closed page or navigation.
+  // Save on the way out: hidden tab, closed page or navigation. Registered
+  // once and reading flush through a ref, so it runs on leaving, not on every render.
+  const flushRef = useRef(flush);
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
   useEffect(() => {
     const hide = () => {
-      if (document.visibilityState === "hidden" && dirty.current) void flush().catch(() => undefined);
+      if (document.visibilityState === "hidden" && dirty.current) void flushRef.current().catch(() => undefined);
     };
     const leave = (e: BeforeUnloadEvent) => {
       if (dirty.current) e.preventDefault();
@@ -224,9 +268,9 @@ export function DeckScreen({ id }: { id: string }) {
     return () => {
       document.removeEventListener("visibilitychange", hide);
       window.removeEventListener("beforeunload", leave);
-      if (dirty.current) void flush().catch(() => undefined);
+      if (dirty.current) void flushRef.current().catch(() => undefined);
     };
-  }, [flush]);
+  }, []);
 
   // ---- Persona review: their versions after the person's last edit or review.
   const base = c ? reviewBase(c.versions, ref.data?.reviewed_seq ?? 0) : 0;
@@ -308,6 +352,9 @@ export function DeckScreen({ id }: { id: string }) {
   const [notice, setNotice] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const onImage = async (file: File) => {
+    // The slide it was added on, even if the person moves on while it uploads.
+    const target = slide?.id;
+    if (!target) return;
     setNotice(undefined);
     setUploading(true);
     try {
@@ -317,8 +364,9 @@ export function DeckScreen({ id }: { id: string }) {
       const k = Math.min(1200 / a.w, 800 / a.h, 1);
       const w = Math.round(a.w * k), h = Math.round(a.h * k);
       const el: Element = { id: newId("e"), type: "image", asset: a.id, frame: { x: Math.round((1920 - w) / 2), y: Math.round((1080 - h) / 2), w, h }, alt: file.name.replace(/\.[a-z0-9]+$/i, "") };
-      update((d) => ({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
-      addElement(el);
+      if (readOnly) throw new Error("the deck became read-only while uploading; add it again once you can edit");
+      update((d) => mapSlide(target, (s) => ({ ...s, elements: [...s.elements, el] }))({ ...d, assets: { ...d.assets, [a.id]: { mime: a.mime, w: a.w, h: a.h } } }));
+      if (slide?.id === target) setSelected(el.id);
     } catch (e) {
       setNotice(`Couldn't add ${file.name}: ${errorText(e)}`);
     } finally {

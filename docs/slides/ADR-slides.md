@@ -418,6 +418,7 @@ Liam approved this ADR and the mockups, then asked for the implementation in the
   - Screens: deck list at `/apps/slides`, editor at `/apps/slides/{id}`, presentation at `/present/slides/{id}`. The presentation sits outside the app shell, like the print pages.
 - **Fonts.** The bundle is the upstream Liberation 2.1.5 TTFs (OFL) under `web/public/fonts/slides`, 4.2 MB for 12 faces. Each face loads only when it's used.
 - **SVG rendering.** Every slide is drawn with `text-rendering: geometricPrecision`. Hinted SVG text draws up to 2.5% narrower than the canvas measures at small scales, which opened gaps between words and made thumbnails overlap. Unhinted, the editor, thumbnails, presentation and PDF agree to within about 0.5%.
+- **Follow-up from code review (N3).** Deleting a deck's chat through `/chats/{id}`, or deleting the Slides space, cascades its `deck_assets` rows but leaves the image blobs in storage. `DeleteDeck` only removes blobs nothing else references. A periodic sweep of `slides/` blobs with no `deck_assets` row should replace inline deletion. Until then, orphaned blobs cost storage only, not quota: quota is counted from the rows.
 - **Not yet built.**
   - The conflict banner's **Compare** button: the banner offers Use the latest version and Keep mine.
   - The persona's `slides_add_image` tool: the persona edits text, shapes, layouts and themes, and the person adds images.
