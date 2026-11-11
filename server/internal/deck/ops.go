@@ -35,13 +35,29 @@ func (d *Deck) slideIndex(id string) int {
 	return slices.IndexFunc(d.Slides, func(s Slide) bool { return s.ID == id })
 }
 
-func (d *Deck) findElement(id string) (int, int) {
+// findElement finds an element by id: its slide, its index among the slide's
+// elements and, for an element inside a group, its index in the group (else -1).
+func (d *Deck) findElement(id string) (int, int, int) {
 	for i, s := range d.Slides {
-		if j := slices.IndexFunc(s.Elements, func(e Element) bool { return e.ID == id }); j >= 0 {
-			return i, j
+		for j, e := range s.Elements {
+			if e.ID == id {
+				return i, j, -1
+			}
+			if k := slices.IndexFunc(e.Elements, func(c Element) bool { return c.ID == id }); k >= 0 {
+				return i, j, k
+			}
 		}
 	}
-	return -1, -1
+	return -1, -1, -1
+}
+
+// elementAt is the element findElement found.
+func (d *Deck) elementAt(i, j, k int) *Element {
+	e := &d.Slides[i].Elements[j]
+	if k >= 0 {
+		return &e.Elements[k]
+	}
+	return e
 }
 
 // merge sets fields on a copy of cur (as JSON objects), keeping id and type.
@@ -169,12 +185,6 @@ func (d *Deck) apply(op Op) error {
 		if i < 0 {
 			return fmt.Errorf("no slide %q (set slide to the slide's id)", op.Slide)
 		}
-		after := len(d.Slides[i].Elements) - 1
-		if op.After != "" {
-			if after = slices.IndexFunc(d.Slides[i].Elements, func(e Element) bool { return e.ID == op.After }); after < 0 {
-				return fmt.Errorf("no element %s on slide %s", op.After, op.Slide)
-			}
-		}
 		var e Element
 		if err := convert(op.Value, &e); err != nil {
 			return fmt.Errorf("value isn't an element: %v", err)
@@ -182,12 +192,32 @@ func (d *Deck) apply(op Op) error {
 		if e.ID == "" {
 			e.ID = NewID("e")
 		}
-		d.Slides[i].Elements = insertAt(d.Slides[i].Elements, after, e)
+		for k := range e.Elements {
+			if e.Elements[k].ID == "" {
+				e.Elements[k].ID = NewID("e")
+			}
+		}
+		list := &d.Slides[i].Elements
+		after := len(*list) - 1
+		if op.After != "" {
+			si, j, k := d.findElement(op.After)
+			if si != i {
+				return fmt.Errorf("no element %s on slide %s", op.After, op.Slide)
+			}
+			// After an element inside a group puts the new one in that group.
+			if k >= 0 {
+				list, after = &d.Slides[i].Elements[j].Elements, k
+			} else {
+				after = j
+			}
+		}
+		*list = insertAt(*list, after, e)
 	case "set_element":
-		i, j := d.findElement(op.ID)
+		i, j, k := d.findElement(op.ID)
 		if i < 0 {
 			return fmt.Errorf("no element %s", op.ID)
 		}
+		cur := d.elementAt(i, j, k)
 		// {"style": id} applies a style preset, after any other fields.
 		fields, style := op.Value, ""
 		if v, ok := op.Value["style"]; ok {
@@ -200,21 +230,37 @@ func (d *Deck) apply(op Op) error {
 			delete(fields, "style")
 		}
 		var e Element
-		if err := merge(d.Slides[i].Elements[j], fields, &e); err != nil {
+		if err := merge(*cur, fields, &e); err != nil {
 			return err
+		}
+		// A group's frame is its children's box: setting it moves and scales them.
+		if _, ok := fields["frame"]; ok && e.IsGroup() {
+			to := e.Frame
+			e.Frame = Bounds(e.Elements)
+			e.ScaleChildren(to)
 		}
 		if style != "" {
 			if err := ApplyStyle(&e, style); err != nil {
 				return err
 			}
 		}
-		d.Slides[i].Elements[j] = e
+		*cur = e
 	case "remove_element":
-		i, j := d.findElement(op.ID)
+		i, j, k := d.findElement(op.ID)
 		if i < 0 {
 			return fmt.Errorf("no element %s", op.ID)
 		}
-		d.Slides[i].Elements = slices.Delete(d.Slides[i].Elements, j, j+1)
+		els := &d.Slides[i].Elements
+		if k < 0 {
+			*els = slices.Delete(*els, j, j+1)
+			break
+		}
+		g := &(*els)[j]
+		g.Elements = slices.Delete(g.Elements, k, k+1)
+		// A group left with one element dissolves into it.
+		if len(g.Elements) == 1 {
+			(*els)[j] = g.Elements[0]
+		}
 	default:
 		return fmt.Errorf("unknown op %q; use set_theme, insert_slide, set_slide, move_slide, remove_slide, insert_element, set_element or remove_element", op.Op)
 	}

@@ -50,8 +50,10 @@ func deckCover(body string) (string, int) {
 	}
 	assets := map[string]deck.Asset{}
 	for _, e := range first.Elements {
-		if a, ok := d.Assets[e.Asset]; ok {
-			assets[e.Asset] = a
+		for _, x := range append([]deck.Element{e}, e.Elements...) {
+			if a, ok := d.Assets[x.Asset]; ok {
+				assets[x.Asset] = a
+			}
 		}
 	}
 	n := len(d.Slides)

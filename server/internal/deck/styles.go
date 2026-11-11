@@ -55,6 +55,18 @@ func ApplyStyle(e *Element, id string) error {
 		}
 	case "line":
 		e.Stroke, e.StrokeWidth = s.LineStroke, s.LineWidth
+	case "group":
+		// A group's shapes and lines take the style; its text and images stay as they are.
+		styled := false
+		for k := range e.Elements {
+			if c := &e.Elements[k]; c.Type == "shape" || c.Type == "line" {
+				_ = ApplyStyle(c, id)
+				styled = true
+			}
+		}
+		if !styled {
+			return fmt.Errorf("this group has no shapes or lines to style")
+		}
 	default:
 		return fmt.Errorf("styles apply to shapes and lines, not %s elements", e.Type)
 	}

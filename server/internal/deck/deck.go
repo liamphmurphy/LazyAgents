@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -99,6 +100,9 @@ type Element struct {
 	Asset       string      `json:"asset,omitempty"`
 	Crop        *Crop       `json:"crop,omitempty"`
 	Alt         string      `json:"alt,omitempty"`
+	// Elements are a group's children, in stacking order, in slide
+	// coordinates; a group's frame is their bounding box.
+	Elements []Element `json:"elements,omitempty"`
 }
 
 type Background struct {
@@ -268,6 +272,77 @@ func normalizeParagraphs(theme Theme, ps []Paragraph, where string) error {
 	return nil
 }
 
+// IsGroup reports whether e is a group of elements.
+func (e *Element) IsGroup() bool { return e.Type == "group" }
+
+// Bounds is the box around frames: lines with a negative width or height
+// count from both ends. Rotation is ignored, as in the editor.
+func Bounds(es []Element) Frame {
+	if len(es) == 0 {
+		return Frame{}
+	}
+	l, t, r, b := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, e := range es {
+		f := e.Frame
+		l = min(l, f.X, f.X+f.W)
+		r = max(r, f.X, f.X+f.W)
+		t = min(t, f.Y, f.Y+f.H)
+		b = max(b, f.Y, f.Y+f.H)
+	}
+	return Frame{X: round(l), Y: round(t), W: round(r - l), H: round(b - t)}
+}
+
+// ScaleChildren maps a group's children from its current frame onto to,
+// scaling their positions and sizes, and sets the group's frame to to.
+func (e *Element) ScaleChildren(to Frame) {
+	from := e.Frame
+	sx, sy := 1.0, 1.0
+	if from.W > 0 {
+		sx = to.W / from.W
+	}
+	if from.H > 0 {
+		sy = to.H / from.H
+	}
+	for k := range e.Elements {
+		f := &e.Elements[k].Frame
+		*f = Frame{X: math.Round(to.X + (f.X-from.X)*sx), Y: math.Round(to.Y + (f.Y-from.Y)*sy), W: math.Round(f.W * sx), H: math.Round(f.H * sy)}
+	}
+	e.Frame = Bounds(e.Elements)
+}
+
+// normalizeGroup checks a group: two or more children that aren't groups
+// or placeholders, no fields of its own beyond id and type (its frame is
+// derived from the children), and no rotation.
+func normalizeGroup(d *Deck, e *Element, where string, seen map[string]bool) error {
+	bare := *e
+	bare.ID, bare.Type, bare.Frame, bare.Elements = "", "", Frame{}, nil
+	if !reflect.DeepEqual(bare, Element{}) {
+		return invalid("%s: a group has only id, type, frame and elements (rotate or style its elements instead)", where)
+	}
+	if len(e.Elements) < 2 {
+		return invalid("%s: a group needs at least 2 elements", where)
+	}
+	for k := range e.Elements {
+		c := &e.Elements[k]
+		cw := fmt.Sprintf("%s child %d (%s)", where, k+1, c.ID)
+		if c.IsGroup() {
+			return invalid("%s: a group can't hold another group", cw)
+		}
+		if c.Placeholder != "" {
+			return invalid("%s: a layout placeholder can't be in a group", cw)
+		}
+		if seen[c.ID] {
+			return invalid("%s: id %s is used twice", cw, c.ID)
+		}
+		seen[c.ID] = true
+		if err := normalizeElement(d, c, cw); err != nil {
+			return err
+		}
+	}
+	e.Frame = Bounds(e.Elements)
+	return nil
+}
+
 func normalizeElement(d *Deck, e *Element, where string) error {
 	if !elementID.MatchString(e.ID) {
 		return invalid("%s: id %q must look like e_ followed by 1–40 lowercase letters, digits or underscores", where, e.ID)
@@ -299,6 +374,9 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 			return invalid("%s: a %s element has no %s", where, e.Type, field)
 		}
 		return nil
+	}
+	if err := notFor(len(e.Elements) > 0, "elements (only a group has)"); err != nil {
+		return err
 	}
 	switch e.Type {
 	case "text":
@@ -374,8 +452,17 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		}
 		return notFor(e.Fill != "" || e.Stroke != "" || e.StrokeWidth != 0 || e.Text != nil || len(e.Paragraphs) > 0 || e.Shape != "" || e.Radius != 0 || e.VAlign != "" || e.EndArrow || e.StartArrow, "fill, stroke, text, shape, radius, valign or arrows")
 	default:
-		return invalid("%s: type must be text, shape, line or image", where)
+		return invalid("%s: type must be text, shape, line, image or group", where)
 	}
+}
+
+// CountElements counts elements and the elements in their groups.
+func CountElements(es []Element) int {
+	n := 0
+	for _, e := range es {
+		n += 1 + len(e.Elements)
+	}
+	return n
 }
 
 // Parse decodes a deck strictly: unknown fields are refused, so a typo never
@@ -476,8 +563,8 @@ func (d *Deck) Validate() error {
 		if utf8.RuneCountInString(s.Notes) > MaxNotesRunes {
 			return invalid("%s: notes are at most %d characters", where, MaxNotesRunes)
 		}
-		if len(s.Elements) > MaxElements {
-			return invalid("%s: at most %d elements", where, MaxElements)
+		if n := CountElements(s.Elements); n > MaxElements {
+			return invalid("%s: at most %d elements (counting those in groups), not %d", where, MaxElements, n)
 		}
 		if s.Elements == nil {
 			s.Elements = []Element{}
@@ -488,7 +575,17 @@ func (d *Deck) Validate() error {
 				return invalid("%s element %d: id %s is used twice", where, j+1, e.ID)
 			}
 			seen[e.ID] = true
-			if err := normalizeElement(d, e, fmt.Sprintf("%s element %d (%s)", where, j+1, e.ID)); err != nil {
+			ew := fmt.Sprintf("%s element %d (%s)", where, j+1, e.ID)
+			if e.IsGroup() {
+				if !elementID.MatchString(e.ID) {
+					return invalid("%s: id %q must look like e_ followed by 1–40 lowercase letters, digits or underscores", ew, e.ID)
+				}
+				if err := normalizeGroup(d, e, ew, seen); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := normalizeElement(d, e, ew); err != nil {
 				return err
 			}
 		}
