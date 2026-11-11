@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -13,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -20,6 +22,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/config"
@@ -609,5 +613,112 @@ func TestDeckImageUploadWaitsForSweepLock(t *testing.T) {
 	}
 	if n, err := e.sweep(); err != nil || n != 0 {
 		t.Fatalf("sweep = %d %v", n, err)
+	}
+}
+
+// Migrations 00098 and 00097 roll back cleanly from a database with decks in
+// use, losing only Slides data (by design), and apply again afterwards.
+func TestSlidesMigrationsRollBackAndReapply(t *testing.T) {
+	e := newSlidesEnv(t)
+	ctx := t.Context()
+	id, chat := e.deck("Doomed")
+	e.uploaded(id, pngSized(t, 10, 10, 8))
+	e.want("POST", "/slides/"+id+"/duplicate", nil, http.StatusCreated)
+	e.canvasToken(uuid.MustParse(chat)) // a persona turn: the deck's chat has a run
+	doc := e.want("POST", "/docs", map[string]any{"title": "Kept"}, http.StatusCreated)["id"].(string)
+	count := func(sql string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := e.pool.QueryRow(ctx, sql, args...).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+		return n
+	}
+	chatsBefore := count(`SELECT count(*) FROM chat_sessions`)
+	deckChats := count(`SELECT count(*) FROM chat_sessions c JOIN chat_spaces s ON s.id = c.space_id WHERE s.app = 'slides'`)
+	if deckChats != 2 {
+		t.Fatalf("%d deck chats", deckChats)
+	}
+
+	sqldb := stdlib.OpenDBFromPool(e.pool)
+	defer sqldb.Close()
+	if err := goose.DownToContext(ctx, sqldb, ".", 96); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"deck_assets", "deck_blob_sweep"} {
+		if n := count(`SELECT count(*) FROM pg_tables WHERE tablename = $1`, table); n != 0 {
+			t.Fatalf("%s survived the rollback", table)
+		}
+	}
+	if n := count(`SELECT count(*) FROM chat_canvases WHERE kind = 'deck'`); n != 0 {
+		t.Fatalf("%d decks survived", n)
+	}
+	if n := count(`SELECT count(*) FROM chat_spaces WHERE app = 'slides'`); n != 0 {
+		t.Fatalf("%d Slides spaces survived", n)
+	}
+	if got := count(`SELECT count(*) FROM chat_sessions`); got != chatsBefore-deckChats {
+		t.Fatalf("%d chats after rollback, want %d", got, chatsBefore-deckChats)
+	}
+	if n := count(`SELECT count(*) FROM chat_canvases WHERE id = $1`, doc); n != 1 {
+		t.Fatal("the rollback deleted a document")
+	}
+	if _, err := e.pool.Exec(ctx, `UPDATE chat_canvases SET kind = 'deck' WHERE id = $1`, doc); err == nil {
+		t.Fatal("kind 'deck' is still allowed after the rollback")
+	}
+
+	if err := goose.UpContext(ctx, sqldb, "."); err != nil {
+		t.Fatal(err)
+	}
+	id, _ = e.deck("Again")
+	e.uploaded(id, pngSized(t, 10, 10, 8))
+	e.want("DELETE", "/slides/"+id, nil, http.StatusNoContent)
+	if q := e.queued(); len(q) != 1 {
+		t.Fatalf("queued after reapplying: %v", q)
+	}
+}
+
+// The sweep against a real S3 gateway (TEST_S3_ENDPOINT: dev compose
+// SeaweedFS, or CI): a released image shared with a copy survives, and is
+// deleted from storage once nothing uses it.
+func TestDeckImageSweepRealStore(t *testing.T) {
+	ep := os.Getenv("TEST_S3_ENDPOINT")
+	if ep == "" {
+		t.Skip("TEST_S3_ENDPOINT not set")
+	}
+	const bucket = "test-artifacts"
+	blobs := blob.New(config.S3{Endpoint: ep, Region: "us-east-1", AccessKey: "lazyagents", SecretKey: "lazyagents-secret",
+		Buckets: []string{bucket}, UsePathStyle: true})
+	ctx := t.Context()
+	if err := blobs.EnsureBuckets(ctx); err != nil {
+		t.Fatal(err)
+	}
+	e := &slidesEnv{chatEnv: newChatEnvServer(t, nil, func(s *Server) { s.Blobs, s.ArtifactBucket = blobs, bucket }), blobs: blobs}
+	img := pngSized(t, 12, 12, byte(time.Now().UnixNano()))
+	id, _ := e.deck("Real")
+	asset := e.uploaded(id, img)
+	cp := e.want("POST", "/slides/"+id+"/duplicate", nil, http.StatusCreated)["id"].(string)
+	key := fmt.Sprintf("slides/%s/%s/%x", e.me.WorkspaceID, e.me.ID, sha256.Sum256(img))
+	sweep := func() int {
+		t.Helper()
+		n, err := slides.SweepBlobs(ctx, e.pool, blobs, bucket, time.Now().Add(time.Minute), 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	e.want("DELETE", "/slides/"+id, nil, http.StatusNoContent)
+	if n := sweep(); n != 0 {
+		t.Fatalf("swept %d while the copy uses the image", n)
+	}
+	if code, b := e.image(cp, asset); code != http.StatusOK || !bytes.Equal(b, img) {
+		t.Fatalf("copy's image = %d", code)
+	}
+	e.want("DELETE", "/slides/"+cp, nil, http.StatusNoContent)
+	if n := sweep(); n != 1 {
+		t.Fatalf("swept %d, want 1", n)
+	}
+	if _, err := blobs.Get(ctx, bucket, key); !errors.Is(err, blob.ErrNotFound) {
+		t.Fatalf("blob after sweep: %v", err)
 	}
 }
