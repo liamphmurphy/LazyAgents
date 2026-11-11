@@ -2,6 +2,7 @@ package chatmodels
 
 import (
 	"bytes"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -18,6 +19,30 @@ func TestClaudeControlModelsWithoutInference(t *testing.T) {
 	}
 	if strings.Contains(input.String(), `"user"`) || strings.Count(input.String(), "\n") != 1 || !strings.Contains(input.String(), `"subtype":"initialize"`) {
 		t.Fatalf("unexpected requests: %s", input.String())
+	}
+}
+
+// Claude Code names its aliases without a version ("Fable") and puts the
+// version the alias resolves to at the start of the description.
+func TestClaudeModelLabelsCarryTheVersion(t *testing.T) {
+	// Trimmed from Claude Code 2.1.322's initialize response.
+	output := `{"type":"control_response","response":{"subtype":"success","request_id":"models","response":{"models":[` +
+		`{"value":"default","displayName":"Default (recommended)","description":"Use the default model (currently Opus 5.5) · $4/$20 per Mtok"},` +
+		`{"value":"opus","displayName":"Opus","description":"Opus 5.5 · Best for everyday, complex tasks · $4/$20 per Mtok"},` +
+		`{"value":"fable","displayName":"Fable","description":"Fable 5.2 · Most capable for your hardest and longest-running tasks · $8/$40 per Mtok"},` +
+		`{"value":"sonnet","displayName":"Sonnet","description":"Efficient for routine tasks"},` +
+		`{"value":"haiku","displayName":"Haiku"}]}}}`
+	models, err := ListOverStdio(agentdef.HarnessClaudeCode, &bytes.Buffer{}, strings.NewReader(output))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, m := range models {
+		got[m.ID] = m.Label
+	}
+	want := map[string]string{"default": "Default (recommended)", "opus": "Opus 5.5", "fable": "Fable 5.2", "sonnet": "Sonnet", "haiku": "Haiku"}
+	if !maps.Equal(got, want) {
+		t.Fatalf("labels=%v want %v", got, want)
 	}
 }
 
