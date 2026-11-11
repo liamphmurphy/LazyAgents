@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChatModels, useChatSuggestions, useChats, useCreateChat, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
 import { useWorkflows } from "@/lib/api/workflow-hooks";
+import { RepositoryPicker } from "./repository-picker";
+import { useRepositories } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
-import { codesInRepos, repoShortName, toneLabel } from "@/lib/persona-ui";
+import { toneLabel } from "@/lib/persona-ui";
 import { unavailableReason } from "@/lib/setup";
 import { carouselOrder, carouselWindow, FALLBACK_STARTERS, newChatSelection, personaTagline, pickUpCards, type PickUpTone } from "@/lib/welcome";
 import { timelineTime } from "@/lib/format";
@@ -24,7 +26,7 @@ import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selecti
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
-import { PersonaCarousel, personaLook, useOpenPersonaManager } from "./persona";
+import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 
@@ -115,12 +117,13 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
   // A coding persona works in its first repo unless /repo picks another.
   const [repoPicked, setRepoPicked] = useState<string>();
   const repos = fullPersona?.repos ?? [];
-  const repo = codesInRepos(fullPersona) ? (repoPicked && repos.includes(repoPicked) ? repoPicked : repos[0]) : undefined;
+  const repo = fullPersona?.capabilities.code ? (repoPicked ?? repos[0]) : undefined;
+  const [repoSignal, setRepoSignal] = useState(0);
+  const savedRepos = useRepositories(!!fullPersona?.capabilities.code);
   // With several addresses, a coding chat's first message waits for which one its commits use.
   const emails = boot.data?.me.emails ?? [];
   const [commitEmail, setCommitEmail] = useState<string>();
   const askCommitEmail = needsCommitEmailPick(emails, repo, commitEmail);
-  const managePersonas = useOpenPersonaManager();
   const [text, setText] = useState("");
   const [research, setResearch] = useState(false);
   const [temporary, setTemporary] = useState(false);
@@ -192,13 +195,14 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
         case "persona":
           return (personas.data?.personas ?? []).map((p) => ({ name: p.name, run: () => (p.id === personaId ? `You’re already talking to ${p.name}.` : setPicked(p.id)) }));
         case "repo":
-          return codesInRepos(fullPersona)
-            ? repos.map((r) => ({ name: repoShortName(r), run: () => (r === repo ? "This chat is already in that repository." : setRepoPicked(r)) }))
+          return fullPersona?.capabilities.code
+            ? (savedRepos.data ?? []).map((r) => ({ name: r.name, run: () => setRepoPicked(r.url) }))
             : [];
         default:
           return [];
       }
     },
+    repository: (arg) => { if (!fullPersona?.capabilities.code) return "This persona cannot write code."; if (arg) setRepoPicked(arg); else setRepoSignal((n) => n + 1); },
     hasWorkflows: published.length > 0,
   };
   const actionError = start.error ?? create.error;
@@ -229,19 +233,7 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
               {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
             </Banner>
           )}
-          {fullPersona?.capabilities.code && !repos.length && (
-            <p className="text-[12.5px] text-fg-secondary" data-testid="no-repos-hint">
-              {fullPersona.name} can write code but has no repository yet.{" "}
-              <button type="button" className="text-accent hover:underline" onClick={managePersonas}>
-                Edit the persona to add one
-              </button>
-            </p>
-          )}
-          {repo && repos.length > 1 && (
-            <p className="text-xs text-fg-tertiary" data-testid="welcome-repo" title={repo}>
-              Works in <span className="font-mono text-fg-secondary">{repoShortName(repo)}</span> · /repo to change
-            </p>
-          )}
+          {fullPersona?.capabilities.code && <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} />}
           {repo && emails.length > 1 && (
             <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
           )}

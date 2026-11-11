@@ -73,6 +73,9 @@ func testEnvRepo(ctx context.Context, q *store.Queries, c runCtx) string {
 			return testenv.RepoKey(*c.project.RepoUrl)
 		}
 	case "chat":
+		if c.chatRepoAtStart != nil {
+			return testenv.RepoKey(*c.chatRepoAtStart)
+		}
 		if !allowedScope(c.spec, "repo:write") {
 			return ""
 		}
@@ -105,7 +108,7 @@ func (r *Runner) loadTestEnv(ctx context.Context, c runCtx, repo string) (rec te
 // testEnvServices are the services a turn starts: the project's, or else the
 // repository's recipe.
 func (r *Runner) testEnvServices(ctx context.Context, c runCtx) []agentdef.Service {
-	if len(c.spec.Services) > 0 {
+	if c.run.Purpose != "chat" && len(c.spec.Services) > 0 {
 		return c.spec.Services
 	}
 	rec, _ := r.loadTestEnv(ctx, c, testEnvRepo(ctx, r.q(), c))

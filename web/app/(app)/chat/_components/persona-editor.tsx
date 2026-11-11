@@ -19,11 +19,9 @@ import {
   AVATAR_HINT,
   CHAT_BG,
   INSTRUCTIONS_MAX,
-  MAX_REPOS,
   NAME_MAX,
   PRESET_COLORS,
   TONES,
-  addRepo,
   avatarUploadError,
   checkAvatarFile,
   colorPicker,
@@ -33,7 +31,6 @@ import {
   isConflict,
   cssHex,
   parseHex,
-  repoShortName,
   sameList,
   unusedPreset,
   type AvatarError,
@@ -331,65 +328,6 @@ function Toggle({ id, checked, onChange, title, hint }: { id: string; checked: b
   );
 }
 
-/** The repositories a coding persona may check out: add by URL (Enter or Add), remove, up to MAX_REPOS. Optional: without one it codes in a scratch workspace. */
-function RepoList({ repos, setRepos, serverError }: { repos: string[]; setRepos: (r: string[]) => void; serverError?: string }) {
-  const [text, setText] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  function add() {
-    if (!text.trim()) return;
-    const r = addRepo(repos, text);
-    if ("error" in r) return setProblem(r.error);
-    setRepos(r.repos);
-    setText("");
-    setProblem(null);
-  }
-  const shown = problem ?? serverError;
-  return (
-    <div className="flex flex-col gap-2 pl-[26px]">
-      <label htmlFor="persona-repo" className={label}>Repositories</label>
-      {repos.length > 0 && (
-        <ul aria-label="Repositories" className="flex flex-col gap-1">
-          {repos.map((r) => (
-            <li key={r} data-testid="persona-repo" className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1">
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg" title={r}>{r}</span>
-              <span className="flex-none text-[11px] text-fg-tertiary">{repoShortName(r)}</span>
-              <IconButton icon="x" label={`Remove ${r}`} onClick={() => setRepos(repos.filter((x) => x !== r))} />
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex items-center gap-2">
-        <TextInput
-          id="persona-repo"
-          mono
-          value={text}
-          disabled={repos.length >= MAX_REPOS}
-          placeholder="https://github.com/owner/repo"
-          spellCheck={false}
-          aria-invalid={!!shown}
-          aria-describedby={shown ? "persona-repo-error" : undefined}
-          onChange={(e) => {
-            setText(e.target.value);
-            setProblem(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add();
-            }
-          }}
-        />
-        <Button variant="secondary" icon="plus" disabled={!text.trim() || repos.length >= MAX_REPOS} onClick={add}>
-          Add
-        </Button>
-      </div>
-      {shown && <p id="persona-repo-error" role="alert" className="text-xs text-pill-blocked-fg">{shown}</p>}
-      {repos.length === 0 && <p className="text-[11.5px] text-fg-secondary">Optional. Without a repository, its chats code in an empty scratch workspace with nothing to push to.</p>}
-      <p className="text-[11.5px] text-fg-tertiary">{repos.length} / {MAX_REPOS}. Private repositories use a token from Settings → Connections &amp; secrets.</p>
-    </div>
-  );
-}
-
 // ---- editor ----
 
 type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; svg: boolean; workflows: boolean; connectors: boolean; repos: string[] };
@@ -627,9 +565,9 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     checked={draft.code}
                     onChange={(v) => set({ code: v })}
                     title="Write code"
-                    hint="Writes and runs code in its chat's workspace. With a repository, it clones it and commits and pushes to its own branch for each chat."
+                    hint="Writes and runs code in its chat’s workspace and any repository your GitHub credential can access."
                   />
-                  {draft.code && <RepoList repos={draft.repos} setRepos={(repos) => set({ repos })} serverError={field?.field === "repos" ? field.message : undefined} />}
+                  {draft.code && <a href="/settings#repositories" className="pl-[26px] text-xs text-accent">Manage saved repositories & organizations</a>}
                   {!draft.code && field?.field === "repos" && <p role="alert" className="text-xs text-pill-blocked-fg">{field.message}</p>}
                   <Toggle
                     id="persona-images"

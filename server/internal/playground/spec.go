@@ -19,6 +19,11 @@ import (
 
 // Spec is what a playground runs, as the agent declares it.
 type Spec struct {
+	// Repository and Directory bind the spec to a checkout. Commands and process
+	// directories remain relative to it, so saved specs work in another chat.
+	Repository string `json:"repository,omitempty"`
+	Directory  string `json:"directory,omitempty"`
+
 	// Services start empty next to the processes, reachable by name. When the
 	// agent declares none, the repository's test environment's are used.
 	Services []agentdef.Service `json:"services,omitempty"`
@@ -98,6 +103,10 @@ func invalid(format string, args ...any) error {
 
 // Validate checks a spec and fills its defaults (the catch-all route).
 func (s *Spec) Validate() error {
+	if s.Directory != "" && s.Directory != "." && !relativePath(s.Directory) {
+		return invalid("directory must stay inside the workspace")
+	}
+
 	if err := agentdef.ValidateServices(s.Services); err != nil {
 		return &InvalidError{err.Error()}
 	}

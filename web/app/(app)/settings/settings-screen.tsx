@@ -13,6 +13,7 @@ import { Toggle } from "@/components/ui/controls";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AppearanceSection } from "./appearance-section";
 import { ProjectsSection } from "./projects/projects-screen";
+import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
 import { SetupChecklist } from "@/components/domain/setup";
 
@@ -32,6 +33,7 @@ export function SettingsScreen() {
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
     { id: "workspace", label: "Workspace", health: !secrets.data ? "unknown" : secrets.data.key_configured ? "ok" : "attention" },
     { id: "secrets", label: "Provider credentials", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
+    { id: "repositories", label: "Repository discovery", health: "idle" },
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
     { id: "overrides", label: "Project overrides", health: "idle" },
@@ -67,6 +69,7 @@ export function SettingsScreen() {
           >
             <SecretsSection />
           </Section>
+          <Section id="repositories" title="Repositories & organizations"><RepositorySourcesSection /></Section>
           <Section id="projects" title="Projects" lead="One project maps to one GitHub repository. Without one, runs start in an empty workspace and can’t push.">
             <ProjectsSection />
           </Section>

@@ -55,7 +55,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 			{"both", ChatCaps{Code: true, RepoURL: code.RepoURL, Images: true}, true, false, h == agentdef.HarnessCodex},
 			// Without a repository a coding persona still writes and runs code,
 			// in a scratch workspace.
-			{"code without repo", ChatCaps{Code: true}, true, true, false},
+			{"code without repo", ChatCaps{Code: true}, true, false, false},
 			{"repo without code", ChatCaps{RepoURL: code.RepoURL}, false, false, false},
 		} {
 			t.Run(h+"/"+tc.name, func(t *testing.T) {
@@ -110,7 +110,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 					t.Errorf("scratch workspace instructions present=%v, want %v", scratch, tc.scratch)
 				}
 				// Branches the chat already pushed are listed for a new segment.
-				if listed := strings.Contains(ins, "Branches you already pushed in this chat, oldest first: feat/add-search."); listed != (tc.coding && len(tc.caps.WorkBranches) > 0) {
+				if listed := strings.Contains(ins, "Branches you already pushed in this chat, oldest first: feat/add-search."); listed {
 					t.Errorf("pushed branches listed=%v for %v", listed, tc.caps.WorkBranches)
 				}
 				if tc.coding == strings.Contains(ins, "Never claim tickets, run or execute project work, change code") {

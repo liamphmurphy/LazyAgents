@@ -18,6 +18,7 @@ const (
 // CodeChange is one file a coding chat turn changed. Its JSON is the
 // contract's ChatCodeChange, stored on the assistant message as is.
 type CodeChange struct {
+ Repository string `json:"repository,omitempty"`
 	Path      string  `json:"path"`
 	OldPath   *string `json:"old_path,omitempty"`
 	Status    string  `json:"status"` // added | modified | deleted | renamed

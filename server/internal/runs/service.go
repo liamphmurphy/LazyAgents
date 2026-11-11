@@ -23,6 +23,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
+ "github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 	"github.com/liamphmurphy/vesper/server/internal/transcript"
@@ -53,6 +54,7 @@ const (
 var Terminal = []string{"completed", "failed", "cancelled"}
 
 type Service struct {
+ RepositoryCatalog *repositories.Service
 	Pool      *pgxpool.Pool
 	Secrets   *secrets.Service
 	Artifacts *artifacts.Service

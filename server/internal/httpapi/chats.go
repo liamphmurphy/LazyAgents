@@ -131,12 +131,26 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			reasons[e.SessionID] = e.BodyMd
 		}
 	}
+	repositoryRows, err := s.Q.ChatRepositoriesForChats(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	repositoriesByChat := map[uuid.UUID][]api.ChatRepository{}
+	for _, r := range repositoryRows {
+		repositoriesByChat[r.ChatID] = append(repositoriesByChat[r.ChatID], api.ChatRepository{RepoUrl: r.RepoUrl, Directory: r.Directory, WorkBranches: r.WorkBranches})
+	}
 	for _, c := range chats {
 		item := api.ChatSession{
 			Id: c.ID, Title: c.Title, Harness: api.Harness(c.Harness), Model: c.Model, State: api.ChatState(c.State),
 			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
 			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl,
 		}
+		repos := repositoriesByChat[c.ID]
+		if repos == nil {
+			repos = []api.ChatRepository{}
+		}
+		item.Repositories = &repos
+		item.PendingRepoUrl = c.PendingRepoUrl
 		if c.Temporary {
 			item.Temporary = &c.Temporary
 		}

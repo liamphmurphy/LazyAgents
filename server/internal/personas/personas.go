@@ -225,6 +225,13 @@ func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (
 		CanCreatePersonas: in.Personas != nil && *in.Personas, CanCreateSvgs: in.SVG != nil && *in.SVG, CanCreateWorkflows: in.Workflows != nil && *in.Workflows,
 		CanCreateConnectors: in.Connectors != nil && *in.Connectors,
 	})
+	if err == nil {
+		for _, repo := range repos {
+			if e := q.AddRepositorySource(ctx, store.AddRepositorySourceParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Kind: "repository", Name: repo}); e != nil {
+				return out, e
+			}
+		}
+	}
 	return out, nameTaken(err)
 }
 
@@ -324,6 +331,11 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		}
 		if err != nil {
 			return nameTaken(err)
+		}
+		for _, repo := range repos {
+			if e := q.AddRepositorySource(ctx, store.AddRepositorySourceParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Kind: "repository", Name: repo}); e != nil {
+				return e
+			}
 		}
 		if out.Name != cur.Name || out.Color != cur.Color || out.CanCode != cur.CanCode || out.CanGenerateImages != cur.CanGenerateImages || out.CanCreatePersonas != cur.CanCreatePersonas || out.CanCreateSvgs != cur.CanCreateSvgs || out.CanCreateWorkflows != cur.CanCreateWorkflows {
 			return NotifyChats(ctx, q, id)

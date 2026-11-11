@@ -288,3 +288,22 @@ test("sign-in is hidden without a Docker runner", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Add OpenAI key" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Sign in to/ })).toHaveCount(0);
 });
+
+test("repository discovery saves repositories and organizations shared by all personas", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.goto("/settings#repositories");
+  const section = page.locator("#repositories");
+  await expect(section).toContainText("Access comes from your GitHub credential");
+  await section.getByLabel("Repository or organization", { exact: true }).fill("acme/app");
+  await section.getByRole("button", { name: "Save source" }).click();
+  await expect(section.getByRole("button", { name: "Remove acme/app", exact: true })).toBeVisible();
+  await section.getByLabel("Repository source type").selectOption("organization");
+  await section.getByLabel("Repository or organization", { exact: true }).fill("acme");
+  await section.getByRole("button", { name: "Save source" }).click();
+  await expect(section.getByRole("button", { name: "Remove acme", exact: true })).toBeVisible();
+  await section.getByRole("button", { name: "Refresh organization repositories" }).click();
+  await expect(section.getByRole("button", { name: "Refresh organization repositories" })).toBeEnabled();
+  await section.getByRole("button", { name: "Remove acme/app", exact: true }).click();
+  await expect(section.getByRole("button", { name: "Remove acme/app", exact: true })).toHaveCount(0);
+  expect(mock.api.unhandled).toEqual([]);
+});

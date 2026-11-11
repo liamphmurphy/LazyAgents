@@ -17,7 +17,7 @@ WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND revision =
 UPDATE chat_sessions SET connector_ids = $2 WHERE id = $1 RETURNING *;
 
 -- name: SetChatRepo :one
--- A coding chat's repository, set once right after creation and never changed.
+-- The initial repository; subsequent selections use ActivateChatRepository.
 UPDATE chat_sessions SET repo_url = $2 WHERE id = $1 RETURNING *;
 
 -- name: SetChatCommitEmail :one

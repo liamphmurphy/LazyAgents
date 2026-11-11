@@ -20,6 +20,8 @@ import {
   useSendChatMessage,
   useSetChatCommitEmail,
 } from "@/lib/api/hooks";
+import { RepositoryPicker } from "./repository-picker";
+import { useRepositories, useSetChatRepository } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
@@ -28,7 +30,6 @@ import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
-import { codesInRepos, repoShortName } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -277,6 +278,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const boot = useBootstrap();
   const personas = usePersonas();
   const create = useCreateChat();
+  const selectRepo = useSetChatRepository(id);
+  const [repoSignal, setRepoSignal] = useState(0);
+  const savedRepos = useRepositories();
   const discard = useDeleteChat();
   const qc = useQueryClient();
   // A persona switch hands the unsent draft over to the new chat.
@@ -615,8 +619,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       case "persona":
         return (personas.data?.personas ?? []).map((p) => ({ name: p.name, run: () => (p.id === c.persona?.id ? `You’re already talking to ${p.name}.` : startInstead(p.id)) }));
       case "repo":
-        return codesInRepos(full) && c.persona
-          ? full!.repos.map((r) => ({ name: repoShortName(r), run: () => (r === c.repo_url ? "This chat is already in that repository." : startInstead(c.persona!.id, r)) }))
+        return (c.speaker ?? c.persona)?.capabilities?.code
+          ? (savedRepos.data ?? []).map((r) => ({ name: r.name, run: () => selectRepo.mutate(r.url) }))
           : [];
       default:
         return [];
@@ -650,22 +654,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </span>
             </span>
           )}
-          {c.repo_url && (
-            <span
-              data-testid="repo-chip"
-              title={[c.repo_url, ...(c.work_branches ?? [])].join("\n")}
-              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary max-md:hidden @max-[720px]:hidden"
-            >
-              <Icon name="branch" size={13} className="flex-none" />
-              <span className="truncate text-fg">{repoShortName(c.repo_url)}</span>
-              {!!c.work_branches?.length && (
-                <span className="truncate font-mono text-xs">
-                  {c.work_branches[c.work_branches.length - 1]}
-                  {c.work_branches.length > 1 && ` +${c.work_branches.length - 1}`}
-                </span>
-              )}
-            </span>
-          )}
+          {(c.speaker ?? c.persona)?.capabilities?.code && <RepositoryPicker value={c.repo_url} pending={c.pending_repo_url} onPick={(r) => selectRepo.mutate(r)} disabled={c.archived || selectRepo.isPending} error={selectRepo.error} signal={repoSignal} />}
           {c.workspace_path && <WorkspaceFolderChip path={c.workspace_path} className="max-md:hidden @max-[720px]:hidden" />}
           <SecretsChip chatId={c.id} />
           {c.repo_url && c.commit_email && myEmails.length > 1 && (
@@ -884,7 +873,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               chips={chips}
               onChips={setChips}
               onSubmit={submit}
-              commands={{ plain: plainCommands, options: commandOptions, hasWorkflows: published.length > 0 }}
+              commands={{ plain: plainCommands, options: commandOptions,
+              repository: (arg) => { if (!(c.speaker ?? c.persona)?.capabilities?.code) return "This persona cannot write code."; if (arg) selectRepo.mutate(arg); else setRepoSignal((n) => n + 1); }, hasWorkflows: published.length > 0 }}
               personas={personas.data?.personas ?? []}
               inChat={(personaId) => participants.some((x) => x.id === personaId)}
               disabled={locked}

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -158,28 +159,45 @@ func (r *Runner) checkpointChat(ctx context.Context, run store.Run) error {
 	c := runCtx{run: run, spec: spec}
 	c.project.ID = runs.ProjectIDOrNil(chat.ProjectID)
 	var saved *string
-	if allowedScope(c.spec, "repo:write") && chat.RepoUrl != nil {
+	repos, err := r.q().ChatRepositories(ctx, chat.ID)
+	if err != nil {
+		return err
+	}
+	if allowedScope(c.spec, "repo:write") {
 		env := map[string]string{}
 		for name, key := range map[string]string{"git:pat": "GH_TOKEN", "git:ssh": SSHKeyEnv} {
-			v, err := r.Secrets.Reveal(ctx, c.run.WorkspaceID, &c.project.ID, name)
-			switch {
-			case err == nil:
+			if r.Secrets == nil {
+				continue
+			}
+			v, e := r.Secrets.Reveal(ctx, c.run.WorkspaceID, &c.project.ID, name)
+			if e == nil {
 				env[key] = v
-			case !errors.Is(err, apperr.ErrNotFound) && !errors.Is(err, secrets.ErrNoKey):
-				return r.checkpointFailed(ctx, c, err)
+			} else if !errors.Is(e, apperr.ErrNotFound) && !errors.Is(e, secrets.ErrNoKey) {
+				return r.checkpointFailed(ctx, c, e)
 			}
 		}
-		ScrubChatGitEnv(env, *chat.RepoUrl)
-		branch := CheckpointBranch("chat", c.run.ID)
-		out, err := r.runScript(ctx, c.run.ID, "lazyagents-checkpoint", CheckpointScript(branch), env)
-		if err != nil {
-			return r.checkpointFailed(ctx, c, err)
-		}
-		if strings.Contains(out, checkpointPushed) {
-			saved = &branch
-			r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "checkpoint_pushed", "branch": branch})
+		for _, repo := range repos {
+			branch := CheckpointBranch(fmt.Sprintf("chat/%x", sha256.Sum256([]byte(repo.RepoUrl)))[:21], c.run.ID)
+			script := "if [ ! -d " + shellQuote(repo.Directory+"/.git") + " ]; then echo vesper-checkpoint-absent; exit 0; fi\n(cd " + shellQuote(repo.Directory) + "\n" + CheckpointScript(branch) + ")\n"
+			out, e := r.runScript(ctx, c.run.ID, "lazyagents-checkpoint", script, env)
+			if e != nil {
+				return r.checkpointFailed(ctx, c, e)
+			}
+			if strings.Contains(out, "vesper-checkpoint-absent") {
+				continue
+			}
+			var checkpoint *string
+			if strings.Contains(out, checkpointPushed) {
+				checkpoint = &branch
+				saved = &branch
+				r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "checkpoint_pushed", "repo": repo.RepoUrl, "branch": branch})
+			}
+			if err := r.q().SetRepositoryCheckpoint(ctx, store.SetRepositoryCheckpointParams{ChatID: chat.ID, RepoUrl: repo.RepoUrl, CheckpointBranch: checkpoint}); err != nil {
+				return err
+			}
 		}
 	}
+
 	out, err := r.runScript(ctx, c.run.ID, "lazyagents-chat-files", chatStrayFilesScript, nil)
 	if err != nil {
 		return r.checkpointFailed(ctx, c, err)

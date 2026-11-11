@@ -328,11 +328,12 @@ func (r *Runner) Wait() { r.wg.Wait() }
 // ---------------------------------------------------------------- context
 
 type runCtx struct {
-	run     store.Run
-	ticket  store.Ticket
-	agent   store.Agent
-	project store.Project
-	spec    agentdef.Resolved
+	run             store.Run
+	ticket          store.Ticket
+	agent           store.Agent
+	project         store.Project
+	spec            agentdef.Resolved
+	chatRepoAtStart *string
 }
 
 func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
@@ -351,6 +352,11 @@ func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 		if err != nil {
 			return c, err
 		}
+		selected := ""
+		if chat.RepoUrl != nil {
+			selected = *chat.RepoUrl
+		}
+		c.chatRepoAtStart = &selected
 		c.ticket = store.Ticket{WorkspaceID: chat.WorkspaceID, ProjectID: runs.ProjectIDOrNil(chat.ProjectID), Key: "CHAT-" + chat.ID.String()[:8], Title: chat.Title}
 	} else if c.run.Purpose == runs.PurposeResearch {
 		job, err := q.ResearchJobForRun(ctx, c.run.ID)
@@ -815,13 +821,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		fail("Couldn't read secrets: " + err.Error())
 		return
 	}
-	chatRepo := ""
+
 	if c.run.Purpose == "chat" {
 		plan = ChatSecretPlan(plan, c.spec)
-		if chatRepo, err = chatGitRepo(ctx, r.q(), c); err != nil {
-			fail("Couldn't prepare the chat workspace: " + err.Error())
-			return
-		}
 	}
 	key, _ := HarnessKey(c.spec)
 	if r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
@@ -846,7 +848,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 		}
 	}
 	if c.run.Purpose == "chat" {
-		ScrubChatGitEnv(env, chatRepo)
+		if !allowedScope(c.spec, "repo:write") {
+			ScrubChatGitEnv(env, "")
+		}
 	}
 	setupStart := time.Now()
 	checkpoint := ""
@@ -857,6 +861,24 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 			}
 			fail("Couldn't save an earlier run's unpushed work, so this run did not start: " + err.Error())
 			return
+		}
+	}
+	if c.run.Purpose == "chat" {
+		chat, e := r.q().ChatSessionForRun(ctx, &c.run.ID)
+		if e != nil {
+			fail("Could not find the chat for recovery.")
+			return
+		}
+		previous, e := r.q().PreviousChatWorkspaces(ctx, store.PreviousChatWorkspacesParams{RunID: c.run.ID, ChatID: chat.ID})
+		if e != nil {
+			fail("Could not find earlier workspaces.")
+			return
+		}
+		for _, old := range previous {
+			if e = r.checkpoint(ctx, old.ID); e != nil {
+				fail("Could not save an earlier chat workspace: " + e.Error())
+				return
+			}
 		}
 	}
 	// Recovering earlier work can take minutes; a run cancelled meanwhile must
@@ -903,9 +925,13 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	// time, report the files a first recipe is inferred from.
 	testRepo := testEnvRepo(ctx, r.q(), c)
 	recipe, hasRecipe := r.loadTestEnv(ctx, c, testRepo)
-	script += "\n" + recipe.NixInstallScript()
-	if testRepo != "" && !hasRecipe && len(c.spec.Services) == 0 {
-		script += testFilesScript()
+	if c.run.Purpose == "chat" {
+		script += "\n" + r.chatTestEnvironmentScript(ctx, c)
+	} else {
+		script += "\n" + recipe.NixInstallScript()
+		if testRepo != "" && !hasRecipe && len(c.spec.Services) == 0 {
+			script += testFilesScript()
+		}
 	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "starting", "runner": r.Cfg.ID, "backend": r.Backend.Name(), "branch": branch})
 	proc, err := r.Backend.Start(ctx, run.ID.String(), ExecSpec{
@@ -1169,13 +1195,8 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		log.Error("secrets", "err", err)
 		return
 	}
-	chatRepo := ""
 	if c.run.Purpose == "chat" {
 		plan = ChatSecretPlan(plan, c.spec)
-		if chatRepo, err = chatGitRepo(ctx, q, c); err != nil {
-			r.failChat(ctx, c, "Could not load chat credentials.")
-			return
-		}
 	}
 	env, err := SecretEnv(ctx, r.Secrets, c.run.WorkspaceID, &c.project.ID, plan)
 	if err != nil {
@@ -1183,8 +1204,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		return
 	}
 	if c.run.Purpose == "chat" {
-		ScrubChatGitEnv(env, chatRepo)
+		if !allowedScope(c.spec, "repo:write") {
+			ScrubChatGitEnv(env, "")
+		}
 	}
+
 	if c.run.Purpose == "chat" {
 		// A runner that died mid image step left its job running, which would
 		// keep granting the step's allowances to this turn.
@@ -1209,6 +1233,21 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		_ = agents.RevokeToken(qctx, q, c.agent.ID, tok.ID)
 	}()
 
+	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") && c.chatRepoAtStart != nil && *c.chatRepoAtStart != "" {
+		script, err := chatSetupScript(ctx, q, c)
+		if err != nil {
+			r.failChat(ctx, c, "Could not prepare attached repositories.")
+			return
+		}
+		script += "\n" + r.chatTestEnvironmentScript(ctx, c)
+		output, setupErr := r.runScript(ctx, c.run.ID, "chat-repositories", script, env)
+		if err = setupErr; err != nil {
+			r.failChat(ctx, c, "Could not prepare attached repositories: "+err.Error())
+			return
+		}
+		_, testFiles := takeTestFiles(output)
+		r.inferTestEnv(ctx, c, testEnvRepo(ctx, q, c), testFiles)
+	}
 	ctxFiles, err := ContextFiles(ctx, q, c.agent, c.ticket, c.spec.Memory)
 	if err != nil {
 		log.Warn("context files", "err", err)
@@ -1357,7 +1396,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	sensitive := sensitiveEnv(env)
 	env["LAZYAGENTS_RUN_ID"] = c.run.ID.String()
 	env["LAZYAGENTS_TICKET"] = c.ticket.Key
-	if c.run.Purpose != "chat" || chatRepo != "" {
+	if c.run.Purpose != "chat" || allowedScope(c.spec, "repo:write") {
 		// After sensitiveEnv: the person's name and email aren't secrets to
 		// scrub from the transcript.
 		ident, err := runCommitEnv(ctx, q, c)
@@ -1376,8 +1415,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	// A coding chat's turn is reported as what changed since this commit,
 	// remembered here rather than in a file the agent could edit.
 	codeBase := ""
+	var repositoryBases map[string]string
 	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") {
 		codeBase = r.workspaceBase(ctx, wsID(c.run))
+		repositoryBases = r.chatRepositoryBases(ctx, c)
 	}
 	networks, stopServices, failure := r.startServices(ctx, c, turn, env)
 	if failure != "" {
@@ -1480,8 +1521,8 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			if ctx.Err() != nil {
 				return // shutting down: the turn re-runs on the next runner start
 			}
-			changes := r.chatCodeChanges(ctx, c, codeBase, sensitive, res, code, waitErr)
-			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, chatTurnCode{changes: changes, branches: r.chatPushedBranches(ctx, c)}, images)
+			changes := r.chatRepositoryCodeChanges(ctx, c, repositoryBases, codeBase, sensitive, res, code, waitErr)
+			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, chatTurnCode{changes: changes, repositoryBranches: r.chatRepositoryBranches(ctx, c)}, images)
 		}
 		return
 	}
