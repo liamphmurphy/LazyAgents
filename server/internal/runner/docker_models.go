@@ -132,6 +132,21 @@ func (d *Docker) converseCLI(ctx context.Context, kind, claim, harness, login, c
 	return converse(st, r)
 }
 
+// expireModelListings marks every saved model listing as due, so the next
+// picker load queues a new one. A runner starting may bring a different
+// harness CLI, and its aliases ("fable") can resolve to newer models; a
+// listing's freshness otherwise depends only on the login. The saved models
+// are still served while the new listing runs. Failure only delays the
+// refresh until the listing expires on its own, so it doesn't stop the runner.
+func (r *Runner) expireModelListings(ctx context.Context) {
+	if _, ok := r.Backend.(ModelLister); !ok {
+		return
+	}
+	if _, err := r.q().ExpireModelListings(ctx); err != nil && ctx.Err() == nil {
+		r.Log.Warn("expire model listings", "err", err)
+	}
+}
+
 // tickModelListings answers the model-listing requests the API queued for plan
 // logins (chatmodels.QueuedListings). Like sign-ins they take no run slot.
 func (r *Runner) tickModelListings(ctx context.Context) {

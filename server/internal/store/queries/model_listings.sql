@@ -31,3 +31,8 @@ WHERE claim_id = $1 AND status = 'running';
 UPDATE harness_model_listings
 SET status = 'failed', error = $2, finished_at = now()
 WHERE claim_id = $1 AND status = 'running';
+
+-- name: ExpireModelListings :execrows
+-- A runner starting may bring a different harness CLI, whose aliases resolve
+-- to different models. Saved models stay readable while they're listed again.
+UPDATE harness_model_listings SET listed_at = NULL WHERE listed_at IS NOT NULL;

@@ -393,6 +393,36 @@ func TestModelListingStoresModels(t *testing.T) {
 	}
 }
 
+// A runner may start with a newer harness CLI whose aliases mean newer
+// models, so a fresh listing saved before it started is listed again.
+func TestRunnerStartListsSavedModelsAgain(t *testing.T) {
+	e := newListingEnv(t, &fakeLister{models: []chatmodels.Model{{ID: "fable", Label: "Fable 5.1", Default: true}}})
+	e.set("harness:anthropic", "sk-ant-oat01-abcdefghijklmnopqrstuvwxyz")
+	if row := e.request(t, agentdef.HarnessClaudeCode); row.Status != "done" {
+		t.Fatalf("row %+v", row)
+	}
+	listings := &chatmodels.QueuedListings{Pool: e.r.Pool}
+	label := func() string {
+		t.Helper()
+		models, err := listings.Models(e.ctx, e.ws, agentdef.HarnessClaudeCode, false)
+		if err != nil || len(models) != 1 {
+			t.Fatalf("models %+v err %v", models, err)
+		}
+		return models[0].Label
+	}
+
+	e.f.models = []chatmodels.Model{{ID: "fable", Label: "Fable 5.2", Default: true}}
+	e.r.expireModelListings(e.ctx)
+	if got := label(); got != "Fable 5.1" {
+		t.Fatalf("while listing again, got %q, want the saved models", got)
+	}
+	e.r.tickModelListings(e.ctx)
+	e.r.wg.Wait()
+	if got := label(); got != "Fable 5.2" {
+		t.Fatalf("after listing again, got %q", got)
+	}
+}
+
 func TestModelListingFailsForAPIKey(t *testing.T) {
 	e := newListingEnv(t, &fakeLister{models: []chatmodels.Model{{ID: "x"}}})
 	e.set("harness:anthropic", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz")

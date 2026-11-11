@@ -43,6 +43,20 @@ func (q *Queries) ClaimModelListing(ctx context.Context, runnerID *string) (Harn
 	return i, err
 }
 
+const expireModelListings = `-- name: ExpireModelListings :execrows
+UPDATE harness_model_listings SET listed_at = NULL WHERE listed_at IS NOT NULL
+`
+
+// A runner starting may bring a different harness CLI, whose aliases resolve
+// to different models. Saved models stay readable while they're listed again.
+func (q *Queries) ExpireModelListings(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, expireModelListings)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const failModelListing = `-- name: FailModelListing :execrows
 UPDATE harness_model_listings
 SET status = 'failed', error = $2, finished_at = now()
