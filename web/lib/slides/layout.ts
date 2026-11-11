@@ -4,6 +4,7 @@
  * and the PDF export both draw it, and the PPTX export reuses the constants,
  * so all of them break lines in the same places.
  */
+import { type Seg, isPreset, shapeGeometry } from "./geometry";
 import { type Deck, type Element, type Paragraph, type Run, type Slide, type Slot, type TextBox, type Theme, resolveColor, slotOf, textOf } from "./schema";
 
 export const INSET = 16; // text inset on every side, in slide units (8 pt)
@@ -28,6 +29,7 @@ export type TextOp = { op: "text"; x: number; y: number; text: string; slot: Slo
 export type Op =
   | { op: "rect"; x: number; y: number; w: number; h: number; r: number; fill?: string; stroke?: string; sw: number; rot?: Rot; el?: string }
   | { op: "ellipse"; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw: number; rot?: Rot; el: string }
+  | { op: "path"; segs: Seg[]; fill?: string; stroke?: string; sw: number; rot?: Rot; el: string }
   | { op: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number; endArrow: boolean; startArrow: boolean; rot?: Rot; el: string }
   | { op: "image"; asset: string; x: number; y: number; w: number; h: number; src: { x: number; y: number; w: number; h: number }; alt: string; rot?: Rot; el: string }
   | TextOp;
@@ -71,7 +73,7 @@ export function layoutText(theme: Theme, box: TextBox, frame: Element["frame"], 
         let chunk = "";
         for (const ch of t.text) {
           if (chunk && measure(chunk + ch, t.slot, style, t.run.size) > innerW - left) {
-            cur.push({ ...t, x: 0, w: measure(chunk, t.slot, style, t.run.size) });
+            cur.push({ ...t, text: chunk, x: 0, w: measure(chunk, t.slot, style, t.run.size) });
             flush();
             chunk = "";
           }
@@ -128,6 +130,11 @@ export function imageSource(e: Extract<Element, { type: "image" }>, a: { w: numb
   return { x, y, w, h };
 }
 
+/** The box an element's text wraps in: a preset shape's text rectangle, else the frame. */
+export function textFrame(e: Element): Element["frame"] {
+  return e.type === "shape" && isPreset(e.shape) ? shapeGeometry(e.shape, e.frame).text : e.frame;
+}
+
 /** Everything a slide draws, in paint order, in slide units. */
 export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
   const { theme } = deck;
@@ -139,7 +146,8 @@ export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
     const group: Op[] = [];
     if (e.type === "shape") {
       const paint = { fill: e.fill ? resolveColor(theme, e.fill) : undefined, stroke: e.stroke ? resolveColor(theme, e.stroke) : undefined, sw: e.strokeWidth ?? 0 };
-      if (e.shape === "ellipse") group.push({ op: "ellipse", x: f.x, y: f.y, w: f.w, h: f.h, ...paint, el: e.id });
+      if (isPreset(e.shape)) group.push({ op: "path", segs: shapeGeometry(e.shape, f).segs, ...paint, el: e.id });
+      else if (e.shape === "ellipse") group.push({ op: "ellipse", x: f.x, y: f.y, w: f.w, h: f.h, ...paint, el: e.id });
       else group.push({ op: "rect", x: f.x, y: f.y, w: f.w, h: f.h, r: e.shape === "roundRect" ? Math.min(e.radius ?? 24, f.w / 2, f.h / 2) : 0, ...paint, el: e.id });
     }
     if (e.type === "line") group.push({ op: "line", x1: f.x, y1: f.y, x2: f.x + f.w, y2: f.y + f.h, stroke: resolveColor(theme, e.stroke), sw: e.strokeWidth, endArrow: !!e.endArrow, startArrow: !!e.startArrow, el: e.id });
@@ -150,7 +158,7 @@ export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
     }
     const box = textOf(e);
     if (box) {
-      const t = layoutText(theme, box, f, measure, e.id);
+      const t = layoutText(theme, box, textFrame(e), measure, e.id);
       if (t.overflow) overflow.add(e.id);
       group.push(...t.ops);
     }

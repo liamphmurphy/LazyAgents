@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { cx } from "@/lib/cx";
 import { SlideSvg } from "@/lib/slides/render";
+import { textFrame } from "@/lib/slides/layout";
 import { H, W, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { TextEditor, type TextEditorHandle } from "./text-editor";
 
@@ -221,8 +222,9 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
           ref={editorRef}
           theme={deck.theme}
           box={textOf(ed)!}
-          frame={ed.frame}
+          frame={textFrame(ed)}
           rotation={ed.rotation}
+          pivot={{ x: ed.frame.x + ed.frame.w / 2, y: ed.frame.y + ed.frame.h / 2 }}
           scale={scale}
           onCommit={(paragraphs) => {
             onText(ed.id, paragraphs);

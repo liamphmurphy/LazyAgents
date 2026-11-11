@@ -138,6 +138,15 @@ var (
 	ThemeColors = []string{"background", "text", "heading", "accent", "accent2", "muted", "surface"}
 	Slots       = []string{"sans", "serif", "mono"}
 	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank"}
+	// Shapes are PowerPoint prstGeom names, so PPTX export passes them through;
+	// web/lib/slides/geometry.ts draws the same set.
+	Shapes = []string{
+		"rect", "roundRect", "ellipse",
+		"triangle", "rtTriangle", "diamond", "pentagon", "hexagon", "octagon",
+		"rightArrow", "leftArrow", "upArrow", "downArrow", "chevron", "homePlate",
+		"wedgeRectCallout", "wedgeRoundRectCallout",
+		"star5", "plus", "donut", "heart",
+	}
 	hexColor    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 	slideID     = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
 	elementID   = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
@@ -301,8 +310,8 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		}
 		return normalizeParagraphs(d.Theme, e.Paragraphs, where)
 	case "shape":
-		if !in(e.Shape, "rect", "roundRect", "ellipse") {
-			return invalid("%s: shape must be rect, roundRect or ellipse", where)
+		if !in(e.Shape, Shapes...) {
+			return invalid("%s: shape must be one of %s", where, strings.Join(Shapes, ", "))
 		}
 		if err := notFor(len(e.Paragraphs) > 0, "paragraphs (put them in text)"); err != nil {
 			return err

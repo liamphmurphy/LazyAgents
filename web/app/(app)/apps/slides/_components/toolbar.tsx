@@ -3,8 +3,9 @@
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
+import { LAYOUTS, THEME_COLORS, THEMES, resolveColor, textOf, type ColorRef, type Element, type Layout, type Paragraph, type ShapeKind, type Slot, type Theme, type ThemeKey } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
+import { ShapePicker } from "./shape-picker";
 
 export type TextFormat =
   | { kind: "mark"; mark: "bold" | "italic" | "underline" }
@@ -20,7 +21,7 @@ export type ToolbarActions = {
   canUndo: boolean;
   canRedo: boolean;
   insertText: () => void;
-  insertShape: (shape: "rect" | "roundRect" | "ellipse") => void;
+  insertShape: (shape: ShapeKind) => void;
   insertImage: () => void;
   insertLine: () => void;
   setLayout: (l: Layout) => void;
@@ -90,11 +91,7 @@ export function Toolbar({ theme, themeKey, layout, selected, editing, disabled, 
       <button type="button" className={chip} onMouseDown={keep} onClick={a.redo} disabled={!a.canRedo} aria-label="Redo" title="Redo (⇧⌘Z)">↷</button>
       {sep}
       <button type="button" className={chip} onClick={a.insertText}>T Text</button>
-      <Menu label="Insert shape" trigger={<>◻ Shape ▾</>}>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("rect")}>Rectangle</DropdownMenu.Item>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("roundRect")}>Rounded rectangle</DropdownMenu.Item>
-        <DropdownMenu.Item className={item} onSelect={() => a.insertShape("ellipse")}>Ellipse</DropdownMenu.Item>
-      </Menu>
+      <ShapePicker chip={chip} onPick={a.insertShape} />
       <button type="button" className={chip} onClick={a.insertImage}>▨ Image</button>
       <button type="button" className={chip} onClick={a.insertLine}>╱ Line</button>
       {sep}

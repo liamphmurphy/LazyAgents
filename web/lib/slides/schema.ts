@@ -21,7 +21,14 @@ export type Placeholder = "title" | "subtitle" | "body" | "body2" | "image";
 
 type Common = { id: string; frame: Frame; rotation?: number; placeholder?: Placeholder };
 export type TextElement = Common & { type: "text" } & TextBox;
-export type ShapeElement = Common & { type: "shape"; shape: "rect" | "roundRect" | "ellipse"; fill?: ColorRef; stroke?: ColorRef; strokeWidth?: number; radius?: number; text?: TextBox };
+/** PowerPoint prstGeom names; server/internal/deck Shapes and geometry.ts SHAPES list the same set. */
+export type ShapeKind =
+  | "rect" | "roundRect" | "ellipse"
+  | "triangle" | "rtTriangle" | "diamond" | "pentagon" | "hexagon" | "octagon"
+  | "rightArrow" | "leftArrow" | "upArrow" | "downArrow" | "chevron" | "homePlate"
+  | "wedgeRectCallout" | "wedgeRoundRectCallout"
+  | "star5" | "plus" | "donut" | "heart";
+export type ShapeElement = Common & { type: "shape"; shape: ShapeKind; fill?: ColorRef; stroke?: ColorRef; strokeWidth?: number; radius?: number; text?: TextBox };
 export type LineElement = Common & { type: "line"; stroke: ColorRef; strokeWidth: number; endArrow?: boolean; startArrow?: boolean };
 export type ImageElement = Common & { type: "image"; asset: string; crop?: Crop; alt?: string };
 export type Element = TextElement | ShapeElement | LineElement | ImageElement;

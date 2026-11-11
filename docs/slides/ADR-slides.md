@@ -51,7 +51,7 @@ Slide     { id, layout: Layout, background?: {color: ColorRef}, notes?: string, 
 Layout    "title" | "title-body" | "two-column" | "image-right" | "section" | "blank"
 Element   common { id, type, frame: {x,y,w,h}, rotation?: deg, placeholder?: "title"|"subtitle"|"body"|"body2"|"image" }
   text    { paragraphs: Paragraph[], valign?: "top"|"middle"|"bottom" }
-  shape   { shape: "rect"|"roundRect"|"ellipse", fill?, stroke?, strokeWidth?, radius?, text?: {paragraphs, valign} }
+  shape   { shape: "rect"|"roundRect"|"ellipse"|<18 PowerPoint presets, see shapes/README.md>, fill?, stroke?, strokeWidth?, radius?, text?: {paragraphs, valign} }
   line    { stroke, strokeWidth, endArrow?: bool, startArrow?: bool }   // frame gives the two end points
   image   { asset: assetId, crop?: {l,t,r,b} (fractions of the source), alt: string }   // always "cover" inside the frame after the crop
 Paragraph { runs: Run[], align?: "left"|"center"|"right", bullet?: "disc"|"number", level?: 0..4, spaceBefore?: units }
@@ -236,7 +236,7 @@ The menu item says "Downloads a PDF", not "Opens the print dialog". The button s
 | text element | text box `p:sp`, `wrap="square"`, insets of 8 pt, no autofit, `anchor` from valign |
 | run | `a:r` with `b`, `i`, `u="sng"`, `sz` (pt × 100), `solidFill`, `latin typeface` (the slot's Office font) |
 | paragraph | `algn`, exact `a:lnSpc/spcPts`, `spcBef`, `buChar •` or `buAutoNum arabicPeriod`, `lvl` with `marL`/`indent` |
-| shape | `prstGeom rect | roundRect (adj from radius) | ellipse`, fill and line; text inside the same `p:sp` |
+| shape | `prstGeom` named after the shape (`rect`, `roundRect` with adj from radius, `ellipse`, and the presets in shapes/README.md at default adjust values), fill and line; text inside the same `p:sp` |
 | line | `prstGeom line` with `tailEnd type="triangle"` |
 | image | `p:pic`, `a:srcRect` from crop + cover (fractions), `descr` = alt |
 | rotation | `a:xfrm rot` |
@@ -355,7 +355,7 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
 | Runs: bold, italic, underline, colour, size; sans/serif/mono | ✓ | ✓ | ✓ (embedded) | ✓ (Arial / Times New Roman / Courier New) |
 | Paragraphs: left/centre/right, disc/number bullets, 5 levels, space before | ✓ | ✓ | ✓ | ✓ |
 | Overflow | ✓ flagged | spills | spills, clipped at page | spills |
-| Shapes: rect, rounded rect, ellipse; fill, stroke; text inside | ✓ | ✓ | ✓ | ✓ |
+| Shapes: rect, rounded rect, ellipse and 18 presets (shapes/README.md); fill, stroke; text inside | ✓ | ✓ | ✓ | ✓ |
 | Lines with arrowheads | ✓ | ✓ | ✓ | ✓ |
 | Rotation | ✓ | ✓ | ✓ | ✓ |
 | Images PNG/JPEG, crop + cover, alt text | ✓ | ✓ | ✓ | ✓ (`srcRect`, `descr`) |
