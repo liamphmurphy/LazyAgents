@@ -7632,6 +7632,7 @@ components:
         agent: { $ref: "#/components/schemas/AgentRef" }
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string, description: The model the next turn uses }
+        auto_model: { type: boolean, description: "The model is routed per turn: a fresh session starts on the tier the message calls for, and a running one only moves up. Picking a model turns it off." }
         effort: { $ref: "#/components/schemas/ChatEffort" }
         state: { $ref: "#/components/schemas/ChatState" }
         error: { type: string, description: Why the last turn failed, when state is failed }
@@ -7667,7 +7668,7 @@ components:
         project: { type: string, description: "Project to attach from the start; omit for a chat with no project" }
         title: { type: string, maxLength: 200 }
         harness: { $ref: "#/components/schemas/Harness" }
-        model: { type: string, description: Defaults to the harness's default model in GET /chat-models }
+        model: { type: string, description: "Defaults to the harness's default model in GET /chat-models; auto routes the model per turn (see ChatSession.auto_model)" }
         effort: { $ref: "#/components/schemas/ChatEffort" }
         persona_id: { type: string, format: uuid, description: "One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life." }
         repo_url: { type: string, description: "A GitHub URL, owner/repository or an unambiguous saved name for a coding persona. Saved repositories aid discovery and never restrict access." }
@@ -7691,7 +7692,7 @@ components:
         research: { type: boolean, description: "Ask for a research plan to approve instead of an answer" }
         body: { type: string, minLength: 1, maxLength: 100000 }
         harness: { $ref: "#/components/schemas/Harness" }
-        model: { type: string }
+        model: { type: string, description: "From this message on; auto routes it per turn (see ChatSession.auto_model), and any other model turns that off. Omit to keep the chat's." }
         effort:
           type: string
           enum: [default, low, medium, high, xhigh, max]

@@ -169,6 +169,9 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			e := api.ChatEffort(c.Effort)
 			item.Effort = &e
 		}
+		if c.AutoModel {
+			item.AutoModel = &c.AutoModel
+		}
 		if c.ProjectID != nil {
 			if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == *c.ProjectID }); i >= 0 {
 				item.Project = &projects[i].Key

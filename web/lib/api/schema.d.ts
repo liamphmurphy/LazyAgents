@@ -6920,6 +6920,8 @@ export interface components {
             harness: components["schemas"]["Harness"];
             /** @description The model the next turn uses */
             model: string;
+            /** @description The model is routed per turn: a fresh session starts on the tier the message calls for, and a running one only moves up. Picking a model turns it off. */
+            auto_model?: boolean;
             effort?: components["schemas"]["ChatEffort"];
             state: components["schemas"]["ChatState"];
             /** @description Why the last turn failed */
@@ -6969,7 +6971,7 @@ export interface components {
             project?: string;
             title?: string;
             harness?: components["schemas"]["Harness"];
-            /** @description Defaults to the harness's default model in GET /chat-models */
+            /** @description Defaults to the harness's default model in GET /chat-models; auto routes the model per turn (see ChatSession.auto_model) */
             model?: string;
             effort?: components["schemas"]["ChatEffort"];
             /**
@@ -7004,6 +7006,7 @@ export interface components {
             research?: boolean;
             body: string;
             harness?: components["schemas"]["Harness"];
+            /** @description From this message on; auto routes it per turn (see ChatSession.auto_model), and any other model turns that off. Omit to keep the chat's. */
             model?: string;
             /**
              * @description Reasoning effort from this message on; default clears it back to the harness's own default. Omit to keep the chat's effort.

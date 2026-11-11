@@ -8,7 +8,8 @@ import { floatPanel } from "@/components/domain/pickers";
 import { catalogModelLabel } from "@/lib/chat-ui";
 import { composerGhost } from "./reply-tools";
 
-export type Selection = { harness: Harness; model: string };
+/** auto routes the model per message (the server's AutoModel); model is then the one it starts from. */
+export type Selection = { harness: Harness; model: string; auto?: boolean };
 export type Effort = Schemas["ChatEffort"];
 type Group = Schemas["ChatHarnessModels"];
 
@@ -25,7 +26,8 @@ export function modelEfforts(groups: Group[] | undefined, s: Selection): { effor
   return { efforts: m?.efforts ?? [] };
 }
 
-export const sameSelection = (a: Selection, b: Selection) => a.harness === b.harness && a.model === b.model;
+export const sameSelection = (a: Selection, b: Selection) =>
+  a.harness === b.harness && !!a.auto === !!b.auto && (!!a.auto || a.model === b.model);
 
 export function modelLabel(groups: Group[] | undefined, s: Selection) {
   const g = groups?.find((x) => x.harness === s.harness);
@@ -131,27 +133,38 @@ export function ModelEffortPicker({
   disabled?: boolean;
 }) {
   const l = modelLabel(groups, value);
+  const model = value.auto ? "Auto" : l.model;
   const options: (Effort | undefined)[] = efforts.length ? [undefined, ...efforts] : [];
+  // "Auto · Auto" says nothing twice: an all-automatic choice is just "Auto".
+  const showEffort = options.length > 0 && !(value.auto && !effort);
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
           disabled={disabled}
-          aria-label={`Model and effort for the next message: ${l.harness}, ${l.model}${options.length ? `, ${effortLabel(effort)} effort` : ""}`}
-          title={`${l.harness} · ${l.model}${options.length ? ` · ${effortLabel(effort)} effort` : ""}`}
+          aria-label={`Model and effort for the next message: ${l.harness}, ${value.auto ? "automatic model" : l.model}${options.length ? `, ${effortLabel(effort)} effort` : ""}`}
+          title={`${l.harness} · ${value.auto ? `Auto (now ${l.model})` : l.model}${options.length ? ` · ${effortLabel(effort)} effort` : ""}`}
           className={composerGhost}
         >
           <span className="truncate">
-            {l.model}
-            {options.length > 0 && <span className="text-fg-tertiary"> · </span>}
-            {options.length > 0 && effortShort(effort)}
+            {model}
+            {showEffort && <span className="text-fg-tertiary"> · </span>}
+            {showEffort && effortShort(effort)}
           </span>
           <Icon name="chev" size={13} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" side="top" sideOffset={6} collisionPadding={MENU_EDGE} className={menuPanel}>
+          <DropdownMenu.Item aria-label="Automatic model" className={item} onSelect={() => onChange({ harness: value.harness, model: value.model, auto: true })}>
+            <span className="flex items-center gap-2">
+              Auto
+              <span className="ml-auto w-4 text-accent">{value.auto && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
+            </span>
+            <span className="text-xs text-fg-tertiary">Picks the model for each message</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           {(groups ?? []).map((g, i) => (
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
@@ -162,7 +175,7 @@ export function ModelEffortPicker({
                 </div>
               )}
               {g.models.map((m) => {
-                const on = value.harness === g.harness && (value.model === m.id || catalogModelLabel([m], value.model) === m.label);
+                const on = !value.auto && value.harness === g.harness && (value.model === m.id || catalogModelLabel([m], value.model) === m.label);
                 return (
                   <DropdownMenu.Item
                     key={m.id}

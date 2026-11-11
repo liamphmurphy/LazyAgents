@@ -556,6 +556,66 @@ func TestChatEffort(t *testing.T) {
 	}
 }
 
+// An automatic chat starts a fresh session on the tier its message calls for,
+// only moves up while the session runs, and stops routing once a model is picked.
+func TestChatAutoModel(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := context.Background()
+	e.want("GET", "/chat-models", nil, 200) // lists the catalog AutoModel routes within
+	runModel := func(id string) (runID, model string) {
+		t.Helper()
+		if err := e.pool.QueryRow(ctx, `SELECT r.id::text, r.model FROM runs r JOIN chat_sessions c ON c.current_run_id = r.id WHERE c.id = $1`, id).Scan(&runID, &model); err != nil {
+			t.Fatal(err)
+		}
+		return runID, model
+	}
+	post := func(id string, body map[string]any) map[string]any {
+		t.Helper()
+		res := e.want("POST", "/chats/"+id+"/messages", body, http.StatusAccepted)
+		return res["chat"].(map[string]any)
+	}
+
+	chat := e.newChat(map[string]any{"harness": "claude-code", "model": "auto"})
+	id := chat["id"].(string)
+	if chat["auto_model"] != true || chat["model"] != "opus-5.5" {
+		t.Fatalf("created %v", chat)
+	}
+	// A greeting starts the session on the small model.
+	if c := post(id, map[string]any{"body": "hi"}); c["model"] != "haiku-5.5" || c["auto_model"] != true {
+		t.Fatalf("fresh light turn %v", c)
+	}
+	run0, m := runModel(id)
+	if m != "haiku-5.5" {
+		t.Fatalf("segment model %q", m)
+	}
+	// Real work moves the same session up.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	post(id, map[string]any{"body": "fix the failing test in chat.go"})
+	if run, m := runModel(id); run != run0 || m != "opus-5.5" {
+		t.Fatalf("run %s model %q, want %s opus-5.5", run, m, run0)
+	}
+	// A light turn doesn't step back down mid-session.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	post(id, map[string]any{"body": "thanks"})
+	if _, m := runModel(id); m != "opus-5.5" {
+		t.Fatalf("stepped down to %q", m)
+	}
+	// Picking a model turns routing off; auto turns it back on.
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	if c := post(id, map[string]any{"body": "hi", "model": "sonnet-5.5"}); c["auto_model"] != nil || c["model"] != "sonnet-5.5" {
+		t.Fatalf("picked model %v", c)
+	}
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	if c := post(id, map[string]any{"body": "fix it", "model": "auto"}); c["auto_model"] != true || c["model"] != "sonnet-5.5" {
+		t.Fatalf("re-enabled %v", c)
+	}
+
+	// Without auto a chat keeps the model it was given.
+	if c := e.newChat(nil); c["auto_model"] != nil {
+		t.Fatalf("default chat routes its model: %v", c)
+	}
+}
+
 // Each reply shows the effort its turn ran at, even after a later turn changes
 // the run's, and an automatic chat's replies say why Vesper picked it.
 func TestChatRepliesShowTheirTurnsEffort(t *testing.T) {

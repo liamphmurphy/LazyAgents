@@ -324,6 +324,7 @@ type ChatSession struct {
 	Temporary          bool
 	PendingRepoUrl     *string
 	ParentChatID       *uuid.UUID
+	AutoModel          bool
 }
 
 type ChatSpace struct {

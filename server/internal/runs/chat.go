@@ -327,7 +327,7 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden, SpaceID: space, Temporary: in.Temporary})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, AutoModel: sel.AutoModel, PersonaID: personaID, Hidden: in.Hidden, SpaceID: space, Temporary: in.Temporary})
 		if err != nil {
 			return err
 		}
@@ -456,7 +456,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	}
 	// Validate the selection and the refs before anything is written; a 422
 	// leaves the stored selection unchanged (the whole transaction rolls back).
-	cur := chatmodels.Selection{Harness: chat.Harness, Model: chat.Model, Effort: chat.Effort}
+	cur := chatmodels.Selection{Harness: chat.Harness, Model: chat.Model, Effort: chat.Effort, AutoModel: chat.AutoModel}
 	sel, err := cat.Resolve(ctx, q, chat.WorkspaceID, cur, chatmodels.Selection{Harness: in.Harness, Model: in.Model, Effort: in.Effort})
 	if err != nil {
 		return chat, msg, err
@@ -483,7 +483,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		return chat, msg, err
 	}
 	if sel != cur {
-		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort}); err != nil {
+		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, AutoModel: sel.AutoModel}); err != nil {
 			return chat, msg, err
 		}
 	}
@@ -598,6 +598,15 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 	}
 	prompt := body
 	fresh := chat.CurrentRunID == nil
+	if chat.AutoModel {
+		// Only a chat with no live segment may step down: see AutoModel.
+		if m := chatmodels.AutoModel(chat.WorkspaceID, chat.Harness, chat.Model, level, fresh); m != chat.Model {
+			var err error
+			if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: chat.Harness, Model: m, Effort: chat.Effort, AutoModel: true}); err != nil {
+				return chat, run, turn, err
+			}
+		}
+	}
 	effort := chat.Effort
 	if effort == "" {
 		effort = chatmodels.AutoEffort(chat.WorkspaceID, chat.Harness, chat.Model, level)

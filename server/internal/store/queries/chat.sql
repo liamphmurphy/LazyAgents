@@ -2,8 +2,8 @@
 -- Without a persona_id the chat gets its creator's default persona (none
 -- when they have no default). Callers check that a given persona_id is the
 -- creator's own.
-INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, persona_id, hidden, space_id, temporary)
-VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model), sqlc.arg(effort),
+INSERT INTO chat_sessions (workspace_id, project_id, title, created_by, agent_id, harness, model, effort, auto_model, persona_id, hidden, space_id, temporary)
+VALUES (sqlc.arg(workspace_id), sqlc.arg(project_id), sqlc.arg(title), sqlc.arg(created_by), sqlc.arg(agent_id), sqlc.arg(harness), sqlc.arg(model), sqlc.arg(effort), sqlc.arg(auto_model),
   COALESCE(sqlc.narg(persona_id)::uuid, (SELECT p.id FROM personas p WHERE p.workspace_id = sqlc.arg(workspace_id) AND p.user_id = sqlc.arg(created_by) AND p.is_default)), sqlc.arg(hidden),
   sqlc.narg(space_id), sqlc.arg(temporary))
 RETURNING *;
@@ -110,9 +110,10 @@ GROUP BY a.id, v.id, s.anchor
 ORDER BY min(r.read_at), a.id, s.anchor NULLS FIRST;
 
 -- name: SetChatSelection :one
--- Stores the harness/model/effort the next segment turn should use. Callers
--- validate them and hold the chat row lock; the runner applies them on the next message.
-UPDATE chat_sessions SET harness = $2, model = $3, effort = $4, revision = revision + 1, updated_at = now()
+-- Stores the harness/model/effort the next segment turn should use, and
+-- whether the model is routed automatically. Callers validate them and hold
+-- the chat row lock; the runner applies them on the next message.
+UPDATE chat_sessions SET harness = $2, model = $3, effort = $4, auto_model = $5, revision = revision + 1, updated_at = now()
 WHERE id = $1 RETURNING *;
 
 -- name: ListRecentChatMessages :many
