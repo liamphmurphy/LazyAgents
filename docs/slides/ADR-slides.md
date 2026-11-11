@@ -418,7 +418,12 @@ Liam approved this ADR and the mockups, then asked for the implementation in the
   - Screens: deck list at `/apps/slides`, editor at `/apps/slides/{id}`, presentation at `/present/slides/{id}`. The presentation sits outside the app shell, like the print pages.
 - **Fonts.** The bundle is the upstream Liberation 2.1.5 TTFs (OFL) under `web/public/fonts/slides`, 4.2 MB for 12 faces. Each face loads only when it's used.
 - **SVG rendering.** Every slide is drawn with `text-rendering: geometricPrecision`. Hinted SVG text draws up to 2.5% narrower than the canvas measures at small scales, which opened gaps between words and made thumbnails overlap. Unhinted, the editor, thumbnails, presentation and PDF agree to within about 0.5%.
-- **Follow-up from code review (N3).** Deleting a deck's chat through `/chats/{id}`, or deleting the Slides space, cascades its `deck_assets` rows but leaves the image blobs in storage. `DeleteDeck` only removes blobs nothing else references. A periodic sweep of `slides/` blobs with no `deck_assets` row should replace inline deletion. Until then, orphaned blobs cost storage only, not quota: quota is counted from the rows.
+- **Image cleanup (follow-up N3, done in LAZYAGENTS-104).** Blobs are content-addressed per person (`slides/{workspace}/{user}/{sha256}`) and shared by a deck and its copies, so nothing deletes them inline any more.
+  - Migration `00098_slides_blob_sweep.sql` adds a trigger on `deck_assets` that queues each released key in `deck_blob_sweep`. That covers every way a row goes: `DELETE /slides/{id}`, `DELETE /chats/{id}`, and a failed upload removing its own row.
+  - The runner's sweep (`slides.SweepBlobs`, every 30 s, 100 keys a batch) handles keys queued over `slides.BlobSweepDelay` (1 hour) ago. It deletes a blob only when no `deck_assets` row uses the key; a copy, or a later upload of the same image, keeps it. A failed delete stays queued, moved to the back.
+  - Uploads and the sweep take the same per-key advisory lock (`LockDeckBlob`) while inserting the row or checking and deleting the blob. So an upload either lands its row first, and the sweep keeps the blob, or writes the blob again after the sweep has deleted it.
+  - Deleting the Slides space doesn't release images: its chats stay, outside any space, and the decks stay listed.
+  - Quota is still counted from the rows, so queued blobs never count against it.
 - **Not yet built.**
   - The conflict banner's **Compare** button: the banner offers Use the latest version and Keep mine.
   - The persona's `slides_add_image` tool: the persona edits text, shapes, layouts and themes, and the person adds images.

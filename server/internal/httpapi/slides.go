@@ -115,25 +115,13 @@ func (s *Server) DeleteDeck(ctx context.Context, req api.DeleteDeckRequestObject
 	if err != nil {
 		return nil, err
 	}
-	assets, err := s.Q.ListDeckAssets(ctx, cv.ID)
-	if err != nil {
-		return nil, err
-	}
 	u, _, ws := me(ctx)
 	// The deck's chat exists only for it, so deleting the chat deletes the
-	// canvas, its versions and its asset rows with it.
+	// canvas, its versions and its asset rows with it. Removing the rows
+	// queues their blobs, and the runner's sweep deletes those no other deck
+	// (such as a copy) still uses: slides.SweepBlobs.
 	if err := s.Runs.DeleteChat(ctx, ws, u.ID, cv.ChatID); err != nil {
 		return nil, err
-	}
-	// Blobs are shared by content between a deck and its copies: delete only
-	// the ones nothing references any more. A failure leaves an orphan blob,
-	// never a broken deck.
-	if s.Blobs != nil {
-		for _, a := range assets {
-			if used, err := s.Q.DeckAssetBlobInUse(ctx, a.BlobKey); err == nil && !used {
-				_ = s.Blobs.Delete(ctx, s.ArtifactBucket, a.BlobKey)
-			}
-		}
 	}
 	return api.DeleteDeck204Response{}, nil
 }
@@ -196,15 +184,18 @@ func (s *Server) UploadDeckAsset(ctx context.Context, req api.UploadDeckAssetReq
 			return nil, apperr.Invalid("file", "your Library is full (1 GB): remove decks or items you no longer need")
 		}
 	}
-	// The row goes in before the blob is written, so a deck deleted meanwhile
-	// sees this reference and leaves the shared blob alone.
-	row, err := s.Q.CreateDeckAsset(ctx, store.CreateDeckAssetParams{CanvasID: cv.ID, ID: deck.NewID("a"), WorkspaceID: ws, UserID: u.ID,
+	// The row goes in before the blob is written, so the sweep sees this
+	// reference and leaves the shared blob alone.
+	row, err := s.slides().AddAsset(ctx, store.CreateDeckAssetParams{CanvasID: cv.ID, ID: deck.NewID("a"), WorkspaceID: ws, UserID: u.ID,
 		BlobKey: a.Key, Mime: a.Mime, Width: int32(a.Width), Height: int32(a.Height), SizeBytes: int64(len(a.Bytes))})
 	if err != nil {
 		return nil, err
 	}
 	if err := s.Blobs.Put(ctx, s.ArtifactBucket, a.Key, bytes.NewReader(a.Bytes), int64(len(a.Bytes)), a.Mime); err != nil {
-		_ = s.Q.DeleteDeckAsset(ctx, store.DeleteDeckAssetParams{CanvasID: cv.ID, ID: row.ID})
+		// Removing the row queues the key, so the sweep deletes anything
+		// partly written once no deck uses it. A cancelled request must
+		// still remove it.
+		_ = s.Q.DeleteDeckAsset(context.WithoutCancel(ctx), store.DeleteDeckAssetParams{CanvasID: cv.ID, ID: row.ID})
 		return nil, err
 	}
 	return api.UploadDeckAsset201JSONResponse{Id: row.ID, Mime: api.DeckAssetMime(row.Mime), W: int(row.Width), H: int(row.Height)}, nil

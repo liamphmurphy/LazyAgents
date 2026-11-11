@@ -21,12 +21,12 @@ import (
 const Schema = 1
 
 const (
-	Width, Height  = 1920, 1080
-	MaxSlides      = 200
-	MaxElements    = 100
-	MaxTextRunes   = 5000
-	MaxParagraphs  = 200
-	MaxNotesRunes  = 10000
+	Width, Height = 1920, 1080
+	MaxSlides     = 200
+	MaxElements   = 100
+	MaxTextRunes  = 5000
+	MaxParagraphs = 200
+	MaxNotesRunes = 10000
 	// MaxBody bounds a deck's canonical JSON, like every canvas version (canvas maxBody).
 	MaxBody        = 512 * 1024
 	maxCoordinate  = 10000

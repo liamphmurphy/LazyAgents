@@ -72,17 +72,6 @@ func (q *Queries) CreateDeckAsset(ctx context.Context, arg CreateDeckAssetParams
 	return i, err
 }
 
-const deckAssetBlobInUse = `-- name: DeckAssetBlobInUse :one
-SELECT EXISTS (SELECT 1 FROM deck_assets WHERE blob_key = $1)
-`
-
-func (q *Queries) DeckAssetBlobInUse(ctx context.Context, blobKey string) (bool, error) {
-	row := q.db.QueryRow(ctx, deckAssetBlobInUse, blobKey)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const deckAssetBytes = `-- name: DeckAssetBytes :one
 SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM (
   SELECT DISTINCT blob_key, size_bytes FROM deck_assets WHERE workspace_id = $1 AND user_id = $2
@@ -114,6 +103,36 @@ type DeleteDeckAssetParams struct {
 func (q *Queries) DeleteDeckAsset(ctx context.Context, arg DeleteDeckAssetParams) error {
 	_, err := q.db.Exec(ctx, deleteDeckAsset, arg.CanvasID, arg.ID)
 	return err
+}
+
+const dueDeckBlobSweeps = `-- name: DueDeckBlobSweeps :many
+SELECT blob_key FROM deck_blob_sweep WHERE queued_at < $1 ORDER BY queued_at, blob_key LIMIT $2
+`
+
+type DueDeckBlobSweepsParams struct {
+	Before   time.Time
+	RowLimit int32
+}
+
+// Released image blobs queued before the cutoff, oldest first.
+func (q *Queries) DueDeckBlobSweeps(ctx context.Context, arg DueDeckBlobSweepsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, dueDeckBlobSweeps, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blob_key string
+		if err := rows.Scan(&blob_key); err != nil {
+			return nil, err
+		}
+		items = append(items, blob_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getDeckAsset = `-- name: GetDeckAsset :one
@@ -228,6 +247,16 @@ func (q *Queries) ListUserDecks(ctx context.Context, arg ListUserDecksParams) ([
 	return items, nil
 }
 
+const lockDeckBlob = `-- name: LockDeckBlob :exec
+SELECT pg_advisory_xact_lock(hashtextextended('deck-blob:' || $1::text, 0))
+`
+
+// Serialises taking a reference to a deck image blob with the sweep deleting it.
+func (q *Queries) LockDeckBlob(ctx context.Context, blobKey string) error {
+	_, err := q.db.Exec(ctx, lockDeckBlob, blobKey)
+	return err
+}
+
 const renameCanvas = `-- name: RenameCanvas :exec
 UPDATE chat_canvases SET title = $1, updated_at = now() WHERE id = $2
 `
@@ -240,6 +269,34 @@ type RenameCanvasParams struct {
 func (q *Queries) RenameCanvas(ctx context.Context, arg RenameCanvasParams) error {
 	_, err := q.db.Exec(ctx, renameCanvas, arg.Title, arg.ID)
 	return err
+}
+
+const requeueDeckBlobSweep = `-- name: RequeueDeckBlobSweep :exec
+UPDATE deck_blob_sweep SET queued_at = now() WHERE blob_key = $1
+`
+
+// Sends a key whose blob couldn't be deleted to the back of the queue.
+func (q *Queries) RequeueDeckBlobSweep(ctx context.Context, blobKey string) error {
+	_, err := q.db.Exec(ctx, requeueDeckBlobSweep, blobKey)
+	return err
+}
+
+const takeDeckBlobSweep = `-- name: TakeDeckBlobSweep :one
+DELETE FROM deck_blob_sweep s WHERE s.blob_key = $1 AND s.queued_at < $2
+RETURNING NOT EXISTS (SELECT 1 FROM deck_assets a WHERE a.blob_key = s.blob_key) AS unused
+`
+
+type TakeDeckBlobSweepParams struct {
+	BlobKey string
+	Before  time.Time
+}
+
+// Dequeues a key that's still due, saying whether any deck still uses it.
+func (q *Queries) TakeDeckBlobSweep(ctx context.Context, arg TakeDeckBlobSweepParams) (bool, error) {
+	row := q.db.QueryRow(ctx, takeDeckBlobSweep, arg.BlobKey, arg.Before)
+	var unused bool
+	err := row.Scan(&unused)
+	return unused, err
 }
 
 const userHasDeckBlob = `-- name: UserHasDeckBlob :one

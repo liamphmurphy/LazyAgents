@@ -115,9 +115,15 @@ func TestPatchesCannotExceedTheBodyCap(t *testing.T) {
 func TestFieldsForOtherTypesAreRefused(t *testing.T) {
 	good := fixture(t)
 	for name, mut := range map[string]func(string) string{
-		"image with shape": func(s string) string { return strings.Replace(s, `"asset":"a_landscape"`, `"asset":"a_landscape","shape":"rect"`, 1) },
-		"line with crop":   func(s string) string { return strings.Replace(s, `"endArrow":true`, `"endArrow":true,"crop":{"l":0.1,"t":0,"r":0,"b":0}`, 1) },
-		"long asset alt":   func(s string) string { return strings.Replace(s, `"alt":"Stylised`, `"alt":"`+strings.Repeat("x", 600)+`Stylised`, 1) },
+		"image with shape": func(s string) string {
+			return strings.Replace(s, `"asset":"a_landscape"`, `"asset":"a_landscape","shape":"rect"`, 1)
+		},
+		"line with crop": func(s string) string {
+			return strings.Replace(s, `"endArrow":true`, `"endArrow":true,"crop":{"l":0.1,"t":0,"r":0,"b":0}`, 1)
+		},
+		"long asset alt": func(s string) string {
+			return strings.Replace(s, `"alt":"Stylised`, `"alt":"`+strings.Repeat("x", 600)+`Stylised`, 1)
+		},
 	} {
 		bad := mut(good)
 		if bad == good {
