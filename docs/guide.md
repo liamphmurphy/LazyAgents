@@ -24,16 +24,28 @@ The Northwind Labs demo is opt-in with `SEED=true`; existing databases are left 
 ### Signing in
 
 The API serves the app only to a signed-in browser. Agent containers can reach
-everything the app serves, so arriving at the API proves nothing; the proof is a
-one-time link that only reaches you through a terminal:
+everything the app serves, so arriving at the API proves nothing; a browser
+signs in with the owner's password or a one-time link.
+
+**First run.** A fresh install is unclaimed: open it and the sign-in page asks
+for a username and password. The first browser to set them claims the install
+for good and stays signed in for a year (an HttpOnly, `SameSite=Strict`
+cookie). Until then whoever reaches the port could claim it, which is why
+compose publishes it on `127.0.0.1` unless you set `LAZYAGENTS_BIND`. Installs
+from before passwords existed stay claimed; add a password in Settings → Sign-in.
+
+**Other devices** sign in with the username and password. Ten wrong guesses
+in 15 minutes pause password sign-in until the window passes.
+
+**Locked out**, or no password yet:
 
 ```sh
 make signin    # → http://localhost:8080/api/v1/sign-in?code=…
 ```
 
-Open it within 15 minutes. It works once, sets an HttpOnly, `SameSite=Strict`
-session cookie good for a year, and drops you into the app. The API also logs a
-link at startup while no browser is signed in. `make signin` asks the full
+Open it within 15 minutes. It works once and drops you into the app. The API
+also logs a link at startup while a claimed install has no password and no
+signed-in browser. `make signin` asks the full
 stack's API when it's running (`docker compose exec api vesper sign-in-link`)
 and otherwise reads the dev database, linking to Next on `WEB_URL`
 (`http://localhost:3000`). Agents are unaffected: they use bearer tokens on

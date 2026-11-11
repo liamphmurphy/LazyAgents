@@ -139,9 +139,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Sign a browser in by opening the one-time link the API prints on first boot
-(`docker compose logs api`), or a fresh one from `make signin`. The browser
-stays signed in for a year. Then open **[localhost:8080](http://localhost:8080)**.
+Open **[localhost:8080](http://localhost:8080)** and choose a username and
+password: the first browser to arrive sets up the install, and other devices
+sign in with them. Locked out? `make signin` prints a one-time sign-in link.
 The first boot creates an empty workspace and an Assistant with all persona
 permissions enabled. After sign-in, setup asks you to replace the placeholder
 name and primary email, then shows the connection checklist. You can also set
@@ -150,8 +150,8 @@ dataset is available only by opting in with `SEED=true`.
 
 Developing Vesper or running it from a checkout? `make start` does everything in
 one command: it creates `.env`, builds the hardened agent image, signs in to your
-Claude and Codex plans, runs the app at
-**[localhost:3000](http://localhost:3000)**, and prints a sign-in link.
+Claude and Codex plans, and runs the app at
+**[localhost:3000](http://localhost:3000)**.
 
 Ready to run agents? Set `SECRETS_KEY` in `.env`, then follow the
 **[setup guide](docs/guide.md#running-agents)** to add provider keys
@@ -160,9 +160,9 @@ repository. Agent runs use your configured providers and can incur model costs.
 
 ### Current scope
 
-Vesper has one person per install: a browser signed in with a link from
-`make signin` acts as the workspace's first user. There are no accounts or
-passwords yet. The Docker runner also mounts the Docker socket, which
+Vesper has one person per install: the username and password chosen on first
+visit sign in as the workspace's first user, and there are no other accounts.
+The app listens on localhost only unless you set `LAZYAGENTS_BIND`. The Docker runner also mounts the Docker socket, which
 is root-equivalent on the host. On a server, keep it on a private network or
 behind your own authenticating proxy, and only run projects you trust. See the
 [guide](docs/guide.md) before running it.
