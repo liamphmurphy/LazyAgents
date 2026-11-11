@@ -32,6 +32,12 @@ export function modelLabel(groups: Group[] | undefined, s: Selection) {
   return { harness: g?.label ?? s.harness, model: catalogModelLabel(g?.models ?? [], s.model) };
 }
 
+// Two harnesses' models plus the efforts outgrow the room above a low
+// composer (the Welcome's), so the menu scrolls inside whatever space Radix
+// finds instead of running off the top of the window.
+const menuPanel = cx(floatPanel, "w-64 max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto");
+const MENU_EDGE = 8;
+
 const item =
   "flex min-h-8 cursor-default select-none flex-col justify-center rounded-md px-2 py-1 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 
@@ -63,7 +69,7 @@ export function ModelPicker({
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-64")}>
+        <DropdownMenu.Content align="start" side="top" sideOffset={6} collisionPadding={MENU_EDGE} className={menuPanel}>
           {(groups ?? []).map((g, i) => (
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
@@ -145,7 +151,7 @@ export function ModelEffortPicker({
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" side="top" sideOffset={6} className={cx(floatPanel, "max-h-[70vh] w-64 overflow-y-auto")}>
+        <DropdownMenu.Content align="end" side="top" sideOffset={6} collisionPadding={MENU_EDGE} className={menuPanel}>
           {(groups ?? []).map((g, i) => (
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}

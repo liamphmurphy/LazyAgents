@@ -196,6 +196,33 @@ test("unavailable models are disabled with their reason", async ({ page }) => {
   await expect(item).toContainText("No harness:openai secret");
 });
 
+test("a long model menu stays on screen and scrolls to its first harness", async ({ page }) => {
+  // The Welcome's composer sits low: a menu opening upward has less room
+  // than a share of the viewport, and its top (Claude) used to go off screen.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await installChatApi(page);
+  const efforts = ["low", "medium", "high", "xhigh", "max"] as const;
+  const models = (names: string[]) => names.map((n, i) => ({ id: n.toLowerCase().replace(/ /g, "-"), label: n, default: i === 0, efforts: [...efforts] }));
+  await page.route("**/api/v1/chat-models", (route) => route.fulfill({ json: [
+    { harness: "claude-code", label: "Claude Code", available: true, models: models(["Default (recommended)", "Opus 5.5", "Fable 5.2", "Sonnet 5.5", "Haiku 5.5"]) },
+    { harness: "codex", label: "Codex", available: true, models: models(["GPT-6.1-Sol", "GPT-6-Astra", "GPT-6.1 Terra", "GPT-6-Sol", "GPT-6-Luna", "GPT-5.6-Sol", "GPT-5.6-Terra", "GPT-5.6-Luna", "GPT-5.5"]) },
+  ] }));
+  await page.goto("/chat?new");
+  await picker(page).click();
+  const menu = page.getByRole("menu");
+  const box = (await menu.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(720);
+  expect(box.height).toBeLessThanOrEqual(400);
+  // The rest is reached by scrolling the menu, not the page.
+  expect(await menu.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  const fable = page.getByRole("menuitem", { name: "Claude Code Fable 5.2" });
+  await fable.scrollIntoViewIfNeeded();
+  await expect(fable).toBeInViewport({ ratio: 1 });
+  await fable.click();
+  await expect(picker(page)).toHaveAccessibleName(/Claude Code, Fable 5\.2/);
+});
+
 test("[[ picks context as removable chips and sends them as context_refs", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
