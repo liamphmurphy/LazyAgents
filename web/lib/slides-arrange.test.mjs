@@ -69,6 +69,13 @@ test("distribute spaces three or more boxes evenly between the outer two", () =>
   assert.equal(v.b.y, 27);
   assert.equal(v.c.y, 73);
   assert.equal(v.d.y, 100);
+  // A wide box that isn't last by its leading edge stays the end; nothing leaves the span.
+  const w = distribute({ a: { x: 0, y: 0, w: 100, h: 10 }, b: { x: 200, y: 0, w: 1000, h: 10 }, c: { x: 300, y: 0, w: 100, h: 10 } }, "x");
+  assert.deepEqual([w.a.x, w.b.x, w.c.x], [0, 200, 100]);
+  // Boxes too big to fit without overlapping: centres spaced evenly, still inside the span.
+  const o = distribute({ a: { x: 0, y: 0, w: 400, h: 10 }, b: { x: 100, y: 0, w: 400, h: 10 }, c: { x: 300, y: 0, w: 400, h: 10 } }, "x");
+  assert.deepEqual([o.a.x, o.b.x, o.c.x], [0, 150, 300]);
+  for (const f of [...Object.values(w), ...Object.values(o)]) assert.ok(f.x >= 0);
   // Two boxes: nothing to distribute.
   assert.deepEqual(distribute({ a: frames.a, b: frames.b }, "x"), { a: frames.a, b: frames.b });
 });

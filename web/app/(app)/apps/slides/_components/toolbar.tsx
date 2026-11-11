@@ -400,9 +400,9 @@ export function Toolbar({ theme, themeKey, layout, selection, editing, disabled,
           )}
         </>
       )}
-      {line && !shape && (
+      {line && (
         <>
-          <StyleGallery theme={theme} current={preset(lines)} line onPick={a.applyStyle} />
+          {!shape && <StyleGallery theme={theme} current={preset(lines)} line onPick={a.applyStyle} />}
           <ColorMenu label="Line colour" trigger={<>Colour ▾</>} theme={theme} onPick={(c) => c && a.setStroke(c)} recent={a.recentColors} remember={a.rememberColor} />
           <NumberMenu label="Line width" trigger={<span className="font-mono">{lineWidth === MIXED || lineWidth === undefined ? "Mixed" : px(lineWidth)} ▾</span>} presets={WIDTHS} show={px} value={lineWidth === MIXED ? undefined : lineWidth} onPick={a.setStrokeWidth} field={widthField} />
           {(["start", "end"] as const).map((end) => {

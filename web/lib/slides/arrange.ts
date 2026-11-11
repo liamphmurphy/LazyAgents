@@ -76,27 +76,41 @@ export function align(frames: Record<string, Frame>, op: AlignOp, to: Box): Reco
 }
 
 /**
- * Equal gaps between three or more boxes along an axis: the first and last
- * (by their leading edge) stay put and the rest move between them.
+ * Equal gaps between three or more boxes along an axis. The box reaching
+ * furthest to the start and the one reaching furthest to the end stay put and
+ * the rest move between them, in the order of their centres. When the boxes
+ * are too big to fit between those two without overlapping (or one box spans
+ * them all), their centres are spaced evenly instead, so nothing ever leaves
+ * the span the selection already covers.
  */
 export function distribute(frames: Record<string, Frame>, axis: "x" | "y"): Record<string, Frame> {
   const items = Object.entries(frames).map(([id, f]) => ({ id, f, b: boxOf(f) }));
   if (items.length < 3) return { ...frames };
   const lo = (b: Box) => (axis === "x" ? b.l : b.t);
-  const size = (b: Box) => (axis === "x" ? b.r - b.l : b.b - b.t);
-  items.sort((p, q) => lo(p.b) - lo(q.b) || size(p.b) - size(q.b));
-  const first = lo(items[0].b);
-  const end = items[items.length - 1].b;
-  const last = lo(end) + size(end);
-  const gap = (last - first - items.reduce((s, i) => s + size(i.b), 0)) / (items.length - 1);
+  const hi = (b: Box) => (axis === "x" ? b.r : b.b);
+  const mid = (b: Box) => (lo(b) + hi(b)) / 2;
+  const first = items.reduce((m, i) => (lo(i.b) < lo(m.b) ? i : m));
+  const last = items.reduce((m, i) => (i !== first && (m === first || hi(i.b) > hi(m.b)) ? i : m));
+  const middle = items.filter((i) => i !== first && i !== last).sort((p, q) => mid(p.b) - mid(q.b));
+  const gap = (hi(last.b) - lo(first.b) - items.reduce((s, i) => s + hi(i.b) - lo(i.b), 0)) / (items.length - 1);
+  const shift: Record<string, number> = {};
+  if (hi(last.b) >= hi(first.b) && gap >= 0) {
+    let at = hi(first.b) + gap;
+    for (const it of middle) {
+      shift[it.id] = Math.round(at - lo(it.b));
+      at += hi(it.b) - lo(it.b) + gap;
+    }
+  } else {
+    // Even centres between the outermost centres.
+    const byMid = [...items].sort((p, q) => mid(p.b) - mid(q.b));
+    const c0 = mid(byMid[0].b), step = (mid(byMid[byMid.length - 1].b) - c0) / (byMid.length - 1);
+    byMid.forEach((it, k) => (shift[it.id] = k === 0 || k === byMid.length - 1 ? 0 : Math.round(c0 + k * step - mid(it.b))));
+  }
   const out: Record<string, Frame> = {};
-  let at = first;
-  items.forEach((it, k) => {
-    // The last box keeps its place, so rounding never moves the outer edges.
-    const d = k === 0 || k === items.length - 1 ? 0 : Math.round(at - lo(it.b));
+  for (const it of items) {
+    const d = shift[it.id] ?? 0;
     out[it.id] = axis === "x" ? { ...it.f, x: it.f.x + d } : { ...it.f, y: it.f.y + d };
-    at += size(it.b) + gap;
-  });
+  }
   return out;
 }
 

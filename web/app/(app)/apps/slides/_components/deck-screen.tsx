@@ -418,6 +418,12 @@ export function DeckScreen({ id }: { id: string }) {
       if (selection.length >= 3) setFrames(distribute(Object.fromEntries(selection.map((e) => [e.id, e.frame])), axis));
     },
   };
+  /** Changes each selected element as one undo step; none when nothing actually changes. */
+  const editSelection = (fn: (e: Element) => Element) => {
+    if (!selection.length) return;
+    const changed = new Map(selection.map((e) => [e.id, fn(e)] as const).filter(([, n], i) => JSON.stringify(n) !== JSON.stringify(selection[i])));
+    if (changed.size) update(mapElements(new Set(changed.keys()), (e) => changed.get(e.id) ?? e));
+  };
   /** Sets several frames at once, leaving the deck untouched (no undo step) when nothing moves. */
   const setFrames = (frames: Record<string, { x: number; y: number; w: number; h: number }>, key?: string) =>
     update((d) => {
@@ -484,15 +490,19 @@ export function DeckScreen({ id }: { id: string }) {
       if (selection.every((e) => formatElement(e, f, markOn) === e)) return; // nothing to change: no undo step
       update(mapElements(selIds, (e) => formatElement(e, f, markOn)));
     },
-    setFill: (col) => update(mapElements(selIds, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
-    setStroke: (col) => update(mapElements(selIds, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
+    setFill: (col) => editSelection((e) => (e.type === "shape" ? { ...e, fill: col } : e)),
+    setStroke: (col) => editSelection((e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e)),
     // One update, so the whole selection restyles as one undo step.
-    applyStyle: (sid) => {
-      if (selIds.size) update(mapElements(selIds, (e) => applyStyle(e, sid)));
+    applyStyle: (sid) => editSelection((e) => applyStyle(e, sid)),
+    setStrokeWidth: (w) => editSelection((e) => withStrokeWidth(e, w)),
+    setRadius: (r) => editSelection((e) => withRadius(e, r)),
+    // Mixed lines all get the arrowhead (or, when every one has it, all lose it).
+    toggleArrow: (end) => {
+      const k = end === "start" ? "startArrow" : "endArrow";
+      const lines = selection.filter((e) => e.type === "line");
+      const on = !lines.every((e) => e[k]);
+      editSelection((e) => (e.type === "line" && !!e[k] !== on ? toggleArrow(e, end) : e));
     },
-    setStrokeWidth: (w) => update(mapElements(selIds, (e) => withStrokeWidth(e, w))),
-    setRadius: (r) => update(mapElements(selIds, (e) => withRadius(e, r))),
-    toggleArrow: (end) => update(mapElements(selIds, (e) => toggleArrow(e, end))),
     recentColors,
     rememberColor,
     remove: removeSelected,

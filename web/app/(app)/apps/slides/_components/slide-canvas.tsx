@@ -137,10 +137,12 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       onUp(moved, ev);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   const start = (e: ReactPointerEvent, el: Element | null, h: Handle) => {
@@ -179,7 +181,8 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
           last = { [one.id]: { frame: f0, rotation: deg || undefined } };
         } else if (h === "move") {
           let mx = dx, my = dy;
-          if (!free) {
+          // Rotated elements' frames aren't what's drawn, so they move freely.
+          if (!free && !els.some((x) => x.rotation)) {
             const b = boxOf(f0);
             const s = snapMove({ l: b.l + dx, r: b.r + dx, t: b.t + dy, b: b.b + dy }, targets, threshold);
             mx += s.dx;
@@ -292,7 +295,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
             data-element={el.id}
             data-selected={chosen.has(el.id) || undefined}
             aria-hidden
-            className={cx("absolute", !readOnly && "cursor-move")}
+            className={cx("absolute", !readOnly && "cursor-move", chosen.has(el.id) && "z-10")}
             style={{
               left: `${((Math.min(f.x, f.x + f.w) - pad) / W) * 100}%`,
               top: `${((Math.min(f.y, f.y + f.h) - pad) / H) * 100}%`,
