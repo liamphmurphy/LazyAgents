@@ -370,7 +370,7 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: first words");
   expect(mock.created).toEqual([{}]);
   expect(mock.posted).toHaveLength(1);
-  expect(mock.posted[0].body).toEqual({ body: "first words" });
+  expect(mock.posted[0].body).toEqual({ body: "first words", model: "auto" });
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -390,8 +390,9 @@ test("the Welcome's box is a chat's: model and effort, / commands, @ mentions an
   const mock = await installChatApi(page, { personas: [persona(1, { name: "Atlas", is_default: true }), persona(2, { name: "Nova" })] });
   await page.goto("/chat?new");
   const box = composer(page);
-  // Before a pick it shows what the chat would start on: the agents' model, automatic effort.
-  await expect(picker(page)).toHaveAccessibleName("Model and effort for the next message: Claude Code, Opus 5.5, Automatic effort");
+  // Before a pick a new chat routes its model automatically, from the agents' harness, at automatic effort.
+  await expect(picker(page)).toHaveAccessibleName("Model and effort for the next message: Claude Code, automatic model, Automatic effort");
+  await expect(picker(page)).toHaveText("Auto");
   await expect(page.getByRole("button", { name: "Add context" })).toBeVisible();
   await expect(page.getByTestId("composer-hints")).toContainText("/ commands");
 
@@ -438,7 +439,7 @@ test("Start chat ?attach= on /chat shows chips in the Welcome and sends them wit
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: summarise");
-  expect(mock.posted.at(-1)?.body).toEqual({ body: "summarise", context_refs: [{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }] });
+  expect(mock.posted.at(-1)?.body).toEqual({ body: "summarise", model: "auto", context_refs: [{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }] });
   await expect(page.getByTestId("user-message").getByTestId("sent-chip")).toHaveCount(1);
   expect(mock.unhandled).toEqual([]);
 });
@@ -581,7 +582,7 @@ for (const codexAvailable of [true, false]) {
     await expect(page.getByRole("menuitem", { name: /Claude Code Opus 5.5/ })).toBeVisible({ timeout: 7_000 });
     await expect(page.getByRole("menu")).not.toContainText("Checking available models…");
     await page.keyboard.press("Escape");
-    await expect(picker(page)).toHaveAttribute("aria-label", /Claude Code, Opus 5.5/);
+    await expect(picker(page)).toHaveAttribute("title", /Claude Code · Auto \(now Opus 5.5\)/);
     // Once resolved, stop polling instead of rediscovering forever.
     const resolvedRequests = requests;
     await page.waitForTimeout(2_500);
@@ -936,4 +937,26 @@ test("a reply shows the effort Vesper picked for it, and why", async ({ page }) 
   await expect(tag).toHaveText("Claude Code · Opus 5.5 · High (auto)");
   await tag.focus();
   await expect(page.getByTestId("usage-tooltip")).toContainText("EffortHighautomatic · aimed for extra high · raised after a retry or edit");
+});
+
+test("a new chat routes its model automatically until one is picked", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await page.goto("/chat?new");
+  await picker(page).click();
+  await expect(page.getByRole("menuitem", { name: "Automatic model" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
+  expect(mock.posted[0].body).toEqual({ body: "hello", model: "auto" });
+
+  // Picking a model replaces Auto; picking Auto again goes back.
+  await page.goto("/chat?new");
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: /Claude Code Sonnet 5\.5/ }).click();
+  await expect(picker(page)).toHaveAccessibleName(/Sonnet 5\.5, Automatic effort/);
+  await picker(page).click();
+  await page.getByRole("menuitem", { name: "Automatic model" }).click();
+  await expect(picker(page)).toHaveText("Auto");
+  expect(mock.unhandled).toEqual([]);
 });

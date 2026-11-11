@@ -338,7 +338,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // and the next reply answers both, picking up from what the stopped one had done.
   const locked = send.isPending || create.isPending;
   const groups: Groups = models.data;
-  const current: Selection | undefined = c && { harness: c.harness, model: c.model };
+  const current: Selection | undefined = c && { harness: c.harness, model: c.model, auto: !!c.auto_model };
   const selection = picked ?? current;
   const pending = !!(picked && current && !sameSelection(picked, current));
   const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
@@ -349,7 +349,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The next message would start a run on a harness that can't run: say why before sending.
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const nextRunSettings = {
-    ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
+    ...(pending && picked ? (picked.auto ? { model: "auto" } : { harness: picked.harness, model: picked.model }) : {}),
     ...(effortPending ? { effort: effort ?? ("default" as const) } : {}),
   };
   const list = messages.data?.messages;
@@ -516,7 +516,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     if (!c) return;
     const old = c;
     create.mutate(
-      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
+      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.auto_model ? "auto" : old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
@@ -611,9 +611,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       case "workflow":
         return published.map((w) => ({ name: w.name, run: () => setStartingWorkflow(w) }));
       case "model":
-        return (groups ?? [])
-          .filter((g) => g.available)
-          .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => whileIdle("model", () => pick({ harness: g.harness, model: m.id })) })));
+        return [
+          ...(current ? [{ name: "Auto", run: () => whileIdle("model", () => pick({ ...current, auto: true })) }] : []),
+          ...(groups ?? [])
+            .filter((g) => g.available)
+            .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => whileIdle("model", () => pick({ harness: g.harness, model: m.id })) }))),
+        ];
       case "effort":
         return [undefined, ...offered.efforts].map((e) => ({ name: effortLabel(e).toLowerCase(), run: () => whileIdle("effort", () => setPickedEffort(e ?? "default")) }));
       case "persona":
@@ -688,6 +691,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             {current && (
               <span className="truncate font-mono text-xs text-fg-tertiary">
                 {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+                {current.auto && " (auto)"}
                 {c.effort && ` · ${effortLabel(c.effort)} effort`}
               </span>
             )}
@@ -769,7 +773,9 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               <SecretRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
-                  {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
+                  {selection.auto
+                    ? "Next message will pick its model automatically"
+                    : `Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
                 </Divider>
               )}
               {effortPending && (
