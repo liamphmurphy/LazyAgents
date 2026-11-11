@@ -154,6 +154,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		if c.Temporary {
 			item.Temporary = &c.Temporary
 		}
+		item.ParentChatId = c.ParentChatID
 		if c.RepoUrl != nil {
 			item.WorkBranches = &c.WorkBranches
 			// Only while it is still one of the creator's addresses (chats are

@@ -4607,6 +4607,107 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /chats/{id}/followups:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatFollowups
+      summary: Your follow-ups queued behind the running reply, next to send first
+      tags: [chats]
+      responses:
+        "200":
+          description: The queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatFollowupList" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: queueChatFollowup
+      summary: Queue a message to send once the running reply ends
+      description: |
+        Unlike posting a message, this doesn't interrupt the running reply.
+        When a turn ends with a reply, the oldest queued follow-up is sent as
+        the next message, one per turn. After a turn that was stopped or
+        failed the queue is held until the person sends something. A follow-up
+        queued while nothing runs and nothing else is queued is sent at once.
+        409 when the chat is archived, is an aside, or already has 20 queued.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatMessageEdit" }
+      responses:
+        "201":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatFollowup" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/followups/{followupId}:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: followupId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteChatFollowup
+      summary: Remove a queued follow-up before it is sent
+      description: 404 once it has been sent or removed.
+      tags: [chats]
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/asides:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatAsides
+      summary: The chat's asides, oldest first
+      description: Each aside is a hidden chat (parent_chat_id is this chat); read its messages from /chats/{id}/messages.
+      tags: [chats]
+      responses:
+        "200":
+          description: The asides
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatAsideList" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: startChatAside
+      summary: Ask about the running reply without interrupting it
+      description: |
+        Starts an aside: a hidden chat whose first turn answers the question.
+        The same persona answers in a fresh session that gets the chat's
+        recent conversation and a snapshot of the running reply (what it has
+        written and which tools it called, with their output). An aside only
+        reads: no shell, images, connectors or secrets, and no Vesper tool that
+        changes anything. Neither conversation sees the other afterwards.
+        409 when nothing is running, the chat is archived or is itself an
+        aside, or 3 asides are still answering.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatMessageEdit" }
+      responses:
+        "201":
+          description: The aside, answering
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSession" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /chats/{id}/persona-proposals:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -7552,6 +7653,7 @@ components:
         commit_email: { type: string, description: "The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email." }
         archived: { type: boolean }
         temporary: { type: boolean, description: "A temporary chat: it doesn't use the person's memory or past chats, stays out of search, and is deleted after a day without messages" }
+        parent_chat_id: { type: string, format: uuid, description: "Set on an aside: the chat whose running reply it answers a question about" }
         revision: { type: integer }
         message_count: { type: integer }
         created_at: { type: string, format: date-time }
@@ -7625,6 +7727,27 @@ components:
       required: [body]
       properties:
         body: { type: string }
+    ChatFollowup:
+      type: object
+      required: [id, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+    ChatFollowupList:
+      type: object
+      required: [followups]
+      properties:
+        followups:
+          type: array
+          items: { $ref: "#/components/schemas/ChatFollowup" }
+    ChatAsideList:
+      type: object
+      required: [asides]
+      properties:
+        asides:
+          type: array
+          items: { $ref: "#/components/schemas/ChatSession" }
     ChatSearchHit:
       type: object
       required: [message_id, chat_id, chat_title, role, archived, snippet, created_at]
