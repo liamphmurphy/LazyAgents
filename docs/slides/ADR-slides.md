@@ -47,16 +47,19 @@ The deck is one JSON document, stored as the body of a canvas with the new kind 
 Deck      { schema: 1, size: {w:1920,h:1080}, theme: Theme, assets: {[assetId]: AssetRef}, slides: Slide[] }
 Theme     { name, fonts: {heading: Slot, body: Slot}, colors: {background,text,heading,accent,accent2,muted,surface: "#RRGGBB"} }
 Slot      "sans" | "serif" | "mono"
-Slide     { id, layout: Layout, background?: {color: ColorRef}, notes?: string, hidden?: false, elements: Element[] }   // paint order = array order
+Slide     { id, layout: Layout, background?: {color: Paint}, notes?: string, hidden?: false, elements: Element[] }   // paint order = array order
 Layout    "title" | "title-body" | "two-column" | "image-right" | "section" | "blank"
 Element   common { id, type, frame: {x,y,w,h}, rotation?: deg, placeholder?: "title"|"subtitle"|"body"|"body2"|"image" }
   text    { paragraphs: Paragraph[], valign?: "top"|"middle"|"bottom" }
-  shape   { shape: "rect"|"roundRect"|"ellipse"|<18 PowerPoint presets, see shapes/README.md>, fill?, stroke?, strokeWidth?, radius?, text?: {paragraphs, valign} }
-  line    { stroke, strokeWidth, endArrow?: bool, startArrow?: bool }   // frame gives the two end points
-  image   { asset: assetId, crop?: {l,t,r,b} (fractions of the source), alt: string }   // always "cover" inside the frame after the crop
+  shape   { shape: "rect"|"roundRect"|"ellipse"|<18 PowerPoint presets, see shapes/README.md>, fill?: Paint, fillOpacity?, stroke?, strokeWidth?, strokeOpacity?, dash?: Dash, radius?, text?: {paragraphs, valign} }
+  line    { stroke, strokeWidth, strokeOpacity?, dash?: Dash, endArrow?: bool, startArrow?: bool }   // frame gives the two end points
+  image   { asset: assetId, crop?: {l,t,r,b} (fractions of the source), alt: string, opacity? }   // always "cover" inside the frame after the crop
 Paragraph { runs: Run[], align?: "left"|"center"|"right", bullet?: "disc"|"number", level?: 0..4, spaceBefore?: units }
 Run       { text, size: units, bold?, italic?, underline?, color?: ColorRef, font?: "heading"|"body"|Slot }
 ColorRef  theme token name | "#RRGGBB"
+Paint     ColorRef | { type: "linear", angle: 0..360 (deg, clockwise from left→right), stops: [ColorRef, ColorRef] }   // LAZYAGENTS-118
+Dash      "solid" | "dash" | "dot" | "dashDot" | "longDash"   // ×strokeWidth: 4·3, 1·1, 4·3·1·3, 8·3 (PowerPoint's dash, sysDot, dashDot, lgDash)
+*Opacity  0..1, absent = 1   // PPTX a:alpha on the colour, a:alphaModFix on a picture; PDF ExtGState ca/CA; gradients are a PDF axial shading and PPTX a:gradFill
 AssetRef  { mime: "image/png"|"image/jpeg", w, h, alt }   // pixel size; the bytes live in the blob store (§3.5)
 ```
 

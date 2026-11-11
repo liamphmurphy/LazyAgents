@@ -5,7 +5,7 @@
  * so all of them break lines in the same places.
  */
 import { type Seg, isPreset, shapeGeometry } from "./geometry.ts";
-import { type Deck, type Element, type Paragraph, type Run, type Slide, type Slot, type TextBox, type Theme, resolveColor, slotOf, textOf } from "./schema.ts";
+import { type Deck, type Element, type Paint, type Paragraph, type Run, type Slide, type Slot, type TextBox, type Theme, dashArray, resolveColor, resolvePaint, slotOf, textOf } from "./schema.ts";
 
 export const INSET = 16; // text inset on every side, in slide units (8 pt)
 export const LINE = 1.2; // line height as a multiple of the paragraph's largest run, times its lineSpacing
@@ -34,12 +34,15 @@ type Rot = { deg: number; cx: number; cy: number };
 export type TextOp = { op: "text"; x: number; y: number; text: string; slot: Slot; style: Style; size: number; color: string; underline: boolean; strike: boolean; w: number; rot?: Rot; el: string };
 /** A highlight behind a run of text; drawn before the text it marks. */
 export type HighlightOp = { op: "highlight"; x: number; y: number; w: number; h: number; fill: string; rot?: Rot; el: string };
+/** fo/so: fill and stroke opacity (absent = opaque); dash: lengths in slide units (empty = solid). */
+type Stroke = { stroke?: string; sw: number; so?: number; dash?: number[] };
 export type Op =
-  | { op: "rect"; x: number; y: number; w: number; h: number; r: number; fill?: string; stroke?: string; sw: number; rot?: Rot; el?: string }
-  | { op: "ellipse"; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw: number; rot?: Rot; el: string }
-  | { op: "path"; segs: Seg[]; fill?: string; stroke?: string; sw: number; rot?: Rot; el: string }
-  | { op: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number; endArrow: boolean; startArrow: boolean; rot?: Rot; el: string }
-  | { op: "image"; asset: string; x: number; y: number; w: number; h: number; src: { x: number; y: number; w: number; h: number }; alt: string; rot?: Rot; el: string }
+  | ({ op: "rect"; x: number; y: number; w: number; h: number; r: number; fill?: Paint; fo?: number; rot?: Rot; el?: string } & Stroke)
+  | ({ op: "ellipse"; x: number; y: number; w: number; h: number; fill?: Paint; fo?: number; rot?: Rot; el: string } & Stroke)
+  /** box is the shape's frame, which a gradient fill spans. */
+  | ({ op: "path"; segs: Seg[]; box: { x: number; y: number; w: number; h: number }; fill?: Paint; fo?: number; rot?: Rot; el: string } & Stroke)
+  | { op: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number; so?: number; dash?: number[]; endArrow: boolean; startArrow: boolean; rot?: Rot; el: string }
+  | { op: "image"; asset: string; x: number; y: number; w: number; h: number; src: { x: number; y: number; w: number; h: number }; alt: string; opacity?: number; rot?: Rot; el: string }
   | HighlightOp
   | TextOp;
 
@@ -170,22 +173,23 @@ export function textFrame(e: Element): Element["frame"] {
 /** Everything a slide draws, in paint order, in slide units. */
 export function layoutSlide(deck: Deck, slide: Slide, measure: Measure): Laid {
   const { theme } = deck;
-  const ops: Op[] = [{ op: "rect", x: 0, y: 0, w: deck.size.w, h: deck.size.h, r: 0, fill: resolveColor(theme, slide.background?.color, "background"), sw: 0 }];
+  const ops: Op[] = [{ op: "rect", x: 0, y: 0, w: deck.size.w, h: deck.size.h, r: 0, fill: resolvePaint(theme, slide.background?.color, "background"), sw: 0 }];
   const overflow = new Set<string>();
   for (const e of slide.elements) {
     const f = e.frame;
     const rot = e.rotation ? { deg: e.rotation, cx: f.x + f.w / 2, cy: f.y + f.h / 2 } : undefined;
     const group: Op[] = [];
     if (e.type === "shape") {
-      const paint = { fill: e.fill ? resolveColor(theme, e.fill) : undefined, stroke: e.stroke ? resolveColor(theme, e.stroke) : undefined, sw: e.strokeWidth ?? 0 };
-      if (isPreset(e.shape)) group.push({ op: "path", segs: shapeGeometry(e.shape, f).segs, ...paint, el: e.id });
+      const sw = e.strokeWidth ?? 0;
+      const paint = { fill: e.fill ? resolvePaint(theme, e.fill) : undefined, fo: e.fillOpacity, stroke: e.stroke ? resolveColor(theme, e.stroke) : undefined, sw, so: e.strokeOpacity, dash: dashArray(e.dash, sw) };
+      if (isPreset(e.shape)) group.push({ op: "path", segs: shapeGeometry(e.shape, f).segs, box: { x: f.x, y: f.y, w: f.w, h: f.h }, ...paint, el: e.id });
       else if (e.shape === "ellipse") group.push({ op: "ellipse", x: f.x, y: f.y, w: f.w, h: f.h, ...paint, el: e.id });
       else group.push({ op: "rect", x: f.x, y: f.y, w: f.w, h: f.h, r: e.shape === "roundRect" ? Math.min(e.radius ?? 24, f.w / 2, f.h / 2) : 0, ...paint, el: e.id });
     }
-    if (e.type === "line") group.push({ op: "line", x1: f.x, y1: f.y, x2: f.x + f.w, y2: f.y + f.h, stroke: resolveColor(theme, e.stroke), sw: e.strokeWidth, endArrow: !!e.endArrow, startArrow: !!e.startArrow, el: e.id });
+    if (e.type === "line") group.push({ op: "line", x1: f.x, y1: f.y, x2: f.x + f.w, y2: f.y + f.h, stroke: resolveColor(theme, e.stroke), sw: e.strokeWidth, so: e.strokeOpacity, dash: dashArray(e.dash, e.strokeWidth), endArrow: !!e.endArrow, startArrow: !!e.startArrow, el: e.id });
     if (e.type === "image") {
       const a = deck.assets[e.asset];
-      if (a) group.push({ op: "image", asset: e.asset, x: f.x, y: f.y, w: f.w, h: f.h, src: imageSource(e, a), alt: e.alt ?? a.alt ?? "", el: e.id });
+      if (a) group.push({ op: "image", asset: e.asset, x: f.x, y: f.y, w: f.w, h: f.h, src: imageSource(e, a), alt: e.alt ?? a.alt ?? "", opacity: e.opacity, el: e.id });
       else group.push({ op: "rect", x: f.x, y: f.y, w: f.w, h: f.h, r: 0, fill: "#E5E7EB", sw: 0, el: e.id });
     }
     const box = textOf(e);
