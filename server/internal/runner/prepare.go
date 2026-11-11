@@ -46,6 +46,31 @@ func BranchName(handle, key, title string) string {
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
+// Ticket and delegated work belongs to the person who dispatched it. Older
+// runs without a dispatcher use the installation's local user.
+func runCommitEnv(ctx context.Context, q *store.Queries, c runCtx) (map[string]string, error) {
+	if c.run.Purpose == "chat" {
+		return chatCommitEnv(ctx, q, c)
+	}
+	var user store.User
+	var err error
+	if c.run.DispatchedByUserID != nil {
+		user, err = q.GetUser(ctx, store.GetUserParams{ID: *c.run.DispatchedByUserID, WorkspaceID: c.run.WorkspaceID})
+	} else {
+		user, err = q.GetLocalUser(ctx)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("run commit author: %w", err)
+	}
+	if user.WorkspaceID != c.run.WorkspaceID {
+		return nil, fmt.Errorf("run commit author belongs to another workspace")
+	}
+	return map[string]string{
+		"GIT_AUTHOR_NAME": user.Name, "GIT_AUTHOR_EMAIL": user.Email,
+		"GIT_COMMITTER_NAME": user.Name, "GIT_COMMITTER_EMAIL": user.Email,
+	}, nil
+}
+
 // SSHKeyEnv is the env var the git:ssh secret is injected as. It is not
 // GIT_SSH, which git itself reads as the path of an ssh program.
 const SSHKeyEnv = "LAZYAGENTS_SSH_KEY"
