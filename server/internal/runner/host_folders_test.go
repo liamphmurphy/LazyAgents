@@ -14,7 +14,7 @@ import (
 // hostFolderLocal is the local backend posing as one with host folders, so
 // the runner's choice can be watched without Docker.
 type hostFolderLocal struct {
-	*runner.Local
+	*runner.Fake
 	dir   string
 	calls atomic.Int32
 }
@@ -30,7 +30,7 @@ func (h *hostFolderLocal) EnsureHostWorkspace(ctx context.Context, runID string)
 // is recorded on the run for the UI.
 func TestRunnerUsesHostFoldersWhenTurnedOn(t *testing.T) {
 	e := setup(t)
-	backend := &hostFolderLocal{Local: e.runner.Backend.(*runner.Local), dir: "/Users/me/vesper/workspaces"}
+	backend := &hostFolderLocal{Fake: e.runner.Backend.(*runner.Fake), dir: "/Users/me/vesper/workspaces"}
 	e.runner.Backend = backend
 	t.Setenv("FAKE_HARNESS_MODE", "crash") // a failed run keeps its workspace
 

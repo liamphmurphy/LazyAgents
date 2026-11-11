@@ -75,7 +75,7 @@ func videoCandidate(rel string) bool {
 }
 
 // ReadVideoFiles reads the job's changed files on the host.
-func (l *Local) ReadVideoFiles(_ context.Context, runID string, req VideoFilesRequest) ([]VideoFile, error) {
+func (l *Fake) ReadVideoFiles(_ context.Context, runID string, req VideoFilesRequest) ([]VideoFile, error) {
 	root, err := os.OpenRoot(l.WorkspaceDir(runID))
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (l *Local) ReadVideoFiles(_ context.Context, runID string, req VideoFilesRe
 
 // OpenWorkspaceFile opens one regular file of the workspace for reading,
 // with its size; fs.ErrNotExist if it isn't there.
-func (l *Local) OpenWorkspaceFile(_ context.Context, runID, rel string, limit int64) (io.ReadCloser, int64, error) {
+func (l *Fake) OpenWorkspaceFile(_ context.Context, runID, rel string, limit int64) (io.ReadCloser, int64, error) {
 	root, err := os.OpenRoot(l.WorkspaceDir(runID))
 	if err != nil {
 		return nil, 0, err
@@ -174,7 +174,7 @@ func (l *Local) OpenWorkspaceFile(_ context.Context, runID, rel string, limit in
 }
 
 // videoFilesScript lists a job's files inside a start-only backend (Docker),
-// with the same rules as Local.ReadVideoFiles in the shell's own tests (which
+// with the same rules as Fake.ReadVideoFiles in the shell's own tests (which
 // don't follow links): "$1" is the job's directory, "$2" the script ("" for
 // none), then known stamps as path=stamp. It tars the changed files and
 // prints "stamp<TAB>path<TAB>stamp" on stderr for each.

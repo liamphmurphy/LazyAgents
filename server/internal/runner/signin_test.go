@@ -22,7 +22,7 @@ import (
 // fakeLogins runs a shell script in place of the provider's CLI. It embeds
 // Local only to be a Backend.
 type fakeLogins struct {
-	*Local
+	*Fake
 	script string
 	home   string
 	mu     sync.Mutex
@@ -119,7 +119,7 @@ func newSignInEnv(t *testing.T, script string) signInEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeLogins{Local: &Local{Dir: t.TempDir()}, script: script, home: t.TempDir()}
+	f := &fakeLogins{Fake: &Fake{Dir: t.TempDir()}, script: script, home: t.TempDir()}
 	e := signInEnv{ctx: ctx, q: q, f: f, ws: me.WorkspaceID, me: me.ID, stored: map[string]string{}, mu: &sync.Mutex{}}
 	e.r = &Runner{Cfg: Config{ID: "test-runner"}, Pool: pool, Backend: f, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		StoreSecret: func(_ context.Context, ws, by uuid.UUID, name, value string) error {

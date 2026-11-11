@@ -83,7 +83,7 @@ type HostFolders interface {
 // Local runs harnesses as host processes in a directory per run. It's for
 // development on a laptop where the CLIs are installed and logged in: there
 // is no isolation, and the host environment (HOME, logins) is inherited.
-type Local struct {
+type Fake struct {
 	Dir string // root for run workspaces
 	// Bins maps a harness program to the binary to run, e.g.
 	// {"claude": "/path/to/fake"}. It applies to the harness wherever it
@@ -97,9 +97,9 @@ type Local struct {
 // harnessPrograms are the CLIs adapters invoke.
 var harnessPrograms = map[string]bool{"claude": true, "codex": true}
 
-func (l *Local) Name() string { return "local" }
+func (l *Fake) Name() string { return "local" }
 
-func (l *Local) WorkspaceDir(runID string) string {
+func (l *Fake) WorkspaceDir(runID string) string {
 	p := filepath.Join(l.Dir, "runs", runID, "workspace")
 	if abs, err := filepath.Abs(p); err == nil {
 		return abs
@@ -107,11 +107,11 @@ func (l *Local) WorkspaceDir(runID string) string {
 	return p
 }
 
-func (l *Local) EnsureWorkspace(_ context.Context, runID string) error {
+func (l *Fake) EnsureWorkspace(_ context.Context, runID string) error {
 	return os.MkdirAll(l.WorkspaceDir(runID), 0o755)
 }
 
-func (l *Local) HasWorkspace(_ context.Context, runID string) (bool, error) {
+func (l *Fake) HasWorkspace(_ context.Context, runID string) (bool, error) {
 	_, err := os.Stat(l.WorkspaceDir(runID))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -119,11 +119,11 @@ func (l *Local) HasWorkspace(_ context.Context, runID string) (bool, error) {
 	return err == nil, err
 }
 
-func (l *Local) RemoveWorkspace(_ context.Context, runID string) error {
+func (l *Fake) RemoveWorkspace(_ context.Context, runID string) error {
 	return os.RemoveAll(filepath.Join(l.Dir, "runs", runID))
 }
 
-func (l *Local) Cleanup(context.Context) error { return nil } // processes die with the runner
+func (l *Fake) Cleanup(context.Context) error { return nil } // processes die with the runner
 
 // subDir joins a workspace-relative directory to root, refusing escapes.
 func subDir(root, rel string) (string, error) {
@@ -158,7 +158,7 @@ func writeFiles(root string, files map[string][]byte) error {
 	return nil
 }
 
-func (l *Local) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
+func (l *Fake) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
 	dir := l.WorkspaceDir(runID)
 	if spec.Dir != "" {
 		var err error

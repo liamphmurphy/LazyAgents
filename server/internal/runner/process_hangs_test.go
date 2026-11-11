@@ -108,7 +108,7 @@ func TestOversizedHarnessLineFailsWithoutBlockingWriter(t *testing.T) {
 		{"stdout", "head -c 34603008 /dev/zero"},
 	} {
 		t.Run(tc.stream, func(t *testing.T) {
-			b := &Local{Dir: t.TempDir()}
+			b := &Fake{Dir: t.TempDir()}
 			id := uuid.NewString()
 			if err := b.EnsureWorkspace(context.Background(), id); err != nil {
 				t.Fatal(err)

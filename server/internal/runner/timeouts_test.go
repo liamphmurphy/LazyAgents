@@ -61,7 +61,7 @@ func TestRunScriptTimesOut(t *testing.T) {
 	old := ScriptTimeout
 	ScriptTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { ScriptTimeout = old })
-	r := &Runner{Backend: &Local{Dir: t.TempDir()}}
+	r := &Runner{Backend: &Fake{Dir: t.TempDir()}}
 	start := time.Now()
 	_, err := r.runScript(context.Background(), uuid.New(), "hang", "sleep 30", nil)
 	if err == nil || !strings.Contains(err.Error(), "timed out") {

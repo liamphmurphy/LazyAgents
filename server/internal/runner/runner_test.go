@@ -124,7 +124,7 @@ func setupWith(t *testing.T, mk backendFor) env {
 		}
 	}
 	t.Setenv("PATH", safe)
-	var backend runner.Backend = &runner.Local{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}, OnlyBins: true}
+	var backend runner.Backend = &runner.Fake{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}, OnlyBins: true}
 	mcpURL := ts.URL + "/mcp"
 	if mk != nil {
 		backend, mcpURL = mk(t, dir, bin, ts.URL)

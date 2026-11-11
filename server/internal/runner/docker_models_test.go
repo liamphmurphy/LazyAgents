@@ -306,7 +306,7 @@ func TestDockerListModelsCodexReadsLoginBackAfterExit(t *testing.T) {
 
 // fakeLister stands in for the Docker backend. It embeds Local only to be a Backend.
 type fakeLister struct {
-	*Local
+	*Fake
 	models []chatmodels.Model
 	err    error
 	mu     sync.Mutex
@@ -348,7 +348,7 @@ func newListingEnv(t *testing.T, f *fakeLister) listingEnv {
 		t.Fatal(err)
 	}
 	svc := &secrets.Service{Q: q, Box: box}
-	f.Local = &Local{Dir: t.TempDir()}
+	f.Fake = &Fake{Dir: t.TempDir()}
 	r := &Runner{Cfg: Config{ID: "test-runner"}, Pool: pool, Backend: f, Secrets: svc, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	t.Cleanup(r.wg.Wait)
 	return listingEnv{ctx: ctx, q: q, r: r, f: f, ws: me.WorkspaceID, set: func(name, value string) {

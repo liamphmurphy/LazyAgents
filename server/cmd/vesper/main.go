@@ -367,7 +367,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		if rc.CodexBin != "" {
 			bins["codex"] = rc.CodexBin
 		}
-		backend = &runner.Local{Dir: rc.DataDir, Bins: bins}
+		backend = &runner.Fake{Dir: rc.DataDir, Bins: bins}
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)
