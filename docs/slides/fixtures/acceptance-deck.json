@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "size": { "w": 1920, "h": 1080 },
+  "theme": {
+    "name": "Vesper Light",
+    "fonts": { "heading": "sans", "body": "sans" },
+    "colors": { "background": "#FFFFFF", "text": "#1F2328", "heading": "#111418", "accent": "#3B6FE0", "accent2": "#E8A33D", "muted": "#6B7280", "surface": "#F3F5F9" }
+  },
+  "assets": {
+    "a_landscape": { "mime": "image/png", "w": 1200, "h": 800, "file": "landscape.png", "alt": "Stylised mountains under a yellow sun" }
+  },
+  "slides": [
+    {
+      "id": "s_title",
+      "layout": "title",
+      "background": { "color": "surface" },
+      "notes": "Welcome everyone.",
+      "elements": [
+        { "id": "e_t1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 340, "w": 1600, "h": 240 }, "valign": "bottom",
+          "paragraphs": [ { "align": "left", "runs": [ { "text": "Quarterly review", "size": 112, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_t2", "type": "text", "placeholder": "subtitle", "frame": { "x": 160, "y": 600, "w": 1600, "h": 120 },
+          "paragraphs": [ { "runs": [ { "text": "Slides acceptance deck · ", "size": 44, "color": "muted" }, { "text": "v1 schema", "size": 44, "italic": true, "color": "accent" } ] } ] },
+        { "id": "e_t3", "type": "shape", "shape": "rect", "frame": { "x": 160, "y": 320, "w": 200, "h": 12 }, "fill": "accent" }
+      ]
+    },
+    {
+      "id": "s_bullets",
+      "layout": "title-body",
+      "elements": [
+        { "id": "e_b1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 80, "w": 1680, "h": 160 }, "valign": "middle",
+          "paragraphs": [ { "runs": [ { "text": "What changed this quarter", "size": 80, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_b2", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 280, "w": 1680, "h": 700 },
+          "paragraphs": [
+            { "bullet": "disc", "level": 0, "runs": [ { "text": "Revenue grew ", "size": 48 }, { "text": "18%", "size": 48, "bold": true, "color": "accent" }, { "text": " against a plan of 12%, driven by the self-serve tier.", "size": 48 } ] },
+            { "bullet": "disc", "level": 1, "runs": [ { "text": "Churn held steady; ", "size": 40 }, { "text": "expansion", "size": 40, "italic": true }, { "text": " did the work.", "size": 40 } ] },
+            { "bullet": "disc", "level": 0, "runs": [ { "text": "This is a deliberately long bullet so the shared layout has to wrap it across more than one line in every renderer, which is exactly where editor, PDF and PPTX drift apart if they measure text differently.", "size": 48 } ] },
+            { "bullet": "number", "level": 0, "runs": [ { "text": "Underlined", "size": 48, "underline": true }, { "text": " and ", "size": 48 }, { "text": "coloured", "size": 48, "color": "#C2410C" }, { "text": " runs survive export.", "size": 48 } ] }
+          ] }
+      ]
+    },
+    {
+      "id": "s_image",
+      "layout": "image-right",
+      "elements": [
+        { "id": "e_i1", "type": "text", "placeholder": "title", "frame": { "x": 120, "y": 120, "w": 800, "h": 300 }, "valign": "top",
+          "paragraphs": [ { "runs": [ { "text": "Images are cropped, not squashed", "size": 72, "bold": true, "font": "heading", "color": "heading" } ] } ] },
+        { "id": "e_i2", "type": "text", "placeholder": "body", "frame": { "x": 120, "y": 460, "w": 800, "h": 480 },
+          "paragraphs": [
+            { "runs": [ { "text": "The photo is 3:2; its frame is nearly square. A crop rectangle in source fractions keeps the sun and trims the red border on the left.", "size": 40, "color": "text" } ] },
+            { "spaceBefore": 24, "runs": [ { "text": "Serif body text", "size": 40, "font": "serif", "italic": true, "color": "muted" } ] }
+          ] },
+        { "id": "e_i3", "type": "image", "asset": "a_landscape", "frame": { "x": 1000, "y": 120, "w": 800, "h": 840 },
+          "crop": { "l": 0.3, "t": 0.0, "r": 0.0, "b": 0.0 } }
+      ]
+    },
+    {
+      "id": "s_shapes",
+      "layout": "blank",
+      "elements": [
+        { "id": "e_s1", "type": "shape", "shape": "roundRect", "frame": { "x": 120, "y": 160, "w": 520, "h": 300 }, "fill": "accent", "radius": 32,
+          "text": { "valign": "middle", "paragraphs": [ { "align": "center", "runs": [ { "text": "Editable text in a shape", "size": 48, "bold": true, "color": "#FFFFFF" } ] } ] } },
+        { "id": "e_s2", "type": "shape", "shape": "ellipse", "frame": { "x": 760, "y": 160, "w": 400, "h": 300 }, "fill": "accent2", "stroke": "#7C4A03", "strokeWidth": 6 },
+        { "id": "e_s3", "type": "shape", "shape": "rect", "frame": { "x": 1280, "y": 160, "w": 520, "h": 300 }, "fill": "surface", "stroke": "muted", "strokeWidth": 4, "rotation": 8,
+          "text": { "valign": "top", "paragraphs": [ { "align": "left", "runs": [ { "text": "Rotated 8°", "size": 40, "color": "text" } ] } ] } },
+        { "id": "e_s4", "type": "line", "frame": { "x": 120, "y": 600, "w": 1680, "h": 0 }, "stroke": "heading", "strokeWidth": 8, "endArrow": true },
+        { "id": "e_s5", "type": "text", "frame": { "x": 120, "y": 700, "w": 700, "h": 120 },
+          "paragraphs": [ { "runs": [ { "text": "This box is too small for the amount of text that has been typed into it, so the layout reports an overflow instead of shrinking it.", "size": 40, "color": "text" } ] } ] }
+      ]
+    },
+    {
+      "id": "s_section",
+      "layout": "section",
+      "background": { "color": "heading" },
+      "elements": [
+        { "id": "e_x1", "type": "text", "placeholder": "title", "frame": { "x": 160, "y": 380, "w": 1600, "h": 320 }, "valign": "middle",
+          "paragraphs": [ { "align": "center", "runs": [ { "text": "Questions?", "size": 128, "bold": true, "color": "#FFFFFF" } ] },
+                          { "align": "center", "runs": [ { "text": "mono: deck.schema = 1", "size": 40, "font": "mono", "color": "accent2" } ] } ] }
+      ]
+    }
+  ]
+}
