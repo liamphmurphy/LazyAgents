@@ -337,6 +337,10 @@ func addReply(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur sto
 	return q.CreateChatCanvasComment(ctx, store.CreateChatCanvasCommentParams{CanvasID: c.ID, ParentID: &p.ID, Seq: cur.Seq, AuthorType: by.Type, AuthorID: by.ID, Body: body, Anchor: []byte("{}"), Status: "open"})
 }
 
+// Decks have no comments yet (ADR: deferred); the persona's suggestions are
+// reviewed as changes instead.
+var errNoDeckComments = apperr.Invalid("canvas_id", "a slide deck can't take comments yet")
+
 // AddComment adds a person's draft comment, or a reply to an existing thread,
 // which goes back to open if it had been addressed.
 func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComment, by Actor) (store.ChatCanvasComment, error) {
@@ -347,6 +351,9 @@ func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComm
 	}
 	err = s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		var err error
+		if c.Kind == KindDeck {
+			return errNoDeckComments
+		}
 		if in.ParentID != nil {
 			out, err = addReply(ctx, q, c, cur, *in.ParentID, body, by, "open")
 			return err
@@ -395,6 +402,9 @@ func (s *Service) AddAgentComment(ctx context.Context, chat, id uuid.UUID, in Ag
 	err = s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		var a Anchor
 		var err error
+		if c.Kind == KindDeck {
+			return errNoDeckComments
+		}
 		if c.Kind == KindSVG {
 			if in.Suggestion != nil {
 				return apperr.Invalid("suggestion", "only a text canvas takes suggestions")

@@ -26,9 +26,10 @@ export const WORK_ITEMS: NavItem[] = [
   { href: "/tickets", label: "Tickets", icon: "tickets" },
 ];
 
-/** Apps: a full page of their own; Docs and Finance have an Ask drawer, each backed by one of the person's spaces. */
+/** Apps: a full page of their own; Docs, Slides and Finance have an Ask drawer, each backed by one of the person's spaces. */
 export const APP_ITEMS: NavItem[] = [
   { href: "/apps/docs", label: "Docs", icon: "edit" },
+  { href: "/apps/slides", label: "Slides", icon: "slides" },
   { href: "/apps/finance", label: "Finance", icon: "dollar" },
   { href: "/library", label: "Library", icon: "library" },
 ];

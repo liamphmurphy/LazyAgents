@@ -3555,6 +3555,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/slides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's slide decks, most recently changed first */
+        get: operations["listDecks"];
+        put?: never;
+        /**
+         * Start a deck in the Slides app
+         * @description Makes a deck canvas with one title slide (the title, unless it is
+         *     empty) in a new chat in the person's Slides space. theme is a built-in
+         *     theme: light (default), dark, paper or contrast.
+         */
+        post: operations["createDeck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slides/{canvasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a deck with its chat, versions and images
+         * @description 404 for anyone else's deck or a canvas that isn't a deck.
+         */
+        delete: operations["deleteDeck"];
+        options?: never;
+        head?: never;
+        /** Rename a deck (and its chat) */
+        patch: operations["renameDeck"];
+        trace?: never;
+    };
+    "/slides/{canvasId}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a deck's current version and images into a new deck */
+        post: operations["duplicateDeck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slides/{canvasId}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an image to a deck
+         * @description PNG or JPEG (sniffed by the server), at most 10 MB and 8192 pixels on
+         *     a side. Returns the asset to put in the deck's assets map; uploading
+         *     doesn't change the deck. Counts toward the 1 GB Library quota.
+         */
+        post: operations["uploadDeckAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slides/{canvasId}/assets/{assetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                assetId: string;
+            };
+            cookie?: never;
+        };
+        /** One of a deck's images (owner only) */
+        get: operations["getDeckAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/docs": {
         parameters: {
             query?: never;
@@ -4574,11 +4683,30 @@ export interface components {
             /** Format: uuid */
             canvas_id?: string;
         };
+        DeckSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            slide_count: number;
+            /** @description The deck JSON cut down to its first slide, for the list's thumbnail */
+            cover: string;
+        };
+        DeckAsset: {
+            id: string;
+            /** @enum {string} */
+            mime: "image/png" | "image/jpeg";
+            w: number;
+            h: number;
+        };
         MyCanvas: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "text" | "svg";
+            kind: "text" | "svg" | "deck";
             title: string;
             /** Format: uuid */
             chat_id: string;
@@ -4863,7 +4991,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "text" | "svg";
+            kind: "text" | "svg" | "deck";
             title: string;
             /**
              * Format: int32
@@ -13882,6 +14010,196 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listDecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 decks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        decks: components["schemas"]["DeckSummary"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDeck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Empty starts an untitled deck */
+                    title?: string;
+                    /** @enum {string} */
+                    theme?: "light" | "dark" | "paper" | "contrast";
+                };
+            };
+        };
+        responses: {
+            /** @description The deck */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDeck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    renameDeck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The deck */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    duplicateDeck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The copy */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadDeckAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The stored image */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckAsset"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDeckAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                assetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
                 };
             };
             404: components["responses"]["Error"];

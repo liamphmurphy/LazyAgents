@@ -470,6 +470,14 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
             <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(q.error)}</p>
           ) : !c ? (
             <p className="text-xs text-fg-tertiary">Loading…</p>
+          ) : c.kind === "deck" ? (
+            <p className="text-[13px] text-fg-secondary">
+              This is a slide deck.{" "}
+              <Link href={`/apps/slides/${canvasId}`} className="text-accent hover:underline">
+                Open it in Slides
+              </Link>{" "}
+              to edit, present or export it.
+            </p>
           ) : view === "edit" && isCurrent && !locked ? (
             <Editor key={c.seq} c={c} actions={actions} onDone={() => setView("preview")} />
           ) : view === "changes" ? (
