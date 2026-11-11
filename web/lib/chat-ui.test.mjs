@@ -1,4 +1,5 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId } from "./chat-ui.ts";
 
@@ -556,4 +557,18 @@ test("a chat's model shows the catalog's label, even when it is the definition's
   assert.equal(catalogModelLabel([], "opus-5.5"), "Opus 5.5", "unknown: made readable");
   assert.equal(readableModelId("gpt-5-codex"), "GPT-5 Codex");
   assert.equal(readableModelId("claude-haiku-5-5"), "Haiku 5.5");
+});
+
+test("every chat tool the server offers has a scene of its own", () => {
+  // The server refuses chat tools missing from chatTools; nothing here forced the UI to keep
+  // up, so new tools silently showed the idle dots. Read the list from the source of truth.
+  const source = readFileSync(new URL("../../server/internal/agentapi/chat.go", import.meta.url), "utf8");
+  const list = /var chatTools = \[\]string\{([^}]*)\}/.exec(source)?.[1];
+  assert.ok(list, "chatTools not found in chat.go");
+  const tools = [...list.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  assert.ok(tools.length > 40, `parsed only ${tools.length} chat tools`);
+  // Bookkeeping that isn't work the person would want pictured.
+  const idle = new Set(["whoami", "set_chat_title"]);
+  const unpictured = tools.filter((tool) => !idle.has(tool) && chatStatusOf({ tool: `mcp__lazyagents__${tool}`, input: {} }).kind === "thinking");
+  assert.deepEqual(unpictured, []);
 });
