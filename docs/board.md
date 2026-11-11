@@ -87,9 +87,11 @@ an unmanaged session uses an agent token from the agent's page.
 | `create_ticket` | Optional `points` and `estimate_rationale` on the new ticket. Chats also take `project` (default: the chat's default project) and `agent`, a main agent's handle to assign it to; a run's follow-ups stay in its project, unassigned | Lead and chat runs |
 | `propose_tickets` | Each draft can carry `points` and `estimate_rationale`. On acceptance the estimate is credited to the planning agent, unless the reviewer changed it first | Planning runs |
 | `create_epic` | Creates an epic in `project`, or the chat's default project | Chat runs |
+| `update_ticket` | `{ticket, revision, title?, description?, status?, priority?, points?, estimate_rationale?, epic_id?, agent?, requires_mockup?, pr_url?, pr_draft?}`. A stale `revision` is refused. `canceled` is refused (only people cancel), and so are status and `pr_url` changes while the ticket has a live run. `pr_url` links a PR for work done in the chat, so PR sync moves the ticket to Done on merge. Each event's payload carries `via {chat_id, persona_id}` | Chat runs |
+| `comment_ticket` | `{ticket, body}`. Comments as the assistant; the event carries `via {chat_id, persona_id}` | Chat runs |
 | `reply_to_run` | `{ticket, answer}`. Posts the person's answer as a comment (written by the assistant, naming whose answer it is) and resumes the run. Only for a run the chat started, while it waits for a reply, after the person has answered in the chat | Chat runs |
 
-No MCP tool sets ticket or epic status directly. A typical lead run: call
+Apart from a chat's `update_ticket`, no MCP tool sets ticket or epic status directly. A typical lead run: call
 `claim_ticket` (which returns the ticket, including the epic's criteria), and
 `estimate_ticket` on tickets it has sized. Once the work is verified it calls
 `check_epic_criterion` for the criteria it has met, then `complete_run`. A

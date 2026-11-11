@@ -594,15 +594,8 @@ var prURLRe = regexp.MustCompile(`^https://github\.com/[\w.-]+/[\w.-]+/pull/(\d+
 // SetPR records the ticket's pull request. The PR sync job (Phase 5) then
 // keeps its state and diff stats current.
 func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bool) error {
-	m := prURLRe.FindStringSubmatch(strings.TrimSpace(url))
-	if m == nil {
-		return apperr.Invalid("url", "must be a GitHub pull request URL")
-	}
-	var num int32
-	fmt.Sscan(m[1], &num)
-	state := "open"
-	if draft {
-		state = "draft"
+	if _, _, err := parsePRURL(url); err != nil {
+		return err
 	}
 	return s.tx(ctx, func(q *store.Queries) error {
 		run, t, err := s.running(ctx, q, c, key)
@@ -612,12 +605,36 @@ func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bo
 		if err := requireMockup(ctx, q, run, t); err != nil {
 			return err
 		}
-		u := m[0]
-		if err := q.SetTicketPR(ctx, store.SetTicketPRParams{ID: t.ID, PrNumber: &num, PrUrl: &u, PrState: &state}); err != nil {
-			return err
-		}
-		return tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbPROpened, map[string]any{"number": num, "url": u, "draft": draft}, nil)
+		return LinkPR(ctx, q, t, agentActor(c), url, draft)
 	})
+}
+
+func parsePRURL(url string) (int32, string, error) {
+	m := prURLRe.FindStringSubmatch(strings.TrimSpace(url))
+	if m == nil {
+		return 0, "", apperr.Invalid("url", "must be a GitHub pull request URL")
+	}
+	var num int32
+	fmt.Sscan(m[1], &num)
+	return num, m[0], nil
+}
+
+// LinkPR records t's pull request inside the caller's transaction, so the PR
+// sync job follows it from now on: a merge moves the ticket to Done. Work done
+// outside a ticket run (a persona coding in a chat) links its PR this way.
+func LinkPR(ctx context.Context, q *store.Queries, t store.Ticket, actor tracker.Actor, url string, draft bool) error {
+	num, u, err := parsePRURL(url)
+	if err != nil {
+		return err
+	}
+	state := "open"
+	if draft {
+		state = "draft"
+	}
+	if err := q.SetTicketPR(ctx, store.SetTicketPRParams{ID: t.ID, PrNumber: &num, PrUrl: &u, PrState: &state}); err != nil {
+		return err
+	}
+	return tracker.Record(ctx, q, t.WorkspaceID, t.ID, t.EpicID, actor, VerbPROpened, map[string]any{"number": num, "url": u, "draft": draft}, nil)
 }
 
 // CheckCriterion ticks acceptance criterion n (1-based, in display order).

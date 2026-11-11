@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,10 @@ const (
 type Actor struct {
 	Type string // user | agent | system
 	ID   *uuid.UUID
+	// Via says where the actor acted from, e.g. {chat_id, persona_id} for a
+	// chat persona. It's stored on each event's payload as "via" so the
+	// timeline can link back to the conversation that made the change.
+	Via map[string]any
 }
 
 func UserActor(id uuid.UUID) Actor { return Actor{Type: "user", ID: &id} }
@@ -63,6 +68,10 @@ func insert(ctx context.Context, q *store.Queries, ws uuid.UUID, ticketID uuid.U
 	p := e.payload
 	if p == nil {
 		p = map[string]any{}
+	}
+	if len(a.Via) > 0 {
+		p = maps.Clone(p)
+		p["via"] = a.Via
 	}
 	raw, err := json.Marshal(p)
 	if err != nil {

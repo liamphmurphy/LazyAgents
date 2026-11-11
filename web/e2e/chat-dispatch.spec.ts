@@ -75,6 +75,13 @@ test("a dispatch card starts the run as you, then the tray follows it", async ({
   expect((state.starts[0] as { message_id?: string }).message_id).toBeTruthy();
   await expect(page.getByTestId("dispatch-started")).toContainText("Started WEB-3 with @pike");
 
+  // The persona hands the ticket to the agent once, over the run's card, then gets out of the way.
+  const handoff = page.getByTestId("ticket-run-handoff");
+  await expect(handoff).toContainText("Handing WEB-3 to @pike");
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: "/tmp/chat-dispatch-handoff.png" });
+  await expect(handoff).toHaveCount(0, { timeout: 5000 });
+
   const tray = page.getByTestId("ticket-run-tray");
   await expect(tray).toContainText("Queued");
   // The agent posts its plan and gets going; the tray follows by polling.
@@ -136,4 +143,13 @@ test("Stop in the tray cancels the run", async ({ page }) => {
   await expect.poll(() => state.cancels).toBe(1);
   await expect(tray).toHaveCount(0, { timeout: 10000 });
   await expect(page.getByTestId("ticket-run")).toContainText("Cancelled");
+});
+
+test("a run already going when the chat opens doesn't replay the hand-off", async ({ page }) => {
+  const state: State = { runs: [run()], starts: [], cancels: 0, blockers: [] };
+  await offer(page, state);
+  await expect(page.getByTestId("ticket-run-tray")).toContainText("Running");
+  // Give a late hand-off the chance to show before checking it never did.
+  await page.waitForTimeout(600);
+  await expect(page.getByTestId("ticket-run-handoff")).toHaveCount(0);
 });

@@ -79,7 +79,7 @@ func TestMCPProfiles(t *testing.T) {
 		return slices.DeleteFunc(slices.Clone(all), func(n string) bool { return slices.Contains(hide, n) })
 	}
 	subTools := []string{"get_ticket", "read_artifact", "create_artifact", "comment", "request_approval", "wait_for_approval", "run_gated", "await_human", "search_knowledge", "find_pattern", "propose_pattern", "list_proposed_patterns", "read_page", "write_note", "get_backlinks", "complete_run"}
-	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "create_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
+	chatTools := []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "create_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
 		"propose_connector", "propose_secret", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "create_space", "create_scheduled_task", "create_learning_module"}
 	planTools := []string{"whoami", "get_ticket", "read_artifact", "search_knowledge", "read_page", "get_backlinks", "propose_tickets"}
 

@@ -115,7 +115,9 @@ test("each tool call maps to the kind of scene it shows", () => {
   const bash = (command) => ({ tool: "Bash", input: { command } });
   const cases = [
     [{ tool: "mcp__lazyagents__read_page", input: {} }, "wiki"],
-    [{ tool: "get_ticket", input: {} }, "tickets"],
+    [{ tool: "get_ticket", input: {} }, "ticket-lookup"],
+    [{ tool: "list_epics", input: {} }, "ticket-lookup"],
+    [{ tool: "update_ticket", input: {} }, "tickets"],
     [{ tool: "create_epic", input: {} }, "tickets"],
     [{ tool: "get_run", input: {} }, "runs"],
     [{ tool: "Read", input: { file_path: "src/a.go" } }, "reading-code"],
@@ -332,6 +334,11 @@ test("stepDetail names canvases, workflows, tickets, images, personas, runs and 
     [{ tool: "mcp__lazyagents__create_learning_module", input: { topic: "Strength training" } }, "Starting a module on “Strength training”"],
     [{ tool: "mcp__lazyagents__create_scheduled_task", input: {} }, "Scheduling a task"],
     [{ tool: "mcp__lazyagents__list_runs", input: { ticket: "PAY-214" } }, "Checking runs of PAY-214"],
+    [{ tool: "mcp__lazyagents__get_ticket", input: { ticket: "PAY-214" } }, "Reading PAY-214"],
+    [{ tool: "mcp__lazyagents__list_epics", input: { project: "PAY" } }, "Looking over PAY epics"],
+    [{ tool: "mcp__lazyagents__list_epics", input: {} }, "Checking tickets"],
+    [{ tool: "mcp__lazyagents__update_ticket", input: { ticket: "PAY-214", description: "secret" } }, "Updating PAY-214"],
+    [{ tool: "mcp__lazyagents__comment_ticket", input: { ticket: "PAY-214", body: "secret" } }, "Commenting on PAY-214"],
     [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
     [{ tool: "mcp__github__create_pull_request", input: { owner: "o", repo: "r", title: "Add rail", body: "secret" } }, "Using Github: create_pull_request"],
     [{ tool: "mcp__github__get_issue", input: { owner: "o", repo: "r", issue_number: 12 } }, "Using Github: get_issue"],

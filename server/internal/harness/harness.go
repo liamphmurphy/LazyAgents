@@ -287,7 +287,7 @@ func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project,
 	}
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
 	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
-	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Do not call claim_ticket, complete_run or propose_tickets. ")
+	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Use update_ticket and comment_ticket to change existing tickets when the person asks, or to keep a ticket you work on in this chat current. Do not call claim_ticket, complete_run or propose_tickets. ")
 	switch {
 	case allowed(spec, "repo:write"):
 		// A persona that can code (runs.ChatSpec): the instructions below say where.

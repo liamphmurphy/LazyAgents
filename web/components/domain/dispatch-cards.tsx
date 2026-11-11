@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChatTicketRuns, useControlRunById, useDecideApproval, useDispatchPreview, useStartChatTicketRun, useTicket } from "@/lib/api/hooks";
 import { parseDispatch, planLine, runEnded } from "@/lib/chat-dispatch";
@@ -76,8 +76,65 @@ function ApprovalPanel({ run, approval }: { run: TicketRun; approval: NonNullabl
   );
 }
 
+/** How long the hand-off plays over a run's card once it starts. */
+const HANDOFF_MS = 2800;
+
+/**
+ * The persona passing the ticket to the agent that took it: the ticket's key travels from
+ * one to the other. It covers the card rather than pushing it down, and announces the
+ * hand-off once. Clicks pass through to the card. With reduced motion the chip simply sits by the agent.
+ */
+function HandOff({ run, from }: { run: TicketRun; from?: ReactNode }) {
+  return (
+    <div data-testid="ticket-run-handoff" role="status" className="handoff pointer-events-none absolute inset-0 z-10 flex items-center gap-3 rounded-xl bg-surface px-3.5">
+      <span className="flex-none">{from ?? <span aria-hidden className="block size-[26px] rounded-full bg-accent-soft ring-1 ring-accent" />}</span>
+      <span aria-hidden className="relative h-6 w-36 flex-none max-sm:w-20">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-accent/10 via-accent to-accent/10" />
+        <span className="handoff-chip absolute top-1/2 whitespace-nowrap rounded-md border border-accent bg-accent-soft px-1.5 py-px font-mono text-[10.5px] text-accent shadow-sm">
+          {run.ticket}
+        </span>
+      </span>
+      <span className="handoff-agent flex-none">
+        <AgentAvatar name={run.agent} colorIndex={0} label={false} />
+      </span>
+      <p className="min-w-0 truncate text-[13px] text-fg-secondary">
+        Handing <span className="font-medium text-fg">{run.ticket}</span> to <span className="font-medium text-fg">@{run.agent}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Runs that start while the tray is open, for HANDOFF_MS each. Runs already live when the
+ * chat opened (a reload, coming back later) don't replay it.
+ */
+function useFreshRuns(ids: string[] | undefined) {
+  const seen = useRef<Set<string>>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [fresh, setFresh] = useState<string[]>([]);
+  const key = ids?.join(",");
+  useEffect(() => {
+    if (key === undefined) return;
+    const now = key ? key.split(",") : [];
+    if (!seen.current) {
+      seen.current = new Set(now);
+      return;
+    }
+    const known = seen.current;
+    const added = now.filter((id) => !known.has(id));
+    if (added.length === 0) return;
+    for (const id of added) known.add(id);
+    timers.current.push(
+      setTimeout(() => setFresh((f) => [...f, ...added]), 0),
+      setTimeout(() => setFresh((f) => f.filter((id) => !added.includes(id))), HANDOFF_MS),
+    );
+  }, [key]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  return fresh;
+}
+
 /** One ticket run a chat started: live in the tray, or as its card's summary once it ends. */
-export function TicketRunCard({ run, scene, onReview }: { run: TicketRun; scene?: SceneRenderer; onReview?: () => void }) {
+export function TicketRunCard({ run, scene, onReview, handoff }: { run: TicketRun; scene?: SceneRenderer; onReview?: () => void; handoff?: { from?: ReactNode } }) {
   const control = useControlRunById(run.run_id);
   const elapsed = useElapsed(run);
   const live = !runEnded(run.state);
@@ -88,7 +145,8 @@ export function TicketRunCard({ run, scene, onReview }: { run: TicketRun; scene?
   const doing = run.state === "running" && run.activity ? chatStatusOf({ tool: run.activity.tool, input: run.activity.command ? { command: run.activity.command } : {} }) : undefined;
   const replyWanted = run.state === "waiting" && run.wait_reason === "human_reply";
   return (
-    <div data-testid="ticket-run" className={cx(CARD, "gap-2.5 transition-colors", waiting ? "border-state-human" : run.state === "failed" || run.state === "blocked" ? "border-state-blocked" : "")}>
+    <div data-testid="ticket-run" className={cx(CARD, "relative gap-2.5 transition-colors", waiting ? "border-state-human" : run.state === "failed" || run.state === "blocked" ? "border-state-blocked" : "")}>
+      {handoff && <HandOff run={run} from={handoff.from} />}
       <div className="flex min-w-0 items-center gap-3">
         {live && scene && doing && <div className="flex-none max-sm:hidden">{scene(doing.kind)}</div>}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -123,13 +181,14 @@ export function TicketRunCard({ run, scene, onReview }: { run: TicketRun; scene?
 }
 
 /** Ticket runs still going in this chat, above the composer so they never scroll away. */
-export function ChatTicketRunTray({ chatId, scene }: { chatId: string; scene?: SceneRenderer }) {
+export function ChatTicketRunTray({ chatId, scene, persona }: { chatId: string; scene?: SceneRenderer; persona?: ReactNode }) {
   const runs = useChatTicketRuns(chatId);
   const live = (runs.data?.runs ?? []).filter((r) => !runEnded(r.state));
+  const fresh = useFreshRuns(runs.data ? live.map((r) => r.run_id) : undefined);
   if (live.length === 0) return null;
   return (
     <div data-testid="ticket-run-tray" className="mb-2 flex flex-col gap-2">
-      {live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} />)}
+      {live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} handoff={fresh.includes(r.run_id) ? { from: persona } : undefined} />)}
     </div>
   );
 }

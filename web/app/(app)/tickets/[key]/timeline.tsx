@@ -313,11 +313,27 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
   }
 }
 
+/** "from a chat" when a persona made the change in a conversation (update_ticket, comment_ticket), linking back to it. */
+function ViaChat({ e }: { e: ActivityEvent }) {
+  const via = (e.payload as P).via as P | undefined;
+  const chat = via && str(via.chat_id);
+  if (!chat) return null;
+  return (
+    <>
+      {" "}
+      <Link href={`/chat/${chat}`} className="text-fg-tertiary hover:text-fg hover:underline">
+        from a chat
+      </Link>
+    </>
+  );
+}
+
 function CommentBody({ e }: { e: ActivityEvent }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="text-[12.5px]">
         <B>{e.actor.name}</B>
+        <ViaChat e={e} />
         <Time iso={e.created_at} />
       </div>
       <Markdown className="type-reading text-fg-2">{str((e.payload as P).body_md)}</Markdown>
@@ -456,6 +472,7 @@ export function Timeline({ events, ticketKey, boot, run }: { events: ActivityEve
             <div className="min-w-0 flex-1 pt-0.5 text-[13px] text-fg-secondary">
               <p>
                 <B>{e.actor.name}</B> {sentence(e, agentColor)}
+                <ViaChat e={e} />
                 <Time iso={e.created_at} />
               </p>
               {e === planEvent && run && run.plan.length > 0 && <PlanCard plan={run.plan} />}

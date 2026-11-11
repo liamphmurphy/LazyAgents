@@ -133,6 +133,13 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       <rect className="glyph-a glyph-hop" x="2.8" y="4" width="3" height="3" rx=".6" fill="currentColor" />
     </>
   ),
+  "ticket-lookup": (
+    <>
+      <circle className="glyph-s" cx="4" cy="8" r="2.5" />
+      <rect className="glyph-s" x="8.5" y="3" width="6" height="4" rx=".8" strokeWidth="1.1" />
+      <rect className="glyph-a glyph-pull glyph-live" x="8.5" y="9" width="6" height="4" rx=".8" fill="currentColor" />
+    </>
+  ),
   runs: [
     [4, 1.7],
     [8, 2.6],

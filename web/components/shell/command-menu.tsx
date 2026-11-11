@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { hasLiveRun, useArtifact, useAskChat, useBootstrap, useChats, useControlRun, useCreateChat, useDecideApproval, useInbox, useLiveRuns, useSearch, useTicket, useUpdateTicket, useWikiPage } from "@/lib/api/hooks";
 import { IconButton } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Kbd } from "@/components/ui/primitives";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { cx } from "@/lib/cx";
 import { attachQuery, type ContextRef } from "@/lib/chat-context";
@@ -68,7 +70,13 @@ type Item = {
   onDemand?: boolean;
 };
 
-const MARK = "underline decoration-accent underline-offset-4";
+const MARK = "rounded-[3px] bg-accent-soft text-fg underline decoration-accent decoration-2 underline-offset-4";
+
+const ROOT_KEYS = [["↑↓", "navigate"], ["↵", "open"], ["⌘↵", "new tab"], ["Tab", "project scope"], [">", "commands"], ["is: status:", "filters"]] as const;
+const PROJECT_KEYS = [["↑↓", "navigate"], ["↵", "switch"], ["⌫", "back"], ["Esc", "close"]] as const;
+
+/** A single-key shortcut ("C", "?") reads as a key; anything longer is context. */
+const isShortcut = (meta: string) => [...meta].length <= 2;
 const STATUSES = [
   ["backlog", "Backlog"],
   ["todo", "Todo"],
@@ -447,9 +455,9 @@ export function CommandMenu() {
   return (
     <Dialog.Root open={open} onOpenChange={close}>
       <Dialog.Portal>
-        <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim backdrop-blur-[3px]" />
         <Dialog.Content
-          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl"
+          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-2xl"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
             // The input, not the scope toggle that comes first.
@@ -465,12 +473,15 @@ export function CommandMenu() {
             }
           }}
         >
+          {/* A hairline of the theme's accent along the top edge: the palette's only ornament. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent opacity-70" />
           <Dialog.Title className="sr-only">{mode === "projects" ? "Switch project" : "Search and commands"}</Dialog.Title>
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
+            <Icon name="search" size={16} className="flex-none text-fg-tertiary" />
             {mode === "projects" ? (
               <button
                 type="button"
-                className="rounded border border-border px-2 text-xs text-fg-secondary"
+                className="rounded-full border border-border px-2.5 py-0.5 text-[11.5px] font-medium text-fg-secondary transition-colors hover:bg-hover"
                 onClick={() => {
                   setMode("root");
                   setQuery("");
@@ -484,7 +495,10 @@ export function CommandMenu() {
                   type="button"
                   aria-pressed={scope}
                   aria-label={scope ? `Searching ${project} only; search all projects` : `Searching all projects; search ${project} only`}
-                  className="rounded border border-border px-2 text-xs text-fg-secondary"
+                  className={cx(
+                    "rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors",
+                    scope ? "border-transparent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover",
+                  )}
                   onClick={() => setScope(!scope)}
                 >
                   {scope ? project : "All projects"}
@@ -507,7 +521,7 @@ export function CommandMenu() {
                 setActive(0);
               }}
               placeholder={mode === "projects" ? "Switch to project…" : "Search, or try is:ticket status:done…"}
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-tertiary"
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" && items.length) {
                   e.preventDefault();
@@ -540,8 +554,13 @@ export function CommandMenu() {
                 }
               }}
             />
-            <span role="status" className="text-xs text-fg-tertiary">{pending ? "Searching…" : ""}</span>
-            <span aria-hidden className="font-mono text-[11px] text-fg-tertiary">esc</span>
+            <span role="status" className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+              {pending && <span aria-hidden className="size-1.5 animate-skeleton rounded-full bg-accent" />}
+              {pending ? "Searching…" : ""}
+            </span>
+            <span aria-hidden>
+              <Kbd>esc</Kbd>
+            </span>
             <Dialog.Close asChild>
               <IconButton icon="x" label="Close search" />
             </Dialog.Close>
@@ -553,7 +572,7 @@ export function CommandMenu() {
                   key={token}
                   type="button"
                   aria-label={`Remove filter ${token}`}
-                  className="rounded border border-border px-2 font-mono text-xs text-fg-secondary"
+                  className="rounded-full border border-transparent bg-accent-soft px-2.5 py-0.5 font-mono text-xs text-accent transition-colors hover:border-accent"
                   onClick={() => {
                     setQuery(removeToken(query, token));
                     inputRef.current?.focus();
@@ -564,7 +583,7 @@ export function CommandMenu() {
               ))}
             </div>
           )}
-          <div className="overflow-y-auto p-2">
+          <div className="scroll-py-2 overflow-y-auto p-2">
             {search.isError && (
               <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
                 Search failed. Try again.
@@ -581,10 +600,10 @@ export function CommandMenu() {
               </p>
             )}
             {searchText && !pending && hits.length === 0 && !key && (
-              <p className="p-3 text-sm text-fg-tertiary">No results for “{query.trim()}”.</p>
+              <p className="px-3 py-8 text-center text-sm text-fg-tertiary">No results for “{query.trim()}”.</p>
             )}
             {mode === "projects" && items.length === 0 && (
-              <p className="p-3 text-sm text-fg-tertiary">No project matches “{query}”.</p>
+              <p className="px-3 py-8 text-center text-sm text-fg-tertiary">No project matches “{query}”.</p>
             )}
             <div id="command-results" role="listbox" aria-label="Results" aria-busy={pending} className={cx(pending && "opacity-60")}>
               {groups.map((g) => (
@@ -592,7 +611,7 @@ export function CommandMenu() {
                   <div
                     id={`command-group-${g.name.replace(/\s+/g, "-")}`}
                     role="presentation"
-                    className="px-3 pb-1 pt-3 text-xs text-fg-tertiary"
+                    className="px-3 pb-1.5 pt-3 text-[11px] font-medium tracking-wide text-fg-tertiary"
                   >
                     {g.name}
                   </div>
@@ -605,11 +624,18 @@ export function CommandMenu() {
                       onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
                       onMouseMove={() => setActive(i)}
                       className={cx(
-                        "flex min-h-[38px] w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-sm",
-                        i === index ? "bg-selected" : "hover:bg-hover",
+                        "relative flex min-h-[40px] w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors duration-100",
+                        i === index ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
                       )}
                     >
-                      <span aria-hidden className="w-4 flex-none text-center text-fg-tertiary">
+                      {i === index && <span aria-hidden className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full bg-accent" />}
+                      <span
+                        aria-hidden
+                        className={cx(
+                          "grid size-6 flex-none place-items-center rounded-md border text-[12px] transition-colors duration-100",
+                          i === index ? "border-transparent bg-accent-soft text-accent" : "border-border-subtle bg-surface-sunken text-fg-tertiary",
+                        )}
+                      >
                         {item.glyph ?? GLYPH[item.group] ?? ""}
                       </span>
                       <span className="min-w-0 flex-1 truncate">
@@ -622,17 +648,25 @@ export function CommandMenu() {
                           </span>
                         )}
                       </span>
-                      {item.meta && <span className="font-mono text-xs text-fg-tertiary">{item.meta}</span>}
+                      {item.meta &&
+                        (isShortcut(item.meta) ? (
+                          <Kbd>{item.meta}</Kbd>
+                        ) : (
+                          <span className="max-w-[40%] flex-none truncate font-mono text-[11.5px] text-fg-tertiary">{item.meta}</span>
+                        ))}
                     </div>
                   ))}
                 </div>
               ))}
             </div>
           </div>
-          <div className="border-t border-border px-4 py-2 text-xs text-fg-tertiary">
-            {mode === "projects"
-              ? "↑↓ navigate · ↵ switch · ⌫ back · Esc close"
-              : "↑↓ navigate · ↵ open · ⌘↵ new tab · Tab project scope · > commands · is: status: filters"}
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-[11.5px] text-fg-tertiary">
+            {(mode === "projects" ? PROJECT_KEYS : ROOT_KEYS).map(([keys, what]) => (
+              <span key={what} className="flex items-center gap-1.5">
+                <Kbd>{keys}</Kbd>
+                {what}
+              </span>
+            ))}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
