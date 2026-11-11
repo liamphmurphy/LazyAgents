@@ -1,0 +1,873 @@
+{
+ "schema": 1,
+ "size": {
+  "w": 1920,
+  "h": 1080
+ },
+ "theme": {
+  "name": "Light",
+  "fonts": {
+   "heading": "sans",
+   "body": "sans"
+  },
+  "colors": {
+   "background": "#FFFFFF",
+   "text": "#1F2328",
+   "heading": "#111418",
+   "accent": "#3B6FE0",
+   "accent2": "#E8A33D",
+   "muted": "#5F6673",
+   "surface": "#F3F5F9"
+  }
+ },
+ "assets": {},
+ "slides": [
+  {
+   "id": "s_pitch_1",
+   "layout": "title",
+   "elements": [
+    {
+     "id": "e_pitch_1",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Lumen",
+         "size": 112,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_2",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 600,
+      "w": 1600,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Energy bills you can actually read · Seed round 2026",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_2",
+   "layout": "big-number",
+   "elements": [
+    {
+     "id": "e_pitch_3",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 220,
+      "w": 1600,
+      "h": 420
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "1 in 3",
+         "size": 280,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_4",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 680,
+      "w": 1600,
+      "h": 160
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "of households can't read their energy bill",
+         "size": 56,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_3",
+   "layout": "title-body",
+   "elements": [
+    {
+     "id": "e_pitch_5",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The problem",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_6",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Bills are dense, late and full of jargon",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "People overpay by about £180 a year",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Switching feels risky, so nobody does",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_4",
+   "layout": "three-column",
+   "elements": [
+    {
+     "id": "e_pitch_7",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "How Lumen works",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_8",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 120,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Connect",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_pitch_9",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 700,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Understand",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_pitch_10",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 1280,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent2",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Save",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_pitch_11",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Link your account in two minutes",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Read-only, bank-grade security",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_12",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 700,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Plain-language monthly summary",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Spot spikes the day they happen",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_13",
+     "type": "text",
+     "placeholder": "body3",
+     "frame": {
+      "x": 1280,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "One-tap switch to a better tariff",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "We only earn when you save",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_5",
+   "layout": "blank",
+   "elements": [
+    {
+     "id": "e_pitch_14",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Traction",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_15",
+     "type": "shape",
+     "shape": "upArrow",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 360,
+      "h": 640
+     },
+     "fill": "accent"
+    },
+    {
+     "id": "e_pitch_16",
+     "type": "text",
+     "frame": {
+      "x": 620,
+      "y": 320,
+      "w": 1180,
+      "h": 600
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "42,000 households signed up",
+         "size": 64,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      },
+      {
+       "runs": [
+        {
+         "text": "18% month-over-month growth since launch",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "spaceBefore": 24
+      },
+      {
+       "runs": [
+        {
+         "text": "4.8 average rating across 3,100 reviews",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_6",
+   "layout": "comparison",
+   "elements": [
+    {
+     "id": "e_pitch_17",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Business model",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_18",
+     "type": "text",
+     "placeholder": "label",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 810,
+      "h": 90
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Households",
+         "size": 44,
+         "bold": true,
+         "font": "heading",
+         "color": "accent"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_19",
+     "type": "text",
+     "placeholder": "label2",
+     "frame": {
+      "x": 990,
+      "y": 280,
+      "w": 810,
+      "h": 90
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Partners",
+         "size": 44,
+         "bold": true,
+         "font": "heading",
+         "color": "accent"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_20",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 390,
+      "w": 810,
+      "h": 590
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Free to use",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "We earn a switching fee from suppliers",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Premium: £3/month for smart-meter insights",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_21",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 990,
+      "y": 390,
+      "w": 810,
+      "h": 590
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "White-label for councils and housing associations",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Annual licence per 10,000 homes",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_7",
+   "layout": "two-column",
+   "elements": [
+    {
+     "id": "e_pitch_22",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Team",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_23",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Ada Okafor, CEO: ex-Octopus pricing lead",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Sam Reyes, CTO: built payments at Monzo",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_24",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 990,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Priya Nair, Design: 10 years in fintech UX",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Advisors from Ofgem and Which?",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_pitch_8",
+   "layout": "closing",
+   "elements": [
+    {
+     "id": "e_pitch_25",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Raising £2M",
+         "size": 128,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_pitch_26",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 620,
+      "w": 1600,
+      "h": 140
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "To reach 250,000 households by end of 2027 · hello@lumen.example",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

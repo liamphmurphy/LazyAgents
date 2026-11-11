@@ -106,6 +106,33 @@ func (s *Service) Create(ctx context.Context, ws, user uuid.UUID, title, theme s
 	return s.start(ctx, ws, user, title, body, "")
 }
 
+// CreateFromStarter starts a deck from a starter deck (deck.Starters) in a
+// built-in theme, with fresh ids. An empty title takes the starter's name and
+// keeps its sample title slide; a title replaces the first slide's title.
+func (s *Service) CreateFromStarter(ctx context.Context, ws, user uuid.UUID, starter, title, theme string) (store.ChatCanvas, store.ChatSession, error) {
+	st, ok := deck.StarterNamed(starter)
+	if !ok {
+		return store.ChatCanvas{}, store.ChatSession{}, apperr.Invalid("starter", "is not a starter deck")
+	}
+	title, err := CleanTitle(title)
+	if err != nil {
+		return store.ChatCanvas{}, store.ChatSession{}, err
+	}
+	slideTitle := title
+	if title == UntitledTitle {
+		title, slideTitle = st.Name, ""
+	}
+	d, err := deck.FromStarter(st.Key, deck.ThemeNamed(theme), slideTitle)
+	if err != nil {
+		return store.ChatCanvas{}, store.ChatSession{}, err
+	}
+	body, err := d.Encode()
+	if err != nil {
+		return store.ChatCanvas{}, store.ChatSession{}, err
+	}
+	return s.start(ctx, ws, user, title, body, "Started from the "+st.Name+" starter")
+}
+
 // Duplicate copies a deck's current version and its images into a new deck
 // and chat. Slide and element ids are kept: they only need to be unique
 // within a deck.

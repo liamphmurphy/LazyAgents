@@ -79,7 +79,7 @@ func (s *Server) ListDecks(ctx context.Context, _ api.ListDecksRequestObject) (a
 
 func (s *Server) CreateDeck(ctx context.Context, req api.CreateDeckRequestObject) (api.CreateDeckResponseObject, error) {
 	u, _, ws := me(ctx)
-	var title, theme string
+	var title, theme, starter string
 	if req.Body != nil {
 		if req.Body.Title != nil {
 			title = *req.Body.Title
@@ -87,12 +87,43 @@ func (s *Server) CreateDeck(ctx context.Context, req api.CreateDeckRequestObject
 		if req.Body.Theme != nil {
 			theme = string(*req.Body.Theme)
 		}
+		if req.Body.Starter != nil {
+			starter = string(*req.Body.Starter)
+		}
 	}
-	cv, chat, err := s.slides().Create(ctx, ws, u.ID, title, theme)
+	var (
+		cv   store.ChatCanvas
+		chat store.ChatSession
+		err  error
+	)
+	if starter != "" {
+		cv, chat, err = s.slides().CreateFromStarter(ctx, ws, u.ID, starter, title, theme)
+	} else {
+		cv, chat, err = s.slides().Create(ctx, ws, u.ID, title, theme)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return api.CreateDeck201JSONResponse(myCanvasOut(cv, chat)), nil
+}
+
+// ListSlideStarters is the New deck chooser's catalogue. The decks are
+// embedded fixtures, so this needs no database.
+func (s *Server) ListSlideStarters(ctx context.Context, _ api.ListSlideStartersRequestObject) (api.ListSlideStartersResponseObject, error) {
+	out := make([]api.SlideStarter, 0, len(deck.Starters))
+	for _, st := range deck.Starters {
+		d, err := deck.StarterDeck(st.Key)
+		if err != nil {
+			return nil, err
+		}
+		body, err := d.Encode()
+		if err != nil {
+			return nil, err
+		}
+		cover, n := deckCover(body)
+		out = append(out, api.SlideStarter{Key: st.Key, Name: st.Name, Description: st.Description, SlideCount: n, Cover: cover})
+	}
+	return api.ListSlideStarters200JSONResponse{Starters: out}, nil
 }
 
 func (s *Server) RenameDeck(ctx context.Context, req api.RenameDeckRequestObject) (api.RenameDeckResponseObject, error) {

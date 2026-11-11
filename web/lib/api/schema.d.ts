@@ -3571,7 +3571,10 @@ export interface paths {
          * Start a deck in the Slides app
          * @description Makes a deck canvas with one title slide (the title, unless it is
          *     empty) in a new chat in the person's Slides space. theme is a built-in
-         *     theme (light by default).
+         *     theme (light by default). With starter, the deck is a copy of that
+         *     starter deck (see listSlideStarters) in the theme, with fresh ids; an
+         *     empty title then takes the starter's name, and a title replaces the
+         *     first slide's title.
          */
         post: operations["createDeck"];
         delete?: never;
@@ -3658,6 +3661,23 @@ export interface paths {
         };
         /** One of a deck's images (owner only) */
         get: operations["getDeckAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slide-starters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The starter decks a new deck can start from, in chooser order */
+        get: operations["listSlideStarters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4765,6 +4785,15 @@ export interface components {
             name: string;
             fonts: components["schemas"]["SlideThemeFonts"];
             colors: components["schemas"]["SlideThemeColors"];
+        };
+        SlideStarter: {
+            /** @description Pass as createDeck's starter */
+            key: string;
+            name: string;
+            description: string;
+            slide_count: number;
+            /** @description The starter deck JSON cut down to its first slide, in the light theme, for the chooser's preview */
+            cover: string;
         };
         SlideTheme: {
             /** Format: uuid */
@@ -14133,6 +14162,11 @@ export interface operations {
                     title?: string;
                     /** @enum {string} */
                     theme?: "light" | "dark" | "paper" | "contrast" | "dusk" | "ocean" | "forest" | "sunset" | "mono" | "blueprint";
+                    /**
+                     * @description Start from this starter deck instead of one blank title slide
+                     * @enum {string}
+                     */
+                    starter?: "project-update" | "pitch" | "retro" | "teaching" | "dnd-recap";
                 };
             };
         };
@@ -14283,6 +14317,29 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSlideStarters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The starter decks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        starters: components["schemas"]["SlideStarter"][];
+                    };
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

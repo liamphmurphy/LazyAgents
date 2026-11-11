@@ -1,0 +1,774 @@
+{
+ "schema": 1,
+ "size": {
+  "w": 1920,
+  "h": 1080
+ },
+ "theme": {
+  "name": "Light",
+  "fonts": {
+   "heading": "sans",
+   "body": "sans"
+  },
+  "colors": {
+   "background": "#FFFFFF",
+   "text": "#1F2328",
+   "heading": "#111418",
+   "accent": "#3B6FE0",
+   "accent2": "#E8A33D",
+   "muted": "#5F6673",
+   "surface": "#F3F5F9"
+  }
+ },
+ "assets": {},
+ "slides": [
+  {
+   "id": "s_projec_1",
+   "layout": "title",
+   "elements": [
+    {
+     "id": "e_projec_1",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Project Atlas: Q3 update",
+         "size": 96,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_2",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 600,
+      "w": 1600,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Platform team · October review",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_projec_2",
+   "layout": "agenda",
+   "elements": [
+    {
+     "id": "e_projec_3",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Agenda",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_4",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Where we are",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "What shipped",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Timeline",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Risks and asks",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_projec_3",
+   "layout": "big-number",
+   "notes": "Call out the two that slipped and why.",
+   "elements": [
+    {
+     "id": "e_projec_5",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 220,
+      "w": 1600,
+      "h": 420
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "82%",
+         "size": 280,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_projec_6",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 680,
+      "w": 1600,
+      "h": 160
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "of Q3 milestones shipped on time",
+         "size": 56,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_projec_4",
+   "layout": "comparison",
+   "elements": [
+    {
+     "id": "e_projec_7",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "What shipped, what's next",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_8",
+     "type": "text",
+     "placeholder": "label",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 810,
+      "h": 90
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Shipped",
+         "size": 44,
+         "bold": true,
+         "font": "heading",
+         "color": "accent"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_9",
+     "type": "text",
+     "placeholder": "label2",
+     "frame": {
+      "x": 990,
+      "y": 280,
+      "w": 810,
+      "h": 90
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Next up",
+         "size": 44,
+         "bold": true,
+         "font": "heading",
+         "color": "accent"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_10",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 390,
+      "w": 810,
+      "h": 590
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Single sign-on for all workspaces",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Search 3× faster on large projects",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "New billing page",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_projec_11",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 990,
+      "y": 390,
+      "w": 810,
+      "h": 590
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Audit log export",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Mobile offline mode",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Usage-based alerts",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_projec_5",
+   "layout": "blank",
+   "elements": [
+    {
+     "id": "e_projec_12",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Timeline",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_13",
+     "type": "shape",
+     "shape": "homePlate",
+     "frame": {
+      "x": 120,
+      "y": 420,
+      "w": 560,
+      "h": 200
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "July",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "Discovery",
+          "size": 36,
+          "bold": false,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_projec_14",
+     "type": "shape",
+     "shape": "chevron",
+     "frame": {
+      "x": 660,
+      "y": 420,
+      "w": 560,
+      "h": 200
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "August",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "Build",
+          "size": 36,
+          "bold": false,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_projec_15",
+     "type": "shape",
+     "shape": "chevron",
+     "frame": {
+      "x": 1200,
+      "y": 420,
+      "w": 600,
+      "h": 200
+     },
+     "fill": "surface",
+     "stroke": "muted",
+     "strokeWidth": 3,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "September",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "Rollout",
+          "size": 36,
+          "bold": false,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_projec_16",
+     "type": "text",
+     "frame": {
+      "x": 120,
+      "y": 700,
+      "w": 1680,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "We are here: rollout to 60% of workspaces, full launch on 14 October.",
+         "size": 40,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_projec_6",
+   "layout": "title-body",
+   "elements": [
+    {
+     "id": "e_projec_18",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Risks and asks",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_projec_19",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1000,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Vendor contract renewal is still open",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "One backend engineer short until November",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Ask: approve a contractor for 8 weeks",
+         "size": 38,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "level": 1,
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_projec_17",
+     "type": "shape",
+     "shape": "wedgeRoundRectCallout",
+     "frame": {
+      "x": 1220,
+      "y": 300,
+      "w": 580,
+      "h": 360
+     },
+     "stroke": "accent",
+     "strokeWidth": 6,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Decision needed",
+          "size": 48,
+          "bold": true,
+          "font": "body",
+          "color": "accent"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "by 20 October",
+          "size": 40,
+          "bold": false,
+          "font": "body",
+          "color": "accent"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "s_projec_7",
+   "layout": "closing",
+   "elements": [
+    {
+     "id": "e_projec_20",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Questions?",
+         "size": 128,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_projec_21",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 620,
+      "w": 1600,
+      "h": 140
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "atlas-team@example.com · #proj-atlas",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
