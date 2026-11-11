@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { FAMILY } from "@/lib/slides/fonts";
+import { LIMITS } from "@/lib/slides/edit";
 import { BULLET_INDENT, INSET, LINE } from "@/lib/slides/layout";
 import { resolveColor, slotOf, THEME_COLORS, type ColorRef, type FontRef, type Paragraph, type Run, type TextBox, type Theme } from "@/lib/slides/schema";
 
@@ -9,6 +10,8 @@ export type TextEditorHandle = {
   /** Applies a mark to the selection (bold, italic, underline) or a colour. */
   format: (cmd: "bold" | "italic" | "underline") => void;
   color: (c: ColorRef) => void;
+  /** Moves the bulleted paragraphs in the selection in or out a level; false if there are none. */
+  indent: (delta: 1 | -1) => boolean;
   /** The text as edited so far. */
   read: () => TextBox["paragraphs"];
 };
@@ -95,6 +98,31 @@ function fromDom(root: HTMLElement, theme: Theme, fallback: Run): Paragraph[] {
   return out.length ? out : [{ runs: [{ ...fallback, text: "" }] }];
 }
 
+/** The paragraph divs the selection touches. */
+function selectedBlocks(root: HTMLElement): HTMLElement[] {
+  const sel = getSelection();
+  if (!sel?.rangeCount) return [];
+  const blocks = [...root.children].filter((n): n is HTMLElement => n instanceof HTMLElement);
+  const hit = blocks.filter((b) => sel.containsNode(b, true));
+  if (hit.length) return hit;
+  // A caret in an empty paragraph may sit on the root itself.
+  const at = sel.anchorNode instanceof HTMLElement ? sel.anchorNode : sel.anchorNode?.parentElement;
+  const b = at?.closest<HTMLElement>("[data-bullet]");
+  return b && root.contains(b) ? [b] : [];
+}
+
+/** Changes the level of the bulleted paragraphs among blocks, as the layout would draw them. */
+function shiftBlocks(blocks: HTMLElement[], delta: number): boolean {
+  const bulleted = blocks.filter((b) => b.dataset.bullet);
+  for (const b of bulleted) {
+    const level = Math.max(LIMITS.level.min, Math.min(LIMITS.level.max, Number(b.dataset.level ?? 0) + delta));
+    b.dataset.level = String(level);
+    b.style.paddingLeft = `${BULLET_INDENT * (level + 1)}px`;
+    b.style.setProperty("--bullet-x", `${BULLET_INDENT * level}px`);
+  }
+  return bulleted.length > 0;
+}
+
 /**
  * Edits a text box in place, drawn at slide units and scaled to the canvas,
  * with the same fonts, insets and line heights as the layout so lines break
@@ -119,6 +147,7 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
         const sel = getSelection();
         if (sel?.rangeCount) for (const s of el.current?.querySelectorAll<HTMLElement>("span[style*='color']") ?? []) if (sel.containsNode(s, true)) s.dataset.color = c;
       },
+      indent: (delta) => !!el.current && shiftBlocks(selectedBlocks(el.current), delta),
       read: () => (el.current ? fromDom(el.current, theme, fallback.current) : box.paragraphs),
     }));
     useLayoutEffect(() => {
@@ -169,6 +198,9 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
             if (e.key === "Escape") {
               e.preventDefault();
               el.current?.blur();
+            } else if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey && el.current) {
+              // In bulleted text Tab indents and Shift+Tab outdents; elsewhere it moves focus as usual.
+              if (shiftBlocks(selectedBlocks(el.current), e.shiftKey ? -1 : 1)) e.preventDefault();
             }
           }}
         />
