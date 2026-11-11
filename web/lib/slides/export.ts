@@ -8,6 +8,7 @@
  */
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
 import { BULLET_INDENT, INSET, LINE, imageSource, layoutSlide } from "./layout";
+import { gradFill, replaceFills } from "./pptx-fills";
 import { DASHES, gradientLine, isGradient, resolveColor, resolvePaint, slotOf, textOf, type Deck, type Dash, type Fill, type Paint, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
@@ -218,28 +219,6 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
   }
   const out = (await pptx.write({ outputType: "blob" })) as Blob;
   return gradients.length ? withGradients(out, gradients) : out;
-}
-
-/** A two-stop a:gradFill; PowerPoint's angle runs clockwise from left-to-right, like ours, in 60000ths of a degree. */
-export function gradFill(p: Exclude<Paint, string>, opacity?: number): string {
-  const alpha = opacity !== undefined && opacity < 1 ? `<a:alpha val="${Math.round(opacity * 100000)}"/>` : "";
-  const stop = (pos: number, c: string) => `<a:gs pos="${pos}"><a:srgbClr val="${c.replace("#", "").toUpperCase()}">${alpha}</a:srgbClr></a:gs>`;
-  return `<a:gradFill rotWithShape="1"><a:gsLst>${stop(0, p.stops[0])}${stop(100000, p.stops[1])}</a:gsLst><a:lin ang="${Math.round(p.angle * 60000) % 21600000}" scaled="0"/></a:gradFill>`;
-}
-
-/**
- * Swaps the placeholder solid fills for gradients: a shape's is the first
- * a:solidFill in the p:spPr after its p:cNvPr (named by element id); a
- * background's is the one in p:bgPr.
- */
-export function replaceFills(xml: string, gradients: { el?: string; xml: string }[]): string {
-  for (const g of gradients) {
-    const re = g.el ? new RegExp(`(<p:cNvPr id="\\d+" name="${g.el}">[\\s\\S]*?<p:spPr>[\\s\\S]*?)<a:solidFill>[\\s\\S]*?</a:solidFill>`) : /(<p:bgPr>)<a:solidFill>[\s\S]*?<\/a:solidFill>/;
-    const next = xml.replace(re, (_, head: string) => head + g.xml);
-    if (next === xml) throw new Error(`couldn't add a gradient${g.el ? ` to ${g.el}` : " to a background"}`);
-    xml = next;
-  }
-  return xml;
 }
 
 async function withGradients(pptx: Blob, gradients: { slide: number; el?: string; xml: string }[]): Promise<Blob> {
