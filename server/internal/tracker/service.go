@@ -61,7 +61,10 @@ type NewTicket struct {
 	Estimate        *string
 	DueDate         *time.Time
 	Criteria        []string
-	RequiresMockup  bool
+	// BlockedBy are ticket keys that must be Done before this one starts.
+	// Only Create sets them; CreateInTx callers manage the graph lock themselves.
+	BlockedBy      []string
+	RequiresMockup bool
 	// EpicReview marks the epic's final review ticket (server-created only).
 	EpicReview bool
 	// EstimatePoints (optional) is set right after creation, with
@@ -178,12 +181,26 @@ func (r refs) labels(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]store.
 }
 
 // Create allocates the next number in the project and records "created".
+// BlockedBy is set in the same transaction, so a ticket never exists without
+// the blockers it was created with.
 func (s *Service) Create(ctx context.Context, ws uuid.UUID, actor Actor, in NewTicket) (store.Ticket, error) {
 	var out store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {
+		// The graph lock comes before the project and ticket locks, as in
+		// planning acceptance, so concurrent edges can't both pass cycle checks.
+		if len(in.BlockedBy) > 0 {
+			if err := q.LockDependencyGraph(ctx, ws); err != nil {
+				return err
+			}
+		}
 		var err error
-		out, err = CreateInTx(ctx, q, ws, actor, in)
-		return err
+		if out, err = CreateInTx(ctx, q, ws, actor, in); err != nil {
+			return err
+		}
+		if len(in.BlockedBy) > 0 {
+			return SetDependenciesInTx(ctx, q, ws, actor, out, in.BlockedBy)
+		}
+		return nil
 	})
 	return out, err
 }
