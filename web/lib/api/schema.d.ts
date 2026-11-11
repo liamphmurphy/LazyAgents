@@ -3571,7 +3571,10 @@ export interface paths {
          * Start a deck in the Slides app
          * @description Makes a deck canvas with one title slide (the title, unless it is
          *     empty) in a new chat in the person's Slides space. theme is a built-in
-         *     theme: light (default), dark, paper or contrast.
+         *     theme (light by default). With starter, the deck is a copy of that
+         *     starter deck (see listSlideStarters) in the theme, with fresh ids; an
+         *     empty title then takes the starter's name, and a title replaces the
+         *     first slide's title.
          */
         post: operations["createDeck"];
         delete?: never;
@@ -3664,6 +3667,72 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/slide-starters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The starter decks a new deck can start from, in chooser order */
+        get: operations["listSlideStarters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slide-themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's saved Slides themes, by name */
+        get: operations["listSlideThemes"];
+        put?: never;
+        /**
+         * Save a theme for use in any of the person's decks
+         * @description Names are unique per person, ignoring case (409 otherwise); a person
+         *     keeps at most 100 themes. Decks embed a copy of their theme, so a saved
+         *     theme is applied by copying it into the deck.
+         */
+        post: operations["createSlideTheme"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slide-themes/{themeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                themeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a saved theme (decks using it keep their copy)
+         * @description 404 for anyone else's theme.
+         */
+        delete: operations["deleteSlideTheme"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename or change a saved theme
+         * @description Only the fields given change. Decks already using the theme keep their copy. 404 for anyone else's theme.
+         */
+        patch: operations["updateSlideTheme"];
         trace?: never;
     };
     "/docs": {
@@ -4696,6 +4765,44 @@ export interface components {
             slide_count: number;
             /** @description The deck JSON cut down to its first slide, for the list's thumbnail */
             cover: string;
+        };
+        SlideThemeFonts: {
+            /** @enum {string} */
+            heading: "sans" | "serif" | "mono";
+            /** @enum {string} */
+            body: "sans" | "serif" | "mono";
+        };
+        SlideThemeColors: {
+            background: string;
+            text: string;
+            heading: string;
+            accent: string;
+            accent2: string;
+            muted: string;
+            surface: string;
+        };
+        SlideThemeInput: {
+            name: string;
+            fonts: components["schemas"]["SlideThemeFonts"];
+            colors: components["schemas"]["SlideThemeColors"];
+        };
+        SlideStarter: {
+            /** @description Pass as createDeck's starter */
+            key: string;
+            name: string;
+            description: string;
+            slide_count: number;
+            /** @description The starter deck JSON cut down to its first slide, in the light theme, for the chooser's preview */
+            cover: string;
+        };
+        SlideTheme: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            fonts: components["schemas"]["SlideThemeFonts"];
+            colors: components["schemas"]["SlideThemeColors"];
+            /** Format: date-time */
+            updated_at: string;
         };
         DeckAsset: {
             id: string;
@@ -14054,7 +14161,12 @@ export interface operations {
                     /** @description Empty starts an untitled deck */
                     title?: string;
                     /** @enum {string} */
-                    theme?: "light" | "dark" | "paper" | "contrast";
+                    theme?: "light" | "dark" | "paper" | "contrast" | "dusk" | "ocean" | "forest" | "sunset" | "mono" | "blueprint";
+                    /**
+                     * @description Start from this starter deck instead of one blank title slide
+                     * @enum {string}
+                     */
+                    starter?: "project-update" | "pitch" | "retro" | "teaching" | "dnd-recap";
                 };
             };
         };
@@ -14205,6 +14317,135 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSlideStarters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The starter decks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        starters: components["schemas"]["SlideStarter"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSlideThemes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Their saved themes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        themes: components["schemas"]["SlideTheme"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSlideTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlideThemeInput"];
+            };
+        };
+        responses: {
+            /** @description The saved theme */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlideTheme"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSlideTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                themeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSlideTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                themeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    fonts?: components["schemas"]["SlideThemeFonts"];
+                    colors?: components["schemas"]["SlideThemeColors"];
+                };
+            };
+        };
+        responses: {
+            /** @description The theme */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlideTheme"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

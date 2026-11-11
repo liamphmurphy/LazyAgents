@@ -271,6 +271,42 @@ func TestDeckLifecycle(t *testing.T) {
 	}
 }
 
+// The chooser lists every starter with a one-slide cover, and a deck made
+// from one is the starter in the chosen theme under the starter's name.
+func TestDeckFromStarter(t *testing.T) {
+	e := newSlidesEnv(t)
+	starters := e.want("GET", "/slide-starters", nil, http.StatusOK)["starters"].([]any)
+	if len(starters) != len(deck.Starters) {
+		t.Fatalf("listed %v", starters)
+	}
+	for i, s := range starters {
+		m := s.(map[string]any)
+		cover, err := deck.Parse(m["cover"].(string))
+		if m["key"] != deck.Starters[i].Key || m["slide_count"].(float64) < 5 || err != nil || len(cover.Slides) != 1 {
+			t.Fatalf("starter %d: %v (%v)", i, m, err)
+		}
+	}
+
+	d := e.want("POST", "/slides", map[string]any{"starter": "retro", "theme": "ocean"}, http.StatusCreated)
+	if d["title"] != "Retro" {
+		t.Fatalf("created %v", d)
+	}
+	body, seq := e.deckBody(d["chat_id"].(string), d["id"].(string))
+	fixture, _ := deck.StarterDeck("retro")
+	if seq != 1 || len(body["slides"].([]any)) != len(fixture.Slides) || body["theme"].(map[string]any)["name"] != "Ocean" {
+		t.Fatalf("deck %d %v", seq, body)
+	}
+	if body["slides"].([]any)[0].(map[string]any)["id"] == fixture.Slides[0].ID {
+		t.Fatal("the starter's ids were kept")
+	}
+
+	titled := e.want("POST", "/slides", map[string]any{"starter": "pitch", "title": "Acme seed"}, http.StatusCreated)
+	if titled["title"] != "Acme seed" {
+		t.Fatalf("titled %v", titled)
+	}
+	e.want("POST", "/slides", map[string]any{"starter": "nope"}, http.StatusUnprocessableEntity)
+}
+
 // Someone else's deck, and a canvas that isn't a deck, are 404 on every
 // Slides route; the list shows only the person's own decks.
 func TestDeckOwnerIsolation(t *testing.T) {

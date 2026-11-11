@@ -1,0 +1,625 @@
+{
+ "schema": 1,
+ "size": {
+  "w": 1920,
+  "h": 1080
+ },
+ "theme": {
+  "name": "Light",
+  "fonts": {
+   "heading": "sans",
+   "body": "sans"
+  },
+  "colors": {
+   "background": "#FFFFFF",
+   "text": "#1F2328",
+   "heading": "#111418",
+   "accent": "#3B6FE0",
+   "accent2": "#E8A33D",
+   "muted": "#5F6673",
+   "surface": "#F3F5F9"
+  }
+ },
+ "assets": {},
+ "slides": [
+  {
+   "id": "s_retro_1",
+   "layout": "title",
+   "elements": [
+    {
+     "id": "e_retro_1",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Sprint 42 retro",
+         "size": 112,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_2",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 600,
+      "w": 1600,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Mobile squad · 3 November",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_retro_2",
+   "layout": "agenda",
+   "elements": [
+    {
+     "id": "e_retro_3",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "How we'll run this",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_4",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Check in: one word each",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "What went well, what didn't, what to try",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Vote on the top three",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Agree owners for action items",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_retro_3",
+   "layout": "three-column",
+   "elements": [
+    {
+     "id": "e_retro_5",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "What we noticed",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_6",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 120,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Went well",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_retro_7",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 700,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "accent2",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Didn't go well",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_retro_8",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 1280,
+      "y": 270,
+      "w": 520,
+      "h": 100
+     },
+     "fill": "surface",
+     "stroke": "muted",
+     "strokeWidth": 3,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Try next",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_retro_9",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Release went out on Thursday",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Pairing on the sync bug",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Fewer meetings",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_retro_10",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 700,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Flaky end-to-end tests",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Design changes late in the sprint",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_retro_11",
+     "type": "text",
+     "placeholder": "body3",
+     "frame": {
+      "x": 1280,
+      "y": 400,
+      "w": 520,
+      "h": 580
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Design review on day two",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Quarantine flaky tests",
+         "size": 40,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_retro_4",
+   "layout": "quote",
+   "elements": [
+    {
+     "id": "e_retro_12",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 200,
+      "y": 220,
+      "w": 1520,
+      "h": 480
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "“We spent more time re-running tests than writing them.”",
+         "size": 72,
+         "italic": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_13",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 200,
+      "y": 740,
+      "w": 1520,
+      "h": 100
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Overheard at stand-up, Wednesday",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_14",
+     "type": "line",
+     "frame": {
+      "x": 200,
+      "y": 735,
+      "w": 240,
+      "h": 0
+     },
+     "stroke": "accent",
+     "strokeWidth": 6
+    }
+   ]
+  },
+  {
+   "id": "s_retro_5",
+   "layout": "title-body",
+   "elements": [
+    {
+     "id": "e_retro_15",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Action items",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_retro_16",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Quarantine the five flakiest tests: Jo, by Friday",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Design review on day two of each sprint: Mei",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Try a no-meeting Wednesday for two sprints: everyone",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_retro_6",
+   "layout": "closing",
+   "elements": [
+    {
+     "id": "e_retro_17",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Thanks, team",
+         "size": 128,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_retro_18",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 620,
+      "w": 1600,
+      "h": 140
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Next retro: 17 November",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

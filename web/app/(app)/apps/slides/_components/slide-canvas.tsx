@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { cx } from "@/lib/cx";
 import { SlideSvg } from "@/lib/slides/render";
-import { H, W, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { textFrame } from "@/lib/slides/layout";
+import { H, W, isImageSlot, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { boxOf, contains, frameOf, guidesFor, scaleFrame, snapAxis, snapMove, snapTargets, unionBox, type Box, type SnapTargets } from "@/lib/slides/arrange";
 import { findDeep, isGroup, mapDeep, scopeElements, withFrame } from "@/lib/slides/group";
 import { TextEditor, type TextEditorHandle } from "./text-editor";
@@ -52,7 +53,7 @@ const handlePos = (h: Handle) => ({
   cursor: { nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize", n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize" }[h as "n"],
 });
 
-const kindLabel = (e: Element) => (e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : e.type === "group" ? `Group · ${e.elements.length}` : "Image");
+const kindLabel = (e: Element) => (isImageSlot(e) ? "Image placeholder" : e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : e.type === "group" ? `Group · ${e.elements.length}` : "Image");
 
 
 /** Live frames while a drag is in progress, by element id. */
@@ -88,7 +89,7 @@ const pct = (b: Box) => ({ left: `${(b.l / W) * 100}%`, top: `${(b.t / H) * 100}
  * under the pointer; inside, the selection is among its elements until a
  * click lands outside it or Escape leaves.
  */
-export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, scope, onScope, editing, onEdit, onFrames, onText, readOnly, editorRef, overflow }: {
+export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, scope, onScope, editing, onEdit, onFillImage, onFrames, onText, readOnly, editorRef, overflow }: {
   deck: Deck;
   slide: Slide;
   assetUrl: (id: string) => string;
@@ -100,6 +101,8 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
   onScope: (id?: string) => void;
   editing?: string;
   onEdit: (id?: string) => void;
+  /** Opens the image picker to fill an empty image placeholder. */
+  onFillImage: (id: string) => void;
   /** One change (one undo step) to several elements' frames. */
   onFrames: (frames: Live) => void;
   onText: (id: string, paragraphs: Paragraph[]) => void;
@@ -335,7 +338,8 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
             onDoubleClick={(e) => {
               if (readOnly) return;
               if (!isGroup(el)) {
-                if (textOf(el)) onEdit(el.id);
+                if (isImageSlot(el)) onFillImage(el.id);
+                else if (textOf(el)) onEdit(el.id);
                 return;
               }
               // Into the group, selecting its topmost element under the pointer.
@@ -350,6 +354,33 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       {entered && (
         <div aria-hidden data-testid="slide-entered-group" className="pointer-events-none absolute z-10 outline-dashed outline-1 outline-fg-tertiary" style={pct(boxOf(entered.frame))} />
       )}
+      {shown.elements.filter(isImageSlot).map((el) => (
+        // Empty image placeholders exist only here: every renderer draws them as nothing.
+        <div
+          key={`slot-${el.id}`}
+          data-image-slot={el.id}
+          className="pointer-events-none absolute grid place-items-center border-dashed border-[#9AA0AE] bg-[#9AA0AE]/15"
+          style={{
+            left: `${(el.frame.x / W) * 100}%`,
+            top: `${(el.frame.y / H) * 100}%`,
+            width: `${(el.frame.w / W) * 100}%`,
+            height: `${(el.frame.h / H) * 100}%`,
+            borderWidth: Math.max(1, 6 * scale),
+            transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+          }}
+        >
+          <button
+            type="button"
+            disabled={readOnly}
+            className="pointer-events-auto rounded-md bg-[#2A2D36]/80 px-2.5 py-1 font-semibold text-[#E6E7EB] hover:bg-[#2A2D36] disabled:pointer-events-none"
+            style={{ fontSize: Math.max(10, 40 * scale) }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onFillImage(el.id)}
+          >
+            ▨ Click to add image
+          </button>
+        </div>
+      ))}
       {/* Outlines of a multiple selection, each on its own rotation, inside the group's box. */}
       {group &&
         sels.map((el) => (
@@ -422,8 +453,9 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
           ref={editorRef}
           theme={deck.theme}
           box={textOf(ed)!}
-          frame={ed.frame}
+          frame={textFrame(ed)}
           rotation={ed.rotation}
+          pivot={{ x: ed.frame.x + ed.frame.w / 2, y: ed.frame.y + ed.frame.h / 2 }}
           scale={scale}
           onCommit={(paragraphs) => {
             onText(ed.id, paragraphs);

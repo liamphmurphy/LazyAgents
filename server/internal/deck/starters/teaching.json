@@ -1,0 +1,674 @@
+{
+ "schema": 1,
+ "size": {
+  "w": 1920,
+  "h": 1080
+ },
+ "theme": {
+  "name": "Light",
+  "fonts": {
+   "heading": "sans",
+   "body": "sans"
+  },
+  "colors": {
+   "background": "#FFFFFF",
+   "text": "#1F2328",
+   "heading": "#111418",
+   "accent": "#3B6FE0",
+   "accent2": "#E8A33D",
+   "muted": "#5F6673",
+   "surface": "#F3F5F9"
+  }
+ },
+ "assets": {},
+ "slides": [
+  {
+   "id": "s_teachi_1",
+   "layout": "title",
+   "elements": [
+    {
+     "id": "e_teachi_1",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Photosynthesis",
+         "size": 112,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_2",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 600,
+      "w": 1600,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Year 8 Biology · Lesson 4",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_2",
+   "layout": "agenda",
+   "elements": [
+    {
+     "id": "e_teachi_3",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Today we'll",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_4",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1680,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Recap: what plants need to grow",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Learn the photosynthesis equation",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Try a leaf experiment",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Check what we've learned",
+         "size": 52,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "number",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_3",
+   "layout": "section",
+   "elements": [
+    {
+     "id": "e_teachi_5",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 380,
+      "w": 1600,
+      "h": 320
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Part 1: How plants make food",
+         "size": 112,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_4",
+   "layout": "title-body",
+   "elements": [
+    {
+     "id": "e_teachi_7",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The big idea",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_8",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 1000,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Plants make their own food (glucose) using light",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "This happens in the chloroplasts of leaf cells",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Oxygen is released as a by-product",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_6",
+     "type": "shape",
+     "shape": "wedgeRectCallout",
+     "frame": {
+      "x": 1220,
+      "y": 300,
+      "w": 580,
+      "h": 320
+     },
+     "fill": "surface",
+     "stroke": "muted",
+     "strokeWidth": 3,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Key word",
+          "size": 44,
+          "bold": true,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "chlorophyll: the green pigment that absorbs light",
+          "size": 36,
+          "bold": false,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_5",
+   "layout": "blank",
+   "elements": [
+    {
+     "id": "e_teachi_9",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "The equation",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_10",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 120,
+      "y": 400,
+      "w": 620,
+      "h": 240
+     },
+     "fill": "surface",
+     "stroke": "muted",
+     "strokeWidth": 3,
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Carbon dioxide",
+          "size": 52,
+          "bold": true,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "+ water",
+          "size": 44,
+          "bold": false,
+          "font": "body",
+          "color": "text"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_teachi_11",
+     "type": "shape",
+     "shape": "rightArrow",
+     "frame": {
+      "x": 800,
+      "y": 440,
+      "w": 320,
+      "h": 160
+     },
+     "fill": "accent",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "light",
+          "size": 40,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_teachi_12",
+     "type": "shape",
+     "shape": "roundRect",
+     "frame": {
+      "x": 1180,
+      "y": 400,
+      "w": 620,
+      "h": 240
+     },
+     "fill": "accent2",
+     "text": {
+      "valign": "middle",
+      "paragraphs": [
+       {
+        "runs": [
+         {
+          "text": "Glucose",
+          "size": 52,
+          "bold": true,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       },
+       {
+        "runs": [
+         {
+          "text": "+ oxygen",
+          "size": 44,
+          "bold": false,
+          "font": "body",
+          "color": "background"
+         }
+        ],
+        "align": "center"
+       }
+      ]
+     }
+    },
+    {
+     "id": "e_teachi_13",
+     "type": "text",
+     "frame": {
+      "x": 120,
+      "y": 720,
+      "w": 1680,
+      "h": 120
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂",
+         "size": 48,
+         "font": "mono",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_6",
+   "layout": "two-column",
+   "elements": [
+    {
+     "id": "e_teachi_14",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 120,
+      "y": 80,
+      "w": 1680,
+      "h": 160
+     },
+     "valign": "middle",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Check your understanding",
+         "size": 80,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_15",
+     "type": "text",
+     "placeholder": "body",
+     "frame": {
+      "x": 120,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "What gas do plants take in?",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Where in the cell does photosynthesis happen?",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Why are most leaves green?",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_16",
+     "type": "text",
+     "placeholder": "body2",
+     "frame": {
+      "x": 990,
+      "y": 280,
+      "w": 810,
+      "h": 700
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Name one thing that would slow photosynthesis down",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      },
+      {
+       "runs": [
+        {
+         "text": "Bonus: why do plants need glucose?",
+         "size": 44,
+         "font": "body",
+         "color": "text"
+        }
+       ],
+       "bullet": "disc",
+       "spaceBefore": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "s_teachi_7",
+   "layout": "closing",
+   "elements": [
+    {
+     "id": "e_teachi_17",
+     "type": "text",
+     "placeholder": "title",
+     "frame": {
+      "x": 160,
+      "y": 300,
+      "w": 1600,
+      "h": 280
+     },
+     "valign": "bottom",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Homework",
+         "size": 128,
+         "bold": true,
+         "font": "heading",
+         "color": "heading"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    },
+    {
+     "id": "e_teachi_18",
+     "type": "text",
+     "placeholder": "subtitle",
+     "frame": {
+      "x": 160,
+      "y": 620,
+      "w": 1600,
+      "h": 140
+     },
+     "valign": "top",
+     "paragraphs": [
+      {
+       "runs": [
+        {
+         "text": "Draw and label a leaf cell · due Monday",
+         "size": 44,
+         "font": "body",
+         "color": "muted"
+        }
+       ],
+       "align": "center"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

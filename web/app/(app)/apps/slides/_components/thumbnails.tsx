@@ -3,14 +3,17 @@
 import { useState, type KeyboardEvent } from "react";
 import { cx } from "@/lib/cx";
 import { SlideSvg } from "@/lib/slides/render";
-import { slideTitle, type Deck } from "@/lib/slides/schema";
+import { DropdownMenu } from "radix-ui";
+import { slideTitle, type Deck, type Layout } from "@/lib/slides/schema";
+import { floatPanel } from "@/components/domain/pickers";
+import { LayoutGrid } from "./layout-picker";
 
 /**
  * The deck's slides in order (mockup 2/6). Click selects; drag, or Alt+↑/↓,
  * reorders; ⌘D duplicates; Delete removes. Amber “!” marks a slide whose text
  * doesn't fit; an “Ada” badge marks slides with a persona's pending change.
  */
-export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRemove, onAdd, assetUrl, fontsReady, overflowing, changed, persona, readOnly }: {
+export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRemove, onAdd, onAddLayout, assetUrl, fontsReady, overflowing, changed, persona, readOnly }: {
   deck: Deck;
   current: string;
   onSelect: (id: string) => void;
@@ -18,6 +21,8 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
   onAdd: () => void;
+  /** Adds a slide with a chosen layout after the current one. */
+  onAddLayout: (l: Layout) => void;
   assetUrl: (id: string) => string;
   fontsReady: boolean;
   overflowing: Set<string>;
@@ -95,9 +100,21 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
           </li>
         ))}
         <li className="pl-[18px] max-md:pl-0">
-          <button type="button" disabled={readOnly} onClick={onAdd} className="h-[30px] w-[128px] rounded-md border border-dashed border-border-strong text-[12.5px] text-fg-secondary hover:bg-hover disabled:opacity-40">
-            + New slide
-          </button>
+          <div className="flex h-[30px] w-[128px] rounded-md border border-dashed border-border-strong text-[12.5px] text-fg-secondary">
+            <button type="button" disabled={readOnly} onClick={onAdd} className="flex-1 rounded-l-md hover:bg-hover disabled:opacity-40">
+              + New slide
+            </button>
+            <DropdownMenu.Root modal={false}>
+              <DropdownMenu.Trigger asChild disabled={readOnly}>
+                <button type="button" aria-label="New slide with layout" className="w-7 rounded-r-md border-l border-dashed border-border-strong hover:bg-hover disabled:opacity-40 data-[state=open]:bg-hover">▾</button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content side="right" align="end" sideOffset={8} collisionPadding={8} className={cx(floatPanel, "z-50 max-h-[80vh] overflow-y-auto")}>
+                  <LayoutGrid theme={deck.theme} onPick={onAddLayout} title="New slide" />
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
         </li>
       </ol>
     </nav>

@@ -147,11 +147,20 @@ type Deck struct {
 var (
 	ThemeColors = []string{"background", "text", "heading", "accent", "accent2", "muted", "surface"}
 	Slots       = []string{"sans", "serif", "mono"}
-	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank"}
-	hexColor    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
-	slideID     = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
-	elementID   = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
-	AssetID     = regexp.MustCompile(`^a_[a-z0-9_]{1,40}$`)
+	Layouts     = []string{"title", "title-body", "two-column", "image-right", "section", "blank", "quote", "big-number", "three-column", "comparison", "image-full", "image-left", "agenda", "closing"}
+	// Shapes are PowerPoint prstGeom names, so PPTX export passes them through;
+	// web/lib/slides/geometry.ts draws the same set.
+	Shapes = []string{
+		"rect", "roundRect", "ellipse",
+		"triangle", "rtTriangle", "diamond", "pentagon", "hexagon", "octagon",
+		"rightArrow", "leftArrow", "upArrow", "downArrow", "chevron", "homePlate",
+		"wedgeRectCallout", "wedgeRoundRectCallout",
+		"star5", "plus", "donut", "heart",
+	}
+	hexColor  = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+	slideID   = regexp.MustCompile(`^s_[a-z0-9_]{1,40}$`)
+	elementID = regexp.MustCompile(`^e_[a-z0-9_]{1,40}$`)
+	AssetID   = regexp.MustCompile(`^a_[a-z0-9_]{1,40}$`)
 )
 
 func in(v string, set ...string) bool {
@@ -360,7 +369,7 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 	if err := checkNumber(&e.Rotation, -360, 360, where+" rotation"); err != nil {
 		return err
 	}
-	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "image") {
+	if !in(e.Placeholder, "", "title", "subtitle", "body", "body2", "body3", "label", "label2", "image") {
 		return invalid("%s: unknown placeholder %q", where, e.Placeholder)
 	}
 	if err := checkNumber(&e.StrokeWidth, 0, maxStrokeWidth, where+" strokeWidth"); err != nil {
@@ -396,8 +405,8 @@ func normalizeElement(d *Deck, e *Element, where string) error {
 		}
 		return normalizeParagraphs(d.Theme, e.Paragraphs, where)
 	case "shape":
-		if !in(e.Shape, "rect", "roundRect", "ellipse") {
-			return invalid("%s: shape must be rect, roundRect or ellipse", where)
+		if !in(e.Shape, Shapes...) {
+			return invalid("%s: shape must be one of %s", where, strings.Join(Shapes, ", "))
 		}
 		if err := notFor(len(e.Paragraphs) > 0, "paragraphs (put them in text)"); err != nil {
 			return err
@@ -492,15 +501,8 @@ func Normalize(body string) (string, error) {
 	return d.Encode()
 }
 
-// Validate checks the whole deck and normalises it in place.
-func (d *Deck) Validate() error {
-	if d.Schema != Schema {
-		return invalid("schema must be %d (got %d)", Schema, d.Schema)
-	}
-	if d.Size != (Size{Width, Height}) {
-		return invalid("size must be %dx%d", Width, Height)
-	}
-	t := &d.Theme
+// Validate checks a theme's name, font slots and colours, upper-casing the colours.
+func (t *Theme) Validate() error {
 	if n := utf8.RuneCountInString(t.Name); n > 60 {
 		return invalid("theme name is at most 60 characters")
 	}
@@ -520,6 +522,20 @@ func (d *Deck) Validate() error {
 	}
 	if len(t.Colors) != len(ThemeColors) {
 		return invalid("theme.colors has exactly %s", strings.Join(ThemeColors, ", "))
+	}
+	return nil
+}
+
+// Validate checks the whole deck and normalises it in place.
+func (d *Deck) Validate() error {
+	if d.Schema != Schema {
+		return invalid("schema must be %d (got %d)", Schema, d.Schema)
+	}
+	if d.Size != (Size{Width, Height}) {
+		return invalid("size must be %dx%d", Width, Height)
+	}
+	if err := d.Theme.Validate(); err != nil {
+		return err
 	}
 	if d.Assets == nil {
 		d.Assets = map[string]Asset{}

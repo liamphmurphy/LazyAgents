@@ -6,11 +6,12 @@
  * fonts embedded; the PPTX maps elements to native, editable PowerPoint
  * objects using the same layout constants.
  */
+import type PptxGenJS from "pptxgenjs";
 import { FAMILY, OFFICE, SLOTS, STYLES, fontUrl, measure } from "./fonts";
 import { BULLET_INDENT, INSET, STRIKE, imageSource, layoutSlide, lineHeight } from "./layout";
 import { flatten } from "./group";
 import { wrapGroups, type PptxGroup } from "./pptx-groups";
-import { resolveColor, slotOf, textOf, type Deck, type LeafElement, type Paragraph, type TextBox } from "./schema";
+import { isImageSlot, resolveColor, slotOf, textOf, type Deck, type LeafElement, type Paragraph, type TextBox } from "./schema";
 
 const K = 0.5; // slide units → points
 const IN = (u: number) => u / 144; // slide units → inches (1920 units = 13.333 in)
@@ -62,17 +63,23 @@ export async function deckToPdf(deck: Deck, assetUrl: (id: string) => string, pr
         const r = (o.rot.deg * Math.PI) / 180, cx = o.rot.cx * K, cy = deck.size.h * K - o.rot.cy * K, c = Math.cos(r), s = Math.sin(r);
         pdf.setCurrentTransformationMatrix(pdf.Matrix(c, -s, s, c, cx - c * cx - s * cy, cy + s * cx - c * cy));
       }
-      if (o.op === "rect" || o.op === "ellipse") {
+      if (o.op === "rect" || o.op === "ellipse" || o.op === "path") {
         const style = o.fill && o.stroke && o.sw ? "FD" : o.fill ? "F" : o.stroke && o.sw ? "S" : null;
         if (o.fill) pdf.setFillColor(o.fill);
         if (o.stroke) {
           pdf.setDrawColor(o.stroke);
           pdf.setLineWidth(o.sw * K);
         }
-        if (style && o.op === "rect") {
+        if (style && o.op === "path") {
+          // jsPDF's path takes absolute m/l/c/h operators in page units.
+          pdf.path(o.segs.map((g) => (g[0] === "Z" ? { op: "h", c: [] } : { op: g[0].toLowerCase(), c: g.slice(1).map((v) => (v as number) * K) })));
+          if (style === "FD") pdf.fillStroke();
+          else if (style === "F") pdf.fill();
+          else pdf.stroke();
+        } else if (style && o.op === "rect") {
           if (o.r) pdf.roundedRect(o.x * K, o.y * K, o.w * K, o.h * K, o.r * K, o.r * K, style);
           else pdf.rect(o.x * K, o.y * K, o.w * K, o.h * K, style);
-        } else if (style) pdf.ellipse((o.x + o.w / 2) * K, (o.y + o.h / 2) * K, (o.w / 2) * K, (o.h / 2) * K, style);
+        } else if (style && o.op === "ellipse") pdf.ellipse((o.x + o.w / 2) * K, (o.y + o.h / 2) * K, (o.w / 2) * K, (o.h / 2) * K, style);
       } else if (o.op === "line") {
         pdf.setDrawColor(o.stroke);
         pdf.setFillColor(o.stroke);
@@ -165,11 +172,14 @@ export async function deckToPptx(deck: Deck, assetUrl: (id: string) => string): 
     // A group's children are written in place and wrapped in a p:grpSp afterwards.
     const leaves: LeafElement[] = s.elements.flatMap((e) => (e.type === "group" ? e.elements : [e]));
     for (const e of leaves) {
+      // An unfilled image placeholder draws nothing; don't leave an empty box in the file.
+      if (isImageSlot(e)) continue;
       const f = { x: IN(e.frame.x), y: IN(e.frame.y), w: IN(e.frame.w), h: IN(e.frame.h), rotate: e.rotation ?? 0, objectName: e.id };
       const textOpts = (box: TextBox) => ({ margin: INSET * K, valign: box.valign ?? "top", fit: "none" as const, wrap: true });
       if (e.type === "text") slide.addText(runs(e), { ...f, ...textOpts(e) });
       else if (e.type === "shape") {
-        const shape = { rect: pptx.ShapeType.rect, roundRect: pptx.ShapeType.roundRect, ellipse: pptx.ShapeType.ellipse }[e.shape];
+        // Our shape names are prstGeom names, so the shape stays native and editable.
+        const shape = e.shape as PptxGenJS.SHAPE_NAME;
         const style = {
           fill: e.fill ? { color: color(e.fill) } : { type: "none" as const },
           line: e.stroke && e.strokeWidth ? { color: color(e.stroke), width: e.strokeWidth * K } : { type: "none" as const },

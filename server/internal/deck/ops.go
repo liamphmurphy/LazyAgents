@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // Op is one persona edit to a deck, keyed by stable ids.
@@ -112,8 +113,8 @@ func (d *Deck) apply(op Op) error {
 	case "set_theme":
 		var t Theme
 		if name, ok := op.Value["preset"].(string); ok && len(op.Value) == 1 {
-			if _, known := Themes[name]; !known {
-				return fmt.Errorf("unknown preset %q", name)
+			if _, known := Themes[strings.ToLower(strings.TrimSpace(name))]; !known {
+				return fmt.Errorf("unknown theme %q; built-in themes: %s", name, strings.Join(ThemeOrder, ", "))
 			}
 			t = ThemeNamed(name)
 		} else if err := merge(d.Theme, op.Value, &t); err != nil {
@@ -273,6 +274,11 @@ func (d *Deck) apply(op Op) error {
 func relayout(s *Slide) {
 	fresh := Placeholders(s.Layout, "")
 	used := map[string]bool{}
+	// An unfilled image placeholder has nothing to keep: drop it when the
+	// new layout has no image slot, rather than leave an invisible box.
+	if !slices.ContainsFunc(fresh, func(f Element) bool { return f.Placeholder == "image" }) {
+		s.Elements = slices.DeleteFunc(s.Elements, func(e Element) bool { return e.Placeholder == "image" && e.Type == "text" })
+	}
 	for k := range s.Elements {
 		e := &s.Elements[k]
 		if e.Placeholder == "" {

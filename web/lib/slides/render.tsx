@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FAMILY, loadSlideFonts, measure, resetMeasureCache } from "./fonts";
+import { svgPath } from "./geometry";
 import { layoutSlide, type Laid, type Op } from "./layout";
 import { findDeep } from "./group";
 import { H, W, slideText, type Deck, type Slide } from "./schema";
@@ -43,6 +44,8 @@ function draw(o: Op, i: number, deck: Deck, assetUrl: (id: string) => string, ui
       return <rect key={i} x={o.x} y={o.y} width={o.w} height={o.h} rx={o.r} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} transform={t} />;
     case "ellipse":
       return <ellipse key={i} cx={o.x + o.w / 2} cy={o.y + o.h / 2} rx={o.w / 2} ry={o.h / 2} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} transform={t} />;
+    case "path":
+      return <path key={i} d={svgPath(o.segs)} fill={o.fill ?? "none"} stroke={o.stroke} strokeWidth={o.stroke ? o.sw : undefined} strokeLinejoin="miter" transform={t} />;
     case "line": {
       const id = `${uid}-arrow-${i}`;
       return (
