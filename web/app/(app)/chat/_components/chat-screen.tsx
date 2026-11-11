@@ -29,7 +29,7 @@ import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/compo
 import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
-import { needsWizard } from "@/lib/onboarding";
+import { wizardMode } from "@/lib/onboarding";
 import { WelcomeWizard } from "./welcome-wizard";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -316,7 +316,8 @@ export function ChatScreen({ id }: { id?: string }) {
   const boot = useBootstrap();
   // First run (or ?setup, from Settings): the Welcome Wizard takes the welcome's place until it hands over.
   const [arrived, setArrived] = useState<string>();
-  const wizard = !id && !arrived && !!boot.data && (search.has("setup") || needsWizard(boot.data.me));
+  const mode = search.has("setup") ? "full" : wizardMode(boot.data?.me);
+  const wizard = !id && !arrived && !!boot.data && !!mode;
   const noHarness = !!health && !health.ready && !wizard;
   // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach
   // or the landing page asked for a new one (?new).
@@ -353,9 +354,11 @@ export function ChatScreen({ id }: { id?: string }) {
                   </div>
                 ) : wizard ? (
                   <WelcomeWizard
+                    only={mode === "harness" ? "harness" : undefined}
                     onDone={(persona) => {
-                      setArrived(persona);
-                      router.replace(`/chat?new&persona=${encodeURIComponent(persona)}`);
+                      // Only the harness step: back to the welcome as it was.
+                      setArrived(persona ?? "harness");
+                      if (persona) router.replace(`/chat?new&persona=${encodeURIComponent(persona)}`);
                     }}
                   />
                 ) : resolving ? (

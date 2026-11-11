@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
@@ -47,7 +49,7 @@ func TestVerifyHarnessStoresKeyAndDiscovers(t *testing.T) {
 		rs.RequireHarnessKey = true
 		rs.ModelDiscovery = func(_ context.Context, h, key string) ([]chatmodels.Model, error) {
 			seen = append(seen, h+"="+key)
-			if key == "sk-ant-api03-revoked" {
+			if key == "sk-ant-api03-revoked" || key == "sk-ant-oat01-expired" || strings.Contains(key, "expired") {
 				return nil, context.DeadlineExceeded
 			}
 			return []chatmodels.Model{{ID: "opus", Label: "Opus", Default: true}, {ID: "sonnet", Label: "Sonnet"}, {ID: "haiku", Label: "Haiku"}}, nil
@@ -87,10 +89,36 @@ func TestVerifyHarnessStoresKeyAndDiscovers(t *testing.T) {
 		t.Fatalf("after verify, harness_connected = %v", me["harness_connected"])
 	}
 
-	// A key the provider refuses: not ok, a public reason, never the key.
+	stored := func(name string) string {
+		t.Helper()
+		v, err := box.Reveal(context.Background(), e.me.WorkspaceID, nil, name)
+		if err != nil {
+			return ""
+		}
+		return v
+	}
+	// A key the provider refuses: not ok, a public reason, never the key, and
+	// the working key stays.
 	out = e.want("POST", "/harness/claude-code/verify", map[string]any{"kind": "api_key", "credential": "sk-ant-api03-revoked"}, http.StatusOK)
-	if out["ok"] != false || out["error"] == nil || len(out["models"].([]any)) != 0 {
+	if out["ok"] != false || out["error"] == nil || len(out["models"].([]any)) != 0 || strings.Contains(fmt.Sprint(out), "revoked") {
 		t.Fatalf("refused key: %v", out)
+	}
+	if got := stored("harness:anthropic"); got != "sk-ant-api03-good" {
+		t.Fatalf("a refused key replaced the working one: %q", got)
+	}
+	// A plan login is stored to be listed; when the listing fails, the earlier key comes back.
+	out = e.want("POST", "/harness/claude-code/verify", map[string]any{"kind": "subscription", "credential": "sk-ant-oat01-expired"}, http.StatusOK)
+	if out["ok"] != false || stored("harness:anthropic") != "sk-ant-api03-good" {
+		t.Fatalf("failed plan login: %v, stored %q", out, stored("harness:anthropic"))
+	}
+	// ...and with nothing before it, it is removed again.
+	login := `{"auth_mode":"chatgpt","tokens":{"refresh_token":"expired","account_id":"a"}}`
+	out = e.want("POST", "/harness/codex/verify", map[string]any{"kind": "subscription", "credential": login}, http.StatusOK)
+	if ok, _, _ := e.runs.ChatCatalog().Check(context.Background(), e.q, e.me.WorkspaceID, "codex"); out["ok"] != false || ok.Available {
+		t.Fatalf("failed codex login: %v, catalog %+v", out, ok)
+	}
+	if got := stored("harness:openai"); got != "" {
+		t.Fatalf("a failed first login stayed stored")
 	}
 	// Codex has no key: checking without a credential reports why.
 	out = e.want("POST", "/harness/codex/verify", nil, http.StatusOK)
@@ -117,6 +145,8 @@ func TestVerifyHarnessAgainstFakeHarness(t *testing.T) {
 			t.Fatalf("%s: %v", harness, out)
 		}
 	}
+	// Runs here use the CLI sign-in, so there is no key to paste.
+	e.invalid("POST", "/harness/claude-code/verify", map[string]any{"kind": "subscription", "credential": "sk-ant-oat01-x"}, "credential", "sign-ins on its host")
 	t.Setenv("RUNNER_CLAUDE_BIN", filepath.Join(dir, "missing"))
 	if out := e.want("POST", "/harness/claude-code/verify", nil, http.StatusOK); out["ok"] != false || out["error"] == nil {
 		t.Fatalf("missing CLI: %v", out)

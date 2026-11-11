@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -69,13 +70,18 @@ func checkHarnessCredential(harness string, kind api.HarnessVerifyRequestKind, v
 }
 
 func (s *Server) VerifyHarness(ctx context.Context, req api.VerifyHarnessRequestObject) (api.VerifyHarnessResponseObject, error) {
-	u, _, ws := me(ctx)
+	_, _, ws := me(ctx)
 	name := string(req.Harness)
-	secret, ok := chatmodels.KeySecret[name]
-	if !ok {
+	if _, ok := chatmodels.KeySecret[name]; !ok {
 		return nil, apperr.Invalid("harness", "unknown harness %q", name)
 	}
+	cat := s.Runs.ChatCatalog()
 	if b := req.Body; b != nil {
+		// Runs on the host use its CLI sign-ins and would never check a
+		// pasted key, yet the runner would still inject it.
+		if !s.Runs.RequireHarnessKey {
+			return nil, apperr.Invalid("credential", "this server's runs use the claude and codex sign-ins on its host: sign the CLI in there and verify without pasting")
+		}
 		v := strings.TrimSpace(b.Credential)
 		if err := checkHarnessCredential(name, b.Kind, v); err != nil {
 			return nil, err
@@ -83,14 +89,71 @@ func (s *Server) VerifyHarness(ctx context.Context, req api.VerifyHarnessRequest
 		if s.Secrets == nil {
 			return nil, secrets.ErrNoKey
 		}
-		if _, err := s.Secrets.Set(ctx, ws, u.ID, secrets.SetInput{Name: secret, Value: v}); err != nil {
-			return nil, err
+		if !chatmodels.PlanLogin(name, v) {
+			// An API key is checked before it replaces anything.
+			models, err := cat.CheckKey(ctx, name, v)
+			if err != nil || len(models) == 0 {
+				return verifyResult(chatmodels.Harness{UnavailableReason: verifyFailure(err)}), nil
+			}
 		}
+		return s.storeHarnessKey(ctx, cat, ws, name, v)
 	}
-	h, _, err := s.Runs.ChatCatalog().Check(ctx, s.Q, ws, name)
+	h, _, err := cat.Check(ctx, s.Q, ws, name)
 	if err != nil {
 		return nil, err
 	}
+	return verifyResult(h), nil
+}
+
+func verifyFailure(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return "no chat models available"
+}
+
+// storeHarnessKey stores v as the harness's key and lists its models. A plan
+// login can only be listed once stored (a runner reads it), so when that
+// fails the earlier value is put back, or the new one removed: a bad paste
+// never replaces a working credential. A listing still pending keeps it, for
+// the next Verify (without a credential) to follow.
+func (s *Server) storeHarnessKey(ctx context.Context, cat chatmodels.Catalog, ws uuid.UUID, name, v string) (api.VerifyHarnessResponseObject, error) {
+	u, _, _ := me(ctx)
+	secret := chatmodels.KeySecret[name]
+	had, err := s.Q.SecretExists(ctx, store.SecretExistsParams{WorkspaceID: ws, Name: secret})
+	if err != nil {
+		return nil, err
+	}
+	var prev string
+	if had {
+		if prev, err = s.Secrets.Reveal(ctx, ws, nil, secret); err != nil {
+			return nil, err
+		}
+	}
+	saved, err := s.Secrets.Set(ctx, ws, u.ID, secrets.SetInput{Name: secret, Value: v})
+	if err != nil {
+		return nil, err
+	}
+	h, _, err := cat.Check(ctx, s.Q, ws, name)
+	if err == nil && (h.Available && len(h.Models) > 0 || h.Checking) {
+		return verifyResult(h), nil
+	}
+	// Restore with a fresh context: the request's may be what failed.
+	rctx := context.WithoutCancel(ctx)
+	if had {
+		_, rerr := s.Secrets.Set(rctx, ws, u.ID, secrets.SetInput{Name: secret, Value: prev})
+		err = errors.Join(err, rerr)
+	} else {
+		_, rerr := s.Q.DeleteSecret(rctx, store.DeleteSecretParams{ID: saved.ID, WorkspaceID: ws})
+		err = errors.Join(err, rerr)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return verifyResult(h), nil
+}
+
+func verifyResult(h chatmodels.Harness) api.VerifyHarness200JSONResponse {
 	out := api.VerifyHarness200JSONResponse{Ok: h.Available && len(h.Models) > 0}
 	out.Models = make([]struct {
 		Id    string `json:"id"`
@@ -106,5 +169,5 @@ func (s *Server) VerifyHarness(ctx context.Context, req api.VerifyHarnessRequest
 		reason := h.UnavailableReason
 		out.Error = &reason
 	}
-	return out, nil
+	return out
 }

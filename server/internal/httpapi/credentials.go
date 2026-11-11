@@ -99,6 +99,8 @@ func (s *Server) ListSecrets(ctx context.Context, _ api.ListSecretsRequestObject
 	}
 	out := api.ListSecrets200JSONResponse{Secrets: make([]api.SecretInfo, 0, len(rows)), KeyConfigured: s.Secrets.Box != nil,
 		SignInAvailable: live && s.Secrets.Box != nil}
+	keys := s.Runs != nil && s.Runs.RequireHarnessKey
+	out.HarnessKeysRequired = &keys
 	for _, r := range rows {
 		si := api.SecretInfo{Id: r.ID, Name: r.Name, GrantsScope: r.GrantsScope, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, LastUsedAt: r.LastUsedAt}
 		if r.ProjectID != nil {

@@ -20,6 +20,7 @@ import {
   PERSONA_EXAMPLES,
   prefillName,
   refinePrompt,
+  setupHarness,
   type CredentialKind,
   type HarnessId,
   type WizardStep,
@@ -226,7 +227,14 @@ function AboutYou({ onNext }: { onNext: () => void }) {
 
 type Verified = Partial<Record<HarnessId, number>>;
 
-function HarnessCard({ id, label, note, secretsOff, verified, onVerified }: { id: HarnessId; label: string; note?: string; secretsOff: boolean; verified?: number; onVerified: (models: number) => void }) {
+function HarnessCard({ id, label, note, paste, stored, verified, onVerified }: {
+  id: HarnessId; label: string; note?: string;
+  /** Whether a credential can be pasted here: runs use stored keys, and secrets are on. */
+  paste: boolean;
+  /** This workspace already has a key for it. */
+  stored: boolean;
+  verified?: number; onVerified: (models: number) => void;
+}) {
   const [kind, setKind] = useState<CredentialKind>("subscription");
   const [value, setValue] = useState("");
   const [error, setError] = useState<string>();
@@ -236,17 +244,18 @@ function HarnessCard({ id, label, note, secretsOff, verified, onVerified }: { id
   useEffect(() => () => { retry.current = -1; }, []);
 
   // With nothing pasted, Verify checks what is already configured (a stored key, or the server's CLI sign-in).
+  // Retries only follow the listing: the credential was stored by the first call.
   const run = (again = false) => {
     if (!again) retry.current = 0;
     setError(undefined);
-    const credential = value.trim();
+    const credential = again ? "" : value.trim();
+    if (credential) setValue("");
     verify.mutate(
-      { harness: id, ...(credential && !secretsOff ? { body: { kind, credential } } : {}) },
+      { harness: id, ...(credential && paste ? { body: { kind, credential } } : {}) },
       {
         onSuccess: (r) => {
           if (r.ok) {
             setChecking(false);
-            setValue("");
             return onVerified(r.models.length);
           }
           // A plan login's models come from a runner: ask again for a little while.
@@ -271,7 +280,7 @@ function HarnessCard({ id, label, note, secretsOff, verified, onVerified }: { id
       <p className="mb-2.5 mt-0.5 min-h-[52px] text-xs text-fg-tertiary">
         Chat, coding and agent runs.{note && <> <em className="not-italic text-[var(--brand-star)]">{note}</em></>}
       </p>
-      {!secretsOff && (
+      {paste && (
         <>
           <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
             {(["subscription", "api_key"] as const).map((k) => (
@@ -284,6 +293,7 @@ function HarnessCard({ id, label, note, secretsOff, verified, onVerified }: { id
           <input type="password" autoComplete="off" spellCheck={false} aria-label={`${label} credential`} className={field}
             placeholder={credentialPlaceholder(id, kind)} title={credentialHelp(id, kind)} value={value} onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) run(); }} />
+          {stored && !ok && <p className="mt-1.5 text-[11.5px] text-fg-tertiary">Already set up for this workspace: leave it empty to check that one. Pasting replaces it for everyone.</p>}
         </>
       )}
       <div className="mt-2 flex items-center gap-2">
@@ -305,27 +315,34 @@ function HarnessCard({ id, label, note, secretsOff, verified, onVerified }: { id
   );
 }
 
-function ConnectHarness({ onNext }: { onNext: () => void }) {
+function ConnectHarness({ onNext }: { onNext: (verified: HarnessId[]) => void }) {
   const secrets = useSecrets();
   const qc = useQueryClient();
   const [verified, setVerified] = useState<Verified>({});
   const done = HARNESS_CARDS.map((c) => c.id).filter((h) => verified[h] !== undefined);
   const secretsOff = secrets.data ? !secrets.data.key_configured : false;
+  // Runs on the host use its CLI sign-ins: there is nothing to paste, only to check.
+  const hostLogins = secrets.data?.harness_keys_required === false;
+  const has = (name: string) => !!secrets.data?.secrets.some((x) => x.name === name && !x.project);
   return (
     <>
-      {secretsOff && (
+      {hostLogins ? (
         <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
-          Secrets are off on this server (<code>SECRETS_KEY</code> isn’t set), so Vesper can’t store a credential here. Set it and restart the API to paste one,
-          or sign the <code>claude</code> or <code>codex</code> CLI in on the server: Verify checks that sign-in.
+          This server runs Claude Code and Codex with the <code>claude</code> and <code>codex</code> sign-ins on its host. Sign the CLI in there, then Verify checks it.
         </p>
-      )}
+      ) : secretsOff ? (
+        <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
+          Secrets are off on this server (<code>SECRETS_KEY</code> isn’t set), so Vesper can’t store a credential here. Set it and restart the API, then paste one here.
+        </p>
+      ) : null}
       <div className="grid grid-cols-2 gap-2.5 max-sm:grid-cols-1">
         {HARNESS_CARDS.map((c) => (
-          <HarnessCard key={c.id} {...c} secretsOff={secretsOff} verified={verified[c.id]} onVerified={(n) => setVerified((v) => ({ ...v, [c.id]: n }))} />
+          <HarnessCard key={c.id} {...c} paste={!hostLogins && !secretsOff} stored={has(c.id === "codex" ? "harness:openai" : "harness:anthropic")}
+            verified={verified[c.id]} onVerified={(n) => setVerified((v) => ({ ...v, [c.id]: n }))} />
         ))}
       </div>
       <Foot hint={harnessHint(done)}>
-        <button type="button" className={primary} disabled={!done.length} onClick={() => { void qc.invalidateQueries({ queryKey: chatKeys.models }); onNext(); }}>
+        <button type="button" className={primary} disabled={!done.length} onClick={() => { void qc.invalidateQueries({ queryKey: chatKeys.models }); onNext(done); }}>
           Continue
         </button>
       </Foot>
@@ -381,7 +398,7 @@ function draftState(list: Proposal[], before: string[], sentAt: number, chat: Ch
   return { fresh, failed, waiting: sentAt > 0 && !settled && !failed };
 }
 
-function FirstPersona({ onDone }: { onDone: (personaId: string) => void }) {
+function FirstPersona({ harness, onDone }: { harness?: HarnessId; onDone: (personaId: string) => void }) {
   const personas = usePersonas();
   const host = personas.data?.default_persona_id;
   const qc = useQueryClient();
@@ -393,6 +410,8 @@ function FirstPersona({ onDone }: { onDone: (personaId: string) => void }) {
   const [sending, setSending] = useState(false);
   const [meeting, setMeeting] = useState(false);
   const [error, setError] = useState<string>();
+  // Set once approved, so a retry after a later failure doesn't approve twice.
+  const [approved, setApproved] = useState<string>();
   const setDefault = useSetDefaultPersona();
   const complete = useCompleteOnboarding();
 
@@ -427,26 +446,33 @@ function FirstPersona({ onDone }: { onDone: (personaId: string) => void }) {
         // Only the newest draft can be met: decline the one being replaced.
         await unwrap(api.POST("/chats/{id}/persona-proposals/{proposal_id}", { params: { path: { id, proposal_id: draft.id } }, body: { decision: "decline" } }));
       }
-      setBefore(list.map((p) => p.id));
-      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id } }, body: { body: draft ? refinePrompt(words) : draftPrompt(words) } }));
+      const known = list.map((p) => p.id);
+      // On a harness that verified: the Assistant's own may not be connected.
+      await unwrap(api.POST("/chats/{id}/messages", { params: { path: { id } }, body: { body: draft ? refinePrompt(words) : draftPrompt(words), ...(harness ? { harness } : {}) } }));
+      setBefore(known);
       setSentAt(Date.now());
       setText("");
       await Promise.all([qc.invalidateQueries({ queryKey: chatKeys.detail(id) }), qc.invalidateQueries({ queryKey: chatKeys.proposals(id) })]);
     } catch (e) {
       setError(errorText(e));
+      if (chatId) void qc.invalidateQueries({ queryKey: chatKeys.proposals(chatId) });
     } finally {
       setSending(false);
     }
   }
 
   async function meet() {
-    if (!chatId || !draft) return;
+    if (!chatId || (!draft && !approved)) return;
     setMeeting(true);
     setError(undefined);
     try {
-      const decided = await unwrap(api.POST("/chats/{id}/persona-proposals/{proposal_id}", { params: { path: { id: chatId, proposal_id: draft.id } }, body: { decision: "approve" } }));
-      const id = decided.persona?.id;
-      if (!id) throw new Error("The persona wasn’t created. Please try again.");
+      let id = approved;
+      if (!id) {
+        const decided = await unwrap(api.POST("/chats/{id}/persona-proposals/{proposal_id}", { params: { path: { id: chatId, proposal_id: draft!.id } }, body: { decision: "approve" } }));
+        id = decided.persona?.id;
+        if (!id) throw new Error("The persona wasn’t created. Please try again.");
+        setApproved(id);
+      }
       await setDefault.mutateAsync(id);
       await complete.mutateAsync();
       onDone(id);
@@ -481,10 +507,10 @@ function FirstPersona({ onDone }: { onDone: (personaId: string) => void }) {
       {(waiting || draft) && <DraftCard draft={waiting && !fresh ? undefined : draft} />}
       <Alert error={shownError} />
       <Foot hint={draft && !waiting ? "Tell me what to change, or meet them." : undefined}>
-        <button type="button" className={ghost} disabled={busy || !text.trim()} onClick={send}>
+        <button type="button" className={ghost} disabled={busy || !text.trim() || !!approved} onClick={send}>
           {sending || waiting ? <><Spinner /> Drafting…</> : draft ? "Redraft" : "Draft persona"}
         </button>
-        <button type="button" className={primary} disabled={!ready || busy} onClick={meet}>
+        <button type="button" className={primary} disabled={!(ready || approved) || busy} onClick={meet}>
           {meeting ? "Meeting…" : "Meet them"}
         </button>
       </Foot>
@@ -494,17 +520,22 @@ function FirstPersona({ onDone }: { onDone: (personaId: string) => void }) {
 
 // ------------------------------------------------------------ the wizard
 
-/** Starts at the greeting; `onDone` gets the new default persona once the person meets them. */
-export function WelcomeWizard({ onDone }: { onDone: (personaId: string) => void }) {
+/**
+ * Starts at the greeting; `onDone` gets the new default persona once the person
+ * meets them. With `only="harness"` (someone already set up whose harness went
+ * missing) it is just the harness step, and `onDone` gets nothing.
+ */
+export function WelcomeWizard({ only, onDone }: { only?: "harness"; onDone: (personaId?: string) => void }) {
   const personas = usePersonas();
   const host = personaLook(personas.data?.personas.find((p) => p.id === personas.data?.default_persona_id));
   const reduced = useReducedMotion();
-  const [step, setStep] = useState<WizardStep>(0);
+  const [step, setStep] = useState<WizardStep>(only ? 2 : 0);
+  const [verified, setVerified] = useState<HarnessId[]>([]);
   const [leaving, setLeaving] = useState(false);
   const [hour] = useState(() => new Date().getHours());
   useEffect(() => {
-    setWizardStep(step);
-  }, [step]);
+    if (!only) setWizardStep(step);
+  }, [step, only]);
   useEffect(() => () => setWizardStep(null), []);
 
   // The card fades and lifts out, then the next one rises in.
@@ -515,11 +546,11 @@ export function WelcomeWizard({ onDone }: { onDone: (personaId: string) => void 
       setLeaving(false);
     }, reduced ? 120 : 200);
   };
-  const finish = (id: string) => {
-    setWizardStep(4);
+  const finish = (id?: string) => {
+    if (!only) setWizardStep(4);
     onDone(id);
   };
-  const line = assistantLine(step, hour);
+  const line = only ? "Chats need a mind to run on again: connect Claude Code, Codex or both." : assistantLine(step, hour);
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="welcome-wizard">
       <div className="mx-auto flex w-full max-w-[600px] flex-1 flex-col items-center justify-center px-6 py-10">
@@ -532,8 +563,8 @@ export function WelcomeWizard({ onDone }: { onDone: (personaId: string) => void 
           <div key={step} className={leaving ? "wizard-leave" : "wizard-enter"} aria-label={["Welcome", "About you", "Connect a harness", "Your first persona"][step]} role="group">
             {step === 0 && <Greeting onNext={() => go(1)} />}
             {step === 1 && <AboutYou onNext={() => go(2)} />}
-            {step === 2 && <ConnectHarness onNext={() => go(3)} />}
-            {step === 3 && <FirstPersona onDone={finish} />}
+            {step === 2 && <ConnectHarness onNext={(v) => { setVerified(v); if (only) finish(); else go(3); }} />}
+            {step === 3 && <FirstPersona harness={setupHarness(verified)} onDone={finish} />}
           </div>
         </div>
       </div>

@@ -530,7 +530,11 @@ export function useVerifyHarness() {
   return useMutation({
     mutationFn: (v: { harness: Schemas["Harness"]; body?: Schemas["HarnessVerifyRequest"] }) =>
       unwrap(api.POST("/harness/{harness}/verify", { params: { path: { harness: v.harness } }, ...(v.body ? { body: v.body } : {}) })),
-    onSettled: (_d, _e, v) => (v.body ? invalidateSecretDependents(qc) : qc.invalidateQueries({ queryKey: chatKeys.models })),
+    // The credential is in the variables: don't keep it in the mutation cache.
+    gcTime: 0,
+    // harness_connected (bootstrap me) may have changed too.
+    onSettled: (_d, _e, v) =>
+      Promise.all([v.body ? invalidateSecretDependents(qc) : qc.invalidateQueries({ queryKey: chatKeys.models }), qc.invalidateQueries({ queryKey: ["bootstrap"] })]),
   });
 }
 

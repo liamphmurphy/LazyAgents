@@ -329,11 +329,17 @@ export interface paths {
         put?: never;
         /**
          * Store a harness credential and check that chats can list its models
-         * @description With a credential, stores it as the harness's key secret
+         * @description With a credential, checks it and stores it as the harness's key secret
          *     (harness:anthropic for claude-code, harness:openai for codex), replacing
-         *     any earlier one, then runs model discovery the way the chat model
-         *     picker does. Without one, only checks what is already configured (a
-         *     stored key, or the host's CLI login when runs use it). A subscription
+         *     any earlier one only when it works: an API key is checked before it is
+         *     stored; a plan login is stored, listed through a runner, and the earlier
+         *     value put back when the listing fails (not while it is still pending:
+         *     verify again without a credential to follow it). Only models listed
+         *     for the new login count. Without a credential, only checks what is
+         *     already configured (a stored key, or the host's CLI login when runs use
+         *     it). A credential is refused (422) when runs use the host's CLI
+         *     sign-ins (SecretList.harness_keys_required false), since it would
+         *     never be checked there. A subscription
          *     is a Claude setup-token (sk-ant-oat…) or a Codex auth.json; an api_key
          *     is an Anthropic (sk-ant-…) or OpenAI (sk-…) API key. The credential is
          *     never echoed back. 409 when secrets are off (SECRETS_KEY unset) and a
@@ -5823,6 +5829,8 @@ export interface components {
             key_configured: boolean;
             /** @description A Docker runner is online, so Claude, Codex and GitHub can be signed in from Settings */
             sign_in_available: boolean;
+            /** @description Runs authenticate with the stored harness keys (the Docker backend); false when they use the host's claude and codex sign-ins, so there is no key to paste */
+            harness_keys_required?: boolean;
             /** @description Well-known secret names and the scope each backs */
             known: {
                 name: string;

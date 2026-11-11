@@ -2,8 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 // The first-run Welcome Wizard (LAZYAGENTS-102) on the real stack: no
 // page.route mocks. The stack's user has never finished setup, so "/" lands in
-// the wizard. Verify stores the pasted setup-token and lists the fake CLI's
-// models (RUNNER_BACKEND=local), and the persona is drafted in a hidden setup
+// the wizard. Runs use the host's CLI sign-ins (RUNNER_BACKEND=local), so
+// Verify lists the fake CLI's models with nothing to paste (pasting a key is
+// covered by e2e/welcome-wizard.spec.ts and the Go tests), and the persona is drafted in a hidden setup
 // chat where the fake harness (FAKE_HARNESS_MODE=chat-read) answers the
 // "(Vesper setup)" prompts with propose_persona. Meeting the persona approves it
 // through the usual proposal path, makes it the default and lands in a chat
@@ -63,14 +64,9 @@ test("Welcome Wizard: from a fresh install to a first chat", async ({ page, requ
   await expect(next).toBeDisabled();
   await expect(wizard.getByTestId("wizard-hint")).toHaveText("Connect at least one to continue.");
   const claude = wizard.getByRole("region", { name: "Claude Code" });
-  // A key of the wrong shape is refused before anything is stored.
-  await claude.getByRole("radio", { name: "API key" }).click();
-  await claude.getByLabel("Claude Code credential").fill("not-a-key");
-  await claude.getByRole("button", { name: "Verify Claude Code" }).click();
-  await expect(claude.getByRole("alert")).toContainText("sk-ant-");
-  await expect(next).toBeDisabled();
-  await claude.getByRole("radio", { name: "Subscription" }).click();
-  await claude.getByLabel("Claude Code credential").fill("sk-ant-oat01-e2e-wizard");
+  // This stack's runner uses the host's CLI sign-ins (the fake): nothing to paste, Verify checks the sign-in.
+  await expect(wizard.getByRole("note")).toContainText("sign-ins on its host");
+  await expect(wizard.getByLabel("Claude Code credential")).toHaveCount(0);
   await claude.getByRole("button", { name: "Verify Claude Code" }).click();
   await expect(claude.getByTestId("claude-code-models")).toHaveText("1 model");
   await expect(claude).toHaveAttribute("data-verified", "true");

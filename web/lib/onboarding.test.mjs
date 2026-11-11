@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assistantLine, credentialPlaceholder, draftBullets, draftPrompt, harnessHint, initialOf, needsWizard, prefillName, refinePrompt, rowState, setupProgress } from "./onboarding.ts";
+import { setupHarness, wizardMode, assistantLine, credentialPlaceholder, draftBullets, draftPrompt, harnessHint, initialOf, needsWizard, prefillName, refinePrompt, rowState, setupProgress } from "./onboarding.ts";
 
 test("needsWizard until onboarded, and again without a harness", () => {
   assert.equal(needsWizard(undefined), false);
@@ -54,4 +54,17 @@ test("draftBullets turns instructions into three short lines", () => {
   ]);
   assert.deepEqual(draftBullets("- Short scenes\n- Tracks the party"), ["Short scenes", "Tracks the party"]);
   assert.deepEqual(draftBullets(""), []);
+});
+
+test("wizardMode: everything first, then only the harness step when it goes missing", () => {
+  assert.equal(wizardMode(undefined), null);
+  assert.equal(wizardMode({ harness_connected: false }), "full");
+  assert.equal(wizardMode({ onboarded_at: "x", harness_connected: false }), "harness");
+  assert.equal(wizardMode({ onboarded_at: "x", harness_connected: true }), null);
+});
+
+test("the setup chat prefers Claude Code, else whichever harness verified", () => {
+  assert.equal(setupHarness(["codex", "claude-code"]), "claude-code");
+  assert.equal(setupHarness(["codex"]), "codex");
+  assert.equal(setupHarness([]), undefined);
 });

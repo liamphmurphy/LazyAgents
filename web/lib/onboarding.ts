@@ -6,10 +6,18 @@ export type WizardStep = 0 | 1 | 2 | 3 | 4;
 /** The sidebar's "Getting set up" rows, one per step. */
 export const SETUP_ROWS = ["About you", "Connect a harness", "Your first persona"] as const;
 
-/** Show the wizard until the person finishes it, or while chats have no harness to run on. */
+/**
+ * Which wizard to show: all of it until the person finishes it; only the
+ * harness step for someone who has, while chats have no harness to run on.
+ */
+export function wizardMode(me: { onboarded_at?: string; harness_connected?: boolean } | undefined): "full" | "harness" | null {
+  if (!me) return null;
+  if (!me.onboarded_at) return "full";
+  return me.harness_connected === false ? "harness" : null;
+}
+
 export function needsWizard(me: { onboarded_at?: string; harness_connected?: boolean } | undefined): boolean {
-  if (!me) return false;
-  return !me.onboarded_at || me.harness_connected === false;
+  return wizardMode(me) !== null;
 }
 
 /** How far the progress bar is filled, 0–1: a step counts once it is finished. */
@@ -75,6 +83,11 @@ export function credentialHelp(h: HarnessId, kind: CredentialKind): string {
 }
 
 /** The harness step's hint: what is still missing. */
+/** The harness the setup chat runs on: Claude Code when it is connected, else the other. */
+export function setupHarness(verified: readonly HarnessId[]): HarnessId | undefined {
+  return verified.includes("claude-code") ? "claude-code" : verified[0];
+}
+
 export function harnessHint(verified: readonly HarnessId[]): string {
   if (!verified.length) return "Connect at least one to continue.";
   return verified.includes("codex") ? "" : "Image generation stays off until Codex is connected.";
