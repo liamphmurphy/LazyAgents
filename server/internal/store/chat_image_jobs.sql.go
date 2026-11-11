@@ -176,6 +176,58 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 	return i, err
 }
 
+const failQueuedChatImageJobs = `-- name: FailQueuedChatImageJobs :many
+UPDATE chat_image_jobs SET state = 'failed', error = $1::text, failure_kind = 'error', finished_at = now()
+WHERE run_id = $2 AND turn_id = $3 AND state = 'queued'
+RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles
+`
+
+type FailQueuedChatImageJobsParams struct {
+	Error  string
+	RunID  uuid.UUID
+	TurnID uuid.UUID
+}
+
+// A turn that ends without running its image jobs (its reply failed, or the
+// run was stopped) fails them, so no request is left queued with no result.
+func (q *Queries) FailQueuedChatImageJobs(ctx context.Context, arg FailQueuedChatImageJobsParams) ([]ChatImageJob, error) {
+	rows, err := q.db.Query(ctx, failQueuedChatImageJobs, arg.Error, arg.RunID, arg.TurnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatImageJob{}
+	for rows.Next() {
+		var i ChatImageJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.RunID,
+			&i.TurnID,
+			&i.ChatID,
+			&i.Prompt,
+			&i.Model,
+			&i.State,
+			&i.CodexSessionID,
+			&i.Error,
+			&i.CreatedAt,
+			&i.FinishedAt,
+			&i.FailureKind,
+			&i.OutboxFiles,
+			&i.AttachmentID,
+			&i.FollowupTurnID,
+			&i.ReferenceRoles,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const failStaleChatImageJobs = `-- name: FailStaleChatImageJobs :exec
 UPDATE chat_image_jobs SET state = 'failed', error = 'interrupted', failure_kind = 'error', finished_at = now()
 WHERE run_id = $1 AND state = 'running'

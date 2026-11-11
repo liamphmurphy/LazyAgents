@@ -19,7 +19,12 @@
 //	                    FAKE_IMAGE_STEP says: ok (default; writes exec-<uuid>.png into
 //	                    .lazyagents/outbox), empty (succeeds, writes nothing), fail
 //	                    (exits 1), hang (waits until killed), moderation (succeeds
-//	                    with a content-policy refusal, writes nothing). The
+//	                    with a content-policy refusal, writes nothing), saved
+//	                    (saves into $CODEX_HOME/generated_images/<thread>/ like
+//	                    codex-cli, and says its copy was denied), saved-copied
+//	                    (saves there and copies it to the outbox as portrait.png).
+//	                    FAKE_HARNESS_FAIL_AFTER_IMAGE fails the turn after it
+//	                    calls generate_image. The
 //	                    image_followup turn after it reads the delivered images, calls
 //	                    generate_image once more and echoes its prompt (or fails,
 //	                    with FAKE_HARNESS_FAIL_FOLLOWUP set). FAKE_IMAGE_REFERENCES
@@ -382,6 +387,26 @@ func main() {
 			text(refusal)
 			result(false, refusal)
 			return
+		case "saved", "saved-copied":
+			// Like codex-cli: the image lands in Codex's own folder for the
+			// thread. "saved" then has its copy denied by the policy hook (the
+			// LAZYAGENTS-97 failure); "saved-copied" copies it under a new name.
+			home := os.Getenv("CODEX_HOME")
+			if home == "" {
+				home = filepath.Join(os.Getenv("HOME"), ".codex")
+			}
+			dir := filepath.Join(home, "generated_images", session)
+			name := "exec-" + newUUID() + ".png"
+			_ = os.MkdirAll(dir, 0o755)
+			_ = os.WriteFile(filepath.Join(dir, name), []byte("\x89PNG\r\n\x1a\nfake image"), 0o644)
+			if os.Getenv("FAKE_IMAGE_STEP") == "saved" {
+				denied := "Generated exactly one image. Copying it to `.lazyagents/outbox/` was blocked by this chat's tool permissions."
+				text(denied)
+				result(false, denied)
+				return
+			}
+			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
+			_ = os.WriteFile(".lazyagents/outbox/portrait.png", []byte("\x89PNG\r\n\x1a\nfake image"), 0o644)
 		case "empty":
 		default:
 			_ = os.MkdirAll(".lazyagents/outbox", 0o755)
@@ -548,6 +573,10 @@ func main() {
 				args["references"] = strings.Split(refs, ",")
 			}
 			out := call("generate_image", args)
+			if os.Getenv("FAKE_HARNESS_FAIL_AFTER_IMAGE") != "" {
+				result(true, "turn crashed after asking for an image")
+				os.Exit(3)
+			}
 			reply = fmt.Sprintf("Chat reply (session=%s): making it (%v)", session, out["queued"])
 		} else if want, ok := strings.CutPrefix(prompt, "persona: "); ok {
 			// "persona: <name> | <avatar prompt>" proposes a persona with a picture.

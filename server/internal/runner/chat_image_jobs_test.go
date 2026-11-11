@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -212,6 +213,81 @@ func TestChatImageJobFailures(t *testing.T) {
 				t.Fatalf("atts %v job %+v run %+v", atts, job, run)
 			}
 		})
+	}
+}
+
+// LAZYAGENTS-97: Codex makes the image (into its own generated_images folder
+// for the thread) but its copy into the outbox is denied by the policy hook.
+// The runner collects the image from that folder itself, so it still shows
+// under the reply and the follow-up turn gets the file.
+func TestChatImageJobCollectsImageCodexSaved(t *testing.T) {
+	codexHome := t.TempDir()
+	t.Setenv("CODEX_HOME", codexHome)
+	e := setup(t)
+	chat, _ := e.imageChat(t, "saved", "image: a photo of you")
+	msgs := e.chatMsgs(chat.ID)
+	if len(msgs) != 3 || msgs[1].Role != "assistant" || msgs[2].Role != "assistant" {
+		t.Fatalf("messages %+v", msgs)
+	}
+	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
+	if err != nil || len(atts) != 1 || atts[0].ContentType != "image/png" || !strings.HasPrefix(atts[0].Filename, "exec-") {
+		t.Fatalf("attachments %+v %v", atts, err)
+	}
+	job := e.imageJob(e.chatRun(chat.ID).ID)
+	if job.State != "done" || job.FailureKind != nil || job.CodexSessionID == nil || len(job.OutboxFiles) != 1 || job.OutboxFiles[0] != atts[0].Filename ||
+		job.AttachmentID == nil || *job.AttachmentID != atts[0].ID {
+		t.Fatalf("job %+v", job)
+	}
+	// It came from the job's own thread folder, which Codex keeps.
+	if _, err := os.Stat(filepath.Join(codexHome, "generated_images", *job.CodexSessionID, atts[0].Filename)); err != nil {
+		t.Fatalf("source image: %v", err)
+	}
+	if follow := msgs[2].BodyMd; !strings.Contains(follow, "seen=1") || strings.Contains(follow, "Failed") {
+		t.Fatalf("follow-up:\n%s", follow)
+	}
+}
+
+// A step whose own copy did get through isn't collected again: the image
+// shows once, under the name the step gave it.
+func TestChatImageJobDoesNotCollectTwice(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	e := setup(t)
+	chat, _ := e.imageChat(t, "saved-copied", "image: a photo of you")
+	msgs := e.chatMsgs(chat.ID)
+	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
+	if err != nil || len(atts) != 1 || atts[0].Filename != "portrait.png" {
+		t.Fatalf("attachments %+v %v", atts, err)
+	}
+	if job := e.imageJob(e.chatRun(chat.ID).ID); job.State != "done" || len(job.OutboxFiles) != 1 || job.OutboxFiles[0] != "portrait.png" {
+		t.Fatalf("job %+v", job)
+	}
+}
+
+// A reply that fails after asking for an image never runs the image step and
+// gets no follow-up turn: the request still ends with a reason the person
+// sees, instead of staying queued with nothing to show for it.
+func TestChatImageJobFailedTurnReportsQueuedRequest(t *testing.T) {
+	t.Setenv("FAKE_HARNESS_FAIL_AFTER_IMAGE", "1")
+	e := setup(t)
+	chat, logPath := e.imageChat(t, "ok", "image: a fox")
+	const reason = "the reply failed before the image could be made"
+	run := e.chatRun(chat.ID)
+	job := e.imageJob(run.ID)
+	if job.State != "failed" || job.Error == nil || *job.Error != reason || job.FailureKind == nil || *job.FailureKind != "error" || job.FollowupTurnID != nil {
+		t.Fatalf("job %+v", job)
+	}
+	msgs := e.chatMsgs(chat.ID)
+	last := msgs[len(msgs)-1]
+	if last.Role != "system" || last.BodyMd != "Couldn't create the image: "+reason+"." || e.chat(chat.ID).State != "failed" {
+		t.Fatalf("messages %+v", msgs)
+	}
+	if turns := e.turns(run.ID); len(turns) != 1 {
+		t.Fatalf("turns %+v", turns)
+	}
+	for _, l := range readLog(t, logPath) {
+		if l["harness"] == "codex" {
+			t.Fatalf("an image step ran: %+v", l)
+		}
 	}
 }
 

@@ -22,11 +22,11 @@ const DefaultChatImageTimeout = 5 * time.Minute
 
 // imageStepPrompt wraps a job's prompt for the one-shot Codex step: this,
 // then any reference images' note, then "Request: " and the prompt.
-const imageStepPrompt = "Generate exactly one image for this request with your image generation tool, then copy the final file into .lazyagents/outbox/ with cp. Don't do anything else. "
+const imageStepPrompt = "Generate exactly one image for this request with your image generation tool, then stop: Vesper collects it from where your tool saved it. Don't copy it or do anything else. "
 
 // imageStepInstructions is the step's AGENTS.md: a stand-in for the chat
 // persona's instructions, which are meant for the chat's own model.
-const imageStepInstructions = `This is a one-shot image step inside a chat. Make the one image the request asks for with your image generation tool, copy the final file into .lazyagents/outbox/ (png, jpeg, webp or gif), and stop. Don't modify any other file, don't run other commands, and don't call Vesper tools.
+const imageStepInstructions = `This is a one-shot image step inside a chat. Make the one image the request asks for with your image generation tool and stop. Vesper collects the image from where your tool saved it, so don't copy or move it. Don't modify any file, don't run other commands, and don't call Vesper tools.
 Reference images may be attached to the request (files in .lazyagents/references/); the request says whom each shows. Use them as the likeness of those people wherever the image shows them, and don't copy them into the outbox.
 `
 
@@ -237,7 +237,9 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	start := time.Now()
 	// The Codex thread is the job's, never the run's resumable session: the
 	// policy hook lets the step copy from that thread's directory only.
+	thread := ""
 	res, _, code, waitErr := r.watchSession(ctx, c, proc, h.NewParser(spec.Model), sensitive, timeout, func(s string) {
+		thread = s
 		if err := q.SetChatImageJobSession(context.Background(), store.SetChatImageJobSessionParams{ID: job.ID, CodexSessionID: &s}); err != nil {
 			r.Log.Warn("record image step session", "job", job.ID, "err", err)
 		}
@@ -263,16 +265,32 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 		return finish("Codex has hit its usage limit")
 	}
 	failed := waitErr != nil || code != 0 || res.IsError
-	if !failed {
+	newInOutbox := func() error {
 		after, err := r.outboxNames(ctx, c)
 		if err != nil {
-			r.Log.Warn("read image outbox", "run", c.run.ID, "job", job.ID, "err", err)
-			return finish(imageOutboxUnreadable)
+			return err
 		}
 		for _, n := range after {
 			if !slices.Contains(before, n) {
 				produced = append(produced, n)
 			}
+		}
+		return nil
+	}
+	if !failed {
+		err := newInOutbox()
+		// The runner hands the image over itself when the step didn't: whether
+		// the step's own copy got past the policy hook depends on how its model
+		// phrased it. Only when the step left nothing, so no image shows twice.
+		if err == nil && len(produced) == 0 && thread != "" {
+			if cerr := collectGeneratedImages(ctx, r.Backend, wsID(c.run), thread); cerr != nil {
+				r.Log.Warn("collect generated images", "run", c.run.ID, "job", job.ID, "err", cerr)
+			}
+			err = newInOutbox()
+		}
+		if err != nil {
+			r.Log.Warn("read image outbox", "run", c.run.ID, "job", job.ID, "err", err)
+			return finish(imageOutboxUnreadable)
 		}
 	}
 	if failed || len(produced) == 0 {

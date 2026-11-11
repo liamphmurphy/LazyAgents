@@ -165,6 +165,105 @@ func TestOutboxScriptLinkedDirectories(t *testing.T) {
 	}
 }
 
+// Collecting a Codex thread's images takes only that thread's regular image
+// files, never through a link, without overwriting what the outbox holds.
+func TestCollectGeneratedImages(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	l := &Local{Dir: t.TempDir()}
+	ctx := context.Background()
+	if err := l.EnsureWorkspace(ctx, "run"); err != nil {
+		t.Fatal(err)
+	}
+	write := func(p, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gen := filepath.Join(home, "generated_images")
+	thread := filepath.Join(gen, "thread-1")
+	secret := filepath.Join(t.TempDir(), "secret.png")
+	write(secret, "secret")
+	write(filepath.Join(thread, "ig_1.png"), "IMG")
+	write(filepath.Join(thread, "UPPER.JPG"), "JPG")
+	write(filepath.Join(thread, "notes.txt"), "txt")
+	write(filepath.Join(thread, ".hidden.png"), "hidden")
+	write(filepath.Join(thread, "-flag.png"), "flag")
+	write(filepath.Join(thread, "kept.png"), "new")
+	write(filepath.Join(gen, "thread-2", "other.png"), "other thread")
+	if err := os.Symlink(secret, filepath.Join(thread, "link.png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(thread, "sub.png"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(l.WorkspaceDir("run"), outboxDir, "kept.png"), "old")
+
+	if err := collectGeneratedImages(ctx, l, "run", "thread-1"); err != nil {
+		t.Fatal(err)
+	}
+	files, _, err := l.ReadOutbox(ctx, "run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(files); got != "UPPER.JPG=JPG,ig_1.png=IMG,kept.png=old" {
+		t.Fatalf("outbox %s", got)
+	}
+
+	// A thread folder that is a link, or a missing one, yields nothing.
+	if err := os.Symlink(filepath.Join(gen, "thread-2"), filepath.Join(gen, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"linked", "missing"} {
+		if err := collectGeneratedImages(ctx, l, "run", id); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+	if files, _, _ := l.ReadOutbox(ctx, "run"); len(files) != 3 {
+		t.Fatalf("collected through %s", names(files))
+	}
+	// Ids that could name another directory are refused before anything runs.
+	for _, id := range []string{"", ".", "..", "../thread-2", "a/b", "-r", "$(id)"} {
+		if err := collectGeneratedImages(ctx, l, "run", id); err == nil {
+			t.Fatalf("accepted thread id %q", id)
+		}
+	}
+}
+
+// A linked outbox is not written through.
+func TestCollectGeneratedImagesLinkedOutbox(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "generated_images", "t1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "generated_images", "t1", "a.png"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	l := &Local{Dir: t.TempDir()}
+	if err := l.EnsureWorkspace(context.Background(), "run"); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	ws := l.WorkspaceDir("run")
+	if err := os.MkdirAll(filepath.Join(ws, ".lazyagents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(ws, outboxDir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := collectGeneratedImages(context.Background(), l, "run", "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("wrote through the link: %v", entries)
+	}
+}
+
 type recordingBlobs struct{ deleted []string }
 
 func (r *recordingBlobs) Put(context.Context, string, string, io.Reader, int64, string) error {

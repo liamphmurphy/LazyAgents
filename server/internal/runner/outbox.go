@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,6 +132,47 @@ done
 [ "$#" -gt 0 ] || exit 0
 exec tar -cf - -- "$@"
 `
+
+// collectScript copies the images a Codex thread saved ($1 is the thread id)
+// from Codex's own folder into the outbox, under the limits ReadOutbox applies:
+// regular image files only, no links followed at either end, nothing
+// overwritten. Codex saves every image it makes to
+// $CODEX_HOME/generated_images/<thread id>/ (codex-cli 0.167.0), so this hands
+// the image over without the step's model having to phrase a copy the policy
+// hook accepts.
+var collectScript = `thread=$1
+case "$thread" in ""|.*|*/*) exit 2 ;; esac
+src=${CODEX_HOME:-$HOME/.codex}/generated_images
+if [ -L "$src" ] || [ ! -d "$src" ] || [ -L "$src/$thread" ] || [ ! -d "$src/$thread" ]; then exit 0; fi
+if [ -L .lazyagents ] || [ -L ` + outboxDir + ` ]; then exit 0; fi
+mkdir -p ` + outboxDir + ` || exit 1
+n=0
+for f in "$src/$thread"/*; do
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  name=${f##*/}
+  case "$name" in .*|-*) continue ;; esac
+  case "$(printf '%s' "$name" | tr 'A-Z' 'a-z')" in *.png|*.jpg|*.jpeg|*.webp|*.gif) ;; *) continue ;; esac
+  [ "$n" -lt ` + strconv.Itoa(OutboxMaxFiles) + ` ] || break
+  [ "$(wc -c < "$f")" -le ` + strconv.Itoa(OutboxMaxFileBytes) + ` ] || continue
+  [ -e "` + outboxDir + `/$name" ] && continue
+  cp -- "$f" "` + outboxDir + `/$name" || exit 1
+  n=$((n + 1))
+done
+`
+
+// codexThreadID matches what Codex reports as a thread id, so it can name a
+// directory without escaping it.
+var codexThreadID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// collectGeneratedImages runs collectScript in the run's workspace, through
+// the backend so it sees the same home the step's Codex wrote to.
+func collectGeneratedImages(ctx context.Context, b Backend, runID, thread string) error {
+	if !codexThreadID.MatchString(thread) {
+		return fmt.Errorf("runner: bad Codex thread id %q", thread)
+	}
+	_, _, err := outboxExec(ctx, b, runID, "sh", "-c", collectScript, "sh", thread)
+	return err
+}
 
 // parseOutboxTar reads the regular files directly named in the script's tar.
 func parseOutboxTar(r io.Reader) ([]OutboxFile, error) {
