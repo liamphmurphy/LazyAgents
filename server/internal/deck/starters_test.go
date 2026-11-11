@@ -119,3 +119,25 @@ func TestFromStarter(t *testing.T) {
 		t.Fatal("unknown starter accepted")
 	}
 }
+
+// New decks use the public research starter; the retired personal preset
+// must no longer be offered or accepted for creation.
+func TestResearchReplacesSessionRecap(t *testing.T) {
+	if _, ok := StarterNamed("dnd-recap"); ok {
+		t.Fatal("retired session recap is still offered")
+	}
+	if _, err := FromStarter("dnd-recap", ThemeNamed("light"), ""); err == nil {
+		t.Fatal("retired session recap accepted for a new deck")
+	}
+	st, ok := StarterNamed("research-findings")
+	if !ok || st.Name != "Research findings" {
+		t.Fatalf("research starter missing or misnamed: %+v", st)
+	}
+	d, err := FromStarter(st.Key, ThemeNamed("light"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Slides[0].Elements[0].Paragraphs[0].Runs[0].Text; got != "Research findings" {
+		t.Fatalf("research cover title = %q", got)
+	}
+}

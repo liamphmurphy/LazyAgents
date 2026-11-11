@@ -14166,7 +14166,7 @@ export interface operations {
                      * @description Start from this starter deck instead of one blank title slide
                      * @enum {string}
                      */
-                    starter?: "project-update" | "pitch" | "retro" | "teaching" | "dnd-recap";
+                    starter?: "project-update" | "pitch" | "retro" | "teaching" | "research-findings";
                 };
             };
         };

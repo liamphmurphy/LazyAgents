@@ -287,12 +287,12 @@ func TestDeckFromStarter(t *testing.T) {
 		}
 	}
 
-	d := e.want("POST", "/slides", map[string]any{"starter": "retro", "theme": "ocean"}, http.StatusCreated)
-	if d["title"] != "Retro" {
+	d := e.want("POST", "/slides", map[string]any{"starter": "research-findings", "theme": "ocean"}, http.StatusCreated)
+	if d["title"] != "Research findings" {
 		t.Fatalf("created %v", d)
 	}
 	body, seq := e.deckBody(d["chat_id"].(string), d["id"].(string))
-	fixture, _ := deck.StarterDeck("retro")
+	fixture, _ := deck.StarterDeck("research-findings")
 	if seq != 1 || len(body["slides"].([]any)) != len(fixture.Slides) || body["theme"].(map[string]any)["name"] != "Ocean" {
 		t.Fatalf("deck %d %v", seq, body)
 	}
@@ -305,6 +305,7 @@ func TestDeckFromStarter(t *testing.T) {
 		t.Fatalf("titled %v", titled)
 	}
 	e.want("POST", "/slides", map[string]any{"starter": "nope"}, http.StatusUnprocessableEntity)
+	e.want("POST", "/slides", map[string]any{"starter": "dnd-recap"}, http.StatusUnprocessableEntity)
 }
 
 // Someone else's deck, and a canvas that isn't a deck, are 404 on every

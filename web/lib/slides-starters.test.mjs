@@ -16,7 +16,7 @@ const frames = (els) => Object.fromEntries(els.filter((e) => e.placeholder).map(
 const layouts = new Set(LAYOUTS.map((l) => l.id));
 
 test("there are five starter decks", () => {
-  assert.deepEqual(starters.map(([f]) => f).sort(), ["dnd-recap.json", "pitch.json", "project-update.json", "retro.json", "teaching.json"]);
+  assert.deepEqual(starters.map(([f]) => f).sort(), ["pitch.json", "project-update.json", "research-findings.json", "retro.json", "teaching.json"]);
 });
 
 for (const [file, deck] of starters) {
