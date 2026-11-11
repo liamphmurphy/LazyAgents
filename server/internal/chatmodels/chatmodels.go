@@ -128,6 +128,19 @@ func (c Catalog) list(ctx context.Context, q *store.Queries, ws uuid.UUID, wait 
 	return out, nil
 }
 
+// Check runs discovery for one harness, waiting like ListWaiting. It is the
+// Welcome Wizard's "Verify": false for a harness chats don't support.
+func (c Catalog) Check(ctx context.Context, q *store.Queries, ws uuid.UUID, name string) (Harness, bool, error) {
+	if !slices.Contains(chatHarnesses, name) {
+		return Harness{}, false, nil
+	}
+	h, err := c.harness(ctx, q, ws, name, true)
+	if err == nil {
+		rememberOffered(ws, []Harness{h})
+	}
+	return h, true, err
+}
+
 func (c Catalog) harness(ctx context.Context, q *store.Queries, ws uuid.UUID, name string, wait bool) (Harness, error) {
 	h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
 	if c.RequireKey {
