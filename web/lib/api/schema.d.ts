@@ -4151,8 +4151,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Save one repository, or all repositories under an account or organization. A repository name ending in /* is saved as an owner source. */
         RepositorySource: {
-            /** @enum {string} */
+            /**
+             * @description organization is the legacy wire name for a GitHub owner, including personal accounts
+             * @enum {string}
+             */
             kind: "repository" | "organization";
             name: string;
         };

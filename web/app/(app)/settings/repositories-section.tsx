@@ -22,15 +22,15 @@ export function RepositorySourcesSection() {
   }
   const error = save.error ?? remove.error ?? sources.error;
   return <div className="flex flex-col gap-3">
-    <p className="text-sm text-fg-secondary">Saved repositories and organizations help every coding persona find repositories by name. Access comes from your GitHub credential.</p>
+    <p className="text-sm text-fg-secondary">Saved repositories and GitHub owners help every coding persona find repositories by name. Access comes from your GitHub credential. Use owner/* to include an account’s or organization’s repositories.</p>
     <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); save.mutate({ kind, name }, { onSuccess: () => setName("") }); }}>
-      <select aria-label="Repository source type" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className="rounded border border-border bg-surface p-2 text-sm text-fg"><option value="repository">Repository</option><option value="organization">Organization</option></select>
-      <input aria-label="Repository or organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "repository" ? "owner/repo or GitHub URL" : "organization name"} className="min-w-60 flex-1 rounded border border-border bg-surface p-2 text-sm text-fg" />
+      <select aria-label="Repository source type" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className="rounded border border-border bg-surface p-2 text-sm text-fg"><option value="repository">Repository or wildcard</option><option value="organization">Account or organization</option></select>
+      <input aria-label="Repository, account or organization" value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "repository" ? "owner/repo or https://github.com/owner/*" : "account or organization name"} className="min-w-60 flex-1 rounded border border-border bg-surface p-2 text-sm text-fg" />
       <button type="submit" disabled={!name.trim() || save.isPending} className="rounded bg-accent px-3 py-2 text-sm text-white disabled:opacity-40">Save source</button>
     </form>
     {(error || problem) && <p role="alert" className="text-sm text-pill-blocked-fg">{error?.message ?? problem}</p>}
     {sources.isPending && <p className="text-sm text-fg-secondary">Loading saved sources…</p>}
-    <ul className="divide-y divide-border">{sources.data?.map((source) => <li key={`${source.kind}/${source.name}`} className="flex items-center gap-3 py-2 text-sm"><span className="text-fg-tertiary">{source.kind}</span><span className="flex-1 truncate text-fg">{source.name}</span><button type="button" aria-label={`Remove ${source.name}`} disabled={remove.isPending} onClick={() => remove.mutate(source)} className="text-fg-secondary hover:text-fg">Remove</button></li>)}</ul>
-    <button type="button" disabled={refreshing} onClick={refresh} className="self-start text-sm text-accent">{refreshing ? "Refreshing organizations…" : "Refresh organization repositories"}</button>
+    <ul className="divide-y divide-border">{sources.data?.map((source) => <li key={`${source.kind}/${source.name}`} className="flex items-center gap-3 py-2 text-sm"><span className="text-fg-tertiary">{source.kind === "organization" ? "All repositories" : "Repository"}</span><span className="flex-1 truncate text-fg">{source.name}{source.kind === "organization" && "/*"}</span><button type="button" aria-label={`Remove ${source.name}`} disabled={remove.isPending} onClick={() => remove.mutate(source)} className="text-fg-secondary hover:text-fg">Remove</button></li>)}</ul>
+    <button type="button" disabled={refreshing} onClick={refresh} className="self-start text-sm text-accent">{refreshing ? "Refreshing owners…" : "Refresh owner repositories"}</button>
   </div>;
 }

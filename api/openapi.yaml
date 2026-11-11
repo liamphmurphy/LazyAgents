@@ -5057,8 +5057,9 @@ components:
     RepositorySource:
       type: object
       required: [kind, name]
+      description: "Save one repository, or all repositories under an account or organization. A repository name ending in /* is saved as an owner source."
       properties:
-        kind: { type: string, enum: [repository, organization] }
+        kind: { type: string, enum: [repository, organization], description: "organization is the legacy wire name for a GitHub owner, including personal accounts" }
         name: { type: string }
     RepositoryEntry:
       type: object

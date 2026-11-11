@@ -4,9 +4,15 @@ A persona's **Write code** capability enables repository work. Its saved
 repository list no longer authorizes or revokes access: GitHub credentials
 remain the authority on which repositories can be read or pushed.
 
-Settings → **Repositories & organizations** manages a shared discovery
+Settings → **Repositories & GitHub owners** manages a shared discovery
 catalogue for the signed-in person. Save a repository as `owner/name` or a
-GitHub URL, or save an organization. Organization lists are paginated and
+GitHub URL, or save an account or organization as `owner/*` or
+`https://github.com/owner/*`. This owner wildcard includes every repository
+visible to the credential under that owner, including private personal
+repositories. Public user listings are combined with the authenticated
+repository listing so private repositories are not silently omitted. Only
+the complete owner wildcard is supported, not partial names such as
+`owner/app*`. Owner lists are paginated and
 cached for five minutes, scoped to the person and credential. Refresh clears
 that delay. Only repositories visible to the credential are discovered.
 
@@ -46,3 +52,8 @@ first-repository default remain compatible with existing clients; new source
 management lives in the shared catalogue. Removing a discovery source neither
 detaches a checkout nor disables coding. Turn off **Write code** to revoke the
 persona's coding capability.
+
+The source API keeps the existing `organization` kind for account and
+organization wildcards, so existing saved sources need no database migration.
+Both `repository` inputs ending in `/*` and explicit owner-source inputs are
+normalized to the same saved owner.

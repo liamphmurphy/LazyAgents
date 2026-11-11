@@ -13,8 +13,8 @@ import (
 )
 
 type SearchRepositoriesIn struct {
-	Query   string `json:"query,omitempty" jsonschema:"Filter saved repositories and repositories under saved organizations"`
-	Refresh bool   `json:"refresh,omitempty" jsonschema:"Refresh organization repository lists"`
+	Query   string `json:"query,omitempty" jsonschema:"Filter saved repositories and repositories under saved GitHub accounts or organizations"`
+	Refresh bool   `json:"refresh,omitempty" jsonschema:"Refresh saved owner repository lists"`
 }
 
 func searchRepositories(ctx context.Context, d Deps, c agents.Caller, in SearchRepositoriesIn) (any, error) {
