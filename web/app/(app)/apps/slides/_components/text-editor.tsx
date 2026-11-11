@@ -2,13 +2,17 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { FAMILY } from "@/lib/slides/fonts";
-import { BULLET_INDENT, INSET, LINE } from "@/lib/slides/layout";
+import { LIMITS } from "@/lib/slides/edit";
+import { BULLET_INDENT, INSET, lineHeight } from "@/lib/slides/layout";
 import { resolveColor, slotOf, THEME_COLORS, type ColorRef, type FontRef, type Paragraph, type Run, type TextBox, type Theme } from "@/lib/slides/schema";
 
 export type TextEditorHandle = {
-  /** Applies a mark to the selection (bold, italic, underline) or a colour. */
-  format: (cmd: "bold" | "italic" | "underline") => void;
+  /** Applies a mark to the selection (bold, italic, underline, strike), a colour or a highlight. */
+  format: (cmd: "bold" | "italic" | "underline" | "strike") => void;
   color: (c: ColorRef) => void;
+  highlight: (c: ColorRef | undefined) => void;
+  /** Moves the bulleted paragraphs in the selection in or out a level; false if there are none. */
+  indent: (delta: 1 | -1) => boolean;
   /** The text as edited so far. */
   read: () => TextBox["paragraphs"];
 };
@@ -19,17 +23,16 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 function toHtml(theme: Theme, paragraphs: Paragraph[]): string {
   return paragraphs
     .map((p) => {
-      const maxSize = Math.max(...p.runs.map((r) => r.size));
       const level = p.level ?? 0;
-      const style = [`text-align:${p.align ?? "left"}`, `line-height:${maxSize * LINE}px`, `margin-top:${p.spaceBefore ?? 0}px`, p.bullet ? `padding-left:${BULLET_INDENT * (level + 1)}px` : "", `--bullet-x:${BULLET_INDENT * level}px`, `--bullet-size:${p.runs[0].size}px`].filter(Boolean).join(";");
+      const style = [`text-align:${p.align ?? "left"}`, `line-height:${lineHeight(p)}px`, `margin-top:${p.spaceBefore ?? 0}px`, p.bullet ? `padding-left:${BULLET_INDENT * (level + 1)}px` : "", `--bullet-x:${BULLET_INDENT * level}px`, `--bullet-size:${p.runs[0].size}px`].filter(Boolean).join(";");
       const runs = p.runs
         .map((r) => {
           const slot = slotOf(theme, r.font);
-          const css = [`font-family:'${FAMILY[slot]}'`, `font-size:${r.size}px`, `font-weight:${r.bold ? 700 : 400}`, `font-style:${r.italic ? "italic" : "normal"}`, r.underline ? "text-decoration:underline" : "", `color:${resolveColor(theme, r.color)}`].filter(Boolean).join(";");
-          return `<span data-font="${r.font ?? "body"}" data-color="${esc(r.color ?? "text")}" style="${css}">${r.text ? esc(r.text) : "<br>"}</span>`;
+          const css = [`font-family:'${FAMILY[slot]}'`, `font-size:${r.size}px`, `font-weight:${r.bold ? 700 : 400}`, `font-style:${r.italic ? "italic" : "normal"}`, r.underline || r.strike ? `text-decoration:${[r.underline && "underline", r.strike && "line-through"].filter(Boolean).join(" ")}` : "", `color:${resolveColor(theme, r.color)}`, r.highlight ? `background-color:${resolveColor(theme, r.highlight)}` : ""].filter(Boolean).join(";");
+          return `<span data-font="${r.font ?? "body"}" data-color="${esc(r.color ?? "text")}"${r.highlight ? ` data-highlight="${esc(r.highlight)}"` : ""} style="${css}">${r.text ? esc(r.text) : "<br>"}</span>`;
         })
         .join("");
-      return `<div data-bullet="${p.bullet ?? ""}" data-level="${level}" data-space="${p.spaceBefore ?? 0}" style="${style}">${runs}</div>`;
+      return `<div data-bullet="${p.bullet ?? ""}" data-level="${level}" data-space="${p.spaceBefore ?? 0}" data-ls="${p.lineSpacing ?? 1}" style="${style}">${runs}</div>`;
     })
     .join("");
 }
@@ -62,27 +65,39 @@ function fromDom(root: HTMLElement, theme: Theme, fallback: Run): Paragraph[] {
       const el = t.parentElement!;
       const cs = getComputedStyle(el);
       let underline = false;
+      let strike = false;
       let font: FontRef | undefined;
       let token: string | undefined;
+      let hlToken: string | undefined;
+      let bg: string | undefined;
       for (let a: HTMLElement | null = el; a && a !== b; a = a.parentElement) {
-        if (getComputedStyle(a).textDecorationLine.includes("underline") || a.tagName === "U") underline = true;
+        const as = getComputedStyle(a);
+        if (as.textDecorationLine.includes("underline") || a.tagName === "U") underline = true;
+        if (as.textDecorationLine.includes("line-through") || a.tagName === "S" || a.tagName === "STRIKE") strike = true;
         font ??= (a.dataset.font as FontRef | undefined) ?? undefined;
         token ??= a.dataset.color;
+        hlToken ??= a.dataset.highlight;
+        // The innermost painted background is the one that shows.
+        if (bg === undefined && !/^(transparent|rgba\(.*,\s*0\))$/.test(as.backgroundColor)) bg = hex(as.backgroundColor);
       }
       const color = hex(cs.color);
       const tokenColor = token && (THEME_COLORS as string[]).includes(token) ? resolveColor(theme, token) : token;
+      const hlColor = hlToken && (THEME_COLORS as string[]).includes(hlToken) ? resolveColor(theme, hlToken) : hlToken;
+      const highlight = bg && (hlToken && hlColor?.toUpperCase() === bg ? hlToken : bg);
       const run: Run = {
         text: (t.textContent ?? "").replace(/[\n\r ]/g, (c) => (c === " " ? " " : "")),
         size: Math.round(parseFloat(cs.fontSize)) || fallback.size,
         ...(parseInt(cs.fontWeight, 10) >= 600 ? { bold: true } : {}),
         ...(cs.fontStyle === "italic" ? { italic: true } : {}),
         ...(underline ? { underline: true } : {}),
+        ...(strike ? { strike: true } : {}),
         color: token && tokenColor?.toUpperCase() === color ? token : color,
+        ...(highlight ? { highlight } : {}),
         font: font ?? fallback.font,
       };
       first ??= run;
       const prev = runs.at(-1);
-      if (prev && prev.size === run.size && !!prev.bold === !!run.bold && !!prev.italic === !!run.italic && !!prev.underline === !!run.underline && prev.color === run.color && prev.font === run.font) prev.text += run.text;
+      if (prev && prev.size === run.size && !!prev.bold === !!run.bold && !!prev.italic === !!run.italic && !!prev.underline === !!run.underline && !!prev.strike === !!run.strike && prev.highlight === run.highlight && prev.color === run.color && prev.font === run.font) prev.text += run.text;
       else runs.push(run);
     }
     if (!runs.length || runs.every((r) => !r.text)) runs.splice(0, runs.length, { ...(first ?? fallback), text: "" });
@@ -90,9 +105,35 @@ function fromDom(root: HTMLElement, theme: Theme, fallback: Run): Paragraph[] {
     const bullet = b.dataset.bullet as Paragraph["bullet"] | "";
     const align = b.style.textAlign as Paragraph["align"];
     const space = Number(b.dataset.space ?? 0);
-    out.push({ runs, ...(align && align !== "left" ? { align } : {}), ...(bullet ? { bullet, level } : {}), ...(space ? { spaceBefore: space } : {}) });
+    const ls = Number(b.dataset.ls ?? 1);
+    out.push({ runs, ...(align && align !== "left" ? { align } : {}), ...(bullet ? { bullet, level } : {}), ...(space ? { spaceBefore: space } : {}), ...(ls && ls !== 1 ? { lineSpacing: ls } : {}) });
   }
   return out.length ? out : [{ runs: [{ ...fallback, text: "" }] }];
+}
+
+/** The paragraph divs the selection touches. */
+function selectedBlocks(root: HTMLElement): HTMLElement[] {
+  const sel = getSelection();
+  if (!sel?.rangeCount) return [];
+  const blocks = [...root.children].filter((n): n is HTMLElement => n instanceof HTMLElement);
+  const hit = blocks.filter((b) => sel.containsNode(b, true));
+  if (hit.length) return hit;
+  // A caret in an empty paragraph may sit on the root itself.
+  const at = sel.anchorNode instanceof HTMLElement ? sel.anchorNode : sel.anchorNode?.parentElement;
+  const b = at?.closest<HTMLElement>("[data-bullet]");
+  return b && root.contains(b) ? [b] : [];
+}
+
+/** Changes the level of the bulleted paragraphs among blocks, as the layout would draw them. */
+function shiftBlocks(blocks: HTMLElement[], delta: number): boolean {
+  const bulleted = blocks.filter((b) => b.dataset.bullet);
+  for (const b of bulleted) {
+    const level = Math.max(LIMITS.level.min, Math.min(LIMITS.level.max, Number(b.dataset.level ?? 0) + delta));
+    b.dataset.level = String(level);
+    b.style.paddingLeft = `${BULLET_INDENT * (level + 1)}px`;
+    b.style.setProperty("--bullet-x", `${BULLET_INDENT * level}px`);
+  }
+  return bulleted.length > 0;
 }
 
 /**
@@ -111,7 +152,7 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
       onCommit(fromDom(el.current, theme, fallback.current));
     };
     useImperativeHandle(ref, () => ({
-      format: (cmd) => document.execCommand(cmd),
+      format: (cmd) => document.execCommand(cmd === "strike" ? "strikeThrough" : cmd),
       color: (c) => {
         document.execCommand("styleWithCSS", false, "true");
         document.execCommand("foreColor", false, resolveColor(theme, c));
@@ -119,6 +160,14 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
         const sel = getSelection();
         if (sel?.rangeCount) for (const s of el.current?.querySelectorAll<HTMLElement>("span[style*='color']") ?? []) if (sel.containsNode(s, true)) s.dataset.color = c;
       },
+      highlight: (c) => {
+        document.execCommand("styleWithCSS", false, "true");
+        document.execCommand("hiliteColor", false, c ? resolveColor(theme, c) : "transparent");
+        // Tag what was just highlighted so a theme colour stays a theme colour.
+        const sel = getSelection();
+        if (c && sel?.rangeCount) for (const s of el.current?.querySelectorAll<HTMLElement>("span[style*='background']") ?? []) if (sel.containsNode(s, true)) s.dataset.highlight = c;
+      },
+      indent: (delta) => !!el.current && shiftBlocks(selectedBlocks(el.current), delta),
       read: () => (el.current ? fromDom(el.current, theme, fallback.current) : box.paragraphs),
     }));
     useLayoutEffect(() => {
@@ -166,9 +215,16 @@ export const TextEditor = forwardRef<TextEditorHandle, { theme: Theme; box: Text
           }}
           onKeyDown={(e) => {
             e.stopPropagation();
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "x") {
+              e.preventDefault();
+              document.execCommand("strikeThrough");
+            }
             if (e.key === "Escape") {
               e.preventDefault();
               el.current?.blur();
+            } else if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey && el.current) {
+              // In bulleted text Tab indents and Shift+Tab outdents; elsewhere it moves focus as usual.
+              if (shiftBlocks(selectedBlocks(el.current), e.shiftKey ? -1 : 1)) e.preventDefault();
             }
           }}
         />

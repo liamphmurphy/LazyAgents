@@ -10,11 +10,13 @@ import { uploadDeckAsset, useDeckRef } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { reviewBase } from "@/lib/doc-review";
 import { align, distribute, duplicate, reorder, unionBox, type AlignOp, type ZOrder } from "@/lib/slides/arrange";
+import { pushRecent, shiftLevel, toggleArrow, withRadius, withStrokeWidth } from "@/lib/slides/edit";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
 import { H, THEMES, W, encodeDeck, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
@@ -63,9 +65,12 @@ function formatElement(e: Element, f: TextFormat, markOn?: boolean): Element {
   if (f.kind === "size") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, size: f.size }));
   if (f.kind === "font") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, font: f.font }));
   if (f.kind === "color") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, color: f.color }));
+  if (f.kind === "highlight") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, highlight: f.highlight }));
+  if (f.kind === "lineSpacing") paragraphs = paragraphs.map((p) => ({ ...p, lineSpacing: f.lineSpacing === 1 ? undefined : f.lineSpacing }));
   if (f.kind === "align") paragraphs = paragraphs.map((p) => ({ ...p, align: f.align === "left" ? undefined : f.align }));
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
-  return withText(e, paragraphs);
+  if (f.kind === "indent") paragraphs = shiftLevel(paragraphs, f.delta);
+  return paragraphs === box.paragraphs ? e : withText(e, paragraphs);
 }
 
 function withText(e: Element, paragraphs: Paragraph[]): Element {
@@ -99,6 +104,29 @@ export function DeckScreen({ id }: { id: string }) {
   const send = useSendChatMessage(chatId);
   const assetUrl = useCallback((a: string) => assetHref(id, a), [id]);
   const [chatOpen, setChatOpen] = useState(true);
+  // Custom colours used in this deck, newest first: editor state, kept per deck in this browser.
+  const recentKey = `slides.recentColors.${id}`;
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(recentKey) ?? "[]");
+      // Reading browser storage once the page is in the browser.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(v)) setRecentColors(v.filter((c) => typeof c === "string").reduceRight<string[]>((r, c) => pushRecent(r, c), []));
+    } catch {
+      // Unreadable storage only loses the recent colours.
+    }
+  }, [recentKey]);
+  const rememberColor = (c: string) =>
+    setRecentColors((r) => {
+      const next = pushRecent(r, c);
+      try {
+        localStorage.setItem(recentKey, JSON.stringify(next));
+      } catch {
+        // Storage full or blocked: the colours stay for this visit.
+      }
+      return next;
+    });
 
   // ---- The working copy, what was last saved, and history.
   const [deck, setDeckState] = useState<Deck | null>(null);
@@ -443,6 +471,8 @@ export function DeckScreen({ id }: { id: string }) {
       if (editing && editorRef.current && selectedEl) {
         if (f.kind === "mark") return editorRef.current.format(f.mark);
         if (f.kind === "color") return editorRef.current.color(f.color);
+        if (f.kind === "highlight") return editorRef.current.highlight(f.highlight);
+        if (f.kind === "indent") return editorRef.current.indent(f.delta);
         const paragraphs = editorRef.current.read();
         setEditing(undefined);
         update(mapElement(selectedEl.id, (e) => formatElement(withText(e, paragraphs), f)));
@@ -451,10 +481,20 @@ export function DeckScreen({ id }: { id: string }) {
       // A mark goes on everywhere unless every selected text already has it.
       const texts = selection.flatMap((e) => textOf(e)?.paragraphs ?? []).flatMap((p) => p.runs);
       const markOn = f.kind === "mark" ? !texts.every((r) => r[f.mark]) : undefined;
+      if (selection.every((e) => formatElement(e, f, markOn) === e)) return; // nothing to change: no undo step
       update(mapElements(selIds, (e) => formatElement(e, f, markOn)));
     },
     setFill: (col) => update(mapElements(selIds, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
     setStroke: (col) => update(mapElements(selIds, (e) => (e.type === "shape" ? { ...e, stroke: col, strokeWidth: col ? (e.strokeWidth || 4) : undefined } : e.type === "line" && col ? { ...e, stroke: col } : e))),
+    // One update, so the whole selection restyles as one undo step.
+    applyStyle: (sid) => {
+      if (selIds.size) update(mapElements(selIds, (e) => applyStyle(e, sid)));
+    },
+    setStrokeWidth: (w) => update(mapElements(selIds, (e) => withStrokeWidth(e, w))),
+    setRadius: (r) => update(mapElements(selIds, (e) => withRadius(e, r))),
+    toggleArrow: (end) => update(mapElements(selIds, (e) => toggleArrow(e, end))),
+    recentColors,
+    rememberColor,
     remove: removeSelected,
     order: arrange.order,
     duplicate: arrange.duplicate,
@@ -515,6 +555,9 @@ export function DeckScreen({ id }: { id: string }) {
     } else if (e.key === "Enter" && selectedEl && textOf(selectedEl)) {
       e.preventDefault();
       setEditing(selectedEl.id);
+    } else if (mod && e.shiftKey && e.key.toLowerCase() === "x" && selection.some((x) => textOf(x))) {
+      e.preventDefault();
+      tools.format({ kind: "mark", mark: "strike" });
     } else if (mod && e.key.toLowerCase() === "d") {
       e.preventDefault();
       arrange.duplicate();

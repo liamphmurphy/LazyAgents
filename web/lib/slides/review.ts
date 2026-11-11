@@ -11,7 +11,7 @@ import { slideTitle, textOf, type Deck, type Element, type Slide } from "./schem
  * server normalises what it stores, so comparing raw JSON would see changes
  * that aren't there.
  */
-const COLOR_KEYS = new Set(["color", "fill", "stroke"]);
+const COLOR_KEYS = new Set(["color", "fill", "stroke", "highlight"]);
 
 function canon(v: unknown, colour = false): unknown {
   if (Array.isArray(v)) return v.map((x) => canon(x));
@@ -26,6 +26,7 @@ function canon(v: unknown, colour = false): unknown {
       if (x === undefined || x === null || x === false || x === "") continue;
       if (k === "align" && x === "left") continue;
       if ((k === "level" || k === "spaceBefore" || k === "rotation" || k === "strokeWidth" || k === "radius") && x === 0) continue;
+      if (k === "lineSpacing" && (x === 0 || x === 1)) continue;
       if (k === "crop" && x && typeof x === "object" && Object.values(x).every((n) => n === 0)) continue;
       out[k] = canon(x, COLOR_KEYS.has(k) || (k !== "text" && colourMap(o)));
     }

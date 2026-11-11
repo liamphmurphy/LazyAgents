@@ -3,6 +3,7 @@ package deck
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 )
 
@@ -187,9 +188,25 @@ func (d *Deck) apply(op Op) error {
 		if i < 0 {
 			return fmt.Errorf("no element %s", op.ID)
 		}
+		// {"style": id} applies a style preset, after any other fields.
+		fields, style := op.Value, ""
+		if v, ok := op.Value["style"]; ok {
+			s, isStr := v.(string)
+			if !isStr {
+				return fmt.Errorf("style must be a style name")
+			}
+			style = s
+			fields = maps.Clone(op.Value)
+			delete(fields, "style")
+		}
 		var e Element
-		if err := merge(d.Slides[i].Elements[j], op.Value, &e); err != nil {
+		if err := merge(d.Slides[i].Elements[j], fields, &e); err != nil {
 			return err
+		}
+		if style != "" {
+			if err := ApplyStyle(&e, style); err != nil {
+				return err
+			}
 		}
 		d.Slides[i].Elements[j] = e
 	case "remove_element":
