@@ -80,6 +80,11 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, api.Internal, "internal error", "")
 		return
 	}
+	setSessionCookie(w, r, token)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.SessionCookie,
 		Value:    token,
@@ -91,5 +96,4 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

@@ -117,7 +117,10 @@ services:
   caddy:
     image: caddy:2-alpine
     ports:
-      - "${LAZYAGENTS_PORT:-8080}:8080"
+      # Loopback only by default: until the first browser sets a password,
+      # whoever reaches the port can claim the install. LAZYAGENTS_BIND=0.0.0.0
+      # opens it to the network.
+      - "${LAZYAGENTS_BIND:-127.0.0.1}:${LAZYAGENTS_PORT:-8080}:8080"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy:/data

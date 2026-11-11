@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/google/uuid"
@@ -228,10 +229,27 @@ func signInLink(cfg config.Config, code string) string {
 	return cfg.WebURL + httpapi.SignInPath + "?code=" + code
 }
 
-// logFirstSignInLink prints a sign-in link while no browser is signed in, so
-// a fresh install can be opened straight from the API's output. The link is
-// one-time and short-lived; `vesper sign-in-link` makes more.
+// logFirstSignInLink tells a fresh install's owner where to start: an
+// unclaimed install is set up in the browser, and a claimed one that has no
+// password and no signed-in browser can only be opened with a sign-in link.
+// The link is one-time and short-lived; `vesper sign-in-link` makes more.
 func logFirstSignInLink(ctx context.Context, q *store.Queries, cfg config.Config, log *slog.Logger) error {
+	if cfg.NoSignIn {
+		return nil
+	}
+	u, err := q.GetLocalUser(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if u.ClaimedAt == nil {
+		log.Info("Vesper isn't set up yet: open it in a browser to choose your username and password", "url", cfg.WebURL)
+		return nil
+	}
+	if u.PasswordSetAt != nil {
+		return nil
+	}
 	n, err := q.CountBrowserSessions(ctx)
 	if err != nil || n > 0 {
 		return err

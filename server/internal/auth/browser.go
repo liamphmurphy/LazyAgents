@@ -64,6 +64,12 @@ func RedeemSignInCode(ctx context.Context, q *store.Queries, code string) (strin
 	} else if err != nil {
 		return "", err
 	}
+	return NewSession(ctx, q)
+}
+
+// NewSession starts a browser session and returns the token for its cookie.
+// Callers must already have proved the browser is the person.
+func NewSession(ctx context.Context, q *store.Queries) (string, error) {
 	token, err := randomSecret()
 	if err != nil {
 		return "", err

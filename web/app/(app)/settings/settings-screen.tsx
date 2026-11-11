@@ -15,6 +15,7 @@ import { AppearanceSection } from "./appearance-section";
 import { ProjectsSection } from "./projects/projects-screen";
 import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
+import { SignInSection, useAuthStatus } from "./sign-in-section";
 import { SetupChecklist } from "@/components/domain/setup";
 
 type Health = "ok" | "attention" | "idle" | "unknown";
@@ -28,6 +29,7 @@ export function SettingsScreen() {
   const boot = useBootstrap();
   const secrets = useSecrets();
   const runner = useRunnerStatus();
+  const auth = useAuthStatus();
   const missing = secrets.data ? missingConnections(secrets.data.secrets).length : 0;
   const activeProjects = boot.data?.projects.filter((p) => !p.archived).length ?? 0;
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
@@ -37,6 +39,7 @@ export function SettingsScreen() {
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
     { id: "overrides", label: "Project overrides", health: "idle" },
+    { id: "sign-in", label: "Sign-in", health: !auth.data ? "unknown" : auth.data.password_set ? "ok" : "attention" },
     { id: "appearance", label: "Appearance", health: "idle" },
   ];
 
@@ -82,6 +85,9 @@ export function SettingsScreen() {
           </Section>
           <Section id="overrides" title="Project overrides" lead="Customize an agent for one project while keeping future agent definition updates.">
             <ProjectOverridesSection />
+          </Section>
+          <Section id="sign-in" title="Sign-in" lead="How you get into Vesper from a browser that isn’t signed in.">
+            <SignInSection />
           </Section>
           <Section id="appearance" title="Appearance">
             <AppearanceSection />
