@@ -1,132 +1,104 @@
 <div align="center">
   <img src="web/public/logo.svg" width="88" height="88" alt="Vesper logo" />
   <h1>Vesper</h1>
-  <p><strong>A self-hosted home for your coding agents and the assistants you work with every day.</strong></p>
-  <p>Plan the work, dispatch agents, review what needs you, and chat with personas that remember you, all from the browser.</p>
+  <p><strong>A frontier model chat-like experience, except memory, agent definitions, context, and more stay yours no matter the underlying harness you use.</strong></p>
+  <p>Chat with Claude and GPT models through the labs' own harnesses, Claude Code and Codex, in a polished web app you host yourself. Switch harness mid-conversation and keep everything that makes the assistant yours.</p>
   <p>
     <a href="#why-vesper">Why Vesper</a> ·
-    <a href="#chat">Chat</a> ·
-    <a href="#work">Work</a> ·
+    <a href="#switch-harness-keep-everything">Switch harness</a> ·
+    <a href="#a-flagship-chat-app">Chat</a> ·
     <a href="#get-started">Get started</a> ·
     <a href="docs/guide.md">Documentation</a>
   </p>
-  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex &nbsp; / &nbsp; Automatic fallbacks &nbsp; / &nbsp; Human approvals</p>
+  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex &nbsp; / &nbsp; Your memory, your Postgres &nbsp; / &nbsp; No lock-in</p>
 </div>
 
-![Vesper dashboard showing setup status, items that need you, live runs, active chats, and epics at risk](docs/images/dashboard.png)
+![A chat with the persona Iris: a Claude Code reply with a ticket table, then a switch to Codex, and a Codex reply that remembers the person likes evidence before a merge](docs/images/hero.png)
 
 ## Why Vesper
 
-Vesper is a control plane for coding agents and a personal workspace around
-them. You define an agent or persona once, and Vesper runs it headless on the
-frontier labs' own harnesses: **Claude Code** and **Codex**. Every agent reports
-back through the same MCP server, so tickets, plans, approvals, knowledge, and
-costs look the same no matter which model did the work.
+The best frontier models are at their best inside their labs' own harnesses,
+and the best chat apps keep your memory, instructions, and projects inside one
+vendor's product. Try the other lab's model and you start over.
 
-The app has two modes. **Chat** is yours: personas, memory, workflows, learning,
-and scheduled tasks that live above any one project. **Work** is your team's:
-projects, tickets, agents, runs, and the wiki.
+Vesper splits the two. It runs **Claude Code** and **Codex** headless as the
+engine, and keeps everything that makes the assistant *yours* in your own
+database:
 
-- **No CLI required.** Managed runs execute in containers from the
-  `vesper/agent-base` image, using the provider keys you store in
-  **Settings → Connections & secrets**. If you prefer your own logins, a local
-  runner can use the CLIs on your machine instead.
-- **One `docker compose up`.** The whole stack (API, web, runner, Postgres,
-  object storage, Caddy) runs on your laptop or a shared box.
-- **Automatic hand-off between models.** Give an agent an ordered list of usage
-  fallbacks. When a provider hits a quota or rate limit, the run moves to the
-  next target on the same checkout and plan. Chats can switch harness or model
-  mid-conversation too.
-- **Agents learn as they go.** Agents look up team conventions with
-  `find_pattern` and propose new lessons with `propose_pattern`. A curator agent
-  or a person publishes each one to the shared `Patterns/` wiki.
-- **Humans stay in charge.** Every dispatch needs your approval. Scopes decide
-  what each agent may do, and gated actions pause the run until you answer.
+| Stays yours | |
+| :--- | :--- |
+| **Memory** | What your personas learn about you, and what each one remembers about itself. Browse, edit, import, and export all of it. |
+| **Personas** | Voice, instructions, color, and what each one may do (write code, make images, build workflows), enforced in code rather than in a prompt. |
+| **Agent definitions** | Roles, instructions, skills, scopes, a model, and an ordered list of fallbacks, defined once and run on either harness. |
+| **Context** | Your chats, projects, tickets, wiki, Library, and the files and links you attach. Every persona reads the same context, whatever model answers. |
+| **Workflows and schedules** | Multi-step workflows, human approval gates, and scheduled prompts that don't care which lab runs a step. |
 
-## Chat
+The harness becomes a choice you make per message, not a home you move into.
 
-![A chat where a persona explains refund failures with a chart and a table of linked tickets](docs/images/chat.png)
+## Switch harness, keep everything
 
-Talk to any available harness and model. Every chat can read every project.
+![Dialog for switching a chat from Claude Code to Codex, listing what carries over and what is lost](docs/images/switch-harness.png)
+
+Pick any model the harnesses offer from the message box. Changing model within
+a harness keeps the session. Changing harness hands the conversation to the
+other one, with the persona, its memory, and your attached context intact, and
+Vesper tells you up front what doesn't survive the move (the old harness's
+hidden reasoning, tool results, and prompt cache).
+
+Agents work the same way: give one an ordered list of fallbacks, and when a
+provider hits a quota or rate limit the run moves to the next target on the same
+checkout and plan.
+
+## A flagship chat app
+
+![A persona answering why refunds are failing with a bar chart and a table of linked tickets](docs/images/chat.png)
 
 | | |
 | :--- | :--- |
-| **Personas** | Create as many as you like, each with its own voice, color, and instructions. Bring several into one conversation with `@`. What a persona may do beyond answering (write and run code, in a repo or a scratch workspace, generate images, create SVGs, workflows, or connectors) is enforced in code, per persona. |
-| **Memory** | Each persona remembers durable facts and tells you when it does. Browse, edit, import, or export everything under **Customization**. Memory is private to you, and secrets are never saved. |
-| **Rich replies** | Charts, diagrams, step-through SVGs, math, interactive apps that run in the chat, citations, and video previews. |
-| **Canvases** | Draft documents and SVG mockups next to the conversation. Comment on a passage and the persona revises it. |
-| **Projects** | The persona reads tickets, epics, runs, and wiki pages in any project, and creates tickets when you ask. Set a default project from the chat header to say where new tickets go. To get an agent on a ticket, the persona offers a Start card; press Start and the run follows above the message box. When it asks you something, needs an approval or finishes, the persona tells you in the chat; answer there and it's passed on, or approve right on the run's card. |
-| **Research and context** | Run a sourced research job from the message box, attach files, or link a wiki page, artifact, or ticket with `[[`. |
-| **Code changes** | A persona allowed to code gets its own branch in a repo you choose, so small jobs don't need a ticket. |
-| **Library** | Generated images, saved links, and keepsakes from your chats in one place. |
+| **Rich replies** | Charts, Mermaid and SVG diagrams, step-through explainers, math, citations, video previews, and small interactive apps that run right in the chat. |
+| **Canvases** | Draft documents and SVG mockups beside the conversation. Comment on a passage and the persona revises it. |
+| **Research** | Run a sourced research job from the message box, attach files, or link a wiki page, artifact, or ticket with `[[`. |
+| **Group chats** | Bring several personas into one conversation with `@`. |
+| **Code** | A persona allowed to code works on its own branch in any GitHub repo your token can reach, runs the tests, opens a PR, and can start a live playground you open beside the chat. |
+| **Images and video** | Personas allowed to can generate images (keeping a consistent likeness) and render videos, saved to your **Library**. |
+| **Apps** | **Docs**, **Slides**, and **Finance**, with a persona beside you. In Docs its edits arrive as suggestions you accept or reject. |
+| **Learn** | Turn a topic into a sourced module with lessons, knowledge checks, and a tutor. |
+| **Temporary chats** | Talk without reading or writing memory; the chat is deleted after a day without messages. |
 
-![Customization page with personas, connectors, and a grid of saved memories](docs/images/customization.png)
+### Memory you can see
 
-### Workflows
+![Customization page listing personas, agents, and a grid of saved memories by type](docs/images/customization.png)
+
+Each persona tells you when it saves something. Everything lives under
+**Customization**: filter by type, edit or delete any entry, or export it all.
+Memory is private to you, and secrets are never saved.
+
+### Workflows and scheduled tasks
+
+![Workflow editor with a draft step, a fact check, an approval gate, and two outputs](docs/images/workflows.png)
 
 Build a fixed graph of steps on a canvas, or describe the change and let a
 persona propose it. Steps can enrich a prompt, run an agent, generate images, or
 stop at a human gate, and outputs land in the wiki, Library, a ticket, or the
-chat. A check step must pass before anything after it runs, and can re-run an
-earlier step when it fails. Start one with `/workflow`, or ask in your own words
-and confirm the card.
-
-![Workflow editor with a draft, fact check, approval gate, and two outputs](docs/images/workflows.png)
-
-### Learn
-
-Turn a topic into a sourced, ordered module. You approve the outline, then work
-through lessons with knowledge checks and a tutor beside you. Claims are marked
-as sourced or as model knowledge, so you can tell which is which.
-
-![A lesson with cited text, a knowledge check, and a tutor panel](docs/images/learn.png)
-
-### Scheduled tasks and connectors
-
-Run prompts and workflows daily, weekly, monthly, or on a cron schedule, with
-results delivered to your Inbox. A task missed while Vesper was off runs once
-when it starts. **Connectors** bring in MCP servers: Vesper holds the
-credentials, and you set each tool to on, off, or ask.
+chat. A check step must pass before anything after it runs. Start one with
+`/workflow`, or ask in your own words and confirm the card.
 
 ![Scheduled tasks with their personas, cadence, and next run](docs/images/scheduled.png)
 
-## Work
+Run prompts and workflows daily, weekly, monthly, or on a cron schedule, with
+results delivered to your Inbox. **Connectors** bring in MCP servers: Vesper
+holds the credentials, and you set each tool to on, off, or ask.
 
-![Kanban board for a project, with priorities, estimates, and assigned agents](docs/images/board.png)
+## Hand work to agents
 
-| | |
-| :--- | :--- |
-| **Turn an idea into a plan** | Start from a goal, an epic, or a markdown PRD, with wiki pages, artifacts, and tickets as context. Edit the proposed tickets and set dependencies before they're created. |
-| **Keep projects moving** | Track projects, epics, and tickets on the board, in saved list views, and on an epic's dependency map. Tickets in an epic ship as one stacked pull request. |
-| **Review mockups** | Flag work as UI and the agent must draft an SVG mockup for approval before it can open a PR. Zoom, compare versions, and pin comments to the exact spot. |
-| **Build your agent team** | Give agents roles, instructions, skills, scopes, memory, a model, and fallbacks. Main agents can delegate to sub agents, in parallel worktrees when the work splits cleanly. |
-| **Keep knowledge together** | A wiki with namespaces, backlinks, versions, and tagged patterns, linked to the tickets and projects that use it. |
-| **Find anything** | Press <kbd>⌘K</kbd> to search and jump across the app, filter by status, or run a command. |
+![Kanban board for a project, with priorities and assigned agents](docs/images/board.png)
 
-### Review from one inbox
-
-Plans, dispatch requests, approvals, mockup reviews, blockers, finished
-scheduled tasks, and work awaiting review, in one keyboard-driven list.
-
-![Inbox listing work waiting for review, with details and actions for the selected item](docs/images/inbox.png)
-
-### See what happened
-
-Follow live runs event by event, with sub-agent trees and the runner
-environment. See spend by agent, project, model, and purpose where pricing is
-known.
-
-![Run details showing the live timeline, tool calls, tokens, cost, branch, and pull request](docs/images/run.png)
-
-![Costs page with total spend, daily spend by agent, and breakdowns by agent and project](docs/images/costs.png)
-
-## From idea to review
-
-1. **Describe the goal.** Start a plan, write a ticket, or ask a persona to file one.
-2. **Shape the plan.** Accept the planner's tickets, arrange dependencies, and assign agents.
-3. **Approve the mockup.** For UI work, review the agent's mockup before it builds.
-4. **Review and dispatch.** Approve each ticket when it is ready to run.
-5. **Follow along.** Answer approval requests, review the PR, and let lessons flow into the wiki.
+When a job is bigger than a chat, ask your persona to file it. Tickets, epics,
+and a board sit under **Work** in the same menu. Press **Start** on the card the
+persona offers and an agent runs it in a container; the run follows
+above the message box, and questions, approvals, and the finished PR come back
+to the chat. Every dispatch needs your approval, scopes decide what each agent
+may do, and agents propose lessons to a shared `Patterns/` wiki as they go.
 
 ## Get started
 
@@ -148,15 +120,16 @@ name and primary email, then shows the connection checklist. You can also set
 `LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` in `.env` before first boot. The demo
 dataset is available only by opting in with `SEED=true`.
 
-Developing Vesper or running it from a checkout? `make start` does everything in
-one command: it creates `.env`, builds the hardened agent image, signs in to your
-Claude and Codex plans, runs the app at
-**[localhost:3000](http://localhost:3000)**, and prints a sign-in link.
-
-Ready to run agents? Set `SECRETS_KEY` in `.env`, then follow the
+To chat and run agents, set `SECRETS_KEY` in `.env`, then follow the
 **[setup guide](docs/guide.md#running-agents)** to add provider keys
-(`harness:anthropic` for Claude Code, `harness:openai` for Codex) and connect a
-repository. Agent runs use your configured providers and can incur model costs.
+(`harness:anthropic` for Claude Code, `harness:openai` for Codex). Runs use your
+configured providers and can incur model costs.
+
+Developing Vesper or running it from a checkout? `make start` does everything in
+one command: it creates `.env`, builds the hardened agent image, signs in to
+your **Claude and ChatGPT plans** so chats use the subscriptions you already
+have, runs the app at **[localhost:3000](http://localhost:3000)**, and prints a
+sign-in link.
 
 ### Current scope
 
