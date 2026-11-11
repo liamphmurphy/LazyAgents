@@ -27,6 +27,7 @@ type PlaygroundRouteIn struct {
 }
 
 type StartPlaygroundIn struct {
+	Repository  string                `json:"repository,omitempty" jsonschema:"Attached repository owner/name or URL; defaults to the active checkout. Setup and process directories are relative to this checkout."`
 	Processes   []PlaygroundProcessIn `json:"processes" jsonschema:"The app's long-running parts, 1 to 4"`
 	Setup       []string              `json:"setup,omitempty" jsonschema:"Commands run in order from the workspace root once services are up, before the processes: install, migrate, seed"`
 	Routes      []PlaygroundRouteIn   `json:"routes,omitempty" jsonschema:"Which process serves which paths when there are several; everything else goes to the first process"`
@@ -37,7 +38,7 @@ type StartPlaygroundIn struct {
 }
 
 type SetPlaygroundOpenAPIIn struct {
-	Path     string `json:"path" jsonschema:"The OpenAPI document, relative to the workspace root (.yaml, .yml or .json)"`
+	Path     string `json:"path" jsonschema:"The OpenAPI document, relative to the playground’s repository checkout (.yaml, .yml or .json)"`
 	Inferred bool   `json:"inferred,omitempty" jsonschema:"true when you wrote it from the code rather than it being the repository's own"`
 	Commit   string `json:"commit,omitempty" jsonschema:"The commit you read when you inferred it (git rev-parse HEAD), so the person sees when the code moved on"`
 }
@@ -69,7 +70,7 @@ func startPlayground(ctx context.Context, d Deps, c agents.Caller, in StartPlayg
 	if err := playgroundChat(ctx, d, c); err != nil {
 		return nil, err
 	}
-	spec := playground.Spec{Setup: in.Setup, Services: in.Services, Env: in.Env, OpenAPI: in.OpenAPI, NixPackages: in.NixPackages}
+	spec := playground.Spec{Repository: in.Repository, Setup: in.Setup, Services: in.Services, Env: in.Env, OpenAPI: in.OpenAPI, NixPackages: in.NixPackages}
 	for _, p := range in.Processes {
 		spec.Processes = append(spec.Processes, playground.Process{Name: p.Name, Command: p.Command, Dir: p.Dir, Port: p.Port, Env: p.Env})
 	}

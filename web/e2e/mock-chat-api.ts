@@ -35,7 +35,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; work_branches?: string[]; commit_email?: string; workspace_path?: string;
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string;
   effort?: Effort;
 };
 type Message = {
@@ -143,6 +143,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const dock: Record<string, unknown>[] = [];
   // Assistant personas (ADR: Assistant personas): private to the caller, at most one default.
   const personas: MockPersona[] = [...(opts.personas ?? [])];
+  const repositorySources: { kind: "repository" | "organization"; name: string }[] = personas.flatMap((p) => p.repos.map((name) => ({ kind: "repository" as const, name })));
   // Personas the chat's personas proposed (several personas in one chat).
   const proposals: MockProposal[] = [];
   const decisions: Array<{ id: string; decision: string }> = [];
@@ -623,6 +624,27 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
     }
 
+    if (path === "/planning-sessions" && method === "GET") return json({ sessions: [], has_more: false });
+    if (path === "/repositories/sources") {
+      if (method === "GET") return json(repositorySources);
+      const b = body() as { kind: "repository" | "organization"; name: string };
+      if (method === "PUT") { if (!repositorySources.some((s) => s.kind === b.kind && s.name === b.name)) repositorySources.push(b); }
+      if (method === "DELETE") { const i = repositorySources.findIndex((s) => s.kind === b.kind && s.name === b.name); if (i >= 0) repositorySources.splice(i, 1); }
+      return route.fulfill({ status: 204 });
+    }
+    if (path === "/repositories" && method === "GET") return json(repositorySources.flatMap((s) => s.kind === "repository" ? [{ name: s.name.replace("https://github.com/", "").replace("git@github.com:", "").replace(/\.git$/, ""), url: s.name }] : [{ name: `${s.name}/org-app`, url: `https://github.com/${s.name}/org-app.git` }]));
+    const repositorySelection = /^\/chats\/([^/]+)\/repository$/.exec(path);
+    if (repositorySelection && method === "PUT") {
+      const c = chats.find((c) => c.id === repositorySelection[1]);
+      if (!c) return fail(err(404, "not_found", "Chat not found"));
+      const raw = String(body().repository);
+      const url = raw.startsWith("https://") ? raw : `https://github.com/${raw}.git`;
+      c.repositories ??= c.repo_url ? [{ repo_url: c.repo_url, directory: ".", work_branches: c.work_branches ?? [] }] : [];
+      if (!c.repositories.some((r) => r.repo_url === url)) c.repositories.push({ repo_url: url, directory: `.lazyagents/repos/${raw.replace("https://github.com/", "").replace(/\.git$/, "")}`, work_branches: [] });
+      if (c.state === "running") c.pending_repo_url = url;
+      else { c.repo_url = url; c.work_branches = c.repositories.find((r) => r.repo_url === url)!.work_branches; }
+      return json(ref(c));
+    }
     if (path === "/chats" && method === "GET") {
       const archived = url.searchParams.get("archived") === "true";
       const pid = url.searchParams.get("persona_id");
@@ -650,7 +672,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       // A coding persona's chat works in the requested repo (default: its first) on its own branch.
       const owner = personas.find((p) => p.id === c.persona_id);
       const repo = (b.repo_url as string | undefined) ?? owner?.repos[0];
-      if (b.repo_url !== undefined && !(owner?.capabilities.code && owner.repos.includes(String(b.repo_url)))) return fail(err(422, "invalid", "not one of the persona's repos", "repo_url"));
+      if (b.repo_url !== undefined && !(owner?.capabilities.code)) return fail(err(422, "invalid", "persona cannot write code", "repo_url"));
       if (owner?.capabilities.code && repo) Object.assign(c, { repo_url: repo, work_branches: [] });
       if (b.commit_email !== undefined) {
         if (!c.repo_url) return fail(err(422, "invalid", "only a chat with a repository makes commits", "commit_email"));

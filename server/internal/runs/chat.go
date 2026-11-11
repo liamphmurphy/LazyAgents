@@ -16,7 +16,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/links"
-	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -26,9 +26,9 @@ import (
 // a persona's free text never does.
 type ChatCaps struct {
 	// Code is the persona's can_code: the chat may write and run code in its
-	// workspace. RepoURL (fixed when the chat is created) is the repository
-	// checked out there; without one the workspace starts empty, a throwaway
-	// scratch space with no git credentials.
+	// workspace. RepoURL is its active repository; attached checkouts are
+	// preserved independently. A repository-less coding chat can attach one
+	// during a turn using the configured GitHub credential.
 	Code    bool
 	RepoURL string
 	// WorkBranches are the branches the chat's persona has pushed so far, in
@@ -72,6 +72,7 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 			r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: scope, Mode: agentdef.Allowed, Source: agentdef.FromPersona})
 		}
 	}
+	r.Services = nil
 	r.Setup = []string{}
 	r.MCPServers = []agentdef.MCPServer{}
 	for _, slug := range caps.Connectors {
@@ -117,10 +118,9 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 	if err != nil {
 		return ChatCaps{}, err
 	}
-	// A repository the persona doesn't list (any more) revokes coding for this
-	// chat, rather than leaving a shell beside a checkout it may no longer
-	// push to. A chat without a repository codes in a scratch workspace.
-	code := p.CanCode && (chat.RepoUrl == nil || slices.Contains(p.Repos, *chat.RepoUrl))
+	// Saved repositories are discovery shortcuts. Only the coding capability
+	// grants a shell; GitHub credentials decide repository access.
+	code := p.CanCode
 	rows, err := q.ConnectorsForPersona(ctx, store.ConnectorsForPersonaParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy, PersonaID: p.ID, AllowedIds: chat.ConnectorIds})
 	if err != nil {
 		return ChatCaps{}, err
@@ -178,8 +178,8 @@ type ChatInput struct {
 	// PersonaID is one of the creator's personas; nil means their default
 	// persona (none when they have no default). Fixed for the chat's life.
 	PersonaID *uuid.UUID
-	// RepoURL is one of the persona's repos; empty takes the first when the
-	// persona can code. Fixed for the chat's life.
+	// RepoURL is a GitHub URL or owner/name. Empty keeps the legacy first
+	// repository default when present; the selection can change in the chat.
 	RepoURL string
 	// Hidden keeps the chat out of chat lists, search and the dock, for a chat
 	// that lives behind another screen. Fixed for the chat's life.
@@ -231,6 +231,13 @@ func (s *Service) StartChat(ctx context.Context, ws, user uuid.UUID, in ChatInpu
 	in.Title = strings.TrimSpace(in.Title)
 	if len([]rune(in.Title)) > 200 {
 		return out, apperr.Invalid("title", "must be at most 200 characters")
+	}
+	if in.RepoURL != "" && !strings.Contains(in.RepoURL, "/") {
+		url, err := s.Repositories().Resolve(ctx, repositories.Owner{WorkspaceID: ws, UserID: user}, in.RepoURL)
+		if err != nil {
+			return out, err
+		}
+		in.RepoURL = url
 	}
 	err := s.tx(ctx, func(q *store.Queries) error {
 		var err error
@@ -322,6 +329,11 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 				return err
 			}
 		}
+		if repo != "" {
+			if _, err = q.AttachChatRepository(ctx, store.AttachChatRepositoryParams{ChatID: out.ID, RepoUrl: repo, Directory: "."}); err != nil {
+				return err
+			}
+		}
 		if in.CommitEmail != "" {
 			if out, err = setChatCommitEmail(ctx, q, out, in.CommitEmail); err != nil {
 				return err
@@ -336,8 +348,7 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 }
 
 // chatRepo picks the repository a new chat works in: the requested one, which
-// must be among a coding persona's repos (compared after normalization), or
-// the persona's first. "" means the chat has no repository.
+// may be any GitHub repository, or the persona's legacy first default. "" means the chat has no repository.
 func chatRepo(persona *store.Persona, requested string) (string, error) {
 	if strings.TrimSpace(requested) == "" {
 		if persona != nil && persona.CanCode && len(persona.Repos) > 0 {
@@ -348,9 +359,9 @@ func chatRepo(persona *store.Persona, requested string) (string, error) {
 	if persona == nil || !persona.CanCode {
 		return "", apperr.Invalid("repo_url", "only a persona that can code can work in a repository")
 	}
-	url, err := personas.NormalizeRepoURL(requested)
-	if err != nil || !slices.Contains(persona.Repos, url) {
-		return "", apperr.Invalid("repo_url", "choose one of the persona's repositories")
+	url, err := repositories.Canonical(requested)
+	if err != nil {
+		return "", apperr.Invalid("repo_url", "enter a GitHub URL or owner/repository")
 	}
 	return url, nil
 }
@@ -364,6 +375,7 @@ func (s *Service) PostChatMessage(ctx context.Context, ws, user, id uuid.UUID, i
 		if err != nil {
 			return err
 		}
+
 		_, out, err = postChatMessage(ctx, q, s.ChatCatalog(), chat, in, s.HandoffChars)
 		return err
 	})
@@ -398,6 +410,16 @@ const firstTurnNote = "\n\n(Vesper: this is the first message of a new conversat
 
 func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catalog, chat store.ChatSession, in ChatMessageInput, handoffChars int) (store.ChatSession, store.ChatMessage, error) {
 	var msg store.ChatMessage
+	if chat.State != "running" && chat.PendingRepoUrl != nil {
+		var err error
+		if err = q.ClearPendingChatRepository(ctx, chat.ID); err != nil {
+			return chat, msg, err
+		}
+		chat, err = q.ActivateChatRepository(ctx, store.ActivateChatRepositoryParams{ID: chat.ID, RepoUrl: *chat.PendingRepoUrl})
+		if err != nil {
+			return chat, msg, err
+		}
+	}
 	body := strings.TrimSpace(in.Body)
 	if body == "" || len([]rune(body)) > 100000 {
 		return chat, msg, apperr.Invalid("body", "provide 1–100000 characters")

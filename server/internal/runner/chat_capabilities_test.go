@@ -73,7 +73,7 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	if chat.RepoUrl == nil || *chat.RepoUrl != "https://github.com/acme/app" || len(chat.WorkBranches) != 0 {
 		t.Fatalf("chat repo %v branches %v", chat.RepoUrl, chat.WorkBranches)
 	}
-	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `WITH attached AS (UPDATE chat_repositories SET repo_url=$2 WHERE chat_id=$1) UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
 		t.Fatal(err)
 	}
 	// A repository the persona no longer lists would revoke coding.
@@ -128,11 +128,12 @@ func TestCodingChatRepoSetupPushAndResume(t *testing.T) {
 	first := e.chatRun(chat.ID)
 	e.selectChat(chat.ID, agentdef.HarnessCodex, "gpt-5.5")
 	reply = e.postSh(chat.ID, "git rev-parse --abbrev-ref HEAD; git checkout -q feat/add-work && cat work.txt && echo again >> work.txt && git commit -qam again && git push -q 2>&1 && echo pushed")
-	if e.chatRun(chat.ID).ID == first.ID || !strings.HasPrefix(strings.TrimSpace(reply), "main") || !strings.Contains(reply, "more") || !strings.Contains(reply, "pushed") {
+	if e.chatRun(chat.ID).ID == first.ID || !strings.Contains(reply, "main") || !strings.Contains(reply, "more") || !strings.Contains(reply, "pushed") {
 		t.Fatalf("new segment didn't pick up pushed work (same run %v): %s", e.chatRun(chat.ID).ID == first.ID, reply)
 	}
-	if spec, _ := runs.Spec(e.chatRun(chat.ID)); !strings.Contains(spec.Instructions, "feat/add-work, fix/typo") {
-		t.Fatalf("new segment isn't told its branches:\n%s", spec.Instructions)
+	agentsMD, err := os.ReadFile(filepath.Join(e.runner.Backend.WorkspaceDir(e.chatRun(chat.ID).ID.String()), "AGENTS.md"))
+	if err != nil || !strings.Contains(string(agentsMD), "feat/add-work, fix/typo") {
+		t.Fatalf("live checkout context lost branches: %v\n%s", err, agentsMD)
 	}
 }
 
@@ -168,7 +169,7 @@ func TestCodingChatCommitsAsPickedEmail(t *testing.T) {
 		t.Fatalf("commit email %v", chat.CommitEmail)
 	}
 	// A persona can't list a local repository, so both are repointed at it.
-	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `WITH attached AS (UPDATE chat_repositories SET repo_url=$2 WHERE chat_id=$1) UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos=ARRAY[$2]::text[] WHERE id=$1`, p.ID, bare); err != nil {

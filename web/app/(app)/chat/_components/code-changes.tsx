@@ -115,6 +115,7 @@ function FileRow({ c, open, onToggle, active }: { c: Change; open: boolean; onTo
             {badge.letter}
           </span>
           <span className="min-w-0 truncate font-mono text-xs text-fg" dir="ltr">
+            {c.repository && <span className="text-fg-tertiary">{c.repository.replace("https://github.com/", "").replace(/\.git$/, "")} / </span>}
             {c.status === "renamed" && c.old_path ? `${c.old_path} → ${c.path}` : c.path}
           </span>
           <span className="ml-auto">
@@ -180,11 +181,11 @@ export function CodeChanges({ changes }: { changes?: Change[] }) {
         <ul id={id} className="border-t border-border">
           {changes.map((c) => (
             <FileRow
-              key={c.path}
+              key={`${c.repository ?? ""}/${c.path}`}
               c={c}
-              open={overrides[c.path] ?? start}
+              open={overrides[`${c.repository ?? ""}/${c.path}`] ?? start}
               active={open}
-              onToggle={() => setOverrides((o) => ({ ...o, [c.path]: !(o[c.path] ?? start) }))}
+              onToggle={() => setOverrides((o) => ({ ...o, [`${c.repository ?? ""}/${c.path}`]: !(o[`${c.repository ?? ""}/${c.path}`] ?? start) }))}
             />
           ))}
         </ul>

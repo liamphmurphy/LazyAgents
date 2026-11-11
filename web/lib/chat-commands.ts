@@ -9,7 +9,7 @@ export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "persona", args: "persona", hint: "Start a new chat with another persona" },
   { name: "workflow", args: "workflow", hint: "Run one of your published workflows" },
   { name: "new", hint: "Start a new conversation" },
-  { name: "repo", args: "repository", hint: "Start a new chat in another repository" },
+  { name: "repo", args: "repository", hint: "Select a repository in this conversation" },
   { name: "memory", hint: "Open your memory" },
   { name: "stop", hint: "Stop the current reply" },
 ];

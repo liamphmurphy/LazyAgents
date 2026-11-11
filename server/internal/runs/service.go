@@ -22,6 +22,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
+	"github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
@@ -53,10 +54,11 @@ const (
 var Terminal = []string{"completed", "failed", "cancelled"}
 
 type Service struct {
-	Pool      *pgxpool.Pool
-	Secrets   *secrets.Service
-	Artifacts *artifacts.Service
-	Tracker   *tracker.Service
+	RepositoryCatalog *repositories.Service
+	Pool              *pgxpool.Pool
+	Secrets           *secrets.Service
+	Artifacts         *artifacts.Service
+	Tracker           *tracker.Service
 	// RequireHarnessKey mirrors the runner's setting: chats can't select a
 	// harness whose API-key secret is missing.
 	RequireHarnessKey bool

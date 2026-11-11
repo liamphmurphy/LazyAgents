@@ -132,7 +132,7 @@ func (e env) codingChat(bare string) store.ChatSession {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `WITH attached AS (UPDATE chat_repositories SET repo_url=$2 WHERE chat_id=$1) UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
 		e.t.Fatal(err)
 	}
 	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos=ARRAY[$2]::text[] WHERE id=$1`, p.ID, bare); err != nil {
@@ -151,7 +151,11 @@ func TestIdleCodingChatCheckpointsUnpushedWork(t *testing.T) {
 	e.postSh(chat.ID, "echo unsaved > work.txt")
 	run := e.chatRun(chat.ID)
 	e.endIdleChat()
-	branch := "vesper-checkpoint/chat/" + run.ID.String()
+	rows, err := e.q.ChatRepositories(e.ctx, chat.ID)
+	if err != nil || len(rows) != 1 || rows[0].CheckpointBranch == nil {
+		t.Fatalf("checkpoint rows: %+v %v", rows, err)
+	}
+	branch := *rows[0].CheckpointBranch
 	out, err := exec.Command("git", "-C", bare, "show", branch+":work.txt").CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) != "unsaved" {
 		t.Fatalf("checkpoint: %v: %s", err, out)

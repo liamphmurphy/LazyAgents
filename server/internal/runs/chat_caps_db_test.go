@@ -78,15 +78,22 @@ func TestChatSegmentsAndCapabilities(t *testing.T) {
 		t.Fatal("an unrelated change to the assistant's definition ended the segment")
 	}
 
-	// The persona drops the repository: this chat can no longer code.
+	// Removing a discovery shortcut does not revoke coding or end the segment.
 	none := []string{}
 	if p, err = ps.Update(ctx, owner, p.ID, personas.Patch{Revision: p.Revision, Repos: &none}); err != nil {
 		t.Fatal(err)
 	}
 	chatRow, _ := q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: me.WorkspaceID})
 	caps, err := chatCaps(ctx, q, chatRow)
-	if err != nil || caps.Coding() {
-		t.Fatalf("removed repository still codes: %+v, %v", caps, err)
+	if err != nil || !caps.Coding() {
+		t.Fatalf("removing a shortcut revoked coding: %+v, %v", caps, err)
+	}
+	if got := post("three"); got != first {
+		t.Fatal("removing a shortcut ended the segment")
+	}
+	off := false
+	if p, err = ps.Update(ctx, owner, p.ID, personas.Patch{Revision: p.Revision, Code: &off}); err != nil {
+		t.Fatal(err)
 	}
 	second := post("three")
 	if second == first {

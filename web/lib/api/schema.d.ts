@@ -4099,10 +4099,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRepositorySources"];
+        put: operations["saveRepositorySource"];
+        post?: never;
+        delete: operations["deleteRepositorySource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchRepositories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/repository": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setChatRepository"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RepositorySource: {
+            /** @enum {string} */
+            kind: "repository" | "organization";
+            name: string;
+        };
+        RepositoryEntry: {
+            name: string;
+            url: string;
+        };
+        ChatRepository: {
+            repo_url: string;
+            /** @description Checkout path relative to the chat workspace */
+            directory: string;
+            work_branches: string[];
+        };
         Health: {
             /** @enum {string} */
             status: "ok" | "degraded";
@@ -6758,8 +6821,11 @@ export interface components {
             /** @description Every persona in the chat: the host first, then the ones mentioned in (by @name or an approved proposal), in the order they joined */
             participants?: components["schemas"]["PersonaSummary"][];
             speaker?: components["schemas"]["PersonaSummary"];
-            /** @description The git repository a coding persona works in for this chat; fixed for the chat's life. Absent when the chat has no repository. */
+            /** @description Repository selected for the next turn while a reply is running */
+            pending_repo_url?: string;
+            /** @description The active repository; other attached checkouts are preserved when it changes. */
             repo_url?: string;
+            repositories?: components["schemas"]["ChatRepository"][];
             /** @description The branches the coding persona pushed in this chat, oldest first (feat/..., fix/..., chore/...). It makes them as changes are asked for, so a new chat has none. Absent when the chat has no repository. */
             work_branches?: string[];
             /** @description The address picked for this chat's commits. Absent until one is picked, or once it is no longer one of the creator's emails; commits then use their primary email. */
@@ -6792,7 +6858,7 @@ export interface components {
              * @description One of the caller's personas; defaults to their default persona (none when they have no default). Fixed for the chat's life.
              */
             persona_id?: string;
-            /** @description One of the persona's repos (compared after normalization). Only valid when the persona can code; defaults to the persona's first repo when it can code and has repos. 422 otherwise. */
+            /** @description A GitHub URL, owner/repository or an unambiguous saved name for a coding persona. Saved repositories aid discovery and never restrict access. */
             repo_url?: string;
             /** @description One of the caller's emails for the chat's commits. Only with a repository; 422 otherwise. */
             commit_email?: string;
@@ -7624,6 +7690,8 @@ export interface components {
             created_at: string;
         };
         ChatCodeChange: {
+            /** @description Repository URL for this change */
+            repository?: string;
             /** @description Repository-relative path after the change */
             path: string;
             /** @description The path before a rename */
@@ -8149,7 +8217,10 @@ export interface components {
             avatar_url?: string;
             custom_instructions: string;
             capabilities: components["schemas"]["PersonaCapabilities"];
-            /** @description Git repositories (https or ssh URLs, normalized) a coding persona may work in */
+            /**
+             * @deprecated
+             * @description Legacy repository favorites and first-chat default; never an access allowlist. Use shared repository sources for discovery.
+             */
             repos: string[];
             is_default: boolean;
             /** @description Chats (archived included) that use this persona */
@@ -14980,6 +15051,127 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listRepositorySources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved repositories and organizations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositorySource"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    saveRepositorySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositorySource"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteRepositorySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositorySource"];
+            };
+        };
+        responses: {
+            /** @description Removed shortcut */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    searchRepositories: {
+        parameters: {
+            query?: {
+                q?: string;
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories matching saved sources and GitHub access */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryEntry"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setChatRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Saved short name, owner/repository or GitHub URL */
+                    repository: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Same conversation with the selected repository */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

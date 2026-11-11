@@ -392,18 +392,18 @@ func TestChatRepoSelection(t *testing.T) {
 		t.Fatalf("default repo/branches: %v %v", c["repo_url"], c["work_branches"])
 	}
 	// An explicit repo is compared after normalization.
-	c = e.newChat(map[string]any{"persona_id": coder, "repo_url": "git@GitHub.com:acme/api.git"})
-	if c["repo_url"] != "git@github.com:acme/api.git" || !noBranches(c) {
+	c = e.newChat(map[string]any{"persona_id": coder, "repo_url": "git@github.com:acme/api.git"})
+	if c["repo_url"] != "https://github.com/acme/api.git" || !noBranches(c) {
 		t.Fatalf("explicit repo: %v", c)
 	}
 	// It is fixed for the chat: renaming the chat or editing the persona leaves it.
 	chatID := c["id"].(string)
 	e.want("PATCH", "/chats/"+chatID, map[string]any{"revision": c["revision"], "title": "renamed"}, 200)
-	if got := e.want("GET", "/chats/"+chatID, nil, 200); got["repo_url"] != "git@github.com:acme/api.git" || !noBranches(got) {
+	if got := e.want("GET", "/chats/"+chatID, nil, 200); got["repo_url"] != "https://github.com/acme/api.git" || !noBranches(got) {
 		t.Fatalf("repo changed: %v", got)
 	}
-	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "https://github.com/acme/other"}, "repo_url", "persona's repositories")
-	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "file:///etc"}, "repo_url", "persona's repositories")
+	e.want("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "https://github.com/acme/other"}, 201)
+	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": coder, "repo_url": "file:///etc"}, "repo_url", "GitHub URL")
 	e.invalid("POST", "/chats", map[string]any{"project": "PAY", "persona_id": noCode, "repo_url": "https://github.com/acme/docs"}, "repo_url", "can code")
 	// A persona that can't code, or has no repos, gets a chat without a repository.
 	for _, p := range []string{noCode, noRepos} {

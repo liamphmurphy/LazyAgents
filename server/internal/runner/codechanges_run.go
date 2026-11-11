@@ -46,7 +46,7 @@ func (r *Runner) gitCmd(ctx context.Context, runID string, env map[string]string
 	for k, v := range env {
 		e[k] = v
 	}
-	proc, err := r.Backend.Start(ctx, runID, ExecSpec{Name: "lazyagents-git-" + runID + "-" + uuid.NewString()[:8], Argv: argv, Env: e})
+	proc, err := r.Backend.Start(ctx, runID, ExecSpec{Name: "lazyagents-git-" + runID + "-" + uuid.NewString()[:8], Argv: argv, Env: e, Dir: gitDirectory(ctx)})
 	if err != nil {
 		return nil, false, -1, err
 	}

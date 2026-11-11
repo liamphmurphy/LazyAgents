@@ -16,6 +16,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -45,14 +46,22 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 	if err != nil {
 		return "", err
 	}
-	if chat.RepoUrl == nil {
-		return script, nil
+	repos, err := q.ChatRepositories(ctx, chat.ID)
+	if err != nil {
+		return "", err
 	}
 	name, email, err := chatCommitAuthor(ctx, q, chat)
 	if err != nil {
 		return "", err
 	}
-	return ChatRepoSetupScript(*chat.RepoUrl, chat.WorkBranches, name, email), nil
+	script += "\n" + sshSetup
+	for _, repo := range repos {
+		script += repositories.SetupScript(repo.RepoUrl, repo.Directory, repo.WorkBranches, repo.CheckpointBranch, name, email)
+		if repo.Directory == "." {
+			script += "if [ ! -f .lazyagents/chat-checkout-ready ]; then\n" + keepOurFilesOutOfGit + "touch .lazyagents/chat-checkout-ready\nfi\n"
+		}
+	}
+	return script, nil
 }
 
 // chatCommitAuthor is who a coding chat's commits are authored as. Commits are
@@ -83,22 +92,6 @@ func chatCommitEnv(ctx context.Context, q *store.Queries, c runCtx) (map[string]
 		"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
 		"GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email,
 	}, nil
-}
-
-// chatGitRepo is the repository URL a coding chat's git credentials may be
-// used for: "" unless the frozen spec grants repo:write and the chat has one.
-func chatGitRepo(ctx context.Context, q *store.Queries, c runCtx) (string, error) {
-	if c.run.Purpose != "chat" || !allowedScope(c.spec, "repo:write") {
-		return "", nil
-	}
-	chat, err := q.ChatSessionForRun(ctx, &c.run.ID)
-	if err != nil {
-		return "", err
-	}
-	if chat.RepoUrl == nil {
-		return "", nil
-	}
-	return *chat.RepoUrl, nil
 }
 
 // chatSpeaker is the persona answering the chat's turn: its speaker, else its
@@ -238,8 +231,9 @@ func (r *Runner) dropImageBlobs(imgs []generatedImage) {
 // chatTurnCode is what a coding chat's turn did in its repository: the
 // changes JSON for its reply, and the branches it has pushed.
 type chatTurnCode struct {
-	changes  []byte
-	branches []string
+	changes            []byte
+	branches           []string
+	repositoryBranches map[string][]string
 }
 
 func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTurn, res harness.Result, code int, waitErr error, logKey *string, work chatTurnCode, jobs chatImages) {
@@ -277,6 +271,16 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 		// Kept whatever came of the turn: a branch it pushed is on the remote.
 		if len(work.branches) > 0 {
 			if err := q.AddChatWorkBranches(ctx, store.AddChatWorkBranchesParams{ID: chat.ID, Branches: work.branches, MaxBranches: personas.MaxWorkBranches}); err != nil {
+				return err
+			}
+		}
+		for url, branches := range work.repositoryBranches {
+			if err := q.SaveRepositoryBranches(ctx, store.SaveRepositoryBranchesParams{ChatID: chat.ID, RepoUrl: url, Branches: branches}); err != nil {
+				return err
+			}
+		}
+		if len(work.repositoryBranches) > 0 {
+			if err := q.RefreshChatRepositoryBranches(ctx, chat.ID); err != nil {
 				return err
 			}
 		}

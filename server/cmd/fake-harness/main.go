@@ -366,7 +366,11 @@ func main() {
 			os.Exit(1)
 		}
 		answer := fmt.Sprintf("Chat reply (resumed=%v, session=%s, model=%s): %s", resume != "", session, model, prompt)
-		if first, ok := strings.CutPrefix(prompt, "sh: "); ok {
+		shellPrompt := prompt
+		if _, latest, ok := strings.Cut(prompt, "New message from the user (answer this one):\n"); ok {
+			shellPrompt = latest
+		}
+		if first, ok := strings.CutPrefix(shellPrompt, "sh: "); ok {
 			// Test hook: a prompt "sh: <command>" runs the command's first line in
 			// the workspace, like an agent using its shell, and reports its output.
 			first, _, _ = strings.Cut(first, "\n")

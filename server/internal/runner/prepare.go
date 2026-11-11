@@ -22,7 +22,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
-	"github.com/liamphmurphy/vesper/server/internal/personas"
+	"github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -247,36 +247,7 @@ const ChatBranchConfig = "vesper.branch"
 // rest: the default branch, someone else's, tags and deletes. Defense in
 // depth, not a hard boundary: the agent can bypass a hook (--no-verify,
 // editing it, another remote), and the token's own reach is the real limit.
-func chatPrePushHook(known []string) string {
-	refs := make([]string, len(known))
-	for i, k := range known {
-		refs[i] = "refs/heads/" + k
-	}
-	hook := []string{
-		"#!/bin/sh",
-		"# Vesper: this chat may push only branches it made (not a hard boundary).",
-		"known=" + shellQuote(strings.Join(refs, " ")),
-		"pattern=" + shellQuote(personas.WorkBranchPattern),
-		`made=$(git config --get-all ` + ChatBranchConfig + ` 2>/dev/null | sed 's|^|refs/heads/|' | tr '\n' ' ')`,
-		`while read -r local_ref local_sha remote_ref remote_sha; do`,
-		`  case "$local_sha" in *[!0]*) ;; *) echo "vesper: this chat may not delete $remote_ref" >&2; exit 1 ;; esac`,
-		`  case " $known $made " in *" $remote_ref "*) continue ;; esac`,
-		`  name=${remote_ref#refs/heads/}`,
-		`  if [ "$name" = "$remote_ref" ] || ! printf '%s\n' "$name" | grep -Eq "$pattern"; then`,
-		`    echo "vesper: name a new branch TYPE/short-description (feat/..., fix/..., chore/...); $remote_ref isn't one" >&2; exit 1`,
-		`  fi`,
-		`  case "$remote_sha" in *[!0]*) echo "vesper: $remote_ref already exists and wasn't made in this chat; pick another name" >&2; exit 1 ;; esac`,
-		`  git config --add ` + ChatBranchConfig + ` "$name"`,
-		`  made="$made $remote_ref"`,
-		"done",
-		"exit 0",
-	}
-	quoted := make([]string, len(hook))
-	for i, l := range hook {
-		quoted[i] = shellQuote(l)
-	}
-	return strings.Join(quoted, " ")
-}
+func chatPrePushHook(known []string) string { return repositories.PrePushHook(known) }
 
 // TurnWrapper git-excludes skill files (in the repository's shared exclude
 // file, which a delegated run's worktree uses too), writes AGENTS.md (our section above the repo's own) and then
@@ -788,6 +759,11 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 		if err != nil {
 			return nil, "Could not load the person's workflows.", fmt.Errorf("chat workflows: %w", err)
 		}
+		repoNote, err := chatRepositoryNote(ctx, q, chat)
+		if err != nil {
+			return nil, "Could not load repositories.", err
+		}
+		spec.Instructions += repoNote
 		spec.Instructions += workflows
 		tutor, err := runs.LearningTutorNote(ctx, q, chat)
 		if err != nil {

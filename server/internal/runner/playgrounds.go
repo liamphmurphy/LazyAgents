@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -237,7 +238,7 @@ func (r *Runner) runPlayground(ctx context.Context, pb PlaygroundBackend, pg sto
 	if reset {
 		err = q.SetPlaygroundDataReset(ctx, store.SetPlaygroundDataResetParams{ID: pg.ID, RunnerID: &r.Cfg.ID})
 	} else {
-		_, err = q.SetPlaygroundRunning(ctx, store.SetPlaygroundRunningParams{ID: pg.ID, RunnerID: &r.Cfg.ID, Branch: r.playgroundBranch(ctx, pg.RunID.String())})
+		_, err = q.SetPlaygroundRunning(ctx, store.SetPlaygroundRunningParams{ID: pg.ID, RunnerID: &r.Cfg.ID, Branch: r.playgroundBranchIn(ctx, pg.RunID.String(), spec.Directory)})
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Stopped or failed by someone else meanwhile.
@@ -247,6 +248,9 @@ func (r *Runner) runPlayground(ctx context.Context, pb PlaygroundBackend, pg sto
 	}
 	if err != nil {
 		r.Log.Warn("playgrounds: mark running", "playground", pg.ID, "err", err)
+	}
+	if spec.OpenAPI != "" {
+		spec.OpenAPI = path.Join(spec.Directory, spec.OpenAPI)
 	}
 	h.gateway.Serve(port, &playground.Live{ID: pg.ID, Spec: spec, Addrs: addrs})
 }
@@ -310,7 +314,10 @@ func (r *Runner) failPlayground(ctx context.Context, pb PlaygroundBackend, pg st
 // playgroundBranch is the branch the workspace has checked out, for the
 // person's orientation; "" when it can't be read.
 func (r *Runner) playgroundBranch(ctx context.Context, runID string) string {
-	rc, _, err := r.Backend.OpenWorkspaceFile(ctx, runID, ".git/HEAD", 1024)
+	return r.playgroundBranchIn(ctx, runID, "")
+}
+func (r *Runner) playgroundBranchIn(ctx context.Context, runID, dir string) string {
+	rc, _, err := r.Backend.OpenWorkspaceFile(ctx, runID, path.Join(dir, ".git/HEAD"), 1024)
 	if err != nil {
 		return ""
 	}
@@ -381,6 +388,9 @@ func (r *Runner) refreshPlaygroundOpenAPI(pg store.Playground) {
 	var spec playground.Spec
 	if json.Unmarshal(pg.Spec, &spec) != nil {
 		return
+	}
+	if spec.OpenAPI != "" {
+		spec.OpenAPI = path.Join(spec.Directory, spec.OpenAPI)
 	}
 	if ref := (playground.OpenAPIRef{Path: spec.OpenAPI, Inferred: spec.OpenAPIInferred, Commit: spec.OpenAPICommit}); ref != live.OpenAPI() {
 		live.SetOpenAPI(ref)

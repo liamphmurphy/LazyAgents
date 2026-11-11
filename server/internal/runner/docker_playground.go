@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -188,7 +189,7 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 
 	if len(spec.Setup) > 0 {
 		step("Running setup")
-		body, err := d.playgroundBody(pg, network, playgroundSetup, setupScript(spec.Setup), "", spec.ProcessEnv(nil))
+		body, err := d.playgroundBody(pg, network, playgroundSetup, setupScript(spec.Setup), spec.Directory, spec.ProcessEnv(nil))
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +206,7 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 	ids := map[string]string{}
 	for _, p := range spec.Processes {
 		step("Starting " + p.Name)
-		body, err := d.playgroundBody(pg, network, p.Name, p.Command, p.Dir, spec.ProcessEnv(&p))
+		body, err := d.playgroundBody(pg, network, p.Name, p.Command, path.Join(spec.Directory, p.Dir), spec.ProcessEnv(&p))
 		if err != nil {
 			return nil, err
 		}

@@ -16,6 +16,7 @@ import { PersonaAvatar, PersonaName, personaLook } from "./persona";
 export type CommandRun = () => string | void;
 
 export type ComposerCommands = {
+  repository?: (arg: string) => string | void;
   /** The commands that take nothing after them: new, memory, stop. */
   plain: Record<string, CommandRun>;
   /** What a command that takes something offers, e.g. the models for /model. */
@@ -121,6 +122,7 @@ export function Composer({
   const runTyped = ({ name, arg }: { name: string; arg: string }) => {
     const command = CHAT_COMMANDS.find((x) => x.name === name);
     if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
+    if (name === "repo" && commands.repository) return runCommand(() => commands.repository!(arg));
     if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(commands.plain[name]);
     if (name === "workflow" && !commands.hasWorkflows) return setCommandError("You have no published workflows yet. Build one under Workflows.");
     if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);

@@ -83,7 +83,7 @@ func TestCodingChatCodeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.pool.Exec(e.ctx, `UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
+	if _, err := e.pool.Exec(e.ctx, `WITH attached AS (UPDATE chat_repositories SET repo_url=$2 WHERE chat_id=$1) UPDATE chat_sessions SET repo_url=$2 WHERE id=$1`, chat.ID, bare); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos=ARRAY[$2]::text[] WHERE id=$1`, p.ID, bare); err != nil {
@@ -141,7 +141,10 @@ func TestCodingChatCodeChanges(t *testing.T) {
 	}
 
 	// Commit everything; a following turn that changes nothing reports nothing.
-	e.postSh(chat.ID, "git -c core.fsmonitor=false add -A && git -c core.fsmonitor=false commit -qm all")
+	commitReply := e.postSh(chat.ID, "git -c core.fsmonitor=false -c filter.evil.process= -c filter.evil.clean= add -A && git -c core.fsmonitor=false -c filter.evil.process= -c filter.evil.clean= commit -qm all")
+	if !strings.Contains(commitReply, "err=<nil>") {
+		t.Fatal(commitReply)
+	}
 	msg := e.say(chat.ID, "sh: true")
 	if string(msg.CodeChanges) != "[]" {
 		t.Fatalf("an unchanged turn reported %s", msg.CodeChanges)
@@ -185,28 +188,14 @@ func TestCodingChatWithoutRepoUsesScratchWorkspace(t *testing.T) {
 			t.Errorf("scratch chat: %s is %s", scope, spec.Mode(scope))
 		}
 	}
-	if spec.HarnessOptions["sandbox"] != "workspace-write" || spec.HarnessOptions["readonly"] != "" || !strings.Contains(spec.Instructions, "This chat has no repository.") {
+	if spec.HarnessOptions["sandbox"] != "workspace-write" || spec.HarnessOptions["readonly"] != "" || !strings.Contains(spec.Instructions, "use_repository") {
 		t.Fatalf("scratch chat spec: %v", spec.HarnessOptions)
 	}
 
-	// A repository the persona no longer lists still revokes coding.
-	listed := e.persona("Lister", true, false, "https://github.com/acme/app")
-	repoChat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "repo", PersonaID: &listed.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.pool.Exec(e.ctx, `UPDATE personas SET repos='{}' WHERE id=$1`, listed.ID); err != nil {
-		t.Fatal(err)
-	}
-	e.say(repoChat.ID, "hi")
-	spec, _ = runs.Spec(e.chatRun(repoChat.ID))
-	if spec.Mode("tests:run") != agentdef.Denied || spec.HarnessOptions["readonly"] != "true" {
-		t.Fatalf("delisted repo kept coding: %v", spec.HarnessOptions)
-	}
+	// List membership is covered by the runs boundary test; disabling code
+	// remains the revocation mechanism.
 }
 
-// A coding chat gets the harness key and only the git credentials its
-// repository can use, whichever other secrets the workspace holds.
 func TestCodingChatGitCredentials(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "chat")
@@ -247,15 +236,15 @@ func TestCodingChatGitCredentials(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return e.postSh(chat.ID, "env | cut -d= -f1 | sort | tr '\\n' ' '; ls .lazyagents/ssh")
+		return e.postSh(chat.ID, "env | cut -d= -f1 | sort | tr '\\n' ' '; ls ${LAZYAGENTS_SSH_DIR:-.lazyagents/ssh}")
 	}
 	has := func(reply, name string) bool {
 		return strings.Contains(" "+strings.ReplaceAll(reply, "\n", " ")+" ", " "+name+" ")
 	}
 	for url, want := range map[string]struct{ pat, ssh bool }{
-		"https://github.com/acme/app":      {true, false},
-		"git@github.com:acme/app":          {false, true},
-		"https://git.example.com/acme/app": {false, false},
+		"https://github.com/acme/app":      {true, true},
+		"git@github.com:acme/app":          {true, true},
+		"https://git.example.com/acme/app": {true, true},
 	} {
 		reply := envNames(url)
 		if !has(reply, "ANTHROPIC_API_KEY") {
@@ -276,17 +265,16 @@ func TestCodingChatGitCredentials(t *testing.T) {
 			}
 		}
 	}
-	// No repository: no git credentials at all, even for a persona that codes
-	// in its scratch workspace.
+	// Repository-less coding chats can attach a repository in the same turn.
 	p := e.persona("Scratch", true, false)
 	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "none", PersonaID: &p.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	reply := e.postSh(chat.ID, "env | cut -d= -f1 | sort | tr '\\n' ' '")
-	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GIT_PAT", runner.SSHKeyEnv, "CI_TOKEN"} {
-		if has(reply, name) {
-			t.Errorf("no-repo chat has %s: %s", name, reply)
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GIT_PAT", runner.SSHKeyEnv} {
+		if !has(reply, name) {
+			t.Errorf("no-repo coding chat lacks %s: %s", name, reply)
 		}
 	}
 }

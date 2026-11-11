@@ -275,6 +275,14 @@ type ChatParticipant struct {
 	JoinedAt  time.Time
 }
 
+type ChatRepository struct {
+	ChatID           uuid.UUID
+	RepoUrl          string
+	Directory        string
+	WorkBranches     []string
+	CheckpointBranch *string
+}
+
 type ChatSession struct {
 	ID                 uuid.UUID
 	WorkspaceID        uuid.UUID
@@ -307,6 +315,7 @@ type ChatSession struct {
 	CommitEmail        *string
 	SecretIds          []uuid.UUID
 	Temporary          bool
+	PendingRepoUrl     *string
 }
 
 type ChatSpace struct {
@@ -966,6 +975,13 @@ type ProviderUsage struct {
 	Available   bool
 	Windows     json.RawMessage
 	ObservedAt  time.Time
+}
+
+type RepositorySource struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Kind        string
+	Name        string
 }
 
 type ResearchJob struct {

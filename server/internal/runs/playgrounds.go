@@ -10,6 +10,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/playground"
+	"github.com/liamphmurphy/vesper/server/internal/repositories"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testenv"
 )
@@ -39,6 +40,41 @@ func (s *Service) StartChatPlayground(ctx context.Context, ws, runID uuid.UUID, 
 	}
 	if !caps.Code {
 		return store.Playground{}, apperr.Conflict("A playground needs a chat that can run code; tell the person this chat can't.")
+	}
+	if spec.Repository != "" {
+		url, e := s.Repositories().Resolve(ctx, repositories.Owner{WorkspaceID: ws, UserID: chat.CreatedBy}, spec.Repository)
+		if e != nil {
+			return store.Playground{}, e
+		}
+		attached, e := q.ChatRepositories(ctx, chat.ID)
+		if e != nil {
+			return store.Playground{}, e
+		}
+		found := false
+		for _, repo := range attached {
+			canonical, _ := repositories.Canonical(repo.RepoUrl)
+			if canonical == url {
+				chat.RepoUrl = &repo.RepoUrl
+				found = true
+				break
+			}
+		}
+		if !found {
+			return store.Playground{}, apperr.Invalid("repository", "attach this repository with use_repository before starting its playground")
+		}
+	}
+	if chat.RepoUrl != nil {
+		attached, e := q.ChatRepositories(ctx, chat.ID)
+		if e != nil {
+			return store.Playground{}, e
+		}
+		for _, repo := range attached {
+			if repo.RepoUrl == *chat.RepoUrl {
+				spec.Repository = repo.RepoUrl
+				spec.Directory = repo.Directory
+				break
+			}
+		}
 	}
 	// What the agent leaves out comes from the repository's test
 	// environment: the services its tests use, and the tools agents installed.
@@ -85,6 +121,7 @@ func savePlaygroundSpec(ctx context.Context, q *store.Queries, ws uuid.UUID, cha
 	if spec.OpenAPIInferred {
 		spec.OpenAPI, spec.OpenAPIInferred, spec.OpenAPICommit = "", false, ""
 	}
+	spec.Directory = ""
 	b, err := json.Marshal(spec)
 	if err != nil {
 		return err
@@ -112,6 +149,17 @@ func (s *Service) SavedPlaygroundSpec(ctx context.Context, chat store.ChatSessio
 	}
 	if json.Unmarshal(row.Spec, &spec) != nil || spec.Validate() != nil {
 		return playground.Spec{}, false, nil // saved under rules that changed
+	}
+	attached, e := q.ChatRepositories(ctx, chat.ID)
+	if e != nil {
+		return spec, false, e
+	}
+	for _, repo := range attached {
+		if repo.RepoUrl == *chat.RepoUrl {
+			spec.Repository = repo.RepoUrl
+			spec.Directory = repo.Directory
+			break
+		}
 	}
 	return spec, true, nil
 }
