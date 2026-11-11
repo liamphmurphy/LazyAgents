@@ -31,12 +31,26 @@ SELECT COALESCE(sum(size_bytes), 0)::bigint AS total FROM (
   SELECT DISTINCT blob_key, size_bytes FROM deck_assets WHERE workspace_id = $1 AND user_id = $2
 ) a;
 
--- name: DeckAssetBlobInUse :one
-SELECT EXISTS (SELECT 1 FROM deck_assets WHERE blob_key = $1);
-
 -- name: DeleteDeckAsset :exec
 DELETE FROM deck_assets WHERE canvas_id = $1 AND id = $2;
 
 -- name: UserHasDeckBlob :one
 -- Whether this person already stores this image (in any deck), so it doesn't count twice.
 SELECT EXISTS (SELECT 1 FROM deck_assets WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3);
+
+-- name: LockDeckBlob :exec
+-- Serialises taking a reference to a deck image blob with the sweep deleting it.
+SELECT pg_advisory_xact_lock(hashtextextended('deck-blob:' || @blob_key::text, 0));
+
+-- name: DueDeckBlobSweeps :many
+-- Released image blobs queued before the cutoff, oldest first.
+SELECT blob_key FROM deck_blob_sweep WHERE queued_at < @before ORDER BY queued_at, blob_key LIMIT @row_limit;
+
+-- name: TakeDeckBlobSweep :one
+-- Dequeues a key that's still due, saying whether any deck still uses it.
+DELETE FROM deck_blob_sweep s WHERE s.blob_key = @blob_key AND s.queued_at < @before
+RETURNING NOT EXISTS (SELECT 1 FROM deck_assets a WHERE a.blob_key = s.blob_key) AS unused;
+
+-- name: RequeueDeckBlobSweep :exec
+-- Sends a key whose blob couldn't be deleted to the back of the queue.
+UPDATE deck_blob_sweep SET queued_at = now() WHERE blob_key = @blob_key;

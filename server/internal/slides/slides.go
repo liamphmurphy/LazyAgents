@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -172,4 +173,84 @@ func ReadAsset(r io.Reader, ws, user uuid.UUID) (Asset, error) {
 	}
 	key := fmt.Sprintf("slides/%s/%s/%x", ws, user, sha256.Sum256(b))
 	return Asset{Mime: mime, Width: cfg.Width, Height: cfg.Height, Bytes: b, Key: key}, nil
+}
+
+// AddAsset lists an image under a deck, ready for its blob to be written.
+// It holds the blob's lock while it inserts the row, so a sweep either sees
+// this reference and keeps the blob, or has deleted the blob before the
+// caller writes it again.
+func (s *Service) AddAsset(ctx context.Context, p store.CreateDeckAssetParams) (store.DeckAsset, error) {
+	var row store.DeckAsset
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if err := q.LockDeckBlob(ctx, p.BlobKey); err != nil {
+			return err
+		}
+		var err error
+		row, err = q.CreateDeckAsset(ctx, p)
+		return err
+	})
+	return row, err
+}
+
+// BlobSweepDelay is how long a released image blob waits before the sweep
+// may delete it.
+const BlobSweepDelay = time.Hour
+
+// BlobDeleter deletes blobs (blob.Store).
+type BlobDeleter interface {
+	Delete(ctx context.Context, bucket, key string) error
+}
+
+// SweepBlobs deletes up to limit image blobs released before cutoff that no
+// deck uses any more, and returns how many it deleted. Deleting a deck, its
+// chat or the Slides space queues its blobs (a trigger on deck_assets); a
+// blob a copy or another deck still uses is dequeued and kept. A blob whose
+// delete fails stays queued, at the back, for a later sweep.
+func SweepBlobs(ctx context.Context, pool *pgxpool.Pool, blobs BlobDeleter, bucket string, cutoff time.Time, limit int32) (int, error) {
+	keys, err := store.New(pool).DueDeckBlobSweeps(ctx, store.DueDeckBlobSweepsParams{Before: cutoff, RowLimit: limit})
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	var errs []error
+	for _, key := range keys {
+		if ctx.Err() != nil {
+			break
+		}
+		gone := false
+		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			q := store.New(tx)
+			if err := q.LockDeckBlob(ctx, key); err != nil {
+				return err
+			}
+			unused, err := q.TakeDeckBlobSweep(ctx, store.TakeDeckBlobSweepParams{BlobKey: key, Before: cutoff})
+			if errors.Is(err, pgx.ErrNoRows) || (err == nil && !unused) {
+				return err // another sweep took it, it was released again, or it's in use
+			} else if err != nil {
+				return err
+			}
+			// Still holding the lock, so no upload can take the key until
+			// the blob is gone; a failure rolls the dequeue back.
+			if err := blobs.Delete(ctx, bucket, key); err != nil {
+				return err
+			}
+			gone = true
+			return nil
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+			if rerr := store.New(pool).RequeueDeckBlobSweep(ctx, key); rerr != nil {
+				errs = append(errs, rerr)
+			}
+			continue
+		}
+		if gone {
+			deleted++
+		}
+	}
+	return deleted, errors.Join(errs...)
 }

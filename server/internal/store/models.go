@@ -500,6 +500,11 @@ type DeckAsset struct {
 	CreatedAt   time.Time
 }
 
+type DeckBlobSweep struct {
+	BlobKey  string
+	QueuedAt time.Time
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
