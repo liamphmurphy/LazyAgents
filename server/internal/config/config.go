@@ -53,7 +53,7 @@ type Config struct {
 // Runner configures `vesper runner` (docs/dev/plan.md §6.5).
 type Runner struct {
 	ModelPrices   map[string]harness.Price
-	Backend       string // docker | local
+	Backend       string // docker, or fake (stand-in harnesses on the host, for tests)
 	MaxConcurrent int
 	MCPURL        string // how turns reach the API's /mcp
 	Image         string // docker
@@ -62,9 +62,9 @@ type Runner struct {
 	Stack         string // docker: the install whose containers this runner owns (RUNNER_STACK)
 	MemoryMB      int64  // docker: per-container memory limit, 0 = none
 	PidsLimit     int64  // docker: per-container process limit, 0 = none
-	DataDir       string // local: run workspaces
-	ClaudeBin     string // local: path to `claude`
-	CodexBin      string // local: path to `codex`
+	DataDir       string // fake: run workspaces
+	ClaudeBin     string // fake: stand-in for `claude`
+	CodexBin      string // fake: stand-in for `codex`
 	// ChatIdleTTL is how long an idle Personal Assistant chat keeps its run
 	// and workspace (RUNNER_CHAT_IDLE_TTL_S).
 	ChatIdleTTL time.Duration
@@ -158,11 +158,19 @@ func Load() (Config, error) {
 	if r.HostWorkspaces = env("RUNNER_HOST_WORKSPACES_DIR", ""); r.HostWorkspaces != "" && !filepath.IsAbs(r.HostWorkspaces) {
 		return c, fmt.Errorf("config: RUNNER_HOST_WORKSPACES_DIR=%q must be an absolute path: Docker resolves it on the host", r.HostWorkspaces)
 	}
-	if r.Backend != "docker" && r.Backend != "local" {
-		return c, fmt.Errorf("config: RUNNER_BACKEND=%q must be docker or local", r.Backend)
+	switch r.Backend {
+	case "docker":
+	case "fake":
+		// Fake turns run on the host with no isolation, so they may only ever
+		// start stand-in harnesses, never a real CLI found on PATH.
+		if r.ClaudeBin == "" || r.CodexBin == "" {
+			return c, fmt.Errorf("config: RUNNER_BACKEND=fake needs RUNNER_CLAUDE_BIN and RUNNER_CODEX_BIN set to fake harness binaries")
+		}
+	default:
+		return c, fmt.Errorf("config: RUNNER_BACKEND=%q must be docker (or fake, for tests and playgrounds)", r.Backend)
 	}
 	defMCP := "http://api:8000/mcp"
-	if r.Backend == "local" {
+	if r.Backend == "fake" {
 		defMCP = "http://localhost:8000/mcp"
 	}
 	r.MCPURL = env("RUNNER_MCP_URL", defMCP)

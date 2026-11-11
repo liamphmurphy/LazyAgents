@@ -37,3 +37,10 @@ test("/workflow takes a workflow to pick", () => {
   assert.deepEqual(commandMenu("/workflow "), { stage: "arg", name: "workflow", query: "" });
   assert.deepEqual(parseCommand("/workflow Research to wiki"), { name: "workflow", arg: "Research to wiki" });
 });
+
+test("/aside and /queue take free text, with nothing to pick", () => {
+  assert.equal(commandMenu("/aside how far along?"), null);
+  assert.equal(commandMenu("/queue "), null);
+  assert.deepEqual(commandMenu("/as"), { stage: "command", query: "as" });
+  assert.deepEqual(parseCommand("/aside how far along?"), { name: "aside", arg: "how far along?" });
+});

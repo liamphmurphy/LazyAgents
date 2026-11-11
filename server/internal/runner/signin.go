@@ -22,7 +22,7 @@ import (
 // Sign-ins started from Settings: the provider's own CLI runs in a throwaway
 // container, the runner relays its link and code to the person, and the login
 // it produces is stored as the provider's secret. Only the Docker backend can
-// do this; a local runner uses the machine's own CLI logins.
+// do this.
 
 // LoginStarter starts the containers sign-ins run in.
 type LoginStarter interface {

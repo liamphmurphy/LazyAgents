@@ -41,7 +41,7 @@ func names(files []OutboxFile) string {
 }
 
 func TestLocalReadOutbox(t *testing.T) {
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	ctx := context.Background()
 	if err := l.EnsureWorkspace(ctx, "run"); err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestLocalReadOutbox(t *testing.T) {
 
 // An outbox that is itself a link out of the workspace is not followed.
 func TestLocalReadOutboxLinkedDirectory(t *testing.T) {
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	if err := l.EnsureWorkspace(context.Background(), "run"); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestOutboxScriptLinkedDirectories(t *testing.T) {
 func TestCollectGeneratedImages(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	ctx := context.Background()
 	if err := l.EnsureWorkspace(ctx, "run"); err != nil {
 		t.Fatal(err)
@@ -244,7 +244,7 @@ func TestCollectGeneratedImagesLinkedOutbox(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "generated_images", "t1", "a.png"), []byte("a"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	l := &Local{Dir: t.TempDir()}
+	l := &Fake{Dir: t.TempDir()}
 	if err := l.EnsureWorkspace(context.Background(), "run"); err != nil {
 		t.Fatal(err)
 	}

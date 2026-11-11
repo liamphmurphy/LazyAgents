@@ -57,7 +57,7 @@ func TestTickRecoversChatAfterOldHeartbeatExpires(t *testing.T) {
 	if _, err := e.pool.Exec(e.ctx, `UPDATE run_turns SET status='running',process_started_at=now() WHERE run_id=$1`, run.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: "old-runner", Backend: "local", MaxConcurrent: 2, Version: "test"}); err != nil {
+	if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: "old-runner", Backend: "fake", MaxConcurrent: 2, Version: "test"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.runner.Recover(e.ctx); err != nil {
@@ -88,7 +88,7 @@ func TestExpiredTurnLeaseRecoversEvenWhileRunnerIsLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: e.runner.Cfg.ID, Backend: "local", MaxConcurrent: 2, Version: "test"}); err != nil {
+	if err := e.q.Heartbeat(e.ctx, store.HeartbeatParams{ID: e.runner.Cfg.ID, Backend: "fake", MaxConcurrent: 2, Version: "test"}); err != nil {
 		t.Fatal(err)
 	}
 	e.runner.Tick(e.ctx)

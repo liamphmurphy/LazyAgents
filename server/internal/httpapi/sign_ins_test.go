@@ -45,10 +45,10 @@ func TestSignInLifecycle(t *testing.T) {
 		t.Fatalf("available without a runner: %v", l)
 	}
 	do("POST", "/sign-ins", `{"provider":"claude"}`, 409)
-	if err := q.Heartbeat(ctx, store.HeartbeatParams{ID: "r1", Backend: "local", MaxConcurrent: 1, Version: "t"}); err != nil {
+	if err := q.Heartbeat(ctx, store.HeartbeatParams{ID: "r1", Backend: "fake", MaxConcurrent: 1, Version: "t"}); err != nil {
 		t.Fatal(err)
 	}
-	do("POST", "/sign-ins", `{"provider":"claude"}`, 409) // a local runner can't
+	do("POST", "/sign-ins", `{"provider":"claude"}`, 409) // a fake runner can't
 	if err := q.Heartbeat(ctx, store.HeartbeatParams{ID: "r2", Backend: "docker", MaxConcurrent: 1, Version: "t"}); err != nil {
 		t.Fatal(err)
 	}

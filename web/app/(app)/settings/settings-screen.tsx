@@ -277,7 +277,7 @@ function RunnerSection() {
           <Row label="Backend">
             <span className="font-mono text-[12px] text-fg-secondary">RUNNER_BACKEND = {current(backends)}</span>
             <span className="mt-1 block text-[11.5px] text-fg-tertiary">
-              docker runs each harness in a container that only receives the secrets its scopes allow. local runs on the runner’s machine with its own CLI logins and no isolation.
+              docker runs each harness in a container that only receives the secrets its scopes allow. fake runs stand-in harnesses on the runner’s machine, for tests and playgrounds.
             </span>
           </Row>
           <Row label="Slots">

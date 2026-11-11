@@ -22,7 +22,7 @@ func dependencySetupScript() string {
 // are shared. These caches are intended for one trusted user's projects.
 type CacheBackend interface{ DependencyCacheDir() string }
 
-func (l *Local) DependencyCacheDir() string {
+func (l *Fake) DependencyCacheDir() string {
 	dir, _ := filepath.Abs(filepath.Join(l.Dir, "cache"))
 	return dir
 }
