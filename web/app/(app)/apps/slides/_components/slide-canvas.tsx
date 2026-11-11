@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { cx } from "@/lib/cx";
 import { SlideSvg } from "@/lib/slides/render";
-import { H, W, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { H, W, isImageSlot, textOf, type Deck, type Element, type Frame, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { TextEditor, type TextEditorHandle } from "./text-editor";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rotate" | "move";
@@ -47,14 +47,14 @@ const handlePos = (h: Handle) => ({
   cursor: { nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize", n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize" }[h as "n"],
 });
 
-const kindLabel = (e: Element) => (e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : "Image");
+const kindLabel = (e: Element) => (isImageSlot(e) ? "Image placeholder" : e.type === "text" ? `Text${e.placeholder ? ` · ${e.placeholder}` : ""}` : e.type === "shape" ? `Shape · ${e.shape}` : e.type === "line" ? "Line" : "Image");
 
 /**
  * The slide being edited: the shared renderer underneath, and above it one
  * hit box per element for selecting, moving, resizing and rotating, plus the
  * in-place text editor. Everything is in slide units, scaled to the width.
  */
-export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, editing, onEdit, onFrame, onText, readOnly, editorRef, overflow }: {
+export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSelect, editing, onEdit, onFillImage, onFrame, onText, readOnly, editorRef, overflow }: {
   deck: Deck;
   slide: Slide;
   assetUrl: (id: string) => string;
@@ -63,6 +63,8 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
   onSelect: (id?: string) => void;
   editing?: string;
   onEdit: (id?: string) => void;
+  /** Opens the image picker to fill an empty image placeholder. */
+  onFillImage: (id: string) => void;
   onFrame: (id: string, frame: Frame, rotation?: number) => void;
   onText: (id: string, paragraphs: Paragraph[]) => void;
   readOnly: boolean;
@@ -172,10 +174,37 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
               transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
             }}
             onPointerDown={(e) => start(e, el, "move")}
-            onDoubleClick={() => !readOnly && textOf(el) && onEdit(el.id)}
+            onDoubleClick={() => !readOnly && (isImageSlot(el) ? onFillImage(el.id) : textOf(el) && onEdit(el.id))}
           />
         );
       })}
+      {shown.elements.filter(isImageSlot).map((el) => (
+        // Empty image placeholders exist only here: every renderer draws them as nothing.
+        <div
+          key={`slot-${el.id}`}
+          data-image-slot={el.id}
+          className="pointer-events-none absolute grid place-items-center border-dashed border-[#9AA0AE] bg-[#9AA0AE]/15"
+          style={{
+            left: `${(el.frame.x / W) * 100}%`,
+            top: `${(el.frame.y / H) * 100}%`,
+            width: `${(el.frame.w / W) * 100}%`,
+            height: `${(el.frame.h / H) * 100}%`,
+            borderWidth: Math.max(1, 6 * scale),
+            transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+          }}
+        >
+          <button
+            type="button"
+            disabled={readOnly}
+            className="pointer-events-auto rounded-md bg-[#2A2D36]/80 px-2.5 py-1 font-semibold text-[#E6E7EB] hover:bg-[#2A2D36] disabled:pointer-events-none"
+            style={{ fontSize: Math.max(10, 40 * scale) }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onFillImage(el.id)}
+          >
+            ▨ Click to add image
+          </button>
+        </div>
+      ))}
       {sel && !ed && (
         <div
           className="pointer-events-none absolute z-20"
