@@ -1,4 +1,4 @@
-# Generator for the Slides mockups (LAZYAGENTS-103): python3 docs/design/slides-mockups.py docs/design
+# Generator for the Slides mockups (LAZYAGENTS-103): python3 docs/design/slides-mockups.py docs/design && python3 docs/design/slides-mockups-compact.py docs/design/slides-*.svg
 """Generates the Slides mockups (LAZYAGENTS-103) as self-contained SVGs."""
 import sys
 
