@@ -397,3 +397,39 @@ Justified text, letter spacing, gradients, shadows, custom shape paths, tables, 
   - Editor text editing must measure exactly like `layoutSlide`. Use the same `FontFace` and `font-kerning: none`, and add a test that compares DOM line breaks with layout line breaks on the acceptance deck.
   - Version volume from autosave (§3.6).
   - Fonts in PPTX on machines without Arial.
+
+## 10. Implementation status (LAZYAGENTS-103)
+
+Liam approved this ADR and the mockups, then asked for the implementation in the same ticket, with PPTX optional. PPTX shipped too. What was built, and how it differs from the plan above:
+
+- **Backend.**
+  - Migration `00097_slides.sql` adds:
+    - `deck` to `chat_canvases.kind`;
+    - `slides` to `chat_spaces.app`, which the plan missed and the first end-to-end run caught;
+    - the `deck_assets` table, keyed `(canvas_id, asset id)`, so a duplicate copies rows without rewriting the deck JSON.
+  - `server/internal/deck` validates and normalises decks and applies persona ops.
+  - `server/internal/slides` holds the space, create, duplicate, rename and image checks.
+  - `httpapi/slides.go` serves `GET/POST /slides`, `PATCH/DELETE /slides/{id}`, `POST /slides/{id}/duplicate` and `POST/GET /slides/{id}/assets[/{assetId}]`.
+  - Review reuses `POST /docs/{id}/reviewed`, which works for any canvas, so the neutral alias in §6 wasn't needed.
+  - Comments on a deck are refused with a clear error, as deferred.
+  - Agents can't `canvas_create` a deck; decks start in the Slides app.
+- **Web.**
+  - `web/lib/slides`: the schema, shared layout, fonts, SVG renderer, review and merge, and PDF/PPTX export.
+  - Screens: deck list at `/apps/slides`, editor at `/apps/slides/{id}`, presentation at `/present/slides/{id}`. The presentation sits outside the app shell, like the print pages.
+- **Fonts.** The bundle is the upstream Liberation 2.1.5 TTFs (OFL) under `web/public/fonts/slides`, 4.2 MB for 12 faces. Each face loads only when it's used.
+- **SVG rendering.** Every slide is drawn with `text-rendering: geometricPrecision`. Hinted SVG text draws up to 2.5% narrower than the canvas measures at small scales, which opened gaps between words and made thumbnails overlap. Unhinted, the editor, thumbnails, presentation and PDF agree to within about 0.5%.
+- **Not yet built.**
+  - The conflict banner's **Compare** button: the banner offers Use the latest version and Keep mine.
+  - The persona's `slides_add_image` tool: the persona edits text, shapes, layouts and themes, and the person adds images.
+  - Renaming a deck doesn't rename its hidden chat, because renaming a chat waits for any running turn.
+- **Verified by running the stack locally** (Postgres and SeaweedFS in Docker, API in no-sign-in mode, Next dev, Playwright):
+  - create, rename, duplicate and delete;
+  - stale saves return 409; invalid decks and non-images return 422;
+  - editing text in place, inserting a shape and dragging it, image upload, undo and redo;
+  - persona review with mixed accept and reject (version note and `reviewed_seq` checked);
+  - a concurrent save on another slide merges, and on the same slide raises the banner without overwriting;
+  - presenting with keyboard navigation and exit back to the editor;
+  - a browser-made PDF with 5 pages at 960×540 pt and embedded fonts, and a browser-made PPTX with native, named shapes;
+  - the narrow layout.
+
+  Tests are deferred to the epic review. Opening the PPTX in PowerPoint and LibreOffice is still a manual or CI check, as §5 describes.
