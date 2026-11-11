@@ -63,3 +63,13 @@ export function useDeleteProfileAvatar() {
     onSettled: settled,
   });
 }
+
+/** Marks the Welcome Wizard finished (idempotent). */
+export function useCompleteOnboarding() {
+  const { saved, settled } = useProfileDone();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/me/onboarding/complete")),
+    onSuccess: saved,
+    onSettled: settled,
+  });
+}

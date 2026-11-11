@@ -524,6 +524,16 @@ export function useSecrets() {
   return useQuery({ queryKey: ["secrets"], queryFn: () => unwrap(api.GET("/secrets")), staleTime: 30_000, retry: 1 });
 }
 
+/** The Welcome Wizard's Verify: stores a pasted credential as the harness key (when sent) and lists its models. */
+export function useVerifyHarness() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { harness: Schemas["Harness"]; body?: Schemas["HarnessVerifyRequest"] }) =>
+      unwrap(api.POST("/harness/{harness}/verify", { params: { path: { harness: v.harness } }, ...(v.body ? { body: v.body } : {}) })),
+    onSettled: (_d, _e, v) => (v.body ? invalidateSecretDependents(qc) : qc.invalidateQueries({ queryKey: chatKeys.models })),
+  });
+}
+
 /**
  * A secret change can make harnesses available or unavailable: refresh the
  * secrets list (and the sidebar dot), chat model availability and dispatch

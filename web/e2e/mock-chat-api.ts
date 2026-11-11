@@ -74,7 +74,9 @@ export type MockProposal = {
   state: "pending" | "approved" | "declined"; proposed_by?: { id: string; name: string; color: string }; created_at: string;
   avatar_state?: "pending" | "ready" | "failed"; avatar_attachment_id?: string;
 };
-export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[] };
+export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[];
+  /** false: a fresh install that hasn't finished the Welcome Wizard. */
+  onboarded?: boolean };
 
 /** A persona fixture for the persona specs. */
 export function persona(i: number, over: Partial<MockPersona> = {}): MockPersona {
@@ -383,6 +385,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const emails = opts.emails ?? ["liam@example.com"];
   const me: Record<string, unknown> & { id: string; name: string; emails: string[] } = {
     id: "00000000-0000-4000-8000-0000000000aa", name: "Liam", email: emails[0], emails, initials: "L", role_title: "Owner",
+    harness_connected: true, ...(opts.onboarded === false ? {} : { onboarded_at: "2026-11-01T09:00:00.000Z" }),
   };
   const ownEmail = (e: unknown) => me.emails.find((x) => x.toLowerCase() === String(e).trim().toLowerCase());
   const profileRequests: string[] = [];
@@ -421,6 +424,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       });
     }
     if (path === "/me" && method === "GET") return json(me);
+    if (path === "/me/onboarding/complete" && method === "POST") {
+      me.onboarded_at ??= now();
+      return json(me);
+    }
     if (path === "/me" && method === "PATCH") {
       const b = body() as { name?: string; role_title?: string; emails?: string[] };
       profileRequests.push(`PATCH ${JSON.stringify(b)}`);

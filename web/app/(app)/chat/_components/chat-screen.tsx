@@ -29,6 +29,8 @@ import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/compo
 import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
+import { needsWizard } from "@/lib/onboarding";
+import { WelcomeWizard } from "./welcome-wizard";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -95,7 +97,7 @@ function PickUp() {
 }
 
 /** A first conversation (the persona-led welcome): pick who to talk to, write, or pick up where you left off. */
-function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) {
+function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () => void; arrived?: boolean }) {
   const router = useRouter();
   const search = useSearchParams();
   const boot = useBootstrap();
@@ -210,7 +212,8 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" {...drop.props}>
       <DropOverlay over={drop.over} />
       <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-center justify-center px-6 py-10">
-        <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} />
+        {/* Fresh from the Welcome Wizard, the new persona slides into the centre and the Assistant moves aside. */}
+        <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} enterFrom={arrived ? 1 : 0} />
         {/* Keyed so the name and tagline fade over as the carousel steps. */}
         <div key={personaId ?? ""} className="motion-page flex flex-col items-center">
           <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
@@ -250,7 +253,7 @@ function Welcome({ disabled, onNew }: { disabled: boolean; onNew: () => void }) 
             inChat={(id) => id === personaId}
             rows={2}
             disabled={locked}
-            placeholder={name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
+            placeholder={arrived ? `Message ${persona.name}…` : name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
             options={
               <>
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
@@ -310,7 +313,11 @@ export function ChatScreen({ id }: { id?: string }) {
   const canvas = useCanvasPanel();
   const turnRunning = current.data?.state === "running";
   const health = useHarnessHealth();
-  const noHarness = !!health && !health.ready;
+  const boot = useBootstrap();
+  // First run (or ?setup, from Settings): the Welcome Wizard takes the welcome's place until it hands over.
+  const [arrived, setArrived] = useState<string>();
+  const wizard = !id && !arrived && !!boot.data && (search.has("setup") || needsWizard(boot.data.me));
+  const noHarness = !!health && !health.ready && !wizard;
   // /chat resumes the newest conversation, unless a "Start chat" link brought context to attach
   // or the landing page asked for a new one (?new).
   const fresh = search.has("attach") || search.has("new");
@@ -318,15 +325,15 @@ export function ChatScreen({ id }: { id?: string }) {
   const chats = useChats(false, "all");
   const newest = newestChat(chats.data?.chats);
   useEffect(() => {
-    if (id || fresh || !newest) return;
+    if (id || fresh || wizard || !newest) return;
     const q = new URLSearchParams(search.toString());
     q.delete("project"); // Old links; a chat carries its own project.
     const qs = q.toString();
     router.replace(qs ? `/chat/${newest.id}?${qs}` : `/chat/${newest.id}`);
-  }, [id, fresh, newest, router, search]);
+  }, [id, fresh, wizard, newest, router, search]);
 
   const conversation = useNewConversation(id);
-  const resolving = !id && !fresh && (!chats.data || !!newest);
+  const resolving = !id && !fresh && !wizard && (!chats.data || !!newest);
   return (
     <div className="flex h-dvh flex-col">
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
@@ -344,6 +351,13 @@ export function ChatScreen({ id }: { id?: string }) {
                   <div className="p-6">
                     <Banner tone="blocked" title="Couldn’t load your conversations">{errorText(chats.error)}</Banner>
                   </div>
+                ) : wizard ? (
+                  <WelcomeWizard
+                    onDone={(persona) => {
+                      setArrived(persona);
+                      router.replace(`/chat?new&persona=${encodeURIComponent(persona)}`);
+                    }}
+                  />
                 ) : resolving ? (
                   <div aria-busy="true" className="flex flex-1 flex-col gap-4 p-6">
                     <Skeleton className="h-6 w-1/3" />
@@ -351,7 +365,7 @@ export function ChatScreen({ id }: { id?: string }) {
                   </div>
                 ) : (
                   // Keyed by the linked persona so New chat from the welcome starts over on the one it names.
-                  <Welcome key={search.get("persona") ?? ""} disabled={noHarness} onNew={conversation.start} />
+                  <Welcome key={search.get("persona") ?? ""} disabled={noHarness} onNew={conversation.start} arrived={!!arrived && search.get("persona") === arrived} />
                 )}
               </>
             )}

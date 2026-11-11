@@ -25,6 +25,10 @@ export const BUILTIN: PersonaLook = { name: "Assistant", color: "var(--accent)" 
 
 export const personaLook = (p?: Summary | Persona | null): PersonaLook => p ?? BUILTIN;
 
+/** The Assistant's own face (a wizard on the dusk gradient), until the person gives it a picture. */
+export const ASSISTANT_MARK = "/assistant-mark.svg";
+const avatarSrc = (p: PersonaLook) => p.avatar_url ?? (p.name === BUILTIN.name ? ASSISTANT_MARK : undefined);
+
 const TONE: Record<Schemas["PersonaTone"], string> = {
   neutral: "Neutral",
   friendly: "Friendly",
@@ -64,8 +68,8 @@ export function PersonaAvatar({ persona, size = 20, className }: { persona: Pers
   const style: CSSProperties = { width: size, height: size };
   // An avatar that fails to load (removed, stale ?v=) falls back to the initial.
   const [broken, setBroken] = useState<string>();
-  if (persona.avatar_url && broken !== persona.avatar_url) {
-    const src = persona.avatar_url;
+  const src = avatarSrc(persona);
+  if (src && broken !== src) {
     return (
       // A same-origin, private, cache-busted URL: next/image would only add a proxy hop.
       // eslint-disable-next-line @next/next/no-img-element
@@ -353,13 +357,13 @@ export function PersonaSwitcher({
 }
 
 /** A persona's portrait on a soft glow of its color: the welcome's centrepiece and an empty chat's greeting. */
-export function PersonaPortrait({ persona, size = 92 }: { persona: PersonaLook; size?: number }) {
+export function PersonaPortrait({ persona, size = 92, breathe }: { persona: PersonaLook; size?: number; breathe?: boolean }) {
   const glow = Math.round(size * 1.9);
   return (
     <span className="relative grid flex-none place-items-center" style={{ width: size + 8, height: size + 8 }} data-testid="persona-portrait">
       <span
         aria-hidden
-        className="pointer-events-none absolute rounded-full"
+        className={cx("pointer-events-none absolute rounded-full", breathe && "wizard-breathe")}
         style={{ width: glow, height: glow, background: `radial-gradient(circle, color-mix(in srgb, ${persona.color} 20%, transparent) 0%, transparent 68%)` }}
       />
       <span className="relative rounded-full p-[3px]" style={{ boxShadow: `0 0 0 2px color-mix(in srgb, ${persona.color} 60%, transparent)` }}>
@@ -377,6 +381,7 @@ export function PersonaCarousel({
   right,
   onPick,
   disabled,
+  enterFrom = 0,
 }: {
   ordered: Persona[];
   current: PersonaLook;
@@ -384,10 +389,12 @@ export function PersonaCarousel({
   right: Persona[];
   onPick: (id: string) => void;
   disabled?: boolean;
+  /** Slide in on mount from this side, as when the Welcome Wizard hands over to a new persona. */
+  enterFrom?: -1 | 0 | 1;
 }) {
   const index = ordered.findIndex((p) => p.id === current.id);
   // Which side the picked persona came from, so it slides in from there. 0 until the first step: no motion on load.
-  const [from, setFrom] = useState<-1 | 0 | 1>(0);
+  const [from, setFrom] = useState<-1 | 0 | 1>(enterFrom);
   const pick = (id: string, d: -1 | 1) => {
     setFrom(d);
     onPick(id);

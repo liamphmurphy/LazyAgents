@@ -13,7 +13,8 @@
 //	                    saying FAKE_HARNESS_OPENING first when set. A Slides prompt
 //	                    "Draft slides from this outline…" (web/lib/slides/outline.ts) adds one
 //	                    slide per top-level outline line to the chat's deck with canvas_patch
-//	                    (see fakeOutlineDraft)
+//	                    (see fakeOutlineDraft). The Welcome Wizard's "(Vesper setup)" prompts
+//	                    (web/lib/onboarding.ts) propose a persona (see fakeSetupPersona)
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	chat-image          chat turn on Claude; a prompt "image: <text>" calls generate_image
@@ -612,6 +613,16 @@ func main() {
 	}
 	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
+		latest := prompt
+		if _, tail, ok := strings.Cut(prompt, "New message from the user (answer this one):\n"); ok {
+			latest = tail
+		}
+		if strings.Contains(latest, "(Vesper setup)") {
+			answer := fakeSetupPersona(call, latest)
+			text(answer)
+			result(false, answer)
+			return
+		}
 		if _, outline, ok := strings.Cut(prompt, "Draft slides from this outline"); ok {
 			answer := fakeOutlineDraft(call, outline)
 			text(answer)
@@ -970,4 +981,22 @@ func fakeOutlineDraft(call func(string, map[string]any) map[string]any, prompt s
 	}
 	call("canvas_patch", map[string]any{"canvas_id": deckID, "base_version": int(version), "ops": ops, "note": "Drafted from your outline"})
 	return fmt.Sprintf("Drafted %d slides from your outline.", len(items))
+}
+
+// fakeSetupPersona answers the Welcome Wizard's hidden setup chat: it proposes
+// "Hackerman" (FAKE_PERSONA_NAME overrides), concise at first and playful once
+// the person asks for a change, so a refined draft is visibly different.
+func fakeSetupPersona(call func(string, map[string]any) map[string]any, prompt string) string {
+	name := os.Getenv("FAKE_PERSONA_NAME")
+	if name == "" {
+		name = "Hackerman"
+	}
+	tone := "concise"
+	if strings.Contains(prompt, "Change the draft") {
+		tone = "playful"
+	}
+	call("propose_persona", map[string]any{"name": name, "tone": tone, "color": "#f2a97e",
+		"instructions": "You reproduce a bug before fixing it. You lead with the answer. You push back with alternatives.",
+		"reason":       "An engineering partner to pair with."})
+	return "Here's my draft of " + name + "."
 }

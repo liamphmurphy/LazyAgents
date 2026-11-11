@@ -7,43 +7,24 @@ import { AGENTS, installChatApi, persona } from "./mock-chat-api";
 const ATLAS = persona(1, { name: "Atlas", is_default: true, chat_count: 2, last_used_at: "2026-11-09T09:00:00.000Z" });
 const NOVA = persona(2, { name: "Nova", chat_count: 9, last_used_at: "2026-11-01T09:00:00.000Z" });
 
-test("a fresh sign-in opens setup until the placeholder profile is replaced", async ({ page }) => {
-  const api = await installChatApi(page, { emails: ["me@localhost"] });
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/setup$/);
-  await expect(page.getByRole("heading", { name: "Get started with Vesper" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Continue to chat" })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Get started with Vesper" })).toBeVisible();
-
-  await page.getByLabel("Display name").fill("Ada Lovelace");
-  await page.getByRole("button", { name: "Save profile", exact: true }).click();
-  await page.getByRole("textbox", { name: "Email addresses", exact: true }).fill("ada@example.com");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByRole("button", { name: "Make primary", exact: true }).click();
-  await page.getByRole("button", { name: "Remove me@localhost", exact: true }).click();
-  await page.getByRole("button", { name: "Save profile", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Continue to chat" })).toBeVisible();
-  expect(api.profileRequests.some((r) => r.includes("ada@example.com"))).toBe(true);
-  await page.getByRole("link", { name: "Continue to chat" }).click();
+test("a fresh install lands in the Welcome Wizard", async ({ page }) => {
+  await installChatApi(page, { onboarded: false });
   await page.goto("/");
   await expect(page).toHaveURL(/\/chat\?new$/);
+  await expect(page.getByTestId("welcome-wizard")).toBeVisible();
+  await page.getByRole("button", { name: "Expand menu" }).click();
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("region", { name: "Getting set up" })).toBeVisible();
 });
 
-test("an empty workspace opens setup even with a configured profile, until Continue", async ({ page }) => {
+test("a finished user only sees the wizard again from Settings", async ({ page }) => {
   await installChatApi(page);
-  await page.route("**/api/v1/bootstrap", async (route) => {
-    await route.fulfill({ json: {
-      workspace: { id: "fresh", name: "My workspace", slug: "default" },
-      me: { id: "owner", name: "Liam", email: "liam@example.com", initials: "L", role_title: "" },
-      users: [], agents: [], projects: [], epics: [], labels: [], counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
-    } });
-  });
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/setup$/);
-  await page.getByRole("link", { name: "Continue to chat" }).click();
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/chat\?new$/);
+  await page.goto("/chat?new");
+  await expect(page.getByRole("radiogroup", { name: "Who to talk to" })).toBeVisible();
+  await expect(page.getByTestId("welcome-wizard")).toHaveCount(0);
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Run setup again →" }).click();
+  await expect(page).toHaveURL(/\/chat\?new&setup$/);
+  await expect(page.getByTestId("welcome-wizard")).toBeVisible();
 });
 
 test("/ opens an empty chat with the most used persona instead of resuming the newest", async ({ page }) => {
