@@ -9,6 +9,7 @@ import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { uploadDeckAsset, useDeckRef } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { reviewBase } from "@/lib/doc-review";
+import { pushRecent, shiftLevel, toggleArrow, withRadius, withStrokeWidth } from "@/lib/slides/edit";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
@@ -62,7 +63,8 @@ function formatElement(e: Element, f: TextFormat): Element {
   if (f.kind === "color") paragraphs = mapRuns(paragraphs, (r) => ({ ...r, color: f.color }));
   if (f.kind === "align") paragraphs = paragraphs.map((p) => ({ ...p, align: f.align === "left" ? undefined : f.align }));
   if (f.kind === "bullet") paragraphs = paragraphs.map((p) => (f.bullet ? { ...p, bullet: f.bullet, level: p.level ?? 0 } : { ...p, bullet: undefined, level: undefined }));
-  return withText(e, paragraphs);
+  if (f.kind === "indent") paragraphs = shiftLevel(paragraphs, f.delta);
+  return paragraphs === box.paragraphs ? e : withText(e, paragraphs);
 }
 
 function withText(e: Element, paragraphs: Paragraph[]): Element {
@@ -96,6 +98,29 @@ export function DeckScreen({ id }: { id: string }) {
   const send = useSendChatMessage(chatId);
   const assetUrl = useCallback((a: string) => assetHref(id, a), [id]);
   const [chatOpen, setChatOpen] = useState(true);
+  // Custom colours used in this deck, newest first: editor state, kept per deck in this browser.
+  const recentKey = `slides.recentColors.${id}`;
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(recentKey) ?? "[]");
+      // Reading browser storage once the page is in the browser.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(v)) setRecentColors(v.filter((c) => typeof c === "string").reduceRight<string[]>((r, c) => pushRecent(r, c), []));
+    } catch {
+      // Unreadable storage only loses the recent colours.
+    }
+  }, [recentKey]);
+  const rememberColor = (c: string) =>
+    setRecentColors((r) => {
+      const next = pushRecent(r, c);
+      try {
+        localStorage.setItem(recentKey, JSON.stringify(next));
+      } catch {
+        // Storage full or blocked: the colours stay for this visit.
+      }
+      return next;
+    });
 
   // ---- The working copy, what was last saved, and history.
   const [deck, setDeckState] = useState<Deck | null>(null);
@@ -401,11 +426,13 @@ export function DeckScreen({ id }: { id: string }) {
       if (editing && editorRef.current) {
         if (f.kind === "mark") return editorRef.current.format(f.mark);
         if (f.kind === "color") return editorRef.current.color(f.color);
+        if (f.kind === "indent") return editorRef.current.indent(f.delta);
         const paragraphs = editorRef.current.read();
         setEditing(undefined);
         update(mapElement(selectedEl.id, (e) => formatElement(withText(e, paragraphs), f)));
         return;
       }
+      if (formatElement(selectedEl, f) === selectedEl) return; // nothing to change: no undo step
       update(mapElement(selectedEl.id, (e) => formatElement(e, f)));
     },
     setFill: (col) => selected && update(mapElement(selected, (e) => (e.type === "shape" ? { ...e, fill: col } : e))),
@@ -415,6 +442,11 @@ export function DeckScreen({ id }: { id: string }) {
       const ids = new Set(selected ? [selected] : []);
       if (ids.size) update((d) => ({ ...d, slides: d.slides.map((s) => ({ ...s, elements: s.elements.map((e) => (ids.has(e.id) ? applyStyle(e, sid) : e)) })) }));
     },
+    setStrokeWidth: (w) => selected && update(mapElement(selected, (e) => withStrokeWidth(e, w))),
+    setRadius: (r) => selected && update(mapElement(selected, (e) => withRadius(e, r))),
+    toggleArrow: (end) => selected && update(mapElement(selected, (e) => toggleArrow(e, end))),
+    recentColors,
+    rememberColor,
     remove: removeSelected,
   };
 
