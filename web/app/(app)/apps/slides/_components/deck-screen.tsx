@@ -6,7 +6,7 @@ import { ApiError, api, unwrap } from "@/lib/api/client";
 import { useCanvasActions, useChatCanvas } from "@/lib/api/canvas-hooks";
 import { useMarkDocReviewed } from "@/lib/api/docs-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
-import { uploadDeckAsset, useDeckRef } from "@/lib/api/slides-hooks";
+import { uploadDeckAsset, useCreateSlideTheme, useDeckRef, useDeleteSlideTheme, useSlideThemes, useUpdateSlideTheme } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { reviewBase } from "@/lib/doc-review";
 import { align, distribute, duplicate, reorder, unionBox, type AlignOp, type ZOrder } from "@/lib/slides/arrange";
@@ -15,7 +15,7 @@ import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { assetHref, useSlideFonts } from "@/lib/slides/render";
 import { mergeDecks, same } from "@/lib/slides/review";
-import { H, THEMES, W, encodeDeck, isImageSlot, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
+import { H, THEMES, W, encodeDeck, isImageSlot, type Theme, newId, newSlide, parseDeck, relayout, textOf, type Deck, type Element, type Layout, type Paragraph, type Slide } from "@/lib/slides/schema";
 import { applyStyle } from "@/lib/slides/styles";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
@@ -25,6 +25,7 @@ import { DeckReview } from "./deck-review";
 import { ExportMenu } from "./export-menu";
 import { SlideCanvas } from "./slide-canvas";
 import type { TextEditorHandle } from "./text-editor";
+import { ThemeEditor, type ThemeEditTarget } from "./theme-editor";
 import { Thumbnails } from "./thumbnails";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
 
@@ -441,6 +442,14 @@ export function DeckScreen({ id }: { id: string }) {
     fileInput.current?.click();
   };
   const [notice, setNotice] = useState<string>();
+  // ---- Themes: the person's saved ones, and the editor.
+  const savedThemes = useSlideThemes().data;
+  const createTheme = useCreateSlideTheme();
+  const updateTheme = useUpdateSlideTheme();
+  const deleteTheme = useDeleteSlideTheme();
+  const [themeEdit, setThemeEdit] = useState<{ start: Theme; target: ThemeEditTarget } | null>(null);
+  const [themeError, setThemeError] = useState<string>();
+  const themeBody = (t: Theme) => ({ name: t.name, fonts: t.fonts, colors: t.colors });
   const [uploading, setUploading] = useState(false);
   const onImage = async (file: File) => {
     // The slide it was added on, even if the person moves on while it uploads.
@@ -490,7 +499,19 @@ export function DeckScreen({ id }: { id: string }) {
     },
     insertLine: () => addElement({ id: newId("e"), type: "line", frame: { x: 560, y: 540, w: 800, h: 0 }, stroke: "text", strokeWidth: 6 }),
     setLayout: (l) => slide && update(mapSlide(slide.id, (s) => relayout(s, l))),
-    setTheme: (k) => update((d) => ({ ...d, theme: structuredClone(THEMES[k]) })),
+    setTheme: (t) => update((d) => ({ ...d, theme: { name: t.name, fonts: { ...t.fonts }, colors: { ...t.colors } } })),
+    savedThemes: savedThemes ?? [],
+    customiseTheme: (savedId) => {
+      const saved = savedId ? savedThemes?.find((t) => t.id === savedId) : undefined;
+      if (savedId && !saved) return;
+      setThemeError(undefined);
+      setThemeEdit(saved ? { start: themeBody(saved), target: { kind: "saved", id: saved.id } } : deck ? { start: deck.theme, target: { kind: "deck" } } : null);
+    },
+    deleteSavedTheme: (tid) => {
+      const t = savedThemes?.find((x) => x.id === tid);
+      if (!t || !window.confirm(`Delete the theme “${t.name}”? Decks using it keep their copy.`)) return;
+      deleteTheme.mutate(tid, { onError: (e) => setNotice(`Couldn't delete ${t.name}: ${errorText(e)}`) });
+    },
     setBackground: (col) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined }))),
     format: (f) => {
       if (!selection.length) return;
@@ -647,7 +668,8 @@ export function DeckScreen({ id }: { id: string }) {
 
   const title = ref.data?.title ?? c?.title ?? "Deck";
   const loadError = ref.error ?? head.error;
-  const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name)?.[0] : undefined;
+  // The built-in theme the deck uses, if its copy is unchanged.
+  const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name && same(t.colors, deck.theme.colors) && same(t.fonts, deck.theme.fonts))?.[0] : undefined;
 
   return (
     <div className="flex h-dvh flex-col">
@@ -841,6 +863,37 @@ export function DeckScreen({ id }: { id: string }) {
             </main>
           </div>
         </div>
+      )}
+      {themeEdit && deck && slide && (
+        <ThemeEditor
+          start={themeEdit.start}
+          target={themeEdit.target}
+          deck={deck}
+          slide={slide}
+          assetUrl={assetUrl}
+          fontsReady={fonts}
+          busy={createTheme.isPending || updateTheme.isPending}
+          error={themeError}
+          onClose={() => setThemeEdit(null)}
+          onApply={(t) => {
+            tools.setTheme(t);
+            setThemeEdit(null);
+          }}
+          onSave={(t) =>
+            createTheme.mutate(themeBody(t), {
+              onSuccess: (s) => {
+                tools.setTheme(s);
+                setThemeEdit(null);
+              },
+              onError: (e) => setThemeError(errorText(e)),
+            })
+          }
+          onUpdate={(t) => {
+            const target = themeEdit.target;
+            if (target.kind !== "saved") return;
+            updateTheme.mutate({ id: target.id, ...themeBody(t) }, { onSuccess: () => setThemeEdit(null), onError: (e) => setThemeError(errorText(e)) });
+          }}
+        />
       )}
     </div>
   );

@@ -62,10 +62,16 @@ export const NEW_LAYOUTS = new Set<Layout>(["quote", "big-number", "three-column
 
 /** The built-in themes; server/internal/deck/templates.go has the same values. */
 export const THEMES: Record<string, Theme> = {
-  light: { name: "Light", fonts: { heading: "sans", body: "sans" }, colors: { background: "#FFFFFF", text: "#1F2328", heading: "#111418", accent: "#3B6FE0", accent2: "#E8A33D", muted: "#6B7280", surface: "#F3F5F9" } },
+  light: { name: "Light", fonts: { heading: "sans", body: "sans" }, colors: { background: "#FFFFFF", text: "#1F2328", heading: "#111418", accent: "#3B6FE0", accent2: "#E8A33D", muted: "#5F6673", surface: "#F3F5F9" } },
   dark: { name: "Dark", fonts: { heading: "sans", body: "sans" }, colors: { background: "#14151A", text: "#E6E7EB", heading: "#FFFFFF", accent: "#8B9CFF", accent2: "#F2B35E", muted: "#9AA0AE", surface: "#1F2129" } },
-  paper: { name: "Paper", fonts: { heading: "serif", body: "serif" }, colors: { background: "#FBF8F1", text: "#2B2723", heading: "#1A1612", accent: "#A2462E", accent2: "#3F6B5C", muted: "#7A7268", surface: "#F1EBDD" } },
+  paper: { name: "Paper", fonts: { heading: "serif", body: "serif" }, colors: { background: "#FBF8F1", text: "#2B2723", heading: "#1A1612", accent: "#A2462E", accent2: "#3F6B5C", muted: "#655D53", surface: "#F1EBDD" } },
   contrast: { name: "Contrast", fonts: { heading: "sans", body: "serif" }, colors: { background: "#FFFFFF", text: "#000000", heading: "#000000", accent: "#D7263D", accent2: "#1B998B", muted: "#4A4A4A", surface: "#F0F0F0" } },
+  dusk: { name: "Dusk", fonts: { heading: "sans", body: "sans" }, colors: { background: "#1B1830", text: "#E4E0F5", heading: "#FFFFFF", accent: "#B79CFF", accent2: "#F4A261", muted: "#A9A3C4", surface: "#262240" } },
+  ocean: { name: "Ocean", fonts: { heading: "sans", body: "sans" }, colors: { background: "#0B2540", text: "#D6E4F0", heading: "#FFFFFF", accent: "#4CC9F0", accent2: "#FFD166", muted: "#9DB4CB", surface: "#13355A" } },
+  forest: { name: "Forest", fonts: { heading: "serif", body: "sans" }, colors: { background: "#F3F6EF", text: "#1E2A20", heading: "#14301B", accent: "#2F6B3A", accent2: "#B5651D", muted: "#56635A", surface: "#E3EADC" } },
+  sunset: { name: "Sunset", fonts: { heading: "sans", body: "sans" }, colors: { background: "#FFF4EC", text: "#3A1F2B", heading: "#5A1A33", accent: "#D1495B", accent2: "#7B4FA0", muted: "#7A5560", surface: "#FBE3D3" } },
+  mono: { name: "Mono", fonts: { heading: "mono", body: "sans" }, colors: { background: "#FAFAFA", text: "#1A1A1A", heading: "#000000", accent: "#111111", accent2: "#777777", muted: "#5C5C5C", surface: "#EDEDED" } },
+  blueprint: { name: "Blueprint", fonts: { heading: "mono", body: "sans" }, colors: { background: "#123A6B", text: "#E8F1FB", heading: "#FFFFFF", accent: "#9BD1FF", accent2: "#FFE08A", muted: "#B4CBE6", surface: "#1B4A82" } },
 };
 export type ThemeKey = keyof typeof THEMES;
 
@@ -190,3 +196,31 @@ export function parseDeck(body: string): Deck {
 
 /** The deck as the server stores it (keys in the server's order isn't required: it normalises). */
 export const encodeDeck = (d: Deck): string => JSON.stringify(d);
+
+/** The built-in themes in the order the theme menu lists them (deck.ThemeOrder). */
+export const THEME_ORDER: ThemeKey[] = ["light", "dark", "paper", "contrast", "dusk", "ocean", "forest", "sunset", "mono", "blueprint"];
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The WCAG contrast ratio of two #RRGGBB colours, 1 to 21 (deck.Contrast). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Text colours on backgrounds below WCAG AA (4.5:1) in a theme. */
+export function contrastIssues(theme: Theme): { fg: ThemeColor; bg: ThemeColor; ratio: number }[] {
+  const out: { fg: ThemeColor; bg: ThemeColor; ratio: number }[] = [];
+  for (const fg of ["text", "heading", "muted"] as const)
+    for (const bg of ["background", "surface"] as const) {
+      const ratio = contrastRatio(theme.colors[fg], theme.colors[bg]);
+      if (ratio < 4.5) out.push({ fg, bg, ratio });
+    }
+  return out;
+}

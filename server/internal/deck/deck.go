@@ -414,15 +414,8 @@ func Normalize(body string) (string, error) {
 	return d.Encode()
 }
 
-// Validate checks the whole deck and normalises it in place.
-func (d *Deck) Validate() error {
-	if d.Schema != Schema {
-		return invalid("schema must be %d (got %d)", Schema, d.Schema)
-	}
-	if d.Size != (Size{Width, Height}) {
-		return invalid("size must be %dx%d", Width, Height)
-	}
-	t := &d.Theme
+// Validate checks a theme's name, font slots and colours, upper-casing the colours.
+func (t *Theme) Validate() error {
 	if n := utf8.RuneCountInString(t.Name); n > 60 {
 		return invalid("theme name is at most 60 characters")
 	}
@@ -442,6 +435,20 @@ func (d *Deck) Validate() error {
 	}
 	if len(t.Colors) != len(ThemeColors) {
 		return invalid("theme.colors has exactly %s", strings.Join(ThemeColors, ", "))
+	}
+	return nil
+}
+
+// Validate checks the whole deck and normalises it in place.
+func (d *Deck) Validate() error {
+	if d.Schema != Schema {
+		return invalid("schema must be %d (got %d)", Schema, d.Schema)
+	}
+	if d.Size != (Size{Width, Height}) {
+		return invalid("size must be %dx%d", Width, Height)
+	}
+	if err := d.Theme.Validate(); err != nil {
+		return err
 	}
 	if d.Assets == nil {
 		d.Assets = map[string]Asset{}
