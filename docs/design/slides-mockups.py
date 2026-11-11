@@ -98,13 +98,13 @@ USED = set()
 def slide(n, x, y, w, sel=False, extra=""):
     k = w / 1920
     h = 1080 * k
-    body = slide_symbol(n).split(">", 1)[1].rsplit("</symbol>", 1)[0]
-    o = f'<g transform="translate({x},{y}) scale({k})">{body}{extra}</g>'
+    USED.add(n)
+    o = f'<g transform="translate({x},{y}) scale({k})"><use href="#slide{n}"/>{extra}</g>'
     return o + rect(x, y, w, h, "none", T["acc"] if sel else T["border"], 4, 2 if sel else 1)
 
 
 def slide_symbol(n):
-    g = f'<symbol id="slide{n}" viewBox="0 0 1920 1080" width="1920" height="1080">'
+    g = f'<g id="slide{n}">'
     if n == 1:
         g += rect(0, 0, 1920, 1080, "#F3F5F9") + rect(160, 320, 200, 12, "#3B6FE0")
         g += text(176, 540, "Quarterly review", 112, "#111418", 700, font="Arial") + text(176, 660, "Slides acceptance deck · v1 schema", 44, "#6B7280", font="Arial")
@@ -134,7 +134,7 @@ def slide_symbol(n):
         g += rect(0, 0, 1920, 1080, "#FFFFFF") + text(136, 200, "Next quarter", 80, "#111418", 700, font="Arial")
         for i, t in enumerate(["Launch the team plan in March", "Hire two support engineers", "Cut onboarding time in half"]):
             g += text(136, 360 + i * 80, "•", 48, "#1F2328", font="Arial") + text(196, 360 + i * 80, t, 48, "#1F2328", font="Arial")
-    return g + "</symbol>"
+    return g + "</g>"
 
 
 def sidebar(h, active="Apps"):
