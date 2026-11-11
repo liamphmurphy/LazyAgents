@@ -32,6 +32,10 @@ export function PresentDeck({ id }: { id: string }) {
   const root = useRef<HTMLDivElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const at = Math.min(i, Math.max(0, shown.length - 1));
+  const flash = useCallback((text: string) => {
+    setToast(text);
+    setTimeout(() => setToast((t) => (t === text ? undefined : t)), 4000);
+  }, []);
   const slide = shown[at];
 
   const exit = useCallback(() => {
@@ -55,10 +59,10 @@ export function PresentDeck({ id }: { id: string }) {
   const go = useCallback((n: number) => setI(Math.max(0, Math.min(shown.length - 1, n))), [shown.length]);
 
   useEffect(() => {
-    root.current?.requestFullscreen?.().catch(() => setToast("Press F for fullscreen"));
+    root.current?.requestFullscreen?.().catch(() => flash("Press F for fullscreen"));
     arm();
     return () => clearTimeout(idle.current);
-  }, [arm]);
+  }, [arm, flash]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,7 +92,7 @@ export function PresentDeck({ id }: { id: string }) {
       else if (k === "?") setHelp((h) => !h);
       else if (k === "f" || k === "F") {
         if (document.fullscreenElement) void document.exitFullscreen();
-        else void root.current?.requestFullscreen?.().catch(() => setToast("Fullscreen isn’t available here"));
+        else void root.current?.requestFullscreen?.().catch(() => flash("Fullscreen isn’t available here"));
       } else if (k === "Escape") {
         if (help) setHelp(false);
         else exit();
@@ -96,7 +100,7 @@ export function PresentDeck({ id }: { id: string }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [at, go, shown.length, help, exit, wake]);
+  }, [at, go, shown.length, help, exit, wake, flash]);
 
   // Swipes, and taps on the left or right third (touch screens).
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -104,7 +108,7 @@ export function PresentDeck({ id }: { id: string }) {
   return (
     <div
       ref={root}
-      className={cx("fixed inset-0 flex items-center justify-center bg-black", !controls && "cursor-none")}
+      className={cx("fixed inset-0 flex items-center justify-center bg-[#000]", !controls && "cursor-none")}
       onPointerMove={wake}
       onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
       onTouchEnd={(e) => {
@@ -121,9 +125,9 @@ export function PresentDeck({ id }: { id: string }) {
       }}
     >
       {!deck ? (
-        <p role="status" className="text-[13px] text-white/60">{ref.isError ? "Couldn’t open this deck." : "Loading…"}</p>
+        <p role="status" className="text-[13px] text-[#fff9]">{ref.isError ? "Couldn’t open this deck." : "Loading…"}</p>
       ) : !slide ? (
-        <p role="status" className="text-[13px] text-white/60">Every slide in this deck is hidden.</p>
+        <p role="status" className="text-[13px] text-[#fff9]">Every slide in this deck is hidden.</p>
       ) : (
         <SlideSvg deck={deck} slide={slide} assetUrl={(a) => assetHref(id, a)} fontsReady={fonts} className="max-h-full max-w-full" label={`Slide ${at + 1} of ${shown.length}: ${slideText(slide) || "empty slide"}`} />
       )}
@@ -156,7 +160,7 @@ export function PresentDeck({ id }: { id: string }) {
         </div>
       )}
       {toast && (
-        <div role="status" className="absolute left-1/2 top-5 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg-2 shadow-[var(--shadow-float)]" onAnimationEnd={() => setToast(undefined)}>
+        <div role="status" className="absolute left-1/2 top-5 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg-2 shadow-[var(--shadow-float)]">
           {toast}
           <button type="button" className="ml-2 text-accent" onClick={() => setToast(undefined)} aria-label="Dismiss">×</button>
         </div>

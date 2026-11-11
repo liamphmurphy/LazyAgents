@@ -104,7 +104,7 @@ export function DeckReview({ base, head, persona, assetUrl, fontsReady, busy, er
                     <>
                       <div>
                         <p className="mb-1.5 text-[11.5px] font-medium text-fg-tertiary">Before</p>
-                        {c.before ? thumb(base, c.before, c.marksBefore) : <span className="grid aspect-video w-[250px] max-w-full place-items-center rounded-[4px] border border-dashed border-border-strong bg-surface-sunken text-[12px] text-fg-tertiary">No slide here before</span>}
+                        {c.before ? thumb(base, c.before, Object.fromEntries(Object.keys(c.marksBefore).map((k) => [k, "removed" as const]))) : <span className="grid aspect-video w-[250px] max-w-full place-items-center rounded-[4px] border border-dashed border-border-strong bg-surface-sunken text-[12px] text-fg-tertiary">No slide here before</span>}
                       </div>
                       <span aria-hidden className="self-center text-lg text-fg-tertiary">→</span>
                       <div>

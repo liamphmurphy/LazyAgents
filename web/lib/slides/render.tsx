@@ -115,7 +115,8 @@ export function SlideSvg({ deck, slide, assetUrl, className, label, marks, showO
   const [uid] = useState(() => `slide${++seq}`);
   const outline = (id: string) => slide.elements.find((e) => e.id === id)?.frame;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={className} role="img" aria-label={label ?? (slideText(slide) || "Empty slide")} preserveAspectRatio="xMidYMid meet">
+    // geometricPrecision: unhinted glyph advances, so text is as wide as the layout measured at any scale.
+    <svg viewBox={`0 0 ${W} ${H}`} className={className} textRendering="geometricPrecision" role="img" aria-label={label ?? (slideText(slide) || "Empty slide")} preserveAspectRatio="xMidYMid meet">
       {laid.ops.map((o, i) => (hideTextOf && o.op === "text" && o.el === hideTextOf ? null : draw(o, i, deck, assetUrl, uid)))}
       {showOverflow &&
         [...laid.overflow].map((id) => {

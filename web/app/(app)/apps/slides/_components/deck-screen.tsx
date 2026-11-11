@@ -106,6 +106,8 @@ export function DeckScreen({ id }: { id: string }) {
   const [saveState, setSaveState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
   const [conflict, setConflict] = useState<{ theirs: Deck; seq: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Set while a conflict waits on the person: nothing saves until they choose.
+  const conflicted = useRef(false);
   const saving = useRef<Promise<void> | null>(null);
 
   const setDeck = (d: Deck) => {
@@ -145,7 +147,7 @@ export function DeckScreen({ id }: { id: string }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const mine = deckRef.current;
       const at = saved.current;
-      if (!mine || !at || !dirty.current) return;
+      if (!mine || !at || !dirty.current || conflicted.current) return;
       if (encodeDeck(mine) === encodeDeck(at.deck)) {
         setDirty(false);
         setSaveState({ s: "saved" });
@@ -172,6 +174,8 @@ export function DeckScreen({ id }: { id: string }) {
             setSaveState({ s: "unsaved" });
             continue;
           }
+          conflicted.current = true;
+          clearTimeout(timer.current);
           setConflict({ theirs, seq: latest.seq });
           setSaveState({ s: "conflict", message: "This deck changed while you were editing." });
         } else if (e instanceof ApiError && e.status === 422 && /changes nothing/.test(e.message)) {
@@ -187,13 +191,13 @@ export function DeckScreen({ id }: { id: string }) {
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
     while (saving.current) await saving.current;
-    if (dirty.current && !conflict) {
+    if (dirty.current && !conflicted.current) {
       saving.current = runSave().finally(() => (saving.current = null));
       await saving.current;
     }
-    if (dirty.current) throw new Error(conflict ? "resolve the conflict first" : "the deck isn't saved yet");
+    if (dirty.current) throw new Error(conflicted.current ? "resolve the conflict first" : "the deck isn't saved yet");
     return { deck: saved.current!.deck, seq: saved.current!.seq };
-  }, [runSave, conflict]);
+  }, [runSave]);
 
   const schedule = useCallback(() => {
     clearTimeout(timer.current);
@@ -238,10 +242,12 @@ export function DeckScreen({ id }: { id: string }) {
 
   // ---- Selection.
   const [slideId, setSlideId] = useState<string>();
+  // Back from presenting (or a link) at ?slide=N opens that slide.
+  const startAt = Number(search.get("slide") ?? 0);
   const [selected, setSelected] = useState<string>();
   const [editing, setEditing] = useState<string>();
   const editorRef = useRef<TextEditorHandle | null>(null);
-  const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[0];
+  const slide = deck?.slides.find((s) => s.id === slideId) ?? deck?.slides[Math.max(0, Math.min(deck.slides.length - 1, startAt - 1))];
   const selectedEl = slide?.elements.find((e) => e.id === selected);
   const readOnly = live || archived || reviewing || !!conflict;
 
@@ -523,9 +529,9 @@ export function DeckScreen({ id }: { id: string }) {
               persona={persona}
               readOnly={readOnly}
             />
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0A0910]">
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
               <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} selected={selectedEl} editing={!!editing} disabled={readOnly} a={tools} />
-              <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => {
+              <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";
                 if (f) void onImage(f);
@@ -564,6 +570,7 @@ export function DeckScreen({ id }: { id: string }) {
                             <Button
                               variant="secondary"
                               onClick={() => {
+                                conflicted.current = false;
                                 markSaved(conflict.seq, conflict.theirs);
                                 setDeck(conflict.theirs);
                                 setDirty(false);
@@ -576,6 +583,7 @@ export function DeckScreen({ id }: { id: string }) {
                             <Button
                               variant="primary"
                               onClick={() => {
+                                conflicted.current = false;
                                 setConflict(null);
                                 void flush().catch(() => undefined);
                               }}

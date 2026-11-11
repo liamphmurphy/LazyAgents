@@ -144,7 +144,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       aria-label="Slide canvas. Tab selects elements; arrow keys move the selection; Enter edits its text."
       onKeyDown={onKey}
       onPointerDown={() => !editing && onSelect(undefined)}
-      className="relative aspect-video w-full select-none overflow-hidden rounded-[4px] border border-border bg-white shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="relative aspect-video w-full select-none overflow-hidden rounded-[4px] border border-border bg-[#fff] shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       <SlideSvg deck={deck} slide={shown} assetUrl={assetUrl} fontsReady={fontsReady} className="absolute inset-0 h-full w-full" showOverflow hideTextOf={editing} />
       {shown.elements.map((el) => {
@@ -191,7 +191,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
               <span
                 key={h}
                 aria-hidden
-                className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border-[1.5px] border-accent bg-white"
+                className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border-[1.5px] border-accent bg-[#fff]"
                 style={handlePos(h)}
                 onPointerDown={(e) => start(e, sel, h)}
               />
@@ -202,7 +202,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
               <span
                 aria-hidden
                 title="Rotate (Shift snaps to 15°)"
-                className="pointer-events-auto absolute left-1/2 top-0 size-3 -translate-x-1/2 -translate-y-[22px] cursor-grab rounded-full border-[1.5px] border-accent bg-white"
+                className="pointer-events-auto absolute left-1/2 top-0 size-3 -translate-x-1/2 -translate-y-[22px] cursor-grab rounded-full border-[1.5px] border-accent bg-[#fff]"
                 onPointerDown={(e) => start(e, sel, "rotate")}
               />
             </>

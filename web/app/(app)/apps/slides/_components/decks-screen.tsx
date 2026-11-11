@@ -160,7 +160,7 @@ function DeckCard({ d, fonts }: { d: DeckSummary; fonts: boolean }) {
           {cover ? (
             <SlideSvg deck={cover} slide={cover.slides[0]} assetUrl={(a) => assetHref(d.id, a)} fontsReady={fonts} className="block aspect-video w-full" label={`First slide of ${d.title}`} />
           ) : (
-            <span className="block aspect-video w-full bg-white" />
+            <span className="block aspect-video w-full bg-[#fff]" />
           )}
         </span>
         <span className="mt-3 block truncate pr-8 text-[13.5px] font-medium text-fg">{renaming ? " " : d.title}</span>
@@ -227,7 +227,7 @@ function DeckCard({ d, fonts }: { d: DeckSummary; fonts: boolean }) {
               </Dialog.Close>
               <Button
                 variant="primary"
-                className="bg-state-blocked text-white"
+                className="bg-state-blocked text-[#fff]"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(d.id, { onSuccess: () => setConfirming(false) })}
               >

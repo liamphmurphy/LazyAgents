@@ -4,6 +4,8 @@
 -- are listed here, keyed by the asset id the deck JSON refers to.
 ALTER TABLE chat_canvases DROP CONSTRAINT chat_canvases_kind_check;
 ALTER TABLE chat_canvases ADD CONSTRAINT chat_canvases_kind_check CHECK (kind IN ('text', 'svg', 'deck'));
+ALTER TABLE chat_spaces DROP CONSTRAINT chat_spaces_app_check;
+ALTER TABLE chat_spaces ADD CONSTRAINT chat_spaces_app_check CHECK (app IN ('finance', 'docs', 'slides'));
 
 CREATE TABLE deck_assets (
   canvas_id    uuid NOT NULL REFERENCES chat_canvases(id) ON DELETE CASCADE,
@@ -24,5 +26,8 @@ CREATE INDEX deck_assets_blob ON deck_assets (blob_key);
 -- +goose Down
 DROP TABLE deck_assets;
 DELETE FROM chat_canvases WHERE kind = 'deck';
+DELETE FROM chat_spaces WHERE app = 'slides';
+ALTER TABLE chat_spaces DROP CONSTRAINT chat_spaces_app_check;
+ALTER TABLE chat_spaces ADD CONSTRAINT chat_spaces_app_check CHECK (app IN ('finance', 'docs'));
 ALTER TABLE chat_canvases DROP CONSTRAINT chat_canvases_kind_check;
 ALTER TABLE chat_canvases ADD CONSTRAINT chat_canvases_kind_check CHECK (kind IN ('text', 'svg'));
