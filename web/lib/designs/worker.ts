@@ -44,11 +44,14 @@ export const deps = {
 const digest = (s: string) => createHash("sha256").update(s).digest();
 
 /** Bearer token check in constant time; false when the token isn't configured. */
+export function tokenOk(given: string, token = process.env.DESIGN_WORKER_TOKEN): boolean {
+  if (!token || !given) return false;
+  return timingSafeEqual(digest(given), digest(token));
+}
+
 export function authorized(req: Request, token = process.env.DESIGN_WORKER_TOKEN): boolean {
-  if (!token) return false;
   const h = req.headers.get("authorization") ?? "";
-  const given = h.startsWith("Bearer ") ? h.slice(7) : "";
-  return timingSafeEqual(digest(given), digest(token)) && given.length > 0;
+  return tokenOk(h.startsWith("Bearer ") ? h.slice(7) : "", token);
 }
 
 const json = (status: number, body: unknown) => Response.json(body, { status });
