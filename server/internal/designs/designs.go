@@ -132,6 +132,45 @@ func (s *Service) Create(ctx context.Context, ws, user uuid.UUID, title, starter
 	return s.start(ctx, ws, user, title, body, note, project)
 }
 
+// CreateInChat starts a design from a starter in an existing chat: a persona's
+// design_create, so the design opens beside the conversation that asked for
+// it and the persona's design tools reach it there. project is a project key
+// ("" keeps the chat's own project).
+func (s *Service) CreateInChat(ctx context.Context, ws uuid.UUID, chat store.ChatSession, title, starter, project string, by canvas.Actor) (store.ChatCanvas, store.ChatCanvasVersion, error) {
+	title, err := CleanTitle(title)
+	if err != nil {
+		return store.ChatCanvas{}, store.ChatCanvasVersion{}, err
+	}
+	body, err := design.Starter(starter)
+	if err != nil {
+		return store.ChatCanvas{}, store.ChatCanvasVersion{}, err
+	}
+	q := store.New(s.Pool)
+	projectID := chat.ProjectID
+	if project != "" {
+		p, err := q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: project})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return store.ChatCanvas{}, store.ChatCanvasVersion{}, apperr.Invalid("project", "there's no project %s", project)
+		}
+		if err != nil {
+			return store.ChatCanvas{}, store.ChatCanvasVersion{}, err
+		}
+		projectID = &p.ID
+	}
+	note := ""
+	if starter != "" && starter != "blank" {
+		note = "Started from the " + starter + " starter"
+	}
+	cv, v, err := s.canvases().Create(ctx, chat.ID, canvas.New{Kind: canvas.KindDesign, Title: title, Body: body, Note: note}, by)
+	if err != nil {
+		return cv, v, err
+	}
+	if projectID != nil {
+		err = q.UpsertDesignSettings(ctx, store.UpsertDesignSettingsParams{CanvasID: cv.ID, ProjectID: projectID})
+	}
+	return cv, v, err
+}
+
 // Duplicate copies a design's current version, with fresh ids, its images and
 // its project into a new design and chat. Proposals and switches stay behind.
 func (s *Service) Duplicate(ctx context.Context, ws, user uuid.UUID, src store.GetMyCanvasRow) (store.ChatCanvas, store.ChatSession, error) {

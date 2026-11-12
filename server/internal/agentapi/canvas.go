@@ -72,7 +72,7 @@ func canvasCreate(ctx context.Context, d Deps, c agents.Caller, in CanvasCreateI
 		return nil, apperr.Invalid("kind", "slide decks are started in the Slides app; ask the person to start one there")
 	}
 	if in.Kind == canvas.KindDesign {
-		return nil, apperr.Invalid("kind", "designs are started in the Designs app; ask the person to start one there")
+		return nil, apperr.Invalid("kind", "start a design with design_create")
 	}
 	svc := canvas.Service{Pool: d.Runs.Pool}
 	cv, v, err := svc.Create(ctx, s.ChatID, canvas.New{Kind: in.Kind, Title: in.Title, Body: in.Body, Note: in.Note}, canvas.Actor{Type: "agent", ID: c.Agent.ID})

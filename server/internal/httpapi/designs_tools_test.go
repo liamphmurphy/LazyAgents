@@ -494,3 +494,40 @@ func TestDesignRender(t *testing.T) {
 }
 
 var _ = store.ChatCanvas{}
+
+// design_create starts a design in the persona's own chat: the person's
+// Designs app lists it and the persona's design tools reach it there.
+func TestDesignCreateTool(t *testing.T) {
+	e, _ := newDesignToolsEnv(t)
+	_, chat, token := e.acceptance()
+	out := e.call(token, "design_create", map[string]any{"title": "  Onboarding  flow ", "starter": "mobile-flow"})
+	id, _ := out["canvas_id"].(string)
+	if id == "" || out["title"] != "Onboarding flow" || out["version"] != float64(1) || out["url"] != "/apps/designs/"+id {
+		t.Fatalf("design_create = %v", out)
+	}
+	d := e.want("GET", "/designs/"+id, nil, http.StatusOK)
+	if d["chat_id"] != chat {
+		t.Errorf("the design lives in chat %v, not the persona's chat %s", d["chat_id"], chat)
+	}
+	listed := false
+	for _, x := range e.call(token, "design_list", map[string]any{})["designs"].([]any) {
+		m := x.(map[string]any)
+		if m["canvas_id"] == id {
+			listed = true
+			if m["frames"].(float64) < 1 {
+				t.Errorf("a mobile-flow starter has frames: %v", m)
+			}
+		}
+	}
+	if !listed {
+		t.Error("design_list doesn't show the new design")
+	}
+	e.call(token, "design_outline", map[string]any{"canvas_id": id})
+
+	if code, _ := e.tool(token, "design_create", map[string]any{"title": "X", "starter": "poster"}); code != http.StatusUnprocessableEntity {
+		t.Errorf("unknown starter = %d", code)
+	}
+	if code, out := e.tool(token, "design_create", map[string]any{"title": "X", "project": "NOPE"}); code != http.StatusUnprocessableEntity || !strings.Contains(out["message"].(string), "NOPE") {
+		t.Errorf("unknown project = %d %v", code, out)
+	}
+}

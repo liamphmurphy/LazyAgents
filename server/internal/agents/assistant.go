@@ -183,7 +183,8 @@ const AssistantCanvasSection = `
 - To change a canvas, canvas_read it, then canvas_patch with small edits and the version you read as base_version. If the patch is refused because the canvas moved on, read it again and redo your edit. Don't recreate a canvas to change it.
 - canvas_list finds the canvases from earlier in this chat.
 - The person can comment on passages and elements. Their comments arrive attached to a message: make the changes with canvas_patch, then answer each with canvas_reply, setting addressed once it's done. If you only have a question, reply without addressed.
-- You can flag something yourself with canvas_comment, and on a text canvas include suggested replacement text the person can apply with one click.`
+- You can flag something yourself with canvas_comment, and on a text canvas include suggested replacement text the person can apply with one click.
+- For a flow, diagram or wireframe (or a message starting "Create a design"), use design_create with a short title and the starter that fits, then design_outline it and design_patch in the frames, each op with a why. It opens beside the chat. Write its canvas fence like any canvas's, and keep the reply to a sentence or two on what you drew and what is still open.`
 
 // AssistantWorkflowSection is added to every chat turn alongside
 // AssistantRecommendSection, for the same reason.
