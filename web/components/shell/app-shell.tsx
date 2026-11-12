@@ -6,7 +6,7 @@ import { useBootstrap } from "@/lib/api/hooks";
 import { useCompact } from "@/lib/viewport";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
-import { ActivityOrb } from "./activity-orb";
+import { ActivityOrb, ViewedChatReader } from "./activity-orb";
 import { CommandMenu } from "./command-menu";
 import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
@@ -88,8 +88,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CommandMenu />
       </Suspense>
       <ShortcutsDialog />
+      {/* Compact screens show the live-run strip above the chat composer instead (live-run-strip.tsx). */}
       <Suspense fallback={null}>
-        <ActivityOrb />
+        {compact ? <ViewedChatReader /> : <ActivityOrb />}
       </Suspense>
       {compact ? null : data ? (
         <Suspense fallback={<SidebarSkeleton />}>

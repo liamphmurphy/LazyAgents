@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TABS, badgeLabel, currentTab, hidesTabBar } from "./tab-bar.ts";
+import { TABS, badgeLabel, currentTab, hidesTabBar, moreLabel, moreSections } from "./tab-bar.ts";
+import { NAV_GROUPS } from "./project-scope.ts";
 
 const counts = { inbox: 0, runs: 0, scheduled: 0, wiki: 0, settings: 0 };
 
@@ -35,4 +36,24 @@ test("counts reach the link name for Inbox and Runs only", () => {
   assert.equal(badgeLabel("Inbox", "inbox", counts), "Inbox");
   assert.equal(badgeLabel("Wiki", "wiki", { ...counts, wiki: 1 }), "Wiki");
   assert.equal(badgeLabel("Chat", undefined, counts), "Chat");
+});
+
+test("More lists every NAV_GROUPS item the bar has no tab for, in the sidebar's order", () => {
+  const tabbed = new Set(TABS.map((t) => t.href));
+  const listed = moreSections().flatMap((g) => g.items.map((i) => i.href));
+  const expected = NAV_GROUPS.flatMap((g) => g.items).map((i) => i.href).filter((h) => !tabbed.has(h));
+  assert.deepEqual(listed, expected);
+  assert.deepEqual(moreSections().map((g) => g.label), ["Apps", "Tools", "You"]);
+});
+
+test("a new nav item shows up in More", () => {
+  const groups = [{ label: "Tools", items: [{ href: "/inbox", label: "Inbox", icon: "inbox" }, { href: "/new", label: "New", icon: "plus" }] }];
+  assert.deepEqual(moreSections(groups), [{ label: "Tools", items: [{ href: "/new", label: "New", icon: "plus" }] }]);
+});
+
+test("More's badges reach the row's name", () => {
+  assert.equal(moreLabel("Wiki", "wiki", { ...counts, wiki: 2 }), "Wiki, 2 suggested edits to review");
+  assert.equal(moreLabel("Scheduled", "scheduled", { ...counts, scheduled: 1 }), "Scheduled, 1 needs you");
+  assert.equal(moreLabel("Settings", "settings", { ...counts, settings: 1 }), "Settings: a setting runs need is missing");
+  assert.equal(moreLabel("Wiki", "wiki", counts), "Wiki");
 });
