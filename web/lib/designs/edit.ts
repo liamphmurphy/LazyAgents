@@ -165,8 +165,11 @@ function reorderList(list: DesignNode[], ids: ReadonlySet<string>, op: ZOrder): 
   else if (op === "back") out = [...list.filter(sel), ...list.filter((n) => !sel(n))];
   else {
     out = [...list];
-    if (op === "forward") for (let i = out.length - 2; i >= 0; i--) (sel(out[i]) && !sel(out[i + 1])) && ([out[i], out[i + 1]] = [out[i + 1], out[i]]);
-    else for (let i = 1; i < out.length; i++) (sel(out[i]) && !sel(out[i - 1])) && ([out[i], out[i - 1]] = [out[i - 1], out[i]]);
+    if (op === "forward") {
+      for (let i = out.length - 2; i >= 0; i--) if (sel(out[i]) && !sel(out[i + 1])) [out[i], out[i + 1]] = [out[i + 1], out[i]];
+    } else {
+      for (let i = 1; i < out.length; i++) if (sel(out[i]) && !sel(out[i - 1])) [out[i], out[i - 1]] = [out[i - 1], out[i]];
+    }
   }
   return out.every((n, i) => n === list[i]) ? list : out;
 }
@@ -324,3 +327,17 @@ export function labelOf(n: DesignNode): string {
 
 /** The ids of every node in a page in paint order, top-level first (Select all). */
 export const topLevelIds = (p: Page) => p.children.filter((n) => n.type !== "connector").map((n) => n.id);
+
+/**
+ * Moves a node into another parent (a page id or a container id), keeping
+ * where it is on the page: abs is the node's absolute top-left, origin the
+ * new parent's (0, 0 for a page). Goes on top of the new parent's children.
+ */
+export function reparent(d: Design, id: string, target: string, abs: { x: number; y: number }, origin: { x: number; y: number }): Design {
+  const f = find(d, id);
+  if (!f || f.node.type === "connector" || (f.parent?.id ?? f.page.id) === target) return d;
+  if (subtreeIds(f.node).has(target)) return d;
+  const moved = { ...f.node, x: r2(abs.x - origin.x), y: r2(abs.y - origin.y) } as DesignNode;
+  const without = mapTree(d, (n) => (n.id === id ? null : n));
+  return insertNodes(without, target, [moved]);
+}

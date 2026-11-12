@@ -11,7 +11,7 @@ test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with uni
   const labels = NAV_GROUPS.map((g) => [g.label, g.items.map((i) => i.label)]);
   assert.deepEqual(labels, [
     ["Work", ["Inbox", "Runs", "Tickets"]],
-    ["Apps", ["Docs", "Slides", "Finance", "Library"]],
+    ["Apps", ["Docs", "Slides", "Designs", "Finance", "Library"]],
     ["Tools", ["Workflows", "Scheduled", "Learn", "Wiki"]],
     ["You", ["Customization", "Settings"]],
   ]);

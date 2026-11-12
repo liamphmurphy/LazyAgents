@@ -308,10 +308,10 @@ export function makeLayout(design: Design) {
 
   // ---------- drawing ----------
 
-  function draw(n: DesignNode, ax: number, ay: number, w: number, h: number, mode: Mode, ops: Op[]) {
-    if (n.visible === false || n.type === "connector") return;
-    const id = n.id;
-    n = expand(n);
+  function draw(node: DesignNode, ax: number, ay: number, w: number, h: number, mode: Mode, ops: Op[]) {
+    if (node.visible === false || node.type === "connector") return;
+    const id = node.id;
+    const n = expand(node) as Exclude<DesignNode, ConnectorNode>;
     mode = ("mode" in n && n.mode) || mode;
     const box = { x: ax, y: ay, w, h };
     boxes.set(id, { ...box, rotation: n.rotation });
@@ -324,7 +324,7 @@ export function makeLayout(design: Design) {
       case "component":
       case "section": {
         const fill = paint(n.fill, mode);
-        const st = n.type === "section" ? { sw: 0 } : stroke(n);
+        const st: ReturnType<typeof stroke> = n.type === "section" ? { stroke: undefined, sw: 0, dash: undefined } : stroke(n);
         const r = n.type === "section" ? 8 : (n.radius ?? 0);
         if (fill || st.stroke) ops.push({ op: "rect", ...box, r, fill, ...st, el: id });
         if (n.type === "section") ops.push({ op: "text", x: ax + 16, y: ay + 28, text: n.name ?? "Section", weight: 600, italic: false, size: 14, fill: color("$text-secondary", mode)!, el: id });
@@ -498,7 +498,10 @@ export function makeLayout(design: Design) {
       let best = 0, bi = 1;
       for (let i = 1; i < pts.length; i++) {
         const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-        if (l > best) (best = l), (bi = i);
+        if (l > best) {
+          best = l;
+          bi = i;
+        }
       }
       const mx = (pts[bi][0] + pts[bi - 1][0]) / 2, my = (pts[bi][1] + pts[bi - 1][1]) / 2;
       const size = 12;

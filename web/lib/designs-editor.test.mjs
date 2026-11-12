@@ -66,7 +66,7 @@ test("history resets when a merge replaces the working copy, and on either confl
   assert.equal(m.saved.seq, 2);
   assert.ok(doc.isDirty(m));
   assert.equal(doc.keepMine(s, 2, theirs).past.length, 0);
-  assert.equal(doc.useTheirs(2, theirs).draft, theirs);
+  assert.equal(doc.takeTheirs(2, theirs).draft, theirs);
 });
 
 test("unchanged is decided on canonical JSON, not identity", () => {
@@ -161,4 +161,56 @@ test("resizing a frame applies its children's constraints; a path scales its poi
   const p = pathFrom([[0, 0], [10, 20]], false);
   const big = resizeNode(p, { x: p.x, y: p.y, w: 20, h: 40 });
   assert.equal(big.d, "M0 0 L20 40");
+});
+
+// ---- Home ----
+import { filterDesigns, isBrief, briefTitle, kindOf, linksOf } from "./designs/home.ts";
+
+test("Home filters by author, review and search", () => {
+  const list = [
+    { id: "1", title: "Checkout flow", persona_edited: true, pending_proposals: 3, frames: 5, pages: 1 },
+    { id: "2", title: "Runner architecture", persona_edited: false, pending_proposals: 0, frames: 0, pages: 1 },
+  ];
+  assert.deepEqual(filterDesigns(list, "mine", "").map((d) => d.id), ["2"]);
+  assert.deepEqual(filterDesigns(list, "persona", "").map((d) => d.id), ["1"]);
+  assert.deepEqual(filterDesigns(list, "review", "").map((d) => d.id), ["1"]);
+  assert.deepEqual(filterDesigns(list, "all", "RUNNER").map((d) => d.id), ["2"]);
+});
+
+test("Home tells a brief from a title and reads cards from the body", () => {
+  assert.equal(isBrief("Checkout"), false);
+  assert.equal(isBrief("Turn LAZYAGENTS-150 into a flow"), true);
+  assert.equal(briefTitle("Turn LAZYAGENTS-150 into a flow"), "LAZYAGENTS-150");
+  const d = acceptance();
+  assert.ok(linksOf(d).includes("LAZYAGENTS-150"));
+  assert.equal(kindOf(d, 4), "4 frames");
+});
+
+// ---- hit testing ----
+import { hitPath, pick, dropTarget } from "./designs/hit.ts";
+import { makeLayout } from "./designs/layout.ts";
+import { reparent } from "./designs/edit.ts";
+
+test("a click picks a top-level frame's child; double-click goes deeper; empty frame area picks the frame", () => {
+  const inner = { id: "n_row", type: "frame", x: 10, y: 10, w: 80, h: 40, children: [rect("n_dot", 5, 5)] };
+  const d = design([{ id: "n_f", type: "frame", x: 100, y: 100, w: 200, h: 200, fill: "#FFFFFF", children: [inner] }]);
+  const { boxes } = makeLayout(d).layoutPage(d.pages[0]);
+  const path = hitPath(d.pages[0], boxes, 117, 117);
+  assert.deepEqual(path.map((n) => n.id), ["n_f", "n_row", "n_dot"]);
+  assert.equal(pick(path, [], "click").id, "n_row");
+  assert.equal(pick(path, ["n_row"], "deeper").id, "n_dot");
+  assert.equal(pick(path, [], "deep").id, "n_dot");
+  const empty = hitPath(d.pages[0], boxes, 250, 250);
+  assert.equal(pick(empty, [], "click").id, "n_f");
+  assert.equal(dropTarget(d.pages[0], boxes, 115, 115).id, "n_row");
+  assert.deepEqual(hitPath(d.pages[0], boxes, 10, 10), []);
+});
+
+test("reparenting keeps a node where it is on the page", () => {
+  const d = design([{ id: "n_f", type: "frame", x: 100, y: 100, w: 200, h: 200, children: [] }, rect("n_a", 150, 160)]);
+  const out = reparent(d, "n_a", "n_f", { x: 150, y: 160 }, { x: 100, y: 100 });
+  const f = find(out, "n_a");
+  assert.equal(f.parent.id, "n_f");
+  assert.deepEqual([f.node.x, f.node.y], [50, 60]);
+  assert.equal(reparent(d, "n_f", "n_f", { x: 0, y: 0 }, { x: 0, y: 0 }), d);
 });

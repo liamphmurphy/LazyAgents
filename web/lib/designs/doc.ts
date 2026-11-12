@@ -74,7 +74,7 @@ export function fromServer(doc: Doc, seq: number, design: Design): Doc {
 export const merged = (doc: Doc, seq: number, theirs: Design, draft: Design): Doc => ({ ...open(seq, theirs), draft });
 
 /** The person chose the latest version over theirs: everything unsaved is dropped. */
-export const useTheirs = (seq: number, theirs: Design): Doc => open(seq, theirs);
+export const takeTheirs = (seq: number, theirs: Design): Doc => open(seq, theirs);
 
 /** The person chose to keep their version: it saves on top of the latest one. */
 export const keepMine = (doc: Doc, seq: number, theirs: Design): Doc => ({ ...doc, saved: { seq, design: theirs }, past: [], future: [], key: undefined });

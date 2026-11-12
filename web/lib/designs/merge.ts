@@ -16,8 +16,7 @@ function index(d: Design): Side {
   s.body.set("$meta", canonical({ mode: d.mode, tokens_ref: d.tokens_ref ?? null, token_sets: d.token_sets }));
   s.lists.set(PAGES, d.pages.map((p) => p.id));
   for (const p of d.pages) {
-    const { children: _c, ...rest } = p;
-    s.body.set(p.id, canonical(rest));
+    s.body.set(p.id, canonical({ ...p, children: undefined }));
     s.home.set(p.id, PAGES);
     s.pages.set(p.id, p);
     const walk = (list: DesignNode[], home: string) => {
@@ -100,7 +99,13 @@ export function mergeDesigns(base: Design, mine: Design, theirs: Design): MergeR
 
   // Every surviving node must have landed: one whose parent the other side removed needs the person.
   const placed = new Set<string>();
-  const mark = (list: DesignNode[]) => list.forEach((n) => (placed.add(n.id), childList(n) && mark(childList(n)!)));
+  const mark = (list: DesignNode[]) => {
+    for (const n of list) {
+      placed.add(n.id);
+      const ch = childList(n);
+      if (ch) mark(ch);
+    }
+  };
   pages.forEach((p) => mark(p.children));
   const orphans = [...from.keys()].filter((id) => from.get(id)!.nodes.has(id) && !placed.has(id));
   if (orphans.length) return { conflicts: orphans };

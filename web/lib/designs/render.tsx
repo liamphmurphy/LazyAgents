@@ -4,7 +4,7 @@
 // display list in layout.ts, used by the editor canvas, Home thumbnails and
 // (later) review, Present and the Design card. Text is one <text> per
 // measured piece with kerning off, so it lands where layout.ts measured it.
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { FAMILY, fontUrl } from "./measure";
 import { makeLayout, type LaidPage, type Op, type ResolvedPaint } from "./layout";
 import type { Design, Page } from "./schema";
@@ -166,7 +166,7 @@ export const LaidPageSvg = memo(function LaidPageSvg({ laid, uid, assetUrl, visi
 export function DesignSvg({ design, page, node, assetUrl, className, title, pad = 0 }: { design: Design; page?: Page; node?: string; assetUrl: (a: string) => string; className?: string; title?: string; pad?: number }) {
   const p = page ?? design.pages[0];
   const laid = useMemo(() => (p ? makeLayout(design).layoutPage(p) : undefined), [design, p]);
-  const uid = useMemo(() => `ds${Math.random().toString(36).slice(2, 8)}`, []);
+  const uid = `ds${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   if (!laid) return null;
   const only = node ? laid.nodes.find((n) => n.id === node) : undefined;
   const box = only?.box ?? laid.box;
