@@ -1302,6 +1302,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
 	}
+	if c.run.ParentRunID != nil && turn.Seq == 1 {
+		prompt += r.checkoutSection(ctx, c, env)
+	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
 		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, turn)

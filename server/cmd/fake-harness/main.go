@@ -44,11 +44,12 @@
 //	delegate_script     delegate as FAKE_HARNESS_DELEGATIONS (a JSON array of delegate
 //	                    arguments) says, optionally writing an uncommitted dirty.txt first
 //	                    (FAKE_HARNESS_DIRTY); on resume run FAKE_HARNESS_ROUND2 once (a
-//	                    "$1" continue_run_id is the first delegated run's id), then
+//	                    "$1" continue_run_id is the first delegated run's id; with
+//	                    FAKE_HARNESS_ROUND2_COMMIT=<path> it first commits that file), then
 //	                    complete_run with the whole resume message as the outcome
 //
 // A delegated run (any delegate* mode) writes the file named by FILE=<path> in its
-// task (default child.txt) in its worktree and commits it. Test knobs: FAKE_HARNESS_LOG
+// task (default child.txt) in its worktree and commits it (FILE=- changes nothing). Test knobs: FAKE_HARNESS_LOG
 // appends one JSON line per invocation (cwd, resume session, first prompt line);
 // FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
 // them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
@@ -729,6 +730,11 @@ func main() {
 		if _, rest, ok := strings.Cut(prompt, "FILE="); ok && len(strings.Fields(rest)) > 0 {
 			file = strings.Fields(rest)[0]
 		}
+		if file == "-" { // FILE=- : change nothing
+			call("complete_run", map[string]any{"outcome": "Nothing to change"})
+			result(false, "Done.")
+			return
+		}
 		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 			result(true, err.Error())
 			os.Exit(2)
@@ -761,6 +767,12 @@ func main() {
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
 				_ = os.WriteFile(".lazyagents/round2", nil, 0o600)
+				if f := os.Getenv("FAKE_HARNESS_ROUND2_COMMIT"); f != "" {
+					_ = os.MkdirAll(filepath.Dir(f), 0o755)
+					_ = os.WriteFile(f, []byte("the main agent's change\n"), 0o644)
+					_ = exec.Command("git", "add", f).Run()
+					_ = exec.Command("git", "commit", "-q", "-m", "Main agent commits "+f).Run()
+				}
 				delegateScript(call, "FAKE_HARNESS_ROUND2")
 				text("Delegated again. Ending my turn until it reports back.")
 				result(false, "Waiting for the sub agent.")

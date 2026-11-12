@@ -495,7 +495,7 @@ type DelegateIn struct {
 	AcceptanceCriteria []string `json:"acceptance_criteria,omitempty" jsonschema:"Checkable conditions that make the task done. Shown to the sub agent; you verify them against the automated check results."`
 	AllowedPaths       []string `json:"allowed_paths,omitempty" jsonschema:"Repo-relative files, directories (trailing slash) or globs the sub agent may change. Changes outside them fail the automated checks."`
 	TestCommand        string   `json:"test_command,omitempty" jsonschema:"Command that must exit 0 in the sub agent's worktree, e.g. go test ./internal/runs/. The server runs it when the sub agent finishes and reports the result to you."`
-	ContinueRunID      string   `json:"continue_run_id,omitempty" jsonschema:"run_id of a finished delegation to the same sub agent to carry on, e.g. to send it fixes. Keeps that agent's context: same worktree and branch, and its conversation is resumed."`
+	ContinueRunID      string   `json:"continue_run_id,omitempty" jsonschema:"run_id of a finished delegation to the same sub agent to carry on, e.g. to send it fixes. Keeps that agent's context: same worktree and branch, and its conversation is resumed. The server tells it which commits changed since its last run; don't paste SHAs."`
 }
 
 type SearchIn struct {
