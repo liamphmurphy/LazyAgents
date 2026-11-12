@@ -234,7 +234,7 @@ func (q *Queries) ListRepositorySources(ctx context.Context, arg ListRepositoryS
 }
 
 const previousChatWorkspaces = `-- name: PreviousChatWorkspaces :many
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at FROM runs r WHERE r.id <> $1 AND r.purpose = 'chat'
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at, context_tokens FROM runs r WHERE r.id <> $1 AND r.purpose = 'chat'
 AND r.state IN ('completed', 'failed', 'cancelled') AND r.workspace_volume IS NOT NULL AND r.checkpoint_at IS NULL
 AND r.id IN (SELECT m.run_id FROM chat_messages m WHERE m.session_id = $2)
 ORDER BY r.ended_at, r.id
@@ -298,6 +298,7 @@ func (q *Queries) PreviousChatWorkspaces(ctx context.Context, arg PreviousChatWo
 			&i.WorkspaceHostPath,
 			&i.ExecutionToken,
 			&i.ExecutionExpiresAt,
+			&i.ContextTokens,
 		); err != nil {
 			return nil, err
 		}
