@@ -208,7 +208,9 @@ export function TicketsScreen() {
   }, [search, bootReady]);
 
   function replaceParams(edit: (p: URLSearchParams) => void) {
-    const next = new URLSearchParams(params);
+    // From the live URL, not this render's params: a debounced write that fires after a
+    // navigation committed must not put back filters (or the project) from before it.
+    const next = new URLSearchParams(window.location.search);
     edit(next);
     router.replace(`/tickets${next.size ? `?${next}` : ""}`);
   }

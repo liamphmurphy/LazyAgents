@@ -265,6 +265,10 @@ test("filter tokens narrow the list and round-trip through the URL", async ({ pa
   await box.fill("project:ops bug");
   await expect(page).toHaveURL(/project=OPS/);
   await expect(box).toHaveValue("bug");
+  // A late debounce from before the navigation must not switch the project back.
+  await page.waitForTimeout(600);
+  await expect(page).toHaveURL(/project=OPS/);
+  await expect(page).toHaveURL(/q=bug/);
   expect(api.unhandled).toEqual([]);
 });
 
