@@ -108,6 +108,21 @@ func TestSaveDesignExportToLibrary(t *testing.T) {
 	if code, _ := e.saveExport(uuid.NewString(), "x.png", pngSized(t, 30, 20, 2)); code != http.StatusNotFound {
 		t.Fatalf("unknown design = %d", code)
 	}
+
+	other := e.otherUser()
+	theirs, _, err := e.svc().Create(t.Context(), e.me.WorkspaceID, other.ID, "Theirs", "diagram", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := e.saveExport(theirs.ID.String(), "x.png", pngSized(t, 30, 20, 2)); code != http.StatusNotFound {
+		t.Fatalf("another user's design = %d", code)
+	}
+	if n := items(); n != before+1 {
+		t.Fatalf("unauthorized save changed Library items: %d", n)
+	}
+	if keys := e.s3.keys(avatarBucket + "/library-designs/"); len(keys) != len(cases) {
+		t.Fatalf("unauthorized save stored an object: %v", keys)
+	}
 	doc := e.want("POST", "/docs", map[string]any{"title": "Notes"}, http.StatusCreated)
 	if code, _ := e.saveExport(doc["id"].(string), "x.png", pngSized(t, 30, 20, 2)); code != http.StatusNotFound {
 		t.Fatalf("a document's id = %d", code)

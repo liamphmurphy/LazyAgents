@@ -40,6 +40,12 @@ const kidBoxes = (d) => {
   return ["n_a", "n_b"].map((id) => local.get(id));
 };
 
+test("path positioning accepts uppercase and lowercase exponents", () => {
+  const d = frame(undefined, [{ id: "n_path", type: "path", x: 10, y: 20, w: 100, h: 100, d: "M1E1 2e1 L3E1 4E1" }]);
+  const path = pageOps(makeLayout(d).layoutPage(d.pages[0])).find((op) => op.op === "path");
+  assert.equal(path.d, "M20 40 L40 60");
+});
+
 test("auto layout reflows children when padding changes", () => {
   const al = { direction: "vertical", gap: 10, padding: [8, 8, 8, 8] };
   assert.deepEqual(kidBoxes(frame(al, [box("n_a", 50, 20), box("n_b", 50, 30)])), [{ x: 8, y: 8, w: 50, h: 20 }, { x: 8, y: 38, w: 50, h: 30 }]);

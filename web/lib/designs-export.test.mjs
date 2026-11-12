@@ -90,6 +90,11 @@ test("PDF export has one page per frame at its size, in page order", async () =>
 });
 
 test("path data becomes PDF operators, quadratics as cubics", () => {
+  assert.deepEqual(pathSegs("M1E-3 2e-3 3E2 4e2 5e1 6E1"), [
+    { op: "m", c: [0.001, 0.002] },
+    { op: "l", c: [300, 400] },
+    { op: "l", c: [50, 60] },
+  ]);
   assert.deepEqual(pathSegs("M0 0 L10 0 10 10Z"), [
     { op: "m", c: [0, 0] },
     { op: "l", c: [10, 0] },

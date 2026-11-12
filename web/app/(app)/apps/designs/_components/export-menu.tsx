@@ -6,14 +6,14 @@ import { useMemo, useRef, useState } from "react";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { useSaveDesignExport } from "@/lib/api/designs-hooks";
 import { cx } from "@/lib/cx";
-import { ExportError, base64, exportItems, exportPdf, exportSvg, fileName, frameFor, allFrames, pngTooLarge, renderQuery, usedAssets, type ExportFormat, type ExportItem, type ExportScope, type Loaders } from "@/lib/designs/export";
-import { find, labelOf } from "@/lib/designs/edit";
+import { ExportError, base64, exportItems, exportPdf, exportSvg, fileName, frameFor, pngTooLarge, renderQuery, usedAssets, type ExportFormat, type ExportItem, type ExportScope, type Loaders } from "@/lib/designs/export";
+import { labelOf } from "@/lib/designs/edit";
 import { designAssetHref } from "@/lib/designs/render";
 import type { Design } from "@/lib/designs/schema";
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
 
-type Notice = { tone: "ok" | "error" | "busy"; text: string; href?: string };
+type Notice = { tone: "ok" | "error" | "busy"; text: string; href?: string; cancellable?: boolean };
 type File1 = { name: string; ext: ExportFormat; blob: Blob };
 
 const FORMATS: { id: ExportFormat; label: string; detail: string }[] = [
@@ -82,13 +82,15 @@ export function ExportMenu({ id, title, design, pageId, selected, current }: { i
   const scopes = useMemo(() => {
     if (!design || !open) return [];
     const page = design.pages.find((p) => p.id === pageId) ?? design.pages[0];
-    const sel = selected.filter((id) => { const f = find(design, id); return f && f.node.type !== "connector"; }).length;
+    const at = { page: pageId, selected };
+    const counts = Object.fromEntries((["selection", "frame", "page", "frames"] as const).map((scope) => [scope, exportItems(design, scope, at).length]));
+    const sel = counts.selection;
     const frame = frameFor(design, pageId, selected);
-    const frames = allFrames(design).length;
+    const frames = counts.frames;
     return [
       { id: "selection" as const, text: sel ? `Selection (${sel})` : "Selection", count: sel },
-      { id: "frame" as const, text: frame ? `Frame: ${labelOf(frame.frame)}` : "Frame", count: frame ? 1 : 0 },
-      { id: "page" as const, text: `Page: ${page?.name ?? ""}`, count: page?.children.length ? 1 : 0 },
+      { id: "frame" as const, text: frame ? `Frame: ${labelOf(frame.frame)}` : "Frame", count: counts.frame },
+      { id: "page" as const, text: `Page: ${page?.name ?? ""}`, count: counts.page },
       { id: "frames" as const, text: `All frames (${frames})`, count: frames },
     ];
   }, [design, open, pageId, selected]);
@@ -145,17 +147,18 @@ export function ExportMenu({ id, title, design, pageId, selected, current }: { i
     say({ tone: "busy", text: `Building ${what}…` });
     try {
       const files = await build(ctl.signal);
-      if (ctl.signal.aborted) return;
+      if (ctl.signal.aborted) return say({ tone: "ok", text: "Export cancelled" });
       if (to === "library") {
         if (files.length !== 1) throw new ExportError("the Library takes one file at a time: export one item, or a PDF");
         const [f] = files;
-        say({ tone: "busy", text: "Saving to your Library…" });
+        say({ tone: "busy", text: "Saving to your Library…", cancellable: false });
         await save.mutateAsync(new File([f.blob], `${f.name}.${f.ext}`, { type: MIME[f.ext] }));
         say({ tone: "ok", text: `Saved “${f.name}.${f.ext}” to your Library`, href: "/library" });
       } else if (files.length === 1) {
         downloadFile(files[0].name, files[0].ext, files[0].blob);
         say({ tone: "ok", text: `Downloaded “${files[0].name}.${files[0].ext}”` });
       } else {
+        say({ tone: "busy", text: "Preparing download…", cancellable: false });
         const { default: JSZip } = await import("jszip");
         const zip = new JSZip();
         for (const f of files) zip.file(`${f.name}.${f.ext}`, f.blob);
@@ -177,7 +180,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current }: { i
       {notice && (
         <span role={notice.tone === "error" ? "alert" : "status"} data-testid="design-export-notice" className={cx("max-w-[420px] truncate text-[12px]", notice.tone === "error" ? "text-pill-blocked-fg" : "text-fg-secondary")} title={notice.text}>
           {notice.text}
-          {notice.tone === "busy" && (
+          {notice.tone === "busy" && notice.cancellable !== false && (
             <button type="button" className="ml-2 text-accent hover:underline" onClick={() => abort.current?.abort()}>
               Cancel
             </button>

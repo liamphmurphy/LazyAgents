@@ -190,12 +190,12 @@ type Seg = { op: "m" | "l" | "c" | "h"; c: number[] };
 
 /** SVG path data (M L C Q Z, absolute or relative) as jsPDF path operators. */
 export function pathSegs(d: string): Seg[] {
-  const tokens = d.match(/[MLCQZmlcqz]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/g) ?? [];
+  const tokens = d.match(/[MLCQZmlcqz]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/gi) ?? [];
   const out: Seg[] = [];
   let i = 0, cmd = "", x = 0, y = 0, sx = 0, sy = 0;
   const num = () => Number(tokens[i++]);
   while (i < tokens.length) {
-    if (/[A-Za-z]/.test(tokens[i])) cmd = tokens[i++];
+    if (/^[MLCQZ]$/i.test(tokens[i])) cmd = tokens[i++];
     else if (!cmd) break;
     const rel = cmd === cmd.toLowerCase();
     const ox = rel ? x : 0, oy = rel ? y : 0;
