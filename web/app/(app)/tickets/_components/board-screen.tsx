@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { DropdownMenu } from "radix-ui";
-import { useBootstrap } from "@/lib/api/hooks";
+import { useBootstrap, useInbox } from "@/lib/api/hooks";
+import { needsYouByTicket, type NeedsYou } from "@/lib/work-rows";
 import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } from "@/lib/api/board-hooks";
 import { BOARD_STATUSES, onlyBlocked, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { useCompact } from "@/lib/viewport";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
-import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { FilterMenu, floatPanel } from "@/components/domain/pickers";
@@ -22,6 +22,7 @@ import { useMotionList } from "@/components/ui/motion";
 import { Toggle } from "@/components/ui/controls";
 import { ticketsHref } from "@/lib/tickets-layout";
 import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
+import { AssigneeAvatar, EpicChip, StateText } from "./ticket-row";
 
 export function BoardScreen() {
   const bootstrap = useBootstrap();
@@ -104,6 +105,9 @@ function EpicHeader({ summary }: { summary: NonNullable<Board["epic"]> }) {
 
 function BoardView({ project, filters, blockedOnly, onOpen }: { project: string; filters: BoardFilters; blockedOnly: boolean; onOpen: (key: string) => void }) {
   const query = useBoard(project, filters);
+  // Cards whose run waits on the person show it the way the list does.
+  const inbox = useInbox(project);
+  const needs = needsYouByTicket(inbox.data);
   const moves = useBoardMoves();
   const dragging = useRef<string | null>(null);
   const columns = useRef<HTMLDivElement>(null);
@@ -168,7 +172,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
               <span className="ml-auto whitespace-nowrap text-fg-tertiary">{column?.count ?? 0} · {column?.points ?? 0} pts</span>
             </header>
             <div className="space-y-2">
-              {column?.cards.map((card) => <TicketCard key={card.key} card={card} statuses={statuses} pending={!!moves.pending[card.key]} onOpen={() => onOpen(card.key)}
+              {column?.cards.map((card) => <TicketCard key={card.key} card={card} needs={needs.get(card.key)} showEpic={!filters.epic} statuses={statuses} pending={!!moves.pending[card.key]} onOpen={() => onOpen(card.key)}
                 onMove={(target) => void moves.move(card, target)}
                 onDragStart={() => { dragging.current = card.key; }}
                 onDragEnd={() => { dragging.current = null; setOver(undefined); }} />)}
@@ -197,35 +201,38 @@ function ConflictToast({ ticket, message, onDismiss }: { ticket: string; message
   </div>;
 }
 
-function TicketCard({ card, statuses, pending, onOpen, onMove, onDragStart, onDragEnd }: {
-  card: BoardCard; statuses: BoardStatus[]; pending: boolean; onOpen: () => void; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
+/** A board card: the list row's content (status, key, title, state, epic, agent) stacked, plus the move menu. */
+function TicketCard({ card, needs, showEpic, statuses, pending, onOpen, onMove, onDragStart, onDragEnd }: {
+  card: BoardCard; needs?: NeedsYou; showEpic: boolean; statuses: BoardStatus[]; pending: boolean; onOpen: () => void; onMove: (status: BoardStatus) => void; onDragStart: () => void; onDragEnd: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [lifted, setLifted] = useState(false);
   const href = `/tickets/${encodeURIComponent(card.key)}`;
   // Plain clicks open the editor; modified clicks keep normal link behavior.
   const open = (e: MouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onOpen(); };
-  return <article tabIndex={0} data-ticket-key={card.key} data-motion-key={card.key} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
+  return <article tabIndex={0} data-ticket-key={card.key} data-motion-key={card.key} data-needs-you={needs ? true : undefined} aria-label={`Ticket ${card.key}`} aria-busy={pending} draggable={!pending}
     onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.key); e.dataTransfer.effectAllowed = "move"; onDragStart(); requestAnimationFrame(() => setLifted(true)); /* After the browser captures the drag image. */ }} onDragEnd={() => { setLifted(false); onDragEnd(); }}
     onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,[role=menu]")) onOpen(); }}
     onKeyDown={(e) => { if (e.target === e.currentTarget && !pending) {
       if (e.key === "Enter") { e.preventDefault(); onOpen(); } else if (e.key === " ") { e.preventDefault(); setMenu(true); }
     } }}
-    className={cx("rounded-md border border-border bg-surface p-3 shadow-sm outline-offset-2 transition-[opacity,scale] duration-150", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
-    <div className="mb-2 flex items-start justify-between gap-1 text-[11px]">
+    className={cx("rounded-lg border p-3 outline-offset-2 transition-[opacity,scale] duration-150", needs ? "border-state-human/60 bg-surface-raised shadow-sm" : "border-border bg-surface", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
+    <div className="mb-1.5 flex items-center gap-2 text-[11px]">
+      <StatusGlyph state={card.status} />
       <Link href={href} onClick={open} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
-      {card.unmet_dependencies > 0 && <span className="rounded-full bg-accent-soft px-1.5 text-state-blocked" title={`${card.unmet_dependencies} open blockers`}>⛔ Blocked</span>}
+      {card.priority !== "none" && <PriorityGlyph priority={card.priority} />}
+      <span className="sr-only">{PRIORITY_NAME[card.priority]}</span>
+      <span className="ml-auto flex-none"><AssigneeAvatar assignee={card.assignee} /></span>
     </div>
-    <Link href={href} onClick={open} className="mb-3 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
+    <Link href={href} onClick={open} className="mb-1.5 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
+    <StateText t={card} needs={needs} className="mb-2 block text-[12px]" />
     <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
-      <span className="flex items-center gap-1"><PriorityGlyph priority={card.priority} label={false} />{PRIORITY_NAME[card.priority]}</span>
-      <span className={cx("rounded-full px-1.5 py-0.5", card.estimate_points == null ? "border border-dashed border-border-strong text-fg-tertiary" : "bg-accent-soft text-accent")}>{card.estimate_points == null ? "unestimated" : `${card.estimate_points} pt`}</span>
-      <span aria-label={`${card.criteria_done} of ${card.criteria_total} criteria met`}>☑ {card.criteria_done}/{card.criteria_total}</span>
-    </div>
-    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-fg-tertiary">
-      {card.assignee ? <><AgentAvatar name={card.assignee.name} colorIndex={card.assignee.color_index} /><span className="truncate">@{card.assignee.handle}</span></> : <><UnassignedAvatar /><span>Unassigned</span></>}
+      {showEpic && <EpicChip epic={card.epic} />}
+      <span className={cx("font-mono", card.estimate_points == null && "text-fg-tertiary")}>{card.estimate_points == null ? "unestimated" : `${card.estimate_points} pt`}</span>
+      <span className="font-mono text-fg-tertiary" aria-label={`${card.criteria_done} of ${card.criteria_total} criteria met`}>{card.criteria_done}/{card.criteria_total}</span>
+      {needs && <Link href={needs.href} className="inline-flex h-[24px] items-center rounded-md border border-pill-human-bg px-2 text-[12px] font-medium text-pill-human-fg hover:bg-pill-human-bg" aria-label={`Open what ${card.key} needs`}>Open</Link>}
       <DropdownMenu.Root open={menu} onOpenChange={setMenu}>
-        <DropdownMenu.Trigger asChild><button type="button" disabled={pending} aria-label={`Move ${card.key} to…`} className="ml-auto rounded px-2 py-1 text-base leading-none hover:bg-hover disabled:opacity-50">⋯</button></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger asChild><button type="button" disabled={pending} aria-label={`Move ${card.key} to…`} className="ml-auto rounded px-2 py-0.5 text-base leading-none hover:bg-hover disabled:opacity-50">⋯</button></DropdownMenu.Trigger>
         <DropdownMenu.Portal><DropdownMenu.Content aria-label={`Move ${card.key}`} align="end" sideOffset={4} className={cx(floatPanel, "w-44")} onClick={(e) => e.stopPropagation()}>
           <DropdownMenu.Label className="px-2 py-1 text-[11px] uppercase text-fg-tertiary">Move to…</DropdownMenu.Label>
           {statuses.map((status) => <DropdownMenu.Item key={status} disabled={status === card.status || pending} onSelect={() => onMove(status)} className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50">

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
 
 for (const mixed of [false, true]) {
-  test(`epic assigns and dispatches in one click (${mixed ? "mixed assignments" : "all unassigned"})`, async ({ page }) => {
+  test(`epic assigns and starts the ready tickets in one click (${mixed ? "mixed assignments" : "all unassigned"})`, async ({ page }) => {
     await installChatApi(page);
     const agent = { id: "agent-1", name: "Builder", handle: "builder", kind: "main", color_index: 0, role: "Developer", specialty: "", model: "test", status: "idle" };
     const other = { ...agent, id: "agent-2", name: "Reviewer", handle: "reviewer" };
@@ -13,6 +13,7 @@ for (const mixed of [false, true]) {
       { id: "2", key: "WEB-2", title: "Dependent", status: "todo", priority: "medium", ...(mixed ? { assignee: other } : {}) },
       { id: "3", key: "WEB-3", title: "Finished", status: "done", priority: "medium" },
       { id: "4", key: "WEB-4", title: "Already queued", status: "todo", priority: "medium", run: { state: "queued" } },
+      { id: "5", key: "WEB-5", title: "Waits on WEB-1", status: "todo", priority: "medium", unmet_dependencies: 1 },
     ];
     const calls: Array<{ path: string; body: unknown }> = [];
     await page.route("**/api/v1/bootstrap", (route) => route.fulfill({ json: {
@@ -21,11 +22,11 @@ for (const mixed of [false, true]) {
       projects: [project], epics: [epic], labels: [], counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
     } }));
     await page.route("**/api/v1/epics", (route) => route.fulfill({ json: { epics: [{
-      epic, project, objective: "Deliver", counts: { total: 4, done: 1, todo: 3, backlog: 0, in_progress: 0, in_review: 0 },
+      epic, project, objective: "Deliver", counts: { total: 5, done: 1, todo: 4, backlog: 0, in_progress: 0, in_review: 0 },
       agents: [], agent_seconds: 0, tickets: tickets.slice(0, 1),
     }] } }));
     await page.route("**/api/v1/projects/WEB/board**", (route) => route.fulfill({ json: {
-      project, columns: [], epic: { epic: { ...epic, requires_mockup: false, status: "open", criteria_total: 0, criteria_done: 0, points_total: 0, points_done: 0, tickets_total: 4, tickets_open: 3 },
+      project, columns: [], epic: { epic: { ...epic, requires_mockup: false, status: "open", criteria_total: 0, criteria_done: 0, points_total: 0, points_done: 0, tickets_total: 5, tickets_open: 4 },
         criteria: [], done_blockers: { open_tickets: [], unchecked_criteria: [] } },
     } }));
     await page.route("**/api/v1/tickets**", async (route) => {
@@ -55,7 +56,10 @@ for (const mixed of [false, true]) {
     const select = page.getByRole("combobox", { name: "Agent for unassigned tickets" });
     await expect(select).toHaveValue(agent.id);
     await expect(select.getByRole("option", { name: "Sub agent" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Assign & dispatch epic (2)", exact: true }).click();
+    // Start ready leaves the blocked ticket alone and says why.
+    await expect(page.getByRole("region", { name: "Start ready" })).toContainText("WEB-5");
+    await expect(page.getByRole("region", { name: "Start ready" })).toContainText("blocked by 1");
+    await page.getByRole("button", { name: "Assign & start ready (2)", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("2 epic tickets queued");
     expect(calls).toEqual([
       { path: "/api/v1/tickets/bulk", body: { keys: mixed ? ["WEB-1"] : ["WEB-1", "WEB-2"], patch: { assignee_agent_id: agent.id } } },

@@ -27,7 +27,7 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
-import { RunsTabNav } from "./runs-tabs";
+import { ReportsTabNav } from "./reports-tabs";
 
 type Report = Schemas["CostReport"];
 type Slice = Schemas["CostSlice"];
@@ -316,7 +316,7 @@ export function CostsScreen() {
       if (v === undefined) q.delete(k);
       else q.set(k, v);
     }
-    router.replace(`/runs?${q}`);
+    router.replace(`/reports?${q}`);
   };
   const pickPreset = (p: RangePreset) => set(p === "custom" ? { range: p, from: range.from, to: range.to } : { range: p, from: undefined, to: undefined });
 
@@ -328,7 +328,7 @@ export function CostsScreen() {
   const rangeLabel = invalid ? "" : `${yearFmt.format(new Date(range.from))} – ${yearFmt.format(new Date(range.to))} · UTC days`;
 
   let body: ReactNode;
-  if (scope.status !== "ready") body = <ProjectScopeState base="/runs" scope={scope} />;
+  if (scope.status !== "ready") body = <ProjectScopeState base="/reports?tab=costs" scope={scope} />;
   else if (invalid) body = <Banner tone="blocked" title="Pick a valid range">{invalid}</Banner>;
   else if (report.isError)
     body = (
@@ -369,23 +369,23 @@ export function CostsScreen() {
             value={data.unpriced_runs}
             tone={data.unpriced_runs > 0 ? "warn" : undefined}
             sub={data.unpriced_runs > 0 ? "Unknown or partial cost; totals are lower bounds" : "Every run is priced"}
-            action={data.unpriced_runs > 0 ? <Link href="/runs?state=all" className="text-xs text-accent hover:underline">Show runs</Link> : undefined}
+            action={data.unpriced_runs > 0 ? <Link href="/runs" className="text-xs text-accent hover:underline">Show runs</Link> : undefined}
           />
         </div>
         <SpendChart report={data} by={by} setBy={(b) => set({ by: b === "agents" ? undefined : b })} agentNames={agentNames} />
         <div className="grid grid-cols-2 gap-5 max-lg:grid-cols-1">
-          <Breakdown title="By agent" hint="Rows open the agent’s run history" rows={data.agents} total={data.total} metric="runs" href={(s) => `/runs?state=all&agent=${encodeURIComponent(s.key)}`} />
+          <Breakdown title="By agent" hint="Rows open the agent’s run history" rows={data.agents} total={data.total} metric="runs" href={(s) => `/runs?agent=${encodeURIComponent(s.key)}`} />
           <Breakdown
             title="By project"
             hint={project ? undefined : "Rows scope the page to the project"}
             rows={data.projects}
             total={data.total}
             metric="runs"
-            href={(s) => (s.key && !project ? `/runs?${new URLSearchParams({ ...Object.fromEntries(params), project: s.key })}` : undefined)}
+            href={(s) => (s.key && !project ? `/reports?${new URLSearchParams({ ...Object.fromEntries(params), project: s.key })}` : undefined)}
             name={(s) => s.label}
           />
           <Breakdown title="By model" hint="Chat turns split by the model that ran them" rows={data.models} total={data.total} metric="tokens" />
-          <Breakdown title="By purpose" rows={data.purposes} total={data.total} metric="runs" href={(s) => `/runs?state=all&purpose=${encodeURIComponent(s.key)}`} />
+          <Breakdown title="By purpose" rows={data.purposes} total={data.total} metric="runs" />
         </div>
         <TopTickets tickets={data.top_tickets} projectNames={projectNames} agentNames={agentNames} />
       </div>
@@ -393,19 +393,19 @@ export function CostsScreen() {
 
   return (
     <>
-      <TopBar crumbs={[...projectCrumbs(project, "Runs").slice(0, -1), { label: "Runs", href: "/runs" }, { label: "Costs" }]} />
+      <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Costs" }]} />
       <Content>
         <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex flex-col gap-3">
               <div className="space-y-1">
-                <h1 className="type-display">Runs</h1>
+                <h1 className="type-display">Reports</h1>
                 <p className="text-sm text-fg-secondary">
                   Spend recorded on every run: ticket work, sub agents, planning and chat.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <RunsTabNav tab="costs" />
+                <ReportsTabNav tab="costs" />
                 <ProjectPicker />
               </div>
             </div>

@@ -9,7 +9,7 @@ const atlas: S["AgentRef"] = { id: "aaaaaaaa-0000-4000-8000-000000000001", name:
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 const inboxItem = (id: string, kind: S["InboxItem"]["kind"], key: string, min: number): S["InboxItem"] => ({
-  id, kind, title: `${kind} on ${key}`, summary: "", href: `/tickets/${key}`, ticket_key: key, project: "WEB", created_at: minutesAgo(min), resolved: false, read: false,
+  id, kind, title: `${kind} on ${key}`, summary: "", href: `/tickets/${key}`, ticket_key: key, project: "WEB", created_at: minutesAgo(min), resolved: false, read: false, needs_you: true,
 });
 
 const run = (id: string, purpose: S["Run"]["purpose"], state: S["Run"]["state"], extra: Partial<S["Run"]> = {}): S["Run"] => ({
@@ -70,7 +70,7 @@ async function installSetupApi(page: Page, init: Partial<State> = {}) {
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [{ ...atlas, kind: "main", role: "Tech lead", specialty: "", model: "opus", status: "running" }],
       epics: [epic("Refresh", "at_risk"), epic("Healthy", "on_track")], projects: [state.repo ? { ...project, repo_url: "git@github.com:acme/web.git" } : project], labels: [],
-      counts: { inbox: 6, wiki_suggestions: 0, live_agents: 1 },
+      counts: { inbox: 6, needs_you: 6, wiki_suggestions: 0, live_agents: 1 },
     });
     if (path === "/runner") return json(state.runner
       ? { online: true, runners: [{ id: "mbp", backend: "docker", max_concurrent: 4, running: 0, heartbeat_at: minutesAgo(0) }], slots: 4, busy: 0, live: 0, queued: 0 }

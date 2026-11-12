@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupItems, isOpen, nextSelection, step, waited } from "./inbox.ts";
+import { approvalId, groupItems, isOpen, nextSelection, step, trayAction, trayItems, waited } from "./inbox.ts";
 
 const at = (min) => new Date(Date.UTC(2026, 10, 7, 12, 0) - min * 60_000).toISOString();
 const item = (id, kind, min, extra = {}) => ({ id, kind, created_at: at(min), resolved: false, read: false, ...extra });
@@ -53,4 +53,34 @@ test("wait time reads in minutes, hours and days", () => {
   assert.equal(waited(at(65), now), "1h 5m");
   assert.equal(waited(at(180), now), "3h");
   assert.equal(waited(at(60 * 50), now), "2d");
+});
+
+test("the tray splits Needs you (urgency, longest wait) from Updates (newest), and only Updates are unread news", () => {
+  const items = [
+    item("m-ask", "mention", 5, { needs_you: true }),
+    item("q1", "question", 10, { needs_you: true }),
+    item("a2", "approval", 30, { needs_you: true }),
+    item("a1", "approval", 60, { needs_you: true }),
+    item("gate", "workflow_gate", 70, { needs_you: true }),
+    item("done", "approval", 90, { needs_you: true, resolved: true }),
+    item("m-fyi", "mention", 3, { needs_you: false }),
+    item("pr", "merged", 20, { needs_you: false, read: true }),
+    item("sched", "scheduled", 1, { needs_you: false }),
+  ];
+  const t = trayItems(items);
+  assert.deepEqual(t.needs.map((i) => i.id), ["a1", "a2", "q1", "m-ask", "gate"]);
+  assert.deepEqual(t.updates.map((i) => i.id), ["sched", "m-fyi", "pr"]);
+  assert.deepEqual(t.unread, ["sched", "m-fyi"]);
+  assert.deepEqual(trayItems(items, 1).updates.map((i) => i.id), ["sched"]);
+});
+
+test("each kind gets its inline tray action", () => {
+  assert.deepEqual(trayAction("approval"), { type: "approve" });
+  assert.deepEqual(trayAction("question"), { type: "reply" });
+  assert.deepEqual(trayAction("question", false), { type: "open", label: "Open" });
+  assert.deepEqual(trayAction("dispatch"), { type: "dispatch" });
+  assert.deepEqual(trayAction("review"), { type: "open", label: "Open review" });
+  assert.deepEqual(trayAction("planning"), { type: "open", label: "Review plan" });
+  assert.equal(approvalId("approval:abc"), "abc");
+  assert.equal(approvalId("question:abc"), undefined);
 });

@@ -64,7 +64,7 @@ async function installWikiApi(p: Page) {
     if (path === "/bootstrap") return json({
       workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
-      users: [], agents: [], epics: [], projects: [], labels: [], counts: { inbox: 0, wiki_suggestions: 0, live_agents: 0 },
+      users: [], agents: [], epics: [], projects: [], labels: [], counts: { inbox: 0, needs_you: 0, wiki_suggestions: 0, live_agents: 0 },
     } satisfies S["Bootstrap"]);
     if (path === "/runner") return json({ online: true, runners: [], slots: 3, busy: 0, live: 0, queued: 0, host_folder_workspaces: false } satisfies S["RunnerStatus"]);
     if (path === "/wiki/pages") return json({ pages, suggestions: 0 } satisfies S["WikiTree"]);

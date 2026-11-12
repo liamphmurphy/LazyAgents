@@ -231,6 +231,21 @@ func TestGetCosts(t *testing.T) {
 		t.Fatalf("chat chip: %+v", got.Total)
 	}
 
+	// Epic: the runs of every ticket in it, sub agents included; an unknown epic spends nothing.
+	if ticket.EpicID == nil {
+		t.Fatal("PAY-214 has no epic in the demo seed")
+	}
+	var epicCounter int64
+	if err := pool.QueryRow(ctx, `SELECT coalesce(sum(r.cost_usd_micros), 0)::bigint FROM runs r JOIN tickets t ON t.id = r.ticket_id WHERE t.epic_id = $1`, *ticket.EpicID).Scan(&epicCounter); err != nil {
+		t.Fatal(err)
+	}
+	if got := get("?epic="+ticket.EpicID.String(), 200); got.Total.CostMicros != epicCounter || epicCounter < ticketCounter {
+		t.Fatalf("epic chip: %d, counters %d (ticket %d)", got.Total.CostMicros, epicCounter, ticketCounter)
+	}
+	if got := get("?epic="+uuid.NewString(), 200); got.Total.CostMicros != 0 {
+		t.Fatalf("unknown epic: %+v", got.Total)
+	}
+
 	get("?ticket=NOPE-1", 404)
 	get("?chat="+uuid.NewString(), 404)
 	get("?from=2020-03-01", 422)
