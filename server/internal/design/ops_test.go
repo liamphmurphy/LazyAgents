@@ -1,7 +1,11 @@
 package design
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -205,5 +209,77 @@ func TestApplyEachKeepsOpsThatNeedALaterOne(t *testing.T) {
 	}
 	if _, ok, err := ApplyEach(minimal(t), o); err != nil || !ok[0] || !ok[1] {
 		t.Fatal(ok, err)
+	}
+}
+
+func TestComponentsAndTokens(t *testing.T) {
+	raw, err := os.ReadFile("../../../docs/design/fixtures/acceptance-design.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := Parse(string(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := Components(d)
+	if len(cs) != 1 || cs[0].ID != "n_btn" || cs[0].Name != "Button / Primary" || cs[0].Page != "p_components" || len(cs[0].Instances) != 3 {
+		t.Fatalf("components = %+v", cs)
+	}
+	tk := TokensOf(d)
+	if tk.TokensCSSChange || tk.Ref["set"] != "dusk-web" || tk.Sets["dusk-web"] == nil {
+		t.Fatalf("tokens = %+v", tk.Ref)
+	}
+	if !slices.Contains(tk.Used, "accent") || !slices.Contains(tk.Used, "text-2") || slices.Contains(tk.Used, "84.00") {
+		t.Fatalf("used = %v", tk.Used)
+	}
+	d["tokens_ref"].(map[string]any)["hash"] = "sha256:old"
+	if !TokensOf(d).TokensCSSChange {
+		t.Fatal("a stale hash should show tokens.css changed")
+	}
+}
+
+// The embedded snapshot is the one tokens.css hashes to: run the web's
+// npm run gen:design-tokens after editing tokens.css.
+func TestTokensSnapshotMatchesTokensCSS(t *testing.T) {
+	css, err := os.ReadFile("../../../web/styles/tokens.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("sha256:%x", sha256.Sum256(css)); TokensHash != want {
+		t.Fatalf("TokensHash = %s, tokens.css is %s; run npm run gen:design-tokens in web/", TokensHash, want)
+	}
+}
+
+// Detaching keeps the instance's overrides in a frame of its own; later edits
+// to the main don't reach it, while the remaining instances keep their overrides.
+func TestDetachLeavesTheCopyAlone(t *testing.T) {
+	raw, err := os.ReadFile("../../../docs/design/fixtures/acceptance-design.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := Normalize(string(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Apply(body, []Op{
+		{"op": "detach", "id": "n_ship_btn"},
+		{"op": "set_node", "id": "n_btn", "fields": map[string]any{"fill": "$state-done"}},
+		{"op": "set_text", "id": "n_btn_label", "text": "Go"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := Parse(out)
+	ship, _ := find(d, "n_ship_btn")
+	if ship.n["type"] != "frame" || ship.n["fill"] != "$accent" {
+		t.Fatalf("detached = %v", ship.n)
+	}
+	label := children(ship.n)[0]
+	if label["id"] == "n_btn_label" || !strings.Contains(fmt.Sprint(label["paragraphs"]), "Continue") {
+		t.Fatalf("detached label = %v", label)
+	}
+	pay, _ := find(d, "n_pay_btn")
+	if ov := pay.n["overrides"].(map[string]any)["n_btn_label"].(map[string]any); ov["text"] != "Pay $84.00" {
+		t.Fatalf("instance overrides = %v", ov)
 	}
 }

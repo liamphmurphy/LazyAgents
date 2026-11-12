@@ -485,6 +485,14 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("design-view", "rendering a design");
     case "design_comments":
       return status("design-view", "reading comments on a design");
+    case "design_components":
+      return status("design-view", "looking at a design's components");
+    case "design_tokens":
+      return status("design-view", "checking a design's tokens");
+    case "design_inspect":
+      return status("design-view", "inspecting a design");
+    case "design_link_ticket":
+      return status("design", "linking a design to a ticket");
     case "design_patch":
       return status("design", "suggesting design changes");
     case "design_import":

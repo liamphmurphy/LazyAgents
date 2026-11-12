@@ -53,7 +53,7 @@ func TestBoardToolsLeadOnly(t *testing.T) {
 var asideRefused = []string{"create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "update_epic", "reply_to_run",
 	"write_note", "save_memory", "update_memory", "forget_memory", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video",
 	"start_playground", "playground_status", "stop_playground", "set_playground_openapi", "propose_persona", "save_link", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv",
-	"submit_research_report", "canvas_create", "canvas_patch", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_import", "design_comments", "design_comment", "design_reply", "propose_workflow_edit", "propose_connector", "propose_secret",
+	"submit_research_report", "canvas_create", "canvas_patch", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_import", "design_comments", "design_comment", "design_reply", "design_components", "design_tokens", "design_inspect", "design_link_ticket", "propose_workflow_edit", "propose_connector", "propose_secret",
 	"create_space", "create_scheduled_task", "update_scheduled_task", "delete_scheduled_task", "create_learning_module"}
 
 func TestAsideToolsOnlyRead(t *testing.T) {

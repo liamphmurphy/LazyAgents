@@ -5,6 +5,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { renderAsync } from "@resvg/resvg-js";
 import { makeLayout, type Box, type LaidPage } from "./layout.ts";
+import { inspect, InspectError, type InspectTarget } from "./inspect.ts";
 import { DesignError, normalize, type Design, type DesignNode, type Page } from "./schema.ts";
 import { toSvg } from "./svg.ts";
 import { newId } from "./edit.ts";
@@ -60,7 +61,7 @@ export function authorized(req: Request, token = process.env.DESIGN_WORKER_TOKEN
 const json = (status: number, body: unknown) => Response.json(body, { status });
 const fail = (e: unknown) => {
   if (e instanceof WorkerError) return json(e.status, { message: e.message });
-  if (e instanceof DesignError) return json(400, { message: e.message });
+  if (e instanceof DesignError || e instanceof InspectError) return json(400, { message: e.message });
   console.error("design worker:", e);
   return json(500, { message: "render failed" });
 };
@@ -251,6 +252,23 @@ export async function handleLayout(req: Request): Promise<Response> {
     const b = await readBody(req);
     const pageId = optId(b.page, "p_", "page");
     return json(200, layoutBoxes(normalize(b.body as string).design, pageId));
+  } catch (e) {
+    return fail(e);
+  } finally {
+    slot?.release();
+  }
+}
+
+/** Inspect output (inspect.ts) for one node: {body, node, target: css|tailwind|react}. */
+export async function handleInspect(req: Request): Promise<Response> {
+  if (!authorized(req)) return unauthorized();
+  let slot: Slot | undefined;
+  try {
+    slot = takeSlot();
+    const b = await readBody(req);
+    const nodeId = optId(b.node, "n_", "node");
+    if (!nodeId) throw new WorkerError(400, "node: required");
+    return json(200, inspect(normalize(b.body as string).design, nodeId, (b.target ?? "react") as InspectTarget));
   } catch (e) {
     return fail(e);
   } finally {

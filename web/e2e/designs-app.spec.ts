@@ -38,6 +38,9 @@ async function install(page: Page, designs: Record<string, object>) {
     designs: Object.entries(designs).map(([id, body], i) => ({ id, title: i ? `Design ${i}` : "Checkout flow", chat_id: chatId, versions: [{ seq: 1, body: JSON.stringify(body), author: "user" as const }] })) as Stored[],
     saves: [] as { id: string; base_seq: number; body: string }[],
     calls: [] as string[],
+    /** Files the Export menu saved to the Library (name and first bytes); libraryFull refuses them. */
+    library: [] as { name: string; head: string }[],
+    libraryFull: false,
   };
   const head = (d: Stored) => d.versions[d.versions.length - 1];
   const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
@@ -70,6 +73,18 @@ async function install(page: Page, designs: Record<string, object>) {
       return json(route, version(head(d)), 201);
     }
     if (parts[1] === "versions") return json(route, version(d.versions.find((v) => v.seq === Number(parts[2]))!));
+    if (parts[1] === "render") {
+      if (url.searchParams.get("scale") === "3") return json(route, { code: "invalid", message: "the image would be 5436×2556 px; the longest edge is at most 4096" }, 422);
+      return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
+    }
+    if (parts[1] === "library" && method === "POST") {
+      if (s.libraryFull) return json(route, { code: "invalid", field: "file", message: "your Library is full (1 GB): remove items you no longer need" }, 422);
+      const raw = req.postDataBuffer()!.toString("latin1");
+      const name = /filename="([^"]+)"/.exec(raw)![1];
+      const head = raw.slice(raw.indexOf("\r\n\r\n", raw.indexOf("filename=")) + 4).slice(0, 8);
+      s.library.push({ name, head });
+      return json(route, { id: "33333333-3333-4333-8333-333333333333", kind: name.endsWith(".pdf") ? "document" : "image", title: name.replace(/\.\w+$/, ""), filename: name, content_type: "application/pdf", size_bytes: raw.length, created_at: at }, 201);
+    }
     if (parts[1] === "assets" && method === "POST") return json(route, { id: "a_upload", mime: "image/png", w: 640, h: 400 }, 201);
     if (parts[1] === "assets") return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
     if (parts[1] === "duplicate") {
@@ -429,6 +444,65 @@ test("Present starts from a chosen frame, follows hotspots, and goes back, resta
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(new RegExp(`/apps/designs/${D1}$`));
   expect(errors).toEqual([]);
+});
+
+test("Export downloads SVG, saves a PDF of every frame to the Library, and explains failures without saving", async ({ page }) => {
+  const { s } = await install(page, { [D1]: acceptance });
+  await page.goto(`/apps/designs/${D1}`);
+  await expect(savedState(page)).toContainText("Saved · v1");
+  const exportButton = page.getByRole("button", { name: "Export" });
+  const panel = page.getByRole("dialog", { name: "Export" });
+  const notice = page.getByTestId("design-export-notice");
+
+  // Nothing selected: the page's first frame, as SVG with text as text.
+  await exportButton.click();
+  await expect(panel.getByRole("radio", { name: "Selection" })).toBeDisabled();
+  await expect(panel.getByRole("radio", { name: "Frame: Cart" })).toBeChecked();
+  await expect(panel.getByRole("radio", { name: "All frames (4)" })).toBeEnabled();
+  await panel.getByRole("radio", { name: /^SVG/ }).check();
+  const [svgDownload] = await Promise.all([page.waitForEvent("download"), panel.getByRole("button", { name: "Download" }).click()]);
+  expect(svgDownload.suggestedFilename()).toBe("Checkout flow - Cart.svg");
+  const svg = readFileSync((await svgDownload.path())!, "utf8");
+  expect(svg).toContain("<text");
+  expect(svg).toContain("data:font/woff2;base64,");
+  await expect(notice).toContainText("Downloaded “Checkout flow - Cart.svg”");
+
+  // Every frame as one PDF, saved to the Library.
+  await exportButton.click();
+  await panel.getByRole("radio", { name: "All frames (4)" }).check();
+  await panel.getByRole("radio", { name: /^PNG/ }).check();
+  // Four PNGs are four files: the Library takes one at a time.
+  await expect(panel.getByRole("button", { name: "Save to Library" })).toBeDisabled();
+  await panel.getByRole("radio", { name: /^PDF/ }).check();
+  await panel.getByRole("button", { name: "Save to Library" }).click();
+  await expect(notice).toContainText("Saved “Checkout flow - All frames.pdf” to your Library");
+  await expect(notice.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/library");
+  expect(s.library).toEqual([{ name: "Checkout flow - All frames.pdf", head: "%PDF-1.3" }]);
+
+  // The renderer refuses a PNG that's too large: the message says why and nothing is saved.
+  await page.getByRole("tree", { name: "Layers" }).getByRole("treeitem", { name: "Payment" }).click();
+  await exportButton.click();
+  // The last scope chosen is kept; the selection is now one choice.
+  await expect(panel.getByRole("radio", { name: "All frames (4)" })).toBeChecked();
+  await expect(panel.getByRole("radio", { name: "Selection (1)" })).toBeEnabled();
+  await panel.getByRole("radio", { name: "Page: Flows" }).check();
+  await panel.getByRole("radio", { name: /^PNG/ }).check();
+  await panel.getByRole("radio", { name: "3×" }).click();
+  await panel.getByRole("button", { name: "Save to Library" }).click();
+  await expect(notice).toContainText("PNG to your Library");
+  await expect(notice).toContainText("a PNG is at most 4096 px");
+  expect(s.calls.filter((c) => c.includes("render"))).toEqual([]);
+
+  // The server's refusal (a full Library) is shown, and nothing was kept.
+  s.libraryFull = true;
+  await exportButton.click();
+  await panel.getByRole("radio", { name: "Selection (1)" }).check();
+  await panel.getByRole("radio", { name: "1×" }).click();
+  await panel.getByRole("button", { name: "Save to Library" }).click();
+  await expect(notice).toContainText("your Library is full (1 GB)");
+  await expect(notice).toContainText("Nothing was saved.");
+  expect(s.calls).toContain("GET /11111111-1111-4111-8111-111111111111/render");
+  expect(s.library).toHaveLength(1);
 });
 
 test("diagram tools: connect two nodes, add a sticky, and draw a section that takes them in", async ({ page }) => {

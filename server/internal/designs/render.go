@@ -90,6 +90,14 @@ func (s *Service) Boxes(ctx context.Context, body, page string) (map[string]desi
 	return out, nil
 }
 
+// Inspect is a node's Inspect output through the worker. ErrUnavailable means no renderer.
+func (s *Service) Inspect(ctx context.Context, body, node, target string) (map[string]any, error) {
+	if !s.Worker.Available() {
+		return nil, ErrUnavailable
+	}
+	return s.Worker.Inspect(ctx, body, node, target)
+}
+
 // Import asks the worker to turn Mermaid or SVG text into a node for a page.
 func (s *Service) Import(ctx context.Context, in ImportRequest) (Imported, error) {
 	if !s.Worker.Available() {

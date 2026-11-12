@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { PRESETS, find, inAutoLayout, mapNodes, presetLabel, resizeIn, resizeNode } from "@/lib/designs/edit";
 import { STICKY_COLORS, type Layout } from "@/lib/designs/layout";
+import { ComponentSection, SendToTicket } from "./library-panels";
 import { SHAPE_PRESETS, type AutoLayout, type Constraints, type Design, type DesignNode, type Paint, type Paragraph, type Run } from "@/lib/designs/schema";
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   readOnly: boolean;
   onGroup: () => void;
   onRemove: () => void;
+  onSelect: (ids: string[]) => void;
 };
 
 const section = "border-b border-border-subtle px-4 py-3";
@@ -118,7 +120,7 @@ const SHAPE_LABEL = (s: string) => ({ rect: "Rectangle", roundRect: "Rounded rec
 const mapRuns = (ps: Paragraph[], fn: (r: Run) => Run) => ps.map((p) => ({ ...p, runs: p.runs.map(fn) }));
 
 /** The inspector's Design tab (docs/design/designs-editor.svg, right column). */
-export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, onRemove }: Props) {
+export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, onRemove, onSelect }: Props) {
   const found = selected.map((id) => find(design, id)).filter((f) => !!f);
   if (!found.length) {
     return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">Select a layer to edit it. Draw a frame (F), a rectangle (R), an ellipse (O), a line (L), a path with the pen (P) or text (T).</p>;
@@ -196,6 +198,8 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
           <Num label="◐" value={Math.round((n.opacity ?? 1) * 100)} min={0} max={100} disabled={readOnly} suffix="%" onChange={(v) => patch({ opacity: v >= 100 ? undefined : v / 100 }, "opacity")} />
         </div>
       </div>
+
+      {(n.type === "frame" || n.type === "component" || n.type === "instance") && <ComponentSection design={design} node={n} readOnly={readOnly} onEdit={onEdit} onSelect={onSelect} />}
 
       {container && (
         <Section title="Frame">
@@ -449,6 +453,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
           </div>
         </Section>
       )}
+      <SendToTicket key={n.id} node={n} readOnly={readOnly} onEdit={onEdit} />
     </div>
   );
 }

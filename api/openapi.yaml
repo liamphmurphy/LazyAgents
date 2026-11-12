@@ -4769,6 +4769,39 @@ paths:
         "503": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /designs/{canvasId}/library:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: saveDesignExportToLibrary
+      summary: Save an export of a design (PNG, SVG or PDF) to the Library
+      description: |
+        Stores one finished export file, built by the Export menu, in the
+        caller's Library: a PNG as an image, an SVG as a diagram and a PDF as
+        a document, titled after the file name. The file's content decides
+        its type, not its name. It counts against the Library's 1 GB storage
+        cap. 404 for anyone else's design; 422 for another type, an empty
+        file, one over 25 MB or a full Library, and then nothing is stored.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /designs/{canvasId}/assets/{assetId}:
     parameters:
       - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
