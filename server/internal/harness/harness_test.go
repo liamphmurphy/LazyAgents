@@ -583,10 +583,14 @@ func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 	s := spec()
 	s.Instructions = "Standing role routine: hand implementation to an implementer."
 	md := string(AgentsMD("", s, []string{".lazyagents/context/one.md"}, "PAY-214"))
-	for _, want := range []string{"Work directly", "optional", "skip whoami", "Read only the files relevant", "Your own diff review"} {
+	for _, want := range []string{"Work directly by default", "optional", "skip whoami", "Read only the files relevant", "Your own diff review",
+		"Pass a note with update_step(done) saying what the next step needs.", "If update_step tells you to end your turn for a fresh session, commit and end it."} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("missing %q", want)
 		}
+	}
+	if strings.Contains(md, "persistent session") {
+		t.Fatal("the session may be replaced; don't call it persistent")
 	}
 	s.ReviewRequired = true
 	md = string(AgentsMD("", s, nil, "PAY-214"))

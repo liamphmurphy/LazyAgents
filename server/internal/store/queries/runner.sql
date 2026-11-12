@@ -59,6 +59,9 @@ SELECT * FROM run_turns WHERE id = $1;
 -- name: SetRunSession :exec
 UPDATE runs SET harness_session_id = $2 WHERE id = $1;
 
+-- name: SetRunRolloverRequested :exec
+UPDATE runs SET rollover_requested = $2 WHERE id = $1;
+
 -- name: SetRunContextTokens :exec
 UPDATE runs SET context_tokens = $2 WHERE id = $1;
 

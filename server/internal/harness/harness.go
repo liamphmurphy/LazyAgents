@@ -377,12 +377,13 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString("post_plan once before editing (step 1 starts current), update_step(n, done) when a step finishes (the next step becomes current), check_criterion with ns to tick verified criteria together, request_approval before any scope that needs it, and complete_run at the end. ")
 		b.WriteString("Every tool call re-reads your whole context, so skip calls that don't add information. ")
 		b.WriteString("When you need a person (an approval, an answer), call request_approval or await_human and then end your turn: ")
-		b.WriteString("you'll be resumed with their reply.\n\n")
+		b.WriteString("you'll be resumed with their reply. ")
+		b.WriteString("Pass a note with update_step(done) saying what the next step needs. If update_step tells you to end your turn for a fresh session, commit and end it.\n\n")
 		b.WriteString(delegationSection(spec))
 	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if !delegated {
-		b.WriteString("## Execution policy\n\nWork directly in this persistent session by default, within your scopes. Standing role routines to call a scoper, hand implementation to an implementer, hand shipping to a shipper, or curate memory after every ticket are optional; do not perform them mechanically. Delegate only substantial independent work, a capability you lack, an explicit task request, or a necessary independent review. Do not start fresh agents for small fixes, routine shipping, or checks already completed. AGENTS.md already contains your instructions and scopes; claim_ticket returns your handle, so skip whoami. Search conventions only when needed and not already available. Write memory only for a durable new lesson.\n\n")
+		b.WriteString("## Execution policy\n\nWork directly by default, within your scopes. Standing role routines to call a scoper, hand implementation to an implementer, hand shipping to a shipper, or curate memory after every ticket are optional; do not perform them mechanically. Delegate only substantial independent work, a capability you lack, an explicit task request, or a necessary independent review. Do not start fresh agents for small fixes, routine shipping, or checks already completed. AGENTS.md already contains your instructions and scopes; claim_ticket returns your handle, so skip whoami. Search conventions only when needed and not already available. Write memory only for a durable new lesson.\n\n")
 		if agentdef.ExplorerOn(spec, true) {
 			b.WriteString("Use the explorer sub agent for broad searches and for reading you only need the conclusion of. Read a file yourself when you are about to edit it.\n\n")
 		}
