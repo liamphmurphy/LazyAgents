@@ -15,7 +15,7 @@ func TestRunBrief(t *testing.T) {
 	if _, err := f.svc.PostPlan(f.ctx, f.caller, "", []string{"Read the code", "Write the fix", "Ship it"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done"); err != nil {
+	if _, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done", "  The bug is in ledger.go.\nKeep the old API.  "); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.CheckCriterion(f.ctx, f.caller, "", 1, true); err != nil {
@@ -50,7 +50,7 @@ func TestRunBrief(t *testing.T) {
 		"## Ticket PAY-214:",
 		"1. [x] ",
 		"3. [ ] ",
-		"1. [done] Read the code",
+		"1. [done] Read the code\n   Note: The bug is in ledger.go.\n   Keep the old API.\n2.",
 		"2. [current] Write the fix  <- current step",
 		"3. [pending] Ship it",
 		"https://github.com/acme/pay/pull/7",
