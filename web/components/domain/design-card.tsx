@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/primitives";
 /**
  * A design in a chat's transcript (docs/design/designs-from-chat.svg): a live thumbnail
  * of its first page from the design renderer, what it holds, Present and Open (beside the
- * chat), and how many of the persona's suggestions wait for review.
+ * chat), and how many of the persona's suggestions wait for review, with Review opening them in the chat's dock.
  */
 export function DesignCard({ id, title }: { id: string; title: string }) {
   const router = useRouter();
@@ -72,6 +72,11 @@ export function DesignCard({ id, title }: { id: string; title: string }) {
         <Button variant="primary" aria-pressed={open} disabled={ref.isError} onClick={() => panel.show(id)}>
           Open
         </Button>
+        {pending > 0 && (
+          <Button variant="approve" disabled={ref.isError} onClick={() => panel.review(id)}>
+            Review
+          </Button>
+        )}
       </div>
     </div>
   );

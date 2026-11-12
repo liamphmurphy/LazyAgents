@@ -33,7 +33,7 @@ export function useOpenNewDesigns(chatId: string, live: boolean) {
   return ids;
 }
 
-/** The design open in the chat: it fills the desktop dock's Design tab or the compact panel sheet. */
+/** The design open in the chat: it fills the desktop dock's Design tab or the compact panel sheet, and reviews its suggestions in place (review=1). */
 export function DesignPanel({ chatId, live }: { chatId: string; live: boolean }) {
   const panel = useCanvasPanel();
   const list = useChatCanvases(chatId, live).data?.canvases;
@@ -42,7 +42,7 @@ export function DesignPanel({ chatId, live }: { chatId: string; live: boolean })
   if (!open) return null;
   return (
     <aside aria-label="Design beside the chat" data-testid="design-panel" className="flex min-h-0 flex-1 flex-col bg-surface-sunken">
-      <DesignEditor key={open} id={open} beside={{ onClose: panel.collapse }} />
+      <DesignEditor key={open} id={open} beside={{ onClose: panel.collapse, reviewing: panel.reviewing, onReview: (on) => (on ? panel.review(open) : panel.show(open)) }} />
     </aside>
   );
 }

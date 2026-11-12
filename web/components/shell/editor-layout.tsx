@@ -31,8 +31,8 @@ export type DockTab = {
   badge?: ReactNode;
   busy?: boolean;
   unread?: boolean;
-  /** Needs the room of a document or a running app rather than a side conversation: the dock widens while it shows. */
-  wide?: boolean;
+  /** Needs the room of a document or a running app rather than a side conversation: the dock widens while it shows. "max" leaves the content beside it only 400px (a design under review). */
+  wide?: boolean | "max";
   content: ReactNode;
 };
 
@@ -255,7 +255,7 @@ export function Dock({
         hidden={!shown}
         className={cx(
           "flex flex-none flex-col border-l border-border-subtle bg-surface",
-          active?.wide ? "w-[540px] max-w-[55%]" : "w-[360px]",
+          active?.wide === "max" ? "w-[984px] max-w-[calc(100%-400px)]" : active?.wide ? "w-[540px] max-w-[55%]" : "w-[360px]",
           overlay === "xl"
             ? "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:shadow-[var(--shadow-float)]"
             : "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:max-w-[calc(100%-44px)] max-lg:shadow-[var(--shadow-float)]",

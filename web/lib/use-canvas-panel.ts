@@ -12,8 +12,11 @@ export function useCanvasPanel() {
   const search = useSearchParams();
   const raw = search.get("canvas");
   const view = search.get("canvas_view");
-  const go = (canvas: string | null, full: boolean | "max") => {
+  const go = (canvas: string | null, full: boolean | "max", review = false) => {
     const q = new URLSearchParams(search.toString());
+    // A design's review in the dock (review=1) lasts while that design stays open as it is.
+    if (review) q.set("review", "1");
+    else q.delete("review");
     if (canvas === null) q.delete("canvas");
     else q.set("canvas", canvas);
     if (full) q.set("canvas_view", full === "max" ? "max" : "full");
@@ -28,6 +31,10 @@ export function useCanvasPanel() {
     /** Taken over the whole window from the dock's Canvas tab. */
     maximized: view === "max",
     show: (id: string) => go(id, false),
+    /** Opens a design in the dock straight into the review of its suggestions. */
+    review: (id: string) => go(id, false, true),
+    /** Whether the open design is in review (review=1), so a reload keeps it. */
+    reviewing: search.get("review") === "1",
     collapse: () => go("none", false),
     openFull: (id: string) => go(id, true),
     exitFull: () => go(raw, false),
