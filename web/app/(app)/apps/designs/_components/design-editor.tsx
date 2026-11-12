@@ -22,6 +22,7 @@ import { TopBar } from "@/components/shell/topbar";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
 import { ReviewBar, ReviewOverlay, ReviewPanel, useReview, type ReviewMode } from "./design-review";
+import { ExportMenu } from "./export-menu";
 import { PresenceLayer } from "./presence-layer";
 import { Inspector } from "./inspector";
 import { PrototypePanel } from "./prototype-panel";
@@ -637,6 +638,14 @@ export function DesignEditor({ id }: { id: string }) {
     if (page) q.set("page", page.id);
     router.push(`/present/designs/${id}?${q}`);
   };
+  /** Export draws the saved design (PNG comes from the server), so unsaved edits are saved first. */
+  const exportCurrent = async (): Promise<Design> => {
+    await flush();
+    const d = docRef.current;
+    if (!d) throw new Error("the design hasn’t loaded");
+    if (W.isDirty(d)) throw new Error("your latest edits couldn’t be saved first, so the export would miss them");
+    return d.saved.design;
+  };
   const title = ref.data?.title ?? "Design";
   const fetchError = ref.error ?? head.error;
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
@@ -662,6 +671,7 @@ export function DesignEditor({ id }: { id: string }) {
               <Button variant="secondary" disabled={!design} onClick={() => void present()} title="Play the prototype from the selected frame">
                 ▶ Present
               </Button>
+              <ExportMenu id={id} title={title} design={design} pageId={page?.id} selected={selected} current={exportCurrent} />
               <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-fg-secondary" title={`Off: ${persona}’s edits wait as suggestions you review. On: they apply at once, and Undo reverts them.`}>
                 <input
                   type="checkbox"
