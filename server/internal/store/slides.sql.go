@@ -283,7 +283,8 @@ func (q *Queries) RequeueDeckBlobSweep(ctx context.Context, blobKey string) erro
 
 const takeDeckBlobSweep = `-- name: TakeDeckBlobSweep :one
 DELETE FROM deck_blob_sweep s WHERE s.blob_key = $1 AND s.queued_at < $2
-RETURNING NOT EXISTS (SELECT 1 FROM deck_assets a WHERE a.blob_key = s.blob_key) AS unused
+RETURNING (NOT EXISTS (SELECT 1 FROM deck_assets a WHERE a.blob_key = s.blob_key)
+  AND NOT EXISTS (SELECT 1 FROM design_assets a WHERE a.blob_key = s.blob_key))::boolean AS unused
 `
 
 type TakeDeckBlobSweepParams struct {
@@ -291,7 +292,7 @@ type TakeDeckBlobSweepParams struct {
 	Before  time.Time
 }
 
-// Dequeues a key that's still due, saying whether any deck still uses it.
+// Dequeues a key that's still due, saying whether any deck or design still uses it.
 func (q *Queries) TakeDeckBlobSweep(ctx context.Context, arg TakeDeckBlobSweepParams) (bool, error) {
 	row := q.db.QueryRow(ctx, takeDeckBlobSweep, arg.BlobKey, arg.Before)
 	var unused bool

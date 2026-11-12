@@ -535,6 +535,49 @@ type DeckTheme struct {
 	UpdatedAt   time.Time
 }
 
+type DesignAsset struct {
+	CanvasID    uuid.UUID
+	ID          string
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	BlobKey     string
+	Mime        string
+	Width       int32
+	Height      int32
+	SizeBytes   int64
+	CreatedAt   time.Time
+}
+
+type DesignFrameLink struct {
+	CanvasID uuid.UUID
+	NodeID   string
+	TicketID uuid.UUID
+}
+
+type DesignProposal struct {
+	ID         uuid.UUID
+	CanvasID   uuid.UUID
+	ChatID     *uuid.UUID
+	RunID      *uuid.UUID
+	AgentID    uuid.UUID
+	BaseSeq    int32
+	Summary    string
+	Ops        json.RawMessage
+	Status     string
+	Decisions  json.RawMessage
+	ResultSeq  *int32
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
+}
+
+type DesignSetting struct {
+	CanvasID      uuid.UUID
+	DirectEdit    bool
+	PersonaPaused bool
+	ProjectID     *uuid.UUID
+	UpdatedAt     time.Time
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID

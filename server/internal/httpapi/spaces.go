@@ -17,6 +17,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/canvas"
 	"github.com/liamphmurphy/vesper/server/internal/linkpreview"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -340,6 +341,9 @@ func (s *Server) AddChatSpaceSource(ctx context.Context, req api.AddChatSpaceSou
 			return nil, apperr.Invalid("canvas_id", "unknown canvas")
 		} else if err != nil {
 			return nil, err
+		}
+		if cv.Kind == canvas.KindDesign {
+			return nil, apperr.Invalid("canvas_id", "a design can't be a source; export it to the Library instead")
 		}
 		text, err := sourceText("canvas_id", cv.Body)
 		if err != nil {

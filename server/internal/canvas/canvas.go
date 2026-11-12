@@ -13,17 +13,28 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/deck"
+	"github.com/liamphmurphy/vesper/server/internal/design"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 const (
-	KindText = "text"
-	KindSVG  = "svg"
-	KindDeck = "deck"
-	// maxBody bounds one version, in bytes.
+	KindText   = "text"
+	KindSVG    = "svg"
+	KindDeck   = "deck"
+	KindDesign = "design"
+	// maxBody bounds one version, in bytes, except where maxBodyFor says otherwise.
 	maxBody = 512 * 1024
 	maxOps  = 100
 )
+
+// maxBodyFor is the one place a kind's body cap is chosen: designs get
+// design.MaxBody (ADR-designs §3.1), everything else maxBody.
+func maxBodyFor(kind string) int {
+	if kind == KindDesign {
+		return design.MaxBody
+	}
+	return maxBody
+}
 
 type Service struct{ Pool *pgxpool.Pool }
 
@@ -59,14 +70,17 @@ func normalize(kind, body string) (string, error) {
 	if strings.TrimSpace(body) == "" {
 		return "", apperr.Invalid("body", "provide some content")
 	}
-	if len(body) > maxBody || !utf8.ValidString(body) {
-		return "", apperr.Invalid("body", "must be valid UTF-8 and at most %d KB", maxBody/1024)
+	if limit := maxBodyFor(kind); len(body) > limit || !utf8.ValidString(body) {
+		return "", apperr.Invalid("body", "must be valid UTF-8 and at most %d KB", limit/1024)
 	}
 	if kind == KindSVG {
 		return Stamp(body)
 	}
 	if kind == KindDeck {
 		return deck.Normalize(body)
+	}
+	if kind == KindDesign {
+		return design.Normalize(body)
 	}
 	return body, nil
 }
@@ -93,6 +107,9 @@ func Apply(kind, body string, ops []Op) (string, error) {
 		}
 		// deck.Apply validates the result and enforces deck.MaxBody (= maxBody) in Encode.
 		return deck.Apply(body, dops)
+	}
+	if kind == KindDesign {
+		return design.Apply(body, DesignOps(ops))
 	}
 	for i, op := range ops {
 		var err error
@@ -121,8 +138,8 @@ func (s *Service) Create(ctx context.Context, chat uuid.UUID, in New, by Actor) 
 	if n := utf8.RuneCountInString(title); n < 1 || n > 200 {
 		return c, v, apperr.Invalid("title", "provide 1–200 characters")
 	}
-	if in.Kind != KindText && in.Kind != KindSVG && in.Kind != KindDeck {
-		return c, v, apperr.Invalid("kind", "use text, svg or deck")
+	if in.Kind != KindText && in.Kind != KindSVG && in.Kind != KindDeck && in.Kind != KindDesign {
+		return c, v, apperr.Invalid("kind", "use text, svg, deck or design")
 	}
 	body, err := normalize(in.Kind, in.Body)
 	if err != nil {
@@ -134,20 +151,74 @@ func (s *Service) Create(ctx context.Context, chat uuid.UUID, in New, by Actor) 
 			return err
 		}
 		v, err = q.CreateChatCanvasVersion(ctx, store.CreateChatCanvasVersionParams{CanvasID: c.ID, Seq: 1, Body: body, Note: in.Note, AuthorType: by.Type, AuthorID: by.ID})
-		return err
+		if err != nil {
+			return err
+		}
+		return syncFrameLinks(ctx, q, c, body)
 	})
 	return c, v, err
+}
+
+// DesignOps turns canvas ops into design ops: Value carries the op's fields,
+// and Op, ID and After fill in op, id and after.
+func DesignOps(ops []Op) []design.Op {
+	out := make([]design.Op, len(ops))
+	for i, op := range ops {
+		d := design.Op{}
+		for k, v := range op.Value {
+			d[k] = v
+		}
+		if op.Op != "" {
+			d["op"] = op.Op
+		}
+		if op.ID != "" {
+			d["id"] = op.ID
+		}
+		if op.After != "" {
+			d["after"] = op.After
+		}
+		out[i] = d
+	}
+	return out
+}
+
+// syncFrameLinks rewrites a design's design_frame_links from its body, in the
+// same transaction as the version, so runs find a ticket's frames without
+// reading bodies. Keys that name no ticket in the workspace are skipped.
+func syncFrameLinks(ctx context.Context, q *store.Queries, c store.ChatCanvas, body string) error {
+	if c.Kind != KindDesign {
+		return nil
+	}
+	links := design.FrameLinks(body)
+	nodes, keys := []string{}, []string{}
+	for node, tickets := range links {
+		for _, k := range tickets {
+			nodes, keys = append(nodes, node), append(keys, k)
+		}
+	}
+	if err := q.ClearDesignFrameLinks(ctx, c.ID); err != nil || len(nodes) == 0 {
+		return err
+	}
+	return q.AddDesignFrameLinks(ctx, store.AddDesignFrameLinksParams{CanvasID: c.ID, NodeIds: nodes, TicketKeys: keys})
 }
 
 // Patch applies ops on top of version base, which must still be current: an
 // edit made against text someone has since changed is refused, not merged.
 func (s *Service) Patch(ctx context.Context, chat, id uuid.UUID, base int32, ops []Op, note string, by Actor) (store.ChatCanvasVersion, error) {
+	return s.patchWith(ctx, chat, id, base, note, by, func(c store.ChatCanvas, body string) (string, error) {
+		return Apply(c.Kind, body, ops)
+	})
+}
+
+// patchWith is Patch with the edit as a function of the current body, run
+// holding the canvas: 409 when base isn't the current version.
+func (s *Service) patchWith(ctx context.Context, chat, id uuid.UUID, base int32, note string, by Actor, edit func(c store.ChatCanvas, body string) (string, error)) (store.ChatCanvasVersion, error) {
 	var v store.ChatCanvasVersion
 	err := s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		if base != cur.Seq {
 			return apperr.Conflict("this canvas is at version %d, not %d; read it again and redo your edit", cur.Seq, base)
 		}
-		body, err := Apply(c.Kind, cur.Body, ops)
+		body, err := edit(c, cur.Body)
 		if err != nil {
 			return err
 		}
