@@ -154,13 +154,13 @@ function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string;
                 role="tab"
                 aria-selected={p === active}
                 onClick={() => panels.switchTo(p)}
-                className={cx("min-h-9 flex-1 rounded-sm px-2 text-[13px]", p === active ? "bg-surface font-semibold text-fg shadow-sm" : "text-fg-secondary")}
+                className={cx("min-h-[40px] flex-1 rounded-sm px-2 text-[13px]", p === active ? "bg-surface font-semibold text-fg shadow-sm" : "text-fg-secondary")}
               >
                 {LABELS[p]}
               </button>
             ))}
           </span>
-          <button type="button" aria-label="Close panels" onClick={hide} className="grid size-9 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg">
+          <button type="button" aria-label="Close panels" onClick={hide} className="grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg">
             <Icon name="x" size={16} />
           </button>
         </div>
@@ -176,13 +176,13 @@ function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string;
       {bar && (
         <div data-testid="panel-sheet-bar" className="flex flex-none items-center gap-2 border-t border-border-subtle px-3 py-2">
           {active === "canvas" && (
-            <Button variant="secondary" className="min-h-10" disabled={!threads} onClick={showComments}>
+            <Button variant="secondary" className="min-h-[44px]" disabled={!threads} onClick={showComments}>
               Comments{threads ? ` ${threads}` : ""}
             </Button>
           )}
           <span className="flex-1" />
           {pending > 0 && designId && (
-            <Button variant="approve" className="min-h-10" onClick={() => router.push(`/apps/designs/${designId}?review=1`)}>
+            <Button variant="approve" className="min-h-[44px]" onClick={() => router.push(`/apps/designs/${designId}?review=1`)}>
               Review {pending} {pending === 1 ? "suggestion" : "suggestions"}
             </Button>
           )}

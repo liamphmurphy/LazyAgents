@@ -447,7 +447,7 @@ export function ReplyComposer({ run, lastSeq }: { run: Run; lastSeq: number }) {
       {sent ? (
         <p role="status" className="flex items-center justify-between gap-3 text-[13px] text-fg-secondary">
           Sent. Resuming {run.agent.name}…
-          <Button variant="outline" className="h-11" onClick={again}>Reply again</Button>
+          <Button variant="outline" className="h-[44px]" onClick={again}>Reply again</Button>
         </p>
       ) : (
         <div className="flex items-end gap-2">
@@ -458,9 +458,9 @@ export function ReplyComposer({ run, lastSeq }: { run: Run; lastSeq: number }) {
             rows={1}
             placeholder={`Reply to ${run.agent.name}`}
             onChange={(e) => setBody(e.target.value)}
-            className="max-h-32 min-h-11 flex-1 text-[16px]"
+            className="max-h-32 min-h-[44px] flex-1 text-[16px]"
           />
-          <Button type="submit" variant="approve" className="h-11" disabled={!body.trim() || comment.isPending}>
+          <Button type="submit" variant="approve" className="h-[44px]" disabled={!body.trim() || comment.isPending}>
             {comment.isPending ? "Sending…" : "Send"}
           </Button>
         </div>
