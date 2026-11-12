@@ -112,7 +112,7 @@ export function absPath(d: string, warn: (s: string) => void): { cmd: string; pt
   };
   while (i < toks.length) {
     if (/[a-z]/i.test(toks[i])) cmd = toks[i++];
-    else if (!cmd) throw new SvgImportError(`path data "${d.slice(0, 40)}" doesn't start with a command`);
+    else if (!cmd) throw new SvgImportError(`path data "${d.slice(0, 40)}" needs a command before a number`);
     const rel = cmd === cmd.toLowerCase() && cmd !== "z" ? true : false;
     const ox = rel ? x : 0, oy = rel ? y : 0;
     const C = cmd.toUpperCase();
@@ -164,7 +164,7 @@ export function absPath(d: string, warn: (s: string) => void): { cmd: string; pt
         out.push({ cmd: "L", pts: [[x, y]] });
         break;
       }
-      case "Z": x = sx; y = sy; out.push({ cmd: "Z", pts: [] }); break;
+      case "Z": x = sx; y = sy; out.push({ cmd: "Z", pts: [] }); cmd = ""; break;
       default: throw new SvgImportError(`path command ${cmd} isn't SVG`);
     }
     lastC = nextC;

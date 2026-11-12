@@ -137,3 +137,20 @@ test("SVG it can't read is refused with the problem named", () => {
   assert.throws(() => importSvg("<div/>", { ids }), (e) => e instanceof SvgImportError && /expected an <svg>/.test(e.message));
   assert.throws(() => importSvg("<svg><image href='a.png'/></svg>", { ids }), (e) => e instanceof SvgImportError && /nothing that can be imported/.test(e.message));
 });
+
+test("SVG close-path followed by a number is rejected without blocking the worker", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const module = new URL("./designs/svgimport.ts", import.meta.url).href;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", `
+    import assert from 'node:assert/strict';
+    import { importSvg, SvgImportError } from ${JSON.stringify(module)};
+    for (const command of ['Z', 'z']) {
+      assert.throws(() => importSvg('<svg><path d="M0 0 L10 10 ' + command + ' 1"/></svg>', { ids: () => 'n_test' }),
+        e => e instanceof SvgImportError && /needs a command before a number/.test(e.message));
+    }
+    const result = importSvg('<svg><path d="M0 0 L10 10 Z M20 20 L30 30 z"/></svg>', { ids: () => 'n_test' });
+    assert.equal(result.node.children.length, 1);
+  `], { timeout: 5000, encoding: "utf8" });
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.status, 0, result.stderr);
+});

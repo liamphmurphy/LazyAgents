@@ -109,3 +109,34 @@ test("routing a busy page stays fast", () => {
   const ms = performance.now() - t0;
   assert.ok(ms < 1500, `took ${ms.toFixed(0)} ms`);
 });
+
+test("close obstacles shorten stubs without being discarded", () => {
+  const source = { x: 0, y: 0, w: 100, h: 100 };
+  const target = { x: 300, y: 0, w: 100, h: 100 };
+  for (const wall of [{ x: 110, y: 20, w: 40, h: 60 }, { x: 250, y: 20, w: 40, h: 60 }]) {
+    const pts = routeOrthogonal(source, "right", target, "left", [wall]);
+    assert.ok(orthogonal(pts));
+    assert.deepEqual(pts[0], [100, 50]);
+    assert.deepEqual(pts.at(-1), [300, 50]);
+    for (const box of [source, target, wall]) assert.ok(!crosses(pts, box), JSON.stringify(pts));
+  }
+});
+
+test("moving a node onto a cached endpoint invalidates a route that crosses its interior", () => {
+  const from = { x: 100, y: 0, w: 100, h: 100 };
+  const to = { x: 300, y: 0, w: 100, h: 100 };
+  const points = [[100, 50], [300, 50]];
+  assert.equal(pointsStillFit(points, from, to, []), false);
+  for (const anchors of [{}, { fromAnchor: "right", toAnchor: "left" }]) {
+    const pts = connectorPath({ from, to, ...anchors }, { points });
+    assert.deepEqual(pts, [[200, 50], [300, 50]]);
+    assert.ok(!crosses(pts, from));
+  }
+});
+
+test("cached routes respect explicit anchors even when they touch another edge", () => {
+  const points = [[50, 0], [50, -40], [450, -40], [450, 0]];
+  assert.equal(pointsStillFit(points, A, B, []), true);
+  const pts = connectorPath({ from: A, to: B, fromAnchor: "right", toAnchor: "left" }, { points });
+  assert.deepEqual(pts, [[100, 30], [400, 30]]);
+});

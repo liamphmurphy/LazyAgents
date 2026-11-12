@@ -15,7 +15,7 @@ export type Anchor = "top" | "right" | "bottom" | "left";
 /** The outline a connector end is clipped to; anything else is its box. */
 export type Outline = "box" | "diamond" | "ellipse";
 
-/** Length of the straight segment at each end (and so room for an arrowhead). */
+/** Preferred straight segment length at each end; shortened in narrow gaps. */
 export const STUB = 20;
 /** Clearance kept around obstacles. */
 export const CLEARANCE = 14;
@@ -130,21 +130,44 @@ class Heap {
 
 /**
  * An orthogonal route from fb's anchor to tb's anchor that keeps CLEARANCE
- * away from every obstacle (and from the two end nodes, apart from the
- * stubs). Falls back to simpleRoute when the ends overlap or no clear path
+ * away from obstacles where space permits (reduced near crowded anchors),
+ * and stays outside the two end nodes apart from the stubs. Falls back to simpleRoute when the ends overlap or no clear path
  * exists within reach.
  */
 export function routeOrthogonal(fb: Box, fa: Anchor, tb: Box, ta: Anchor, obstacles: Box[] = []): Pt[] {
   const p0 = anchorPoint(fb, fa), p3 = anchorPoint(tb, ta);
   const fd = DIRS[fa], td = DIRS[ta];
-  const p1: Pt = [p0[0] + fd[0] * STUB, p0[1] + fd[1] * STUB];
-  const p2: Pt = [p3[0] + td[0] * STUB, p3[1] + td[1] * STUB];
+  // Near an anchor, reduce clearance to leave a channel in a narrow gap.
+  // Keep every unrelated obstacle: dropping one containing a nominal stub
+  // would let both the stub and the grid path cross the node itself.
+  const distance = (p: Pt, b: Box) => Math.max(b.x - p[0], p[0] - b.x - b.w, b.y - p[1], p[1] - b.y - b.h, 0);
+  const otherBlocks = obstacles.map((o) => inflate(o, Math.min(CLEARANCE, distance(p0, o) / 2, distance(p3, o) / 2)));
+  const stub = (p: Pt, d: Pt, blocks: Box[]): Pt => {
+    let len = STUB;
+    for (const b of blocks) {
+      const horizontal = d[0] !== 0;
+      const cross = horizontal ? p[1] : p[0];
+      const low = horizontal ? b.y : b.x, size = horizontal ? b.h : b.w;
+      if (cross <= low || cross >= low + size) continue;
+      const along = horizontal ? p[0] : p[1], dir = horizontal ? d[0] : d[1];
+      const near = horizontal ? b.x : b.y, extent = horizontal ? b.w : b.h;
+      const gap = dir > 0 ? near - along : along - near - extent;
+      if (gap >= 0) len = Math.min(len, gap / 2);
+    }
+    return [p[0] + d[0] * len, p[1] + d[1] * len];
+  };
+  const p1 = stub(p0, fd, [tb, ...otherBlocks]);
+  const p2 = stub(p3, td, [fb, ...otherBlocks]);
   const reach = inflate(
     { x: Math.min(fb.x, tb.x), y: Math.min(fb.y, tb.y), w: Math.max(fb.x + fb.w, tb.x + tb.w) - Math.min(fb.x, tb.x), h: Math.max(fb.y + fb.h, tb.y + tb.h) - Math.min(fb.y, tb.y) },
     REACH,
   );
   // The ends' own boxes are obstacles too, so a route doesn't double back over its node.
-  const blocks = [fb, tb, ...obstacles.filter((o) => overlaps(o, reach))].map((o) => inflate(o, CLEARANCE)).filter((o) => !strictlyInside(p1, o) && !strictlyInside(p2, o));
+  const blocks = [
+    inflate(fb, Math.min(CLEARANCE, Math.abs(p1[0] - p0[0]) + Math.abs(p1[1] - p0[1]))),
+    inflate(tb, Math.min(CLEARANCE, Math.abs(p2[0] - p3[0]) + Math.abs(p2[1] - p3[1]))),
+    ...otherBlocks.filter((o) => overlaps(o, reach)),
+  ];
   if (blocks.length > MAX_OBSTACLES) return simpleRoute(fb, fa, tb, ta);
 
   const xsSet = new Set<number>([p1[0], p2[0], (p1[0] + p2[0]) / 2, reach.x, reach.x + reach.w]);
@@ -268,9 +291,12 @@ const onEdge = (p: Pt, b: Box, tol = 1) => {
  * box, the last the target box, and no segment crosses an obstacle. When they
  * don't, the connector is re-routed.
  */
-export function pointsStillFit(pts: Pt[], fb: Box, tb: Box, obstacles: Box[]): boolean {
+export function pointsStillFit(pts: Pt[], fb: Box, tb: Box, obstacles: Box[], fromAnchor?: Anchor, toAnchor?: Anchor): boolean {
   if (pts.length < 2 || !onEdge(pts[0], fb) || !onEdge(pts.at(-1)!, tb)) return false;
-  for (let i = 1; i < pts.length; i++) for (const o of obstacles) if (segmentHits(pts[i - 1], pts[i], o)) return false;
+  const matchesAnchor = (p: Pt, b: Box, a?: Anchor) => !a || (p[0] === anchorPoint(b, a)[0] && p[1] === anchorPoint(b, a)[1]);
+  if (!matchesAnchor(pts[0], fb, fromAnchor) || !matchesAnchor(pts.at(-1)!, tb, toAnchor)) return false;
+  const blocks = [fb, tb, ...obstacles];
+  for (let i = 1; i < pts.length; i++) for (const o of blocks) if (segmentHits(pts[i - 1], pts[i], o)) return false;
   return true;
 }
 
@@ -284,7 +310,7 @@ export function connectorPath(
   const fa = !ends.fromAnchor || ends.fromAnchor === "auto" ? autoAnchor(fb, tb) : ends.fromAnchor;
   const ta = !ends.toAnchor || ends.toAnchor === "auto" ? autoAnchor(tb, fb) : ends.toAnchor;
   let pts: Pt[];
-  if (opts.points && pointsStillFit(opts.points, fb, tb, obstacles)) pts = opts.points.map((p) => [...p] as Pt);
+  if (opts.points && pointsStillFit(opts.points, fb, tb, obstacles, ends.fromAnchor === "auto" ? undefined : ends.fromAnchor, ends.toAnchor === "auto" ? undefined : ends.toAnchor)) pts = opts.points.map((p) => [...p] as Pt);
   else if (opts.straight) return [anchorPoint(fb, fa), anchorPoint(tb, ta)];
   else pts = routeOrthogonal(fb, fa, tb, ta, obstacles);
   if (pts.length >= 2) {
