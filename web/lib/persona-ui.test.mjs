@@ -12,6 +12,8 @@ import {
   codesInRepos,
   isImageType,
   repoShortName,
+  repositoryChoices,
+  sameRepo,
   checkAvatarFile,
   colorPicker,
   contrastRatio,
@@ -183,6 +185,23 @@ test("repo short name is owner/repo", () => {
   assert.equal(repoShortName("git@github.com:acme/app.git"), "acme/app");
   assert.equal(repoShortName("ssh://git@gitlab.com/group/sub/app"), "sub/app");
   assert.equal(repoShortName("nonsense"), "nonsense");
+});
+
+test("the repository chip lists the persona's repos, then saved ones, once each", () => {
+  const saved = [{ url: "https://github.com/acme/app.git" }, { url: "https://github.com/acme/web" }, { url: "git@github.com:acme/api.git" }];
+  assert.equal(sameRepo("https://github.com/Acme/App.git", "git@github.com:acme/app"), true);
+  const c = repositoryChoices(["https://github.com/acme/app", "https://github.com/acme/app"], saved, "https://github.com/acme/app");
+  assert.deepEqual(c.persona.map((r) => r.name), ["acme/app"]);
+  assert.deepEqual(c.saved.map((r) => r.name), ["acme/web", "acme/api"]);
+  assert.equal(c.current, undefined);
+  // A repo picked with /repo that neither list holds still shows, first.
+  assert.equal(repositoryChoices([], saved, "https://github.com/other/thing").current?.name, "other/thing");
+  // The one in use is lifted out of the saved list rather than shown twice.
+  const lifted = repositoryChoices([], saved, "git@github.com:acme/web.git");
+  assert.equal(lifted.current?.name, "acme/web");
+  assert.deepEqual(lifted.saved.map((r) => r.name), ["acme/app", "acme/api"]);
+  assert.equal(repositoryChoices([], Array.from({ length: 30 }, (_, i) => ({ url: `https://github.com/a/r${i}` }))).saved.length, 8);
+  assert.deepEqual(repositoryChoices([], []), { current: undefined, persona: [], saved: [] });
 });
 
 test("adding repos dedupes and caps at 10", () => {

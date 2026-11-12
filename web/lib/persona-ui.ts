@@ -332,6 +332,26 @@ export function repoShortName(url: string): string {
   return path.split("/").slice(-2).join("/");
 }
 
+/** Whether two repository URLs name the same owner/repo, however each is written (https or scp-style, with or without .git). */
+export const sameRepo = (a: string, b: string) => repoShortName(a).toLowerCase() === repoShortName(b).toLowerCase();
+
+export type RepoChoice = { url: string; name: string };
+
+/**
+ * What the composer's repository chip offers, in order: the repo this chat already uses when
+ * neither list holds it (so the current choice is always visible), the persona's own repos
+ * (the first is the default for new chats), then the shared saved ones. A repo shows once.
+ */
+export function repositoryChoices(personaRepos: string[], saved: { url: string }[], current?: string, savedLimit = 8) {
+  const seen: string[] = [];
+  const fresh = (url: string) => !seen.some((s) => sameRepo(s, url)) && !!seen.push(url);
+  const toChoice = (url: string): RepoChoice => ({ url, name: repoShortName(url) });
+  const own = personaRepos.filter(fresh).map(toChoice);
+  const used = current && fresh(current) ? toChoice(current) : undefined;
+  const shared = saved.map((r) => r.url).filter(fresh).slice(0, savedLimit).map(toChoice);
+  return { current: used, persona: own, saved: shared };
+}
+
 /** Adds a repo to the list: trimmed, validated, no duplicates, at most MAX_REPOS. */
 export function addRepo(repos: string[], input: string): { repos: string[] } | { error: string } {
   const c = checkRepoUrl(input);
