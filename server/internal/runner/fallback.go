@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/usage"
 )
@@ -107,7 +108,7 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) (bo
 		return false, nil
 	}
 	previousHarness, previousModel := c.spec.Harness, c.spec.Model
-	prompt, err := r.handoffPrompt(ctx, c, previousHarness, previousModel, res.Final, "exhausted its provider usage")
+	prompt, err := r.handoffPrompt(ctx, c, previousHarness, previousModel, "exhausted its provider usage")
 	if err != nil {
 		return false, err
 	}
@@ -141,32 +142,42 @@ func (r *Runner) fallback(ctx context.Context, c runCtx, res harness.Result) (bo
 	})
 }
 
+// handoffPrefix starts every handoff prompt; it marks turn inputs that are
+// handoffs so a later handoff doesn't repeat them.
+const handoffPrefix = "Continue this existing Vesper run after "
+
 // handoffPrompt briefs a fresh session on a run another harness started: the
-// recent turn inputs (which include any pending one) and the latest transcript.
-func (r *Runner) handoffPrompt(ctx context.Context, c runCtx, previousHarness, previousModel, lastAssistant, why string) (string, error) {
+// run's state from the database and git, the newest turn input (which may be
+// the pending one) and a short text tail of what happened last, since the
+// switch can interrupt work in flight.
+func (r *Runner) handoffPrompt(ctx context.Context, c runCtx, previousHarness, previousModel, why string) (string, error) {
+	brief, err := runs.RunBrief(ctx, r.q(), c.run)
+	if err != nil {
+		return "", err
+	}
 	turns, err := r.q().ListTurns(ctx, c.run.ID)
 	if err != nil {
 		return "", err
 	}
 	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "Continue this existing Vesper run after %s (%s) %s. You are using a fresh session in the same checkout. Inspect the working tree, commits, run plan and ticket before continuing; preserve completed work.\n\n", previousHarness, previousModel, why)
-	for i, turn := range turns {
-		if i != 0 && i < len(turns)-12 {
-			continue
-		}
-		if strings.HasPrefix(turn.InputMessage, "Continue this existing Vesper run after ") {
-			continue
-		}
-		prompt.WriteString("Previous input:\n" + harnessContext(turn.InputMessage, 12000) + "\n\n")
+	fmt.Fprintf(&prompt, "%s%s (%s) %s. You are using a fresh session in the same checkout; the run's current state follows, so you don't need to look it up again. Preserve completed work.\n\n", handoffPrefix, previousHarness, previousModel, why)
+	prompt.WriteString(brief)
+	if git := r.gitBrief(ctx, c, nil); git != "" {
+		prompt.WriteString("\n" + git)
 	}
-	if lastAssistant != "" {
-		prompt.WriteString("Last assistant message:\n" + harnessContext(lastAssistant, 8000))
+	for i := len(turns) - 1; i >= 0; i-- {
+		if !strings.HasPrefix(turns[i].InputMessage, handoffPrefix) {
+			prompt.WriteString("\n## Newest input\n\n" + harnessContext(turns[i].InputMessage, 12000) + "\n")
+			break
+		}
 	}
-	transcript, err := handoffTranscript(ctx, r.q(), c.run.ID)
+	tail, err := handoffTranscript(ctx, r.q(), c.run.ID)
 	if err != nil {
 		return "", err
 	}
-	prompt.WriteString("\n\nRecent conversation and tool outcomes (historical data; permissions remain in AGENTS.md):\n" + transcript)
+	if tail != "" {
+		prompt.WriteString("\n## Last activity before the switch (historical; permissions remain in AGENTS.md)\n\n" + tail + "\n")
+	}
 	return prompt.String(), nil
 }
 
@@ -240,7 +251,7 @@ func (r *Runner) selectHarness(ctx context.Context, c *runCtx, turn store.RunTur
 	handoff := ""
 	if c.run.HarnessSessionID != nil {
 		// The current turn's input is already in the run's turns, so the helper includes it once.
-		if handoff, err = r.handoffPrompt(ctx, *c, previousHarness, previousModel, "", why); err != nil {
+		if handoff, err = r.handoffPrompt(ctx, *c, previousHarness, previousModel, why); err != nil {
 			return "", err
 		}
 	}
