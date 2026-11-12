@@ -40,6 +40,8 @@ type Turn struct {
 	// InlineImages are the same pictures for Claude Code, which takes them as
 	// content blocks in its first message rather than as file arguments.
 	InlineImages []InlineImage
+	// Lead is an undelegated ticket run (agentdef.ExplorerOn).
+	Lead bool
 }
 
 // InlineImage is an image delivered as bytes.
@@ -74,8 +76,11 @@ type Usage struct {
 	CacheReportedInputTokens int64   `json:"cache_reported_input_tokens"`
 	CachedTokens             int64   `json:"cached_tokens"`
 	ToolCalls                int64   `json:"tool_calls"`
-	CostUSD                  float64 `json:"cost_usd"`
-	CostSource               string  `json:"cost_source"` // harness | computed | unknown | ""
+	// SubagentToolCalls are Claude Code sub agents' (the explorer's) calls,
+	// kept out of ToolCalls, which counts the main agent's.
+	SubagentToolCalls int64   `json:"subagent_tool_calls,omitempty"`
+	CostUSD           float64 `json:"cost_usd"`
+	CostSource        string  `json:"cost_source"` // harness | computed | unknown | ""
 	// ContextTokens is the prompt size (input + cache read + cache creation)
 	// of the main agent's latest request. 0 means unknown: Codex reports
 	// only cumulative totals, so consumers must not read 0 as "empty".
@@ -377,6 +382,9 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
 	if !delegated {
 		b.WriteString("## Execution policy\n\nWork directly in this persistent session by default, within your scopes. Standing role routines to call a scoper, hand implementation to an implementer, hand shipping to a shipper, or curate memory after every ticket are optional; do not perform them mechanically. Delegate only substantial independent work, a capability you lack, an explicit task request, or a necessary independent review. Do not start fresh agents for small fixes, routine shipping, or checks already completed. AGENTS.md already contains your instructions and scopes; claim_ticket returns your handle, so skip whoami. Search conventions only when needed and not already available. Write memory only for a durable new lesson.\n\n")
+		if agentdef.ExplorerOn(spec, true) {
+			b.WriteString("Use the explorer sub agent for broad searches and for reading you only need the conclusion of. Read a file yourself when you are about to edit it.\n\n")
+		}
 		if spec.ReviewRequired {
 			b.WriteString("Independent review is required for Done: obtain delegated reviewer/QA approval.\n\n")
 		} else {

@@ -67,6 +67,21 @@ func WebTool(tool string) bool {
 	return false
 }
 
+// LeadRun reports an undelegated ticket run: the only kind that may get the
+// explorer sub agent (agentdef.ExplorerOn).
+func LeadRun(run store.Run) bool {
+	return run.Purpose == "ticket" && run.ParentRunID == nil
+}
+
+// subagentDecision rules on Claude Code's sub agent tool: only the explorer,
+// and only when the run has it.
+func subagentDecision(spec agentdef.Resolved, run store.Run, input map[string]any) ToolDecision {
+	if typ, _ := input["subagent_type"].(string); typ == agentdef.ExplorerAgent && agentdef.ExplorerOn(spec, LeadRun(run)) {
+		return ToolDecision{Decision: "allow"}
+	}
+	return ToolDecision{Decision: "deny", Reason: "Only the explorer sub agent is available; delegate other work with the delegate tool"}
+}
+
 func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDecision, error) {
 	deny := func(reason string) (ToolDecision, error) { return ToolDecision{Decision: "deny", Reason: reason}, nil }
 	if c.RunID == nil {
@@ -83,6 +98,10 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	spec, err := Spec(run)
 	if err != nil {
 		return ToolDecision{}, err
+	}
+	if in.Tool == "Agent" || in.Tool == "Task" { // Task: its name before Claude Code 2.1
+		// ToolScopes would send it to tests:run, which a lead has.
+		return subagentDecision(spec, run, in.Input), nil
 	}
 	if WebTool(in.Tool) && run.Purpose == PurposeLearning {
 		// Only a reviewer has the web, and only to open what the course cites.
