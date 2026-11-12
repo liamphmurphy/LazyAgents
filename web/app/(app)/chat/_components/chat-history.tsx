@@ -363,7 +363,7 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
   return (
     <aside aria-label="Chat history" className={cx("flex min-h-0 flex-1 flex-col gap-1.5", !fill && "max-[799px]:max-h-64")}>
       {fill && (
-        <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-11 w-full !text-[16px]" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-[44px] w-full !text-[16px]" value={query} onChange={(e) => setQuery(e.target.value)} />
       )}
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       {between}

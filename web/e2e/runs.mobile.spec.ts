@@ -102,6 +102,11 @@ test("a waiting run opens full screen and takes a reply from the pinned composer
 
   await expect(page.getByRole("heading", { name: "Payout retries" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to runs" })).toHaveAttribute("href", "/runs");
+  // 44px touch targets, written in px: the root font is 13px, so size-11 would be 35.75px.
+  for (const target of [page.getByRole("link", { name: "Back to runs" }), page.getByRole("button", { name: "Run actions" })]) {
+    const box = (await target.boundingBox())!;
+    expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+  }
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   const strip = page.getByRole("list", { name: "Plan steps" });
   await expect(strip.getByRole("listitem")).toHaveCount(4);

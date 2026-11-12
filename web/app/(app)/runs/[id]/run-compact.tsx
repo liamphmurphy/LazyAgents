@@ -24,7 +24,7 @@ import { ActionBox, ReplyComposer, confirmCancel, waitsForReply } from "./run-pa
 type RunDetail = Schemas["RunDetail"];
 type Run = Schemas["Run"];
 
-const item = "flex min-h-11 cursor-pointer select-none items-center rounded-md px-3 text-[14px] text-fg outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
+const item = "flex min-h-[44px] cursor-pointer select-none items-center rounded-md px-3 text-[14px] text-fg outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 
 const SEGMENT: Record<string, string> = {
   done: "bg-state-done",
@@ -62,7 +62,7 @@ function RunMenu({ run, lastLog, control }: { run: Run; lastLog?: number; contro
   const work = run.purpose === "ticket" && run.ticket_key ? `/tickets/${encodeURIComponent(run.ticket_key)}` : workHref(run);
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label="Run actions" className="grid size-11 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
+      <DropdownMenu.Trigger aria-label="Run actions" className="grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
         <Icon name="dots" size={18} />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -104,7 +104,7 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
   return (
     <div className="flex h-app flex-col">
       <header className="flex flex-none items-center gap-1 border-b border-border-subtle px-1 pt-safe">
-        <Link href="/runs" aria-label="Back to runs" className="grid size-11 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
+        <Link href="/runs" aria-label="Back to runs" className="grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
           <Icon name="chev" size={18} className="rotate-90" />
         </Link>
         <div className="flex min-w-0 flex-1 flex-col py-1.5 leading-tight">

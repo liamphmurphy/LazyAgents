@@ -66,7 +66,7 @@ function LiveCard({ run }: { run: Run }) {
 function FinishedRow({ run }: { run: Run }) {
   const s = finishedLabel(run.state);
   return (
-    <li className="relative flex min-h-11 items-center gap-2.5 border-b border-border-row px-3.5 py-2.5 last:border-b-0">
+    <li className="relative flex min-h-[44px] items-center gap-2.5 border-b border-border-row px-3.5 py-2.5 last:border-b-0">
       <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} />
       <Link href={`/runs/${run.id}`} className="flex min-w-0 flex-1 flex-col after:absolute after:inset-0 after:content-['']">
         <span className="truncate text-[13.5px] text-fg">{titleOf(run)}</span>
