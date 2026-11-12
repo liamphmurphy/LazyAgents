@@ -123,6 +123,13 @@ const node = (body: { pages: { children: unknown[] }[] }, id: string): Record<st
 };
 const savedState = (page: Page) => page.getByTestId("design-save-state");
 const canvas = (page: Page) => page.getByTestId("design-canvas");
+/** The inspector (Design / Prototype / Inspect) lives in the dock's Design tab; the dock opens on Chat. */
+async function openInspector(page: Page) {
+  const tab = page.getByRole("complementary", { name: "Panel", exact: true }).getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: /Design/ });
+  // Clicking the active dock tab collapses the dock, so only click it when it isn't active.
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
 
 test("Designs is in Apps; Home has starters and recent designs to rename, duplicate and delete", async ({ page }) => {
   const { s } = await install(page, { [D1]: acceptance, [D2]: simple() });
@@ -188,12 +195,17 @@ test("drawing, autosave, undo and reopening: rapid edits save as one version", a
   await page.goto(`/apps/designs/${D1}`);
   await expect(savedState(page)).toContainText("Saved · v1");
 
-  // Draw a rectangle on the page outside the frame.
+  // Draw a rectangle over the frame's empty right half. Aim at the frame's box on screen
+  // (select it from Layers, then deselect), not at the canvas edge: the canvas width
+  // depends on the panels around it.
+  await page.getByRole("tree", { name: "Layers" }).getByRole("treeitem", { name: "Home" }).locator("div").first().click();
+  const frame = (await page.locator('[data-selected="n_frame"]').boundingBox())!;
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-selected="n_frame"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await canvas(page).boundingBox())!;
-  await page.mouse.move(box.x + box.width - 160, box.y + 120);
+  await page.mouse.move(frame.x + frame.width * 0.6, frame.y + frame.height * 0.3);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width - 80, box.y + 180, { steps: 4 });
+  await page.mouse.move(frame.x + frame.width * 0.85, frame.y + frame.height * 0.4, { steps: 4 });
   await page.mouse.up();
   await expect(page.getByTestId("design-size-badge")).toBeVisible();
   await expect(savedState(page)).toContainText("Saved · v2");
@@ -201,6 +213,7 @@ test("drawing, autosave, undo and reopening: rapid edits save as one version", a
   // Drawn over the frame, it went into the frame, on top.
   const added = (latest(D1).pages[0].children[0].children as { id: string; x: number }[]).at(-1)!;
   expect(added).toMatchObject({ type: "shape", shape: "rect" });
+  expect(["n_title", "n_box"]).not.toContain(added.id);
 
   // Ten nudges in quick succession are debounced into one version.
   for (let i = 0; i < 10; i++) await page.keyboard.press("ArrowRight");
@@ -219,6 +232,7 @@ test("drawing, autosave, undo and reopening: rapid edits save as one version", a
 
   // Auto layout from the inspector: the frame's children reflow.
   await page.getByRole("tree", { name: "Layers" }).getByRole("treeitem", { name: "Home" }).locator("div").first().click();
+  await openInspector(page);
   await page.getByRole("button", { name: "Add auto layout" }).click();
   await expect(savedState(page)).toContainText("Saved · v6");
   const title = node(latest(D1), "n_title") as { y: number; h: number };
@@ -385,6 +399,7 @@ test("the Prototype tab adds, edits and removes a layer's links, and they're sav
   const layers = page.getByRole("tree", { name: "Layers" });
   await layers.getByRole("treeitem", { name: "Home" }).getByRole("button", { name: "Expand" }).click();
   await layers.getByRole("treeitem", { name: "Box" }).locator("div").first().click();
+  await openInspector(page);
   await page.getByRole("tab", { name: "Prototype" }).click();
 
   await page.getByRole("button", { name: "Add interaction" }).click();
@@ -407,6 +422,7 @@ test("a link to a deleted frame shows as broken in the editor and is skipped in 
   const live = { id: "k_live", from: "n_title", to: "n_next", trigger: "click", transition: "instant" };
   await install(page, { [D1]: twoFrames([broken, live]) });
   await page.goto(`/apps/designs/${D1}`);
+  await openInspector(page);
   await page.getByRole("tab", { name: "Prototype" }).click();
   await expect(page.getByRole("region", { name: "Flow" })).toContainText("1 broken");
   await expect(page.locator('[data-link="k_gone"][data-broken]')).toContainText("deleted frame (broken)");
@@ -427,6 +443,7 @@ test("Present starts from a chosen frame, follows hotspots, and goes back, resta
   await install(page, { [D1]: acceptance });
   await page.goto(`/apps/designs/${D1}`);
   await page.getByRole("tree", { name: "Layers" }).getByRole("treeitem", { name: "Shipping" }).locator("div").first().click();
+  await openInspector(page);
   await page.getByRole("tab", { name: "Prototype" }).click();
   await page.getByRole("button", { name: "Present from “Shipping”" }).click();
   await expect(page).toHaveURL(new RegExp(`/present/designs/${D1}\\?start=n_ship`));
@@ -617,7 +634,7 @@ test("a design opens in the shared layout: slim header, Pages and layers, and a 
   await canvas(page).click({ position: { x: 20, y: 20 } });
   await page.keyboard.press(`${mod}+j`);
   await expect(tab("Chat")).toHaveAttribute("aria-selected", "true");
-  await expect(dock.getByRole("textbox", { name: "Message" })).toBeFocused();
+  await expect(dock.getByRole("combobox", { name: "Message" })).toBeFocused();
 
   // The dock is remembered across a reload.
   await canvas(page).click({ position: { x: 20, y: 20 } });
