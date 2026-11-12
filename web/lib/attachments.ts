@@ -4,7 +4,7 @@
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 5;
 
-const EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "md", "csv", "json"];
+const EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "md", "csv", "json", "zip"];
 /** The file input's `accept`. */
 export const ATTACH_ACCEPT = EXTENSIONS.map((e) => `.${e}`).join(",");
 
@@ -24,7 +24,7 @@ export function pastedImageName(contentType: string, n: number): string {
   return `pasted-image-${n}.${subtype === "jpeg" ? "jpg" : subtype}`;
 }
 
-/** The chip's badge: PDF, IMG, CSV, TXT, MD or JSON. */
+/** The chip's badge: PDF, IMG, CSV, TXT, MD, JSON or ZIP. */
 export function attachmentBadge(filename: string): string {
   const e = ext(filename);
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(e)) return "IMG";

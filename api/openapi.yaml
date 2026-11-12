@@ -2293,8 +2293,11 @@ paths:
         Stores one file for the caller. It stays unattached and private to
         the caller until a message lists its id in `attachment_ids`; each
         upload can be attached to one message. Supported: PDF, PNG, JPEG,
-        GIF, WebP, plain text, Markdown, CSV and JSON, up to 25 MB each.
-        422 for an unsupported type, an empty file or one over the limit.
+        GIF, WebP, plain text, Markdown, CSV, JSON and zip archives, up to
+        25 MB each. The assistant gets a zip's files unpacked (at most 200
+        files, 5 MB each and 50 MB in all; the rest are named as skipped).
+        422 for an unsupported type, an empty file, a zip that can't be read
+        or has no files, or one over the limit.
       tags: [chats]
       requestBody:
         required: true

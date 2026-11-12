@@ -47,9 +47,14 @@ func (s *Server) UploadChatAttachment(ctx context.Context, req api.UploadChatAtt
 		return nil, err
 	}
 	name := runs.ChatAttachmentName(f.file.Name)
-	ct, err := runs.ChatAttachmentType(name, f.file.Size, head[:n])
+	ct, err := runs.ChatUploadType(name, f.file.Size, head[:n])
 	if err != nil {
 		return nil, err
+	}
+	if ct == runs.ChatAttachmentZipType {
+		if err := runs.ValidateZip(f.tmp, f.file.Size); err != nil {
+			return nil, err
+		}
 	}
 	// A soft cap: two concurrent uploads can each pass the check.
 	stored, err := s.Q.ChatAttachmentBytes(ctx, store.ChatAttachmentBytesParams{WorkspaceID: ws, UserID: u.ID})
