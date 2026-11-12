@@ -124,7 +124,7 @@ export function DocScreen({ id }: { id: string }) {
   const showRail = !reviewing && editable && (open.length > 0 || resolved.length > 0 || !!target);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar
         crumbs={[{ label: "Apps" }, { label: "Docs", href: "/apps/docs" }, { label: title }]}
         actions={

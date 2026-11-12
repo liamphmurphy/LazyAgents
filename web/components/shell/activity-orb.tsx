@@ -27,7 +27,7 @@ const CHIP_NEEDS_MS = 8000;
 const CHIP_LINGER_MS = 2000;
 const CHIPS_MAX = 2;
 
-/** Clears bottom bars and floating buttons (bulk bar, jump-to-latest). */
+/** Clears bottom bars and floating buttons (bulk bar, jump-to-latest); the compact tab bar is cleared through --tab-bar-h. */
 const ORB_BOTTOM = 80;
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -221,15 +221,35 @@ function Chip({ chip, onOpen, onGone }: { chip: ChipData; onOpen: (c: ChipData) 
 
 // ---- The orb
 
+/**
+ * The persona dock and the chat on screen, which it marks read: opening a chat reads it, and so
+ * does a reply arriving while it's on screen. The orb uses it, and so does the compact shell without it.
+ */
+function useViewedChat() {
+  const pathname = usePathname();
+  const dock = usePersonaDock();
+  const visible = useSyncExternalStore(subscribeVisible, () => document.visibilityState === "visible", () => false);
+  const viewed = visible ? viewedChatId(pathname) : null;
+  const unreadViewed = dock.data?.personas.flatMap((e) => e.chats).find((c) => c.id === viewed && c.unread > 0);
+  const { mutate } = useMarkChatRead();
+  const seq = unreadViewed?.last_seq;
+  useEffect(() => {
+    if (viewed && seq) mutate({ id: viewed, seq });
+  }, [viewed, seq, mutate]);
+  return { dock, viewed };
+}
+
+/** Marks the chat on screen read where the orb doesn't render (the compact shell). */
+export function ViewedChatReader() {
+  useViewedChat();
+  return null;
+}
+
 /** Which personas and harnesses are working, what's left of each plan, and who finished, on every screen. */
 export function ActivityOrb() {
   const router = useRouter();
-  const pathname = usePathname();
-  const dock = usePersonaDock();
-  const mark = useMarkChatRead();
+  const { dock, viewed } = useViewedChat();
   const bottom = useOrbBottom();
-  const visible = useSyncExternalStore(subscribeVisible, () => document.visibilityState === "visible", () => false);
-  const viewed = visible ? viewedChatId(pathname) : null;
   const entries = dockEntries<Chat, Entry>(dock.data?.personas ?? [], viewed);
   const harnesses: HarnessActivity[] = dock.data?.harnesses ?? [];
 
@@ -242,14 +262,6 @@ export function ActivityOrb() {
   const openRef = useRef(false);
   const [chips, setChips] = useState<ChipData[]>([]);
   const [live, setLive] = useState("");
-
-  // Opening a chat reads it, and so does a reply arriving while it's on screen.
-  const unreadViewed = dock.data?.personas.flatMap((e) => e.chats).find((c) => c.id === viewed && c.unread > 0);
-  const { mutate } = mark;
-  const seq = unreadViewed?.last_seq;
-  useEffect(() => {
-    if (viewed && seq) mutate({ id: viewed, seq });
-  }, [viewed, seq, mutate]);
 
   // ---- Sprout: the orb's circle stretches left into a pill, then up into the card.
   const frames = useCallback((r: number): Keyframe[] => {
@@ -369,7 +381,7 @@ export function ActivityOrb() {
   const usage = [CLAUDE, CODEX].flatMap((id) => harnesses.filter((h) => h.harness === id));
 
   return (
-    <div ref={root} role="region" aria-label="Activity" className="orb-root" style={{ bottom }}>
+    <div ref={root} role="region" aria-label="Activity" className="orb-root" style={{ bottom: `max(${bottom}px, calc(var(--tab-bar-h, 0px) + 12px))` }}>
       <div className="orb-chips">
         {chips.map((c) => <Chip key={c.key} chip={c} onOpen={onChip} onGone={onGone} />)}
       </div>

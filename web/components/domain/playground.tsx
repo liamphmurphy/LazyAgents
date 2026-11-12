@@ -223,13 +223,13 @@ function NotRunning({ pg }: { pg: Playground }) {
   );
 }
 
-/** Beside the chat, while the person keeps talking to the agent. */
-export function PlaygroundPanel({ chatId }: { chatId: string }) {
+/** Beside the chat, while the person keeps talking to the agent; `sheet` fills the panel sheet (chat-panel-host), which is already full height, so fullscreen shows there too. */
+export function PlaygroundPanel({ chatId, sheet }: { chatId: string; sheet?: boolean }) {
   const panel = usePlaygroundPanel();
   const pg = useChatPlayground(chatId).data;
-  if (!panel.open || panel.fullscreen || !pg) return null;
+  if (!panel.open || (panel.fullscreen && !sheet) || !pg) return null;
   return (
-    <aside aria-label="Playground" data-testid="playground-panel" className="flex w-[min(560px,48%)] flex-none flex-col border-l border-border bg-panel max-md:w-full max-md:border-l-0 max-md:border-t">
+    <aside aria-label="Playground" data-testid="playground-panel" className={sheet ? "flex min-h-0 flex-1 flex-col bg-panel" : "flex w-[min(560px,48%)] flex-none flex-col border-l border-border bg-panel max-md:w-full max-md:border-l-0 max-md:border-t"}>
       <PlaygroundView chatId={chatId} pg={pg} full={false} />
     </aside>
   );

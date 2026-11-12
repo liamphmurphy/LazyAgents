@@ -28,6 +28,8 @@ import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 import { CostValue, SimpleHeader, SimpleView } from "./run-simple";
 import { RunGraphView } from "./run-graph-view";
+import { CompactRunDetail } from "./run-compact";
+import { useCompact } from "@/lib/viewport";
 
 type RunDetail = Schemas["RunDetail"];
 type RunEvent = Schemas["RunEvent"];
@@ -377,6 +379,7 @@ export function RunLogScreen({ id }: { id: string }) {
   const [turnOpen, setTurnOpen] = useState<Record<number, boolean>>({});
   const [toolOpen, setToolOpen] = useState<Record<string, boolean>>({});
   const scroller = useRef<HTMLDivElement>(null);
+  const compactView = useCompact();
 
   const parentTurn = turnByEvent(d?.events ?? []);
   const starts = turnStarts(d?.events ?? []);
@@ -488,6 +491,34 @@ export function RunLogScreen({ id }: { id: string }) {
   const isOpen = (n: number) => turnOpen[n] ?? (allOpen || n === (focusTurn ?? lastTurn));
   const grandchildren = children.map((c) => c.data?.child_runs as Run[] | undefined);
   const childDetails = children.map((c) => c.data);
+  const logBody = (
+    groups.length ? (
+      <div aria-live={follow ? "polite" : "off"}>
+        {groups.map((g) => (
+          <TurnGroup
+            key={g.turn}
+            turn={g.turn}
+            t={d.turns.find((t) => t.seq === g.turn)}
+            runId={run.id}
+            open={isOpen(g.turn)}
+            onToggle={() => setTurnOpen((o) => ({ ...o, [g.turn]: !isOpen(g.turn) }))}
+            items={g.items.map((entry) => (
+              <EventRow key={`${entry.runId}:${rowEvent(entry.row).seq}`} entry={entry} plan={run.plan} tools={tools} runs={d.child_runs} calls={d.events} />
+            ))}
+          />
+        ))}
+      </div>
+    ) : (
+      <EmptyState icon="terminal" title={rows.length ? "No events match" : "No events yet"}>
+        {rows.length ? "Try another tab or filter." : run.state === "queued" ? "The run starts when a runner slot is free." : "Events appear as the harness works."}
+      </EmptyState>
+    )
+  );
+  const onLogScroll = (el: HTMLDivElement) => {
+    detailsScroll.current = el.scrollTop;
+    setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
+  };
+  if (compactView) return <CompactRunDetail d={d} log={logBody} scroller={scroller} onScroll={onLogScroll} control={control} />;
   return (
     <div className="flex flex-col lg:h-dvh">
       <TopBar
@@ -591,34 +622,10 @@ export function RunLogScreen({ id }: { id: string }) {
             role="log"
             aria-label="Run log"
             tabIndex={0}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              detailsScroll.current = el.scrollTop;
-              setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
-            }}
+            onScroll={(e) => onLogScroll(e.currentTarget)}
             className="min-h-0 flex-1 overflow-y-auto max-lg:max-h-[70dvh]"
           >
-          {groups.length ? (
-            <div aria-live={follow ? "polite" : "off"}>
-              {groups.map((g) => (
-                <TurnGroup
-                  key={g.turn}
-                  turn={g.turn}
-                  t={d.turns.find((t) => t.seq === g.turn)}
-                  runId={run.id}
-                  open={isOpen(g.turn)}
-                  onToggle={() => setTurnOpen((o) => ({ ...o, [g.turn]: !isOpen(g.turn) }))}
-                  items={g.items.map((entry) => (
-                    <EventRow key={`${entry.runId}:${rowEvent(entry.row).seq}`} entry={entry} plan={run.plan} tools={tools} runs={d.child_runs} calls={d.events} />
-                  ))}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState icon="terminal" title={rows.length ? "No events match" : "No events yet"}>
-              {rows.length ? "Try another tab or filter." : run.state === "queued" ? "The run starts when a runner slot is free." : "Events appear as the harness works."}
-            </EmptyState>
-          )}
+          {logBody}
           <p className="px-5 py-4 text-xs text-fg-tertiary">
             Normalized events. The raw harness stream of each turn is kept with the run ({run.mode === "managed" ? "raw links on each turn" : "unmanaged sessions have none"}).
           </p>

@@ -126,6 +126,25 @@
 @utility type-micro   { font: var(--text-micro); letter-spacing: 0.06em; text-transform: uppercase; }
 @utility type-mono    { font: var(--text-mono); }
 
+/* Safe-area padding for fixed bars (tab bar, sheets, pinned action bars), DESIGN.md §2 Spacing.
+   The insets are 0 on desktop, so these add nothing there. */
+@utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@utility pl-safe { padding-left: env(safe-area-inset-left, 0px); }
+@utility pr-safe { padding-right: env(safe-area-inset-right, 0px); }
+@utility px-safe { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+@utility py-safe { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+@utility p-safe {
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* The compact shell's bottom tab bar (components/shell/tab-bar.tsx): 56px plus the home indicator while it shows, else 0.
+   The shell pads its content by it; h-app screens and the activity orb stop above it. */
+:root:has([data-tab-bar]) { --tab-bar-h: calc(56px + env(safe-area-inset-bottom, 0px)); }
+/* A screen sized to the viewport: 100dvh, less the tab bar where there is one. */
+@utility h-app { height: calc(100dvh - var(--tab-bar-h, 0px)); }
+
 /* Inline code inside prose and descriptions (DESIGN.md §2 Typography). */
 /* Canvas comments, painted without touching the rendered text. */
 ::highlight(canvas-comment) { background-color: color-mix(in srgb, var(--state-progress) 32%, transparent); }
@@ -826,11 +845,17 @@
 .motion-scrim[data-state="closed"] { animation: motion-fade-out var(--motion-exit) ease-in both; }
 .motion-dialog[data-state="open"] { animation: motion-panel-in var(--motion-slow) var(--motion-ease) both; }
 .motion-dialog[data-state="closed"] { animation: motion-panel-out var(--motion-exit) ease-in both; }
+/* The compact chat's history drawer slides in from the left edge. */
+.motion-drawer-left[data-state="open"] { animation: motion-drawer-left-in var(--motion-slow) var(--motion-ease) both; }
+.motion-drawer-left[data-state="closed"] { animation: motion-drawer-left-out var(--motion-exit) ease-in both; }
 /*
  * Menus and the command menu only animate in: while one plays an exit its dismiss layer is still
  * live, and swallows a quick click on the trigger.
  */
 .motion-dialog-fast[data-state="open"] { animation: motion-float-in 100ms var(--motion-ease) both; }
+/* Bottom sheets (components/ui/sheet.tsx) slide up from the bottom edge. */
+.motion-sheet[data-state="open"] { animation: motion-sheet-in var(--motion-slow) var(--motion-ease) both; }
+.motion-sheet[data-state="closed"] { animation: motion-sheet-out var(--motion-exit) ease-in both; }
 .motion-float { transform-origin: var(--radix-popper-transform-origin); }
 .motion-float[data-state="open"] { animation: motion-float-in var(--motion-fast) var(--motion-ease) both; }
 .motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
@@ -877,10 +902,14 @@
 @keyframes motion-fade-in { from { opacity: 0; } }
 @keyframes motion-fade-out { to { opacity: 0; } }
 @keyframes motion-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+@keyframes motion-drawer-left-in { from { transform: translateX(-100%); } }
+@keyframes motion-drawer-left-out { to { transform: translateX(-100%); } }
 @keyframes motion-panel-out { to { opacity: 0; transform: translateY(6px) scale(0.985); } }
 @keyframes motion-float-in { from { opacity: 0; transform: scale(0.97); } }
 @keyframes motion-flyout-in { from { opacity: 0; transform: translateX(-8px) scale(0.96); } }
 @keyframes motion-pop { from { opacity: 0; transform: scale(0.4); } }
+@keyframes motion-sheet-in { from { transform: translateY(100%); } }
+@keyframes motion-sheet-out { to { transform: translateY(100%); } }
 @keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes motion-slide { from { opacity: 0; transform: translateX(calc(var(--slide-from, 0) * 32px)) scale(0.94); } }
 
@@ -888,7 +917,9 @@
 @media (prefers-reduced-motion: reduce) {
   .motion-scrim,
   .motion-dialog,
+  .motion-drawer-left,
   .motion-dialog-fast,
+  .motion-sheet,
   .motion-float,
   .motion-pop,
   .motion-pop-child svg,

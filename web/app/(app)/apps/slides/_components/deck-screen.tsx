@@ -742,7 +742,7 @@ export function DeckScreen({ id }: { id: string }) {
   const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name && same(t.colors, deck.theme.colors) && same(t.fonts, deck.theme.fonts))?.[0] : undefined;
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar
         crumbs={[{ label: "Apps" }, { label: "Slides", href: "/apps/slides" }, { label: title }]}
         actions={

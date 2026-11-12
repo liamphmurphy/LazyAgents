@@ -5,12 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
 import { usePulse } from "@/components/ui/motion";
-import { useBootstrap, useSecrets } from "@/lib/api/hooks";
-import { useScheduledTasks } from "@/lib/api/connector-hooks";
-import { tasksNeedingYou } from "@/lib/schedule-ui";
+import { useBootstrap } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
-import { needsAttention } from "@/lib/settings";
+import { useNavCounts } from "@/lib/use-nav-counts";
 import { WORK_ITEMS, isActive, type NavBadge } from "@/lib/project-scope";
+import { badgeLabel } from "@/lib/tab-bar";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
@@ -18,23 +17,6 @@ import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { AppsMenu } from "./apps-menu";
-
-export type SidebarProps = {
-  inboxCount: number;
-  /** Ticket and planning runs in progress; chat runs aren't counted. */
-  liveRuns: number;
-  /** Agent edits to wiki pages waiting for a person (amber: a person acts). */
-  wikiSuggestions?: number;
-};
-
-const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
-
-/** The rail shows only a dot, so a count has to reach screen readers through the name. */
-function railLabel(label: string, badge: NavBadge | undefined, counts: Record<NavBadge, number>) {
-  const n = badge ? counts[badge] : 0;
-  const word = badge && BADGE_WORD[badge];
-  return n > 0 && word ? `${label} ${n} ${word}` : label;
-}
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
@@ -180,11 +162,9 @@ function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, nu
   );
 }
 
-export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
-  const secrets = useSecrets();
-  const scheduled = useScheduledTasks(true);
-  const counts: Record<NavBadge, number> = { scheduled: tasksNeedingYou(scheduled.data?.tasks), inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
+  const counts = useNavCounts();
   const [expanded, setExpanded] = useExpanded();
   const [creatingSpace, setCreatingSpace] = useState(false);
   // Only a toggle animates, not restoring the remembered state after mount.
@@ -218,7 +198,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarPr
         <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
           <div className="flex w-full flex-col gap-px">
             {WORK_ITEMS.map((n) => (
-              <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
+              <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
                 <Icon name={n.icon} />
                 {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
               </NavLink>

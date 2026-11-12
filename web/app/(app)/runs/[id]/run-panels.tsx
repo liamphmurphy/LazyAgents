@@ -27,8 +27,8 @@ export function confirmCancel(agent: string) {
   return window.confirm(`Cancel ${agent}'s run? It stops now and can't be resumed.`);
 }
 
-/** Chat-style prompt for a run waiting on `human_reply`; replies go out as a ticket comment mentioning the agent. */
-function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | null; lastSeq: number }) {
+/** Sends a reply to a run waiting on `human_reply`: a ticket comment mentioning the agent. */
+function useReply(run: Run, lastSeq: number) {
   const qc = useQueryClient();
   const comment = useComment(run.ticket_key);
   const [body, setBody] = useState("");
@@ -47,6 +47,17 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
       },
     );
   };
+  return { comment, body, setBody, sent, again: () => setSentAt(null), submit };
+}
+
+/** Whether the run waits for a reply that the run page itself sends (ticket runs; plans and chats reply in place). */
+export function waitsForReply(run: Run) {
+  return run.state === "waiting" && run.wait_reason === "human_reply" && run.purpose !== "planning" && run.purpose !== "chat";
+}
+
+/** Chat-style prompt for a run waiting on `human_reply`; replies go out as a ticket comment mentioning the agent. */
+function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | null; lastSeq: number }) {
+  const { comment, body, setBody, sent, again, submit } = useReply(run, lastSeq);
   return (
     <>
       <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
@@ -54,7 +65,7 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
       {sent ? (
         <p role="status" className="flex items-center gap-3 text-[13px] text-fg-secondary">
           Sent. Resuming {run.agent.name}…
-          <Button variant="outline" onClick={() => setSentAt(null)}>Reply again</Button>
+          <Button variant="outline" onClick={again}>Reply again</Button>
         </p>
       ) : (
         <>
@@ -78,7 +89,7 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
             </Banner>
           )}
           <div className="flex items-center justify-end gap-3">
-            <span className="text-xs text-fg-tertiary">
+            <span className="text-xs text-fg-tertiary pointer-coarse:hidden">
               <kbd className="font-mono">⌘↵</kbd> to send
             </span>
             <Button variant="approve" disabled={!body.trim() || comment.isPending} onClick={submit}>
@@ -131,7 +142,7 @@ function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"
         </Banner>
       )}
       <div className="flex items-center justify-end gap-3">
-        <span className="text-xs text-fg-tertiary">
+        <span className="text-xs text-fg-tertiary pointer-coarse:hidden">
           <kbd className="font-mono">⌘↵</kbd> to approve
         </span>
         <Button variant="outline" disabled={decide.isPending} onClick={() => go("deny")}>Deny</Button>
@@ -143,8 +154,11 @@ function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"
   );
 }
 
-/** What the run waits for and how to unblock it, inline under the header. */
-export function ActionBox({ d }: { d: RunDetail }) {
+/**
+ * What the run waits for and how to unblock it, inline under the header. `compact` (the
+ * compact run detail) shows it inside the log and leaves replies to the pinned ReplyComposer.
+ */
+export function ActionBox({ d, compact }: { d: RunDetail; compact?: boolean }) {
   const run = d.run;
   const control = useControlRunById(run.id);
   const cancel = (
@@ -202,7 +216,7 @@ export function ActionBox({ d }: { d: RunDetail }) {
           body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/plans"}>Open the plan</Link></p>;
         } else if (run.purpose === "chat") {
           body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/chat"}>Open chat</Link></p>;
-        } else {
+        } else if (!compact) {
           body = <ReplyBox run={run} question={latestQuestion(d.events)} lastSeq={d.events.at(-1)?.seq ?? 0} />;
         }
         break;
@@ -247,7 +261,7 @@ export function ActionBox({ d }: { d: RunDetail }) {
   }
   if (!body) return null;
   return (
-    <div className="border-b border-border-subtle px-6 py-3">
+    <div className={compact ? "px-3 py-3" : "border-b border-border-subtle px-6 py-3"}>
       <div id={ACTION_BOX_ID} tabIndex={-1} aria-label="Needs attention" role="group" className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
         {body}
         {control.isError && (
@@ -411,3 +425,46 @@ export function RunRail({ d, grandchildren }: { d: RunDetail; grandchildren: (Ru
   );
 }
 
+
+/** The compact run detail's reply composer, pinned under the log while the run waits for a reply. */
+export function ReplyComposer({ run, lastSeq }: { run: Run; lastSeq: number }) {
+  const { comment, body, setBody, sent, again, submit } = useReply(run, lastSeq);
+  return (
+    <form
+      aria-label={`Reply to ${run.agent.name}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="flex flex-none flex-col gap-2 border-t border-border-subtle bg-bg px-3 pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))]"
+    >
+      <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
+      {comment.isError && (
+        <Banner tone="blocked" title="Couldn't send the reply">
+          {comment.error.message}
+        </Banner>
+      )}
+      {sent ? (
+        <p role="status" className="flex items-center justify-between gap-3 text-[13px] text-fg-secondary">
+          Sent. Resuming {run.agent.name}…
+          <Button variant="outline" className="h-[44px]" onClick={again}>Reply again</Button>
+        </p>
+      ) : (
+        <div className="flex items-end gap-2">
+          <label className="sr-only" htmlFor="run-reply-compact">Reply to {run.agent.name}</label>
+          <TextArea
+            id="run-reply-compact"
+            value={body}
+            rows={1}
+            placeholder={`Reply to ${run.agent.name}`}
+            onChange={(e) => setBody(e.target.value)}
+            className="max-h-32 min-h-[44px] flex-1 text-[16px]"
+          />
+          <Button type="submit" variant="approve" className="h-[44px]" disabled={!body.trim() || comment.isPending}>
+            {comment.isPending ? "Sending…" : "Send"}
+          </Button>
+        </div>
+      )}
+    </form>
+  );
+}

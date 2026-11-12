@@ -221,3 +221,17 @@ test("row checkbox focus permits list shortcuts while search keeps typing", asyn
   await expect(search).toHaveValue("jkx");
   await expect(checkbox).not.toBeChecked();
 });
+
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("row actions show without hovering", async ({ page }) => {
+    await installBoardApi(page);
+    await page.goto("/tickets?project=WEB");
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
+    const select = page.getByRole("checkbox", { name: "Select WEB-2" });
+    await expect(select).toHaveCSS("opacity", "1");
+    await select.tap();
+    await expect(select).toBeChecked();
+  });
+});

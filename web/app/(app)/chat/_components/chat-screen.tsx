@@ -1,12 +1,12 @@
 "use client";
 
-import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChatModels, useChatSuggestions, useChats, useCreateChat, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
 import { useWorkflows } from "@/lib/api/workflow-hooks";
 import { RepositoryPicker } from "./repository-picker";
+import { composerOptions } from "@/lib/composer-options";
 import { useRepositories } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
@@ -22,12 +22,13 @@ import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { Composer, type CommandRun, type ComposerCommands } from "./composer";
-import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selection } from "./model-picker";
+import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
-import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
-import { DesignPanel } from "./design-panel";
+import { CanvasButton } from "@/components/domain/canvas-view";
+import { ChatPanelHost } from "./chat-panel-host";
+import { useCompact } from "@/lib/viewport";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
-import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
+import { PlaygroundButton } from "@/components/domain/playground";
 import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
@@ -273,17 +274,18 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             rows={2}
             disabled={locked}
             placeholder={arrived ? `Message ${persona.name}…` : name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
-            options={
-              <>
-                {fullPersona?.capabilities.code && (
-                  <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} personaName={persona.name} personaRepos={repos} />
-                )}
-                <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-                <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
-              </>
-            }
-            actions={
-              selection && (
+            options={composerOptions({
+              code: !!fullPersona?.capabilities.code,
+              repo,
+              research,
+              temporary,
+              model: selection ? modelEffortSummary(groups, selection, offered.efforts.length > 0, effort).text : undefined,
+            })}
+            controls={{
+              repository: <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} personaName={persona.name} personaRepos={repos} />,
+              research: <ResearchToggle on={research} onChange={setResearch} disabled={locked} />,
+              temporary: <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />,
+              model: selection && (
                 <ModelEffortPicker
                   groups={groups}
                   value={selection}
@@ -293,8 +295,8 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
                   onEffort={(e) => setPickedEffort(e ?? null)}
                   disabled={locked}
                 />
-              )
-            }
+              ),
+            }}
             send={{
               label: start.isPending ? "Starting…" : research ? "Plan it" : "Send",
               disabled: locked || !!unavailable || files.pending || !text.trim() || askCommitEmail,
@@ -332,12 +334,13 @@ export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
   const search = useSearchParams();
   const current = useChat(id);
-  const canvas = useCanvasPanel();
   const turnRunning = current.data?.state === "running";
   const health = useHarnessHealth();
   const boot = useBootstrap();
   // First run (or ?setup, from Settings): the Welcome Wizard takes the welcome's place until it hands over.
   const [arrived, setArrived] = useState<string>();
+  // Compact: the panels are one sheet over the chat (chat-panel-host); the compact header's Panels button reopens it.
+  const compact = useCompact();
   const mode = search.has("setup") ? "full" : wizardMode(boot.data?.me);
   const wizard = !id && !arrived && !!boot.data && !!mode;
   const noHarness = !!health && !health.ready && !wizard;
@@ -358,7 +361,7 @@ export function ChatScreen({ id }: { id?: string }) {
   const conversation = useNewConversation(id);
   const resolving = !id && !fresh && !wizard && (!chats.data || !!newest);
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
             {noHarness && (
@@ -395,11 +398,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {/* The playground sits beside the chat: a running app needs the width more than a canvas does. */}
-          {id && <DesignPanel key={id} chatId={id} live={turnRunning} />}
-          {id && <PlaygroundPanel chatId={id} />}
-          {id && <PlaygroundFullscreen chatId={id} />}
-          {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
+          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} layout={compact ? "sheet" : "side"} />}
       </div>
     </div>
   );

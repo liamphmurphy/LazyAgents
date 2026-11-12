@@ -311,7 +311,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
 
   // ---- Review (a persona's suggestions as a diff): After and Diff show a preview, so nothing is editable there.
   const proposals = useDesignProposals(id, !!ref.data).data;
-  const [reviewOpen, setReviewing] = useState(false);
+  // ?review=1 (the chat's panel sheet sends it) opens straight into the review.
+  const [reviewOpen, setReviewing] = useState(() => search.get("review") === "1");
   const reviewing = reviewOpen && !!proposals?.length;
   const [mode, setMode] = useState<ReviewMode>("diff");
   const [resolving, setResolving] = useState(false);
@@ -538,6 +539,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
         e.preventDefault();
         if (!readOnly) setTool("section");
       } else if (e.key === "Escape") {
+        // Consumed here, so the panel sheet around a design (chat-panel-host) stays open.
+        if (tool !== "select" || selected.length) e.preventDefault();
         if (tool !== "select") setTool("select");
         else if (selected.length) {
           // Up to the parent first, then nothing.
@@ -663,7 +666,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
   return (
-    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-dvh")}>
+    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-app")}>
       {beside ? (
         <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
           <Icon name="designs" size={16} className="flex-none text-accent" />

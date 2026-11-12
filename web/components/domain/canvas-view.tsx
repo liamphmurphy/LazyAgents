@@ -539,7 +539,7 @@ function FullscreenChat({ chatId, live, readOnly }: { chatId: string; live: bool
 const noSubscribe = () => () => {};
 
 /** A canvas over the whole browser window, with the conversation reduced to a message box. */
-export function CanvasFullscreen({ chatId, live, readOnly, agent }: { chatId: string; live: boolean; readOnly: boolean; agent: string }) {
+export function CanvasFullscreen({ chatId, live, readOnly, agent, inline }: { chatId: string; live: boolean; readOnly: boolean; agent: string; inline?: boolean }) {
   const panel = useCanvasPanel();
   const canvases = useChatCanvases(chatId, live).data?.canvases;
   const id = panel.focus ?? canvases?.at(-1)?.id;
@@ -550,18 +550,27 @@ export function CanvasFullscreen({ chatId, live, readOnly, agent }: { chatId: st
     exit.current = exitFull;
   });
   useEffect(() => {
+    // In the panel sheet, Escape closes the sheet (chat-panel-host), not the canvas.
+    if (inline) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [inline]);
   if (!id || !mounted) return null;
+  const body = (
+    <>
+      <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onExitFullscreen={exitFull} />
+      <FullscreenChat chatId={chatId} live={live} readOnly={readOnly} />
+    </>
+  );
+  // `inline` fills the panel sheet (chat-panel-host), which is already full height.
+  if (inline) return <section aria-label="Canvas" data-testid="canvas-fullscreen" className="flex min-h-0 flex-1 flex-col bg-surface-sunken">{body}</section>;
   // On body, so no layout around the chat can contain it.
   return createPortal(
     <section role="dialog" aria-modal="true" aria-label="Canvas" data-testid="canvas-fullscreen" className="fixed inset-0 z-[100] flex flex-col bg-surface-sunken">
-      <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onExitFullscreen={exitFull} />
-      <FullscreenChat chatId={chatId} live={live} readOnly={readOnly} />
+      {body}
     </section>,
     document.body,
   );
