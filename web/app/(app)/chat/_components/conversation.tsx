@@ -820,7 +820,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
-                  <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
+                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}
                     actions={{

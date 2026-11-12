@@ -44,13 +44,16 @@ test("a scheduled task is created from the Scheduled page", async ({ page }) => 
 test("a connector tool waiting for approval shows in the chat", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS] });
   await page.goto("/chat");
-  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).fill("slow: hello");
   await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
   mock.connectorApprovals.push({ id: "11111111-1111-4111-8111-111111111111", connector_id: "11111111-1111-4111-8111-111111111112", connector_name: "GitHub", tool: "create_issue", arguments: { title: "Fix it" }, created_at: new Date().toISOString() });
-  const card = page.getByTestId("connector-approval");
+  // The request opens inside the running status card rather than stacking above it.
+  const card = page.getByTestId("chat-status-card").getByTestId("connector-approval");
   await expect(card).toContainText("create_issue");
+  await expect(page.getByTestId("chat-status")).toContainText("needs your approval");
   await card.getByRole("button", { name: "Allow once" }).click();
   await expect(card).toHaveCount(0);
+  await expect(page.getByTestId("chat-status")).not.toContainText("needs your approval");
   expect(mock.connectorDecisions).toEqual(["allow"]);
 });
