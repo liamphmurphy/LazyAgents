@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useUpdateChat } from "@/lib/api/hooks";
 import { chatTitle, groupByDay, newestChat } from "@/lib/chat-ui";
@@ -309,9 +309,11 @@ function ChatSearchResults({ query, onPick }: { query: string; onPick: () => voi
 
 /**
  * The conversation history at the top of the menu: persona strip, then Active by day or
- * Archived (kept in ?view= on the chat page).
+ * Archived (kept in ?view= on the chat page). `between` goes under the persona strip (the
+ * history drawer's spaces); `fill` drops the narrow-screen height cap for a drawer of its own and
+ * puts a Search chats box on top, where a phone has no room to tuck it into a heading.
  */
-export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null }) {
+export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed: string | null; between?: ReactNode; fill?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -359,8 +361,12 @@ export function ChatHistory({ id, viewed }: { id?: string; viewed: string | null
   // While finding, the row stays on top, so the box keeps focus as results replace the days.
   const onTop = finding || groups.length === 0;
   return (
-    <aside aria-label="Chat history" className="flex min-h-0 flex-1 flex-col gap-1.5 max-[799px]:max-h-64">
+    <aside aria-label="Chat history" className={cx("flex min-h-0 flex-1 flex-col gap-1.5", !fill && "max-[799px]:max-h-64")}>
+      {fill && (
+        <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-11 w-full !text-[16px]" value={query} onChange={(e) => setQuery(e.target.value)} />
+      )}
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
+      {between}
       <nav aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
         {onTop && headingRow(view === "archived" ? "Archived" : "Chats")}
         {query ? (
