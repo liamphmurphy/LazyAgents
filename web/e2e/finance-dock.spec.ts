@@ -72,6 +72,7 @@ test("asking about a spending section sends it to the Finance chat in the Chat t
   await expect(dock(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => api.posted.map((p) => p.body.body)).toEqual([expect.stringMatching(question)]);
   expect(api.created).toEqual([expect.objectContaining({ space_id: overview.space_id })]);
-  await expect(dock(page).getByText(question).first()).toBeVisible();
+  // The inactive Activity tab stays mounted (hidden) and also lists the prompt: look in the conversation.
+  await expect(dock(page).getByRole("log", { name: "Conversation" }).getByText(question).first()).toBeVisible();
   await expect(dock(page).getByText(PRIVACY)).toBeVisible();
 });
