@@ -7,6 +7,7 @@ import { dropTarget, hitPath, inMarquee, pick } from "@/lib/designs/hit";
 import type { Box, LaidPage } from "@/lib/designs/layout";
 import { FAMILY } from "@/lib/designs/measure";
 import { LaidPageSvg } from "@/lib/designs/render";
+import { screens } from "@/lib/designs/prototype";
 import type { Design, DesignNode, Page, TextNode } from "@/lib/designs/schema";
 
 export type Tool = "select" | "hand" | "frame" | "rect" | "ellipse" | "line" | "pen" | "text";
@@ -58,6 +59,8 @@ export type CanvasProps = {
   onEditing: (id?: string) => void;
   onViewport?: (w: number, h: number) => void;
   remoteCursor?: never;
+  /** Draws prototype links as wires (the Prototype tab). */
+  wires?: boolean;
 };
 
 /** The infinite canvas: the page drawn once in world space under a camera transform, with overlays in screen space. */
@@ -375,6 +378,7 @@ export function DesignCanvas(p: CanvasProps) {
         </g>
       </svg>
       <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" aria-hidden data-testid="design-overlay">
+        {p.wires && <Wires design={design} laid={laid} toScreen={toScreen} selected={selected} />}
         {boards.map((n) => {
           const b = laid.boxes.get(n.id);
           if (!b) return null;
@@ -439,6 +443,62 @@ export function DesignCanvas(p: CanvasProps) {
       )}
       <div className={cx("pointer-events-none absolute right-3 top-3 rounded-md bg-surface/80 px-2 py-1 text-[11px] text-fg-tertiary", !readOnly && "hidden")}>Read-only</div>
     </div>
+  );
+}
+
+/**
+ * Prototype links as wires over the canvas (an overlay, ADR §3.8): from the
+ * hotspot to its target frame on this page, a labelled stub to a frame on
+ * another page, and a red dashed stub for a broken link.
+ */
+function Wires({ design, laid, toScreen, selected }: { design: Design; laid: LaidPage; toScreen: (b: Box) => Box; selected: string[] }) {
+  const frames = new Map(screens(design).map((s) => [s.id, s]));
+  return (
+    <g data-testid="design-wires">
+      <defs>
+        <marker id="wire-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0 0L8 4L0 8z" fill="var(--color-accent)" />
+        </marker>
+      </defs>
+      {design.links.map((l) => {
+        const fb = laid.boxes.get(l.from);
+        if (!fb) return null;
+        const f = toScreen(fb);
+        const on = selected.includes(l.from);
+        const target = frames.get(l.to);
+        const tb = target ? laid.boxes.get(l.to) : undefined;
+        const sx = f.x + f.w, sy = f.y + f.h / 2;
+        if (!target) {
+          return (
+            <g key={l.id} data-wire={l.id} data-broken="true">
+              <rect x={f.x} y={f.y} width={f.w} height={f.h} fill="none" stroke="var(--color-pill-blocked-fg)" strokeDasharray="3 3" />
+              <path d={`M${sx} ${sy}h40`} stroke="var(--color-pill-blocked-fg)" strokeWidth={1.5} strokeDasharray="4 3" fill="none" />
+              <text x={sx + 46} y={sy + 4} fontSize={11} fill="var(--color-pill-blocked-fg)">Broken link</text>
+            </g>
+          );
+        }
+        if (!tb) {
+          return (
+            <g key={l.id} data-wire={l.id}>
+              <path d={`M${sx} ${sy}h40`} stroke="var(--color-accent)" strokeWidth={1.5} fill="none" markerEnd="url(#wire-arrow)" />
+              <text x={sx + 46} y={sy + 4} fontSize={11} fill="var(--color-accent)">{target.pageName} / {target.name}</text>
+            </g>
+          );
+        }
+        const t = toScreen(tb);
+        // Leave from the side facing the target, and arrive at its near edge.
+        const right = t.x >= f.x + f.w / 2;
+        const x0 = right ? f.x + f.w : f.x, x1 = right ? t.x : t.x + t.w, y1 = t.y + Math.min(t.h / 2, 40);
+        const bend = Math.max(40, Math.abs(x1 - x0) / 2) * (right ? 1 : -1);
+        return (
+          <g key={l.id} data-wire={l.id} opacity={on || !selected.length ? 1 : 0.55}>
+            <rect x={f.x} y={f.y} width={f.w} height={f.h} fill="var(--color-accent)" fillOpacity={0.08} stroke="var(--color-accent)" />
+            <circle cx={x0} cy={sy} r={3.5} fill="var(--color-accent)" />
+            <path d={`M${x0} ${sy}C${x0 + bend} ${sy} ${x1 - bend} ${y1} ${x1} ${y1}`} stroke="var(--color-accent)" strokeWidth={on ? 2 : 1.5} fill="none" markerEnd="url(#wire-arrow)" />
+          </g>
+        );
+      })}
+    </g>
   );
 }
 

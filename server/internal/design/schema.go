@@ -965,7 +965,10 @@ func Validate(d Doc) error {
 		if _, ok := ids[l["from"].(string)]; !ok {
 			return invalid("link %s: from %s doesn't exist", id, l["from"])
 		}
-		if !top[l["to"].(string)] {
+		// A link whose target is gone (removed by another edit that merged in)
+		// is kept as broken: the editor shows it, Present and design_flows
+		// skip it. One to a node that isn't a top-level frame is refused.
+		if _, exists := ids[l["to"].(string)]; exists && !top[l["to"].(string)] {
 			return invalid("link %s: to %s isn't a top-level frame", id, l["to"])
 		}
 		if _, ok := l["delay_ms"]; l["trigger"] == "after-delay" && !ok {

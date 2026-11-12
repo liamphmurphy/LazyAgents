@@ -520,3 +520,36 @@ func TestDesignsMigrationRollsBackAndReapplies(t *testing.T) {
 	id, _ = e.design(map[string]any{})
 	e.want("DELETE", "/designs/"+id, nil, http.StatusNoContent)
 }
+
+// design_flows answers the acceptance design's prototype as JSON and Mermaid,
+// for the design's own chat only, and refuses canvases that aren't designs.
+func TestDesignFlowsTool(t *testing.T) {
+	e := newDesignsEnv(t)
+	id, chat := e.design(map[string]any{})
+	raw, err := os.ReadFile("../../../docs/design/fixtures/acceptance-design.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(raw, &body)
+	seq, _ := e.current(id)
+	if code, out := e.save(id, seq, body); code != http.StatusCreated {
+		t.Fatalf("save = %d %v", code, out)
+	}
+	token := e.canvasToken(uuid.MustParse(chat))
+	code, out := e.tool(token, "design_flows", map[string]any{"canvas_id": id})
+	if code != http.StatusOK || len(out["frames"].([]any)) != 4 || len(out["links"].([]any)) != 3 ||
+		!strings.HasPrefix(out["mermaid"].(string), "flowchart LR\n") || !strings.Contains(out["mermaid"].(string), "n_pay -->|\"Button / Primary: click · smart-animate\"| n_done") {
+		t.Fatalf("design_flows = %d %v", code, out)
+	}
+	if code, out = e.tool(token, "design_flows", map[string]any{"canvas_id": id, "page": "Nowhere"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown page = %d %v", code, out)
+	}
+	_, otherToken, textID := e.makeCanvas("Not a design.")
+	if code, out = e.tool(otherToken, "design_flows", map[string]any{"canvas_id": textID}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("text canvas = %d %v", code, out)
+	}
+	if code, out = e.tool(otherToken, "design_flows", map[string]any{"canvas_id": id}); code != http.StatusNotFound {
+		t.Fatalf("another chat's design = %d %v", code, out)
+	}
+}
