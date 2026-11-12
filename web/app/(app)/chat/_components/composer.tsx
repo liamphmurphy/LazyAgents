@@ -13,6 +13,8 @@ import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-c
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
 import { ComposerHints, composerFrameFor, composerInput, SendButton, type SendTone } from "./reply-tools";
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
+import { ComposerSheet } from "./composer-sheet";
+import { useCompact } from "@/lib/viewport";
 
 /** A / command's action; a returned string is why it couldn't run. */
 export type CommandRun = () => string | void;
@@ -34,7 +36,8 @@ export type ComposerCommands = {
  * the caller's composerOptions list: the "options" ones on the left, the "actions" ones on the
  * right before the caller's actions (Stop) and Send; controls holds each one's control, while
  * Add context and Attach are the composer's own. Its parent owns the draft, chips and files so
- * it can send them, clear them and seed them from links.
+ * it can send them, clear them and seed them from links. Below COMPACT the row under the box is
+ * just + (a sheet listing every option, "header" ones too), the model chip, the actions and Send.
  */
 export function Composer({
   text,
@@ -93,6 +96,8 @@ export function Composer({
   const [commandActive, setCommandActive] = useState(0);
   const [commandDismissed, setCommandDismissed] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const compact = useCompact();
+  const [sheet, setSheet] = useState(false);
 
   const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
     const chip = chipFromTarget(t);
@@ -159,6 +164,30 @@ export function Composer({
       <AttachButton key={o.id} onFiles={files.add} disabled={disabled} compact />
     ) : (
       <Fragment key={o.id}>{controls[o.id]}</Fragment>
+    );
+  // In the sheet, picking context or files is done with it, so the sheet closes too.
+  const sheetControl = (o: ComposerOption) =>
+    o.id === "context" ? (
+      <AddContext
+        onPick={(t) => {
+          attach(t);
+          setSheet(false);
+        }}
+        disabled={disabled}
+        compact
+        create={create}
+      />
+    ) : o.id === "attach" ? (
+      <AttachButton
+        onFiles={(f) => {
+          files.add(f);
+          setSheet(false);
+        }}
+        disabled={disabled}
+        compact
+      />
+    ) : (
+      controls[o.id]
     );
   const submitComposer = () => {
     const command = parseCommand(text);
@@ -309,7 +338,23 @@ export function Composer({
               }}
             />
           </div>
-          {/* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */}
+          {compact ? (
+            <div className="flex items-center gap-2" data-testid="composer-compact-row">
+              <ComposerSheet
+                open={sheet}
+                onOpenChange={setSheet}
+                options={options.filter((o) => controls[o.id] || o.id === "context" || o.id === "attach")}
+                control={sheetControl}
+                counts={{ context: chips.length, attach: files.items.length }}
+              />
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+                {options.filter((o) => o.id === "model").map(control)}
+                {actions}
+              </div>
+              <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
+            </div>
+          ) : (
+          /* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */
           <div className="flex items-end gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               {options.filter((o) => o.place === "options").map(control)}
@@ -320,6 +365,7 @@ export function Composer({
               <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
             </div>
           </div>
+          )}
         </div>
       </form>
       <ComposerHints>{hints}</ComposerHints>
