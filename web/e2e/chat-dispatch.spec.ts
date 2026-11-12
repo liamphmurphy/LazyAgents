@@ -48,9 +48,10 @@ async function serve(page: Page, state: State) {
   });
 }
 
-async function offer(page: Page, state: State) {
+async function offer(page: Page, state: State, routes?: () => Promise<unknown>) {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   await serve(page, state);
+  await routes?.();
   await page.goto("/chat");
   const box = page.getByRole("combobox", { name: "Message" });
   await box.fill("dispatch: fix the payout bug");
@@ -253,4 +254,34 @@ test("runs started together get one grouped hand-off instead of one per card", a
   await page.screenshot({ path: "/tmp/chat-dispatch-group-flyout.png" });
   await page.keyboard.press("Escape");
   await expect(flyout).toHaveCount(0);
+});
+
+test("two trays share the status slot: the run shows, the queued follow-up expands from +1 more", async ({ page }) => {
+  const state: State = { runs: [run()], starts: [], cancels: 0, blockers: [] };
+  const followups = [{ id: "f0000000-0000-4000-8000-000000000001", body: "Also update the changelog", created_at: now() }];
+  const card = await offer(page, state, () => page.route(/\/api\/v1\/chats\/[^/]+\/followups$/, (route: Route) => route.fulfill({ json: { followups } })));
+
+  const slot = page.getByTestId("status-slot");
+  await expect(slot.getByTestId("ticket-run-tray")).toBeVisible();
+  // Both are live status; the run is listed first, so the follow-up collapses behind "+1 more".
+  await expect(slot.getByTestId("followup-tray")).toBeHidden();
+  const more = slot.getByTestId("status-slot-more");
+  await expect(more).toContainText("+1 more");
+  await expect(more).toContainText("1 queued");
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(more).toContainText("Show less");
+  const tray = slot.getByTestId("followup-tray");
+  await expect(tray).toBeVisible();
+  await expect(slot.getByTestId("ticket-run-tray")).toBeVisible();
+
+  // The tray's own actions still work from the slot.
+  await tray.getByRole("button", { name: "Send now" }).click();
+  await expect.poll(() => card.mock.posted.map((p) => (p.body as { body?: string }).body)).toContain("Also update the changelog");
+
+  await more.click();
+  await expect(slot.getByTestId("followup-tray")).toBeHidden();
+  await expect(more).toContainText("+1 more");
 });
