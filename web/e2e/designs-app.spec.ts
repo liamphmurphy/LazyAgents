@@ -331,8 +331,8 @@ test("pan and zoom stay smooth on the ~2k-node PoC design", async ({ page }, inf
   await page.goto(`/apps/designs/${D1}`);
   const svg = canvas(page).locator("svg").first();
   await expect(svg.locator("text", { hasText: /^40$/ }).first()).toBeAttached();
-  // Close the chat rail so the canvas is the PoC's size.
-  await page.getByRole("button", { name: "Hide chat" }).click();
+  // Collapse the dock so the canvas is the PoC's size.
+  await page.getByRole("button", { name: "Collapse panel" }).click();
   // The PoC's camera path through the editor's own wheel handling: pan across the grid at
   // overview zoom (every node visible), zoom 0.1× ↔ 2×, pan at 100 %. One wheel event per frame.
   const result = await canvas(page).evaluate(async (el) => {
@@ -450,7 +450,8 @@ test("Export downloads SVG, saves a PDF of every frame to the Library, and expla
   const { s } = await install(page, { [D1]: acceptance });
   await page.goto(`/apps/designs/${D1}`);
   await expect(savedState(page)).toContainText("Saved · v1");
-  const exportButton = page.getByRole("button", { name: "Export" });
+  // Export lives under the header's Share ▾.
+  const exportButton = page.getByRole("button", { name: "Share" });
   const panel = page.getByRole("dialog", { name: "Export" });
   const notice = page.getByTestId("design-export-notice");
 
@@ -555,4 +556,74 @@ test("diagram tools: connect two nodes, add a sticky, and draw a section that ta
   await page.keyboard.press("Shift+ArrowRight");
   await expect.poll(() => (latest(D1).pages[0].children[0] as { x: number }).x).toBe(section.x + 10);
   expect(node(latest(D1), "n_a")!.x).toBe(startX);
+});
+
+// ---- The shared editor layout (LAZYAGENTS-157).
+test("a design opens in the shared layout: slim header, Pages and layers, and a dock that collapses and reopens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await install(page, { [D1]: acceptance });
+  const settings: unknown[] = [];
+  await page.route(/\/api\/v1\/designs\/[^/]+\/settings$/, async (route) => {
+    settings.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ direct_edit: true, persona_paused: false, project_id: null }) });
+  });
+  await page.goto(`/apps/designs/${D1}`);
+  await expect(savedState(page)).toContainText("Saved · v1");
+  const header = page.locator("header").filter({ has: savedState(page) });
+  const dock = page.getByRole("complementary", { name: "Panel", exact: true });
+  const rail = page.getByRole("navigation", { name: "Panel rail" });
+  const tab = (name: string) => dock.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: new RegExp(name) });
+  const mod = process.platform === "darwin" ? "Meta" : "Control";
+
+  // Header: back, title, save state, Present and Share; no Hide chat or Export of its own.
+  await expect(header.getByRole("link", { name: "Designs" })).toHaveAttribute("href", "/apps/designs");
+  await expect(header.getByRole("heading", { name: "Checkout flow" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "▶ Present" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Share" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "More" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Hide chat|^Export$/ })).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "Tools" }).getByRole("button", { name: /Ask/ })).toHaveCount(0);
+
+  // Three panels: Pages and layers, the canvas, the dock (Chat · Design; Review only with suggestions).
+  await expect(page.getByRole("navigation", { name: "Pages and layers" })).toBeVisible();
+  await expect(canvas(page)).toBeVisible();
+  await expect(tab("Chat")).toBeVisible();
+  await expect(tab("Design")).toBeVisible();
+  await expect(tab("Review")).toHaveCount(0);
+
+  // Direct edit is the pill at the top of Chat.
+  const pill = page.getByTestId("direct-edit");
+  await expect(pill).toContainText("suggests changes");
+  await pill.click();
+  await page.getByRole("menuitemradio", { name: /Edits directly/ }).click();
+  await expect.poll(() => settings).toEqual([{ direct_edit: true }]);
+
+  // The Design tab holds the inspector's Design / Prototype / Inspect.
+  await tab("Design").click();
+  await expect(dock.getByRole("tablist", { name: "Inspector" }).getByRole("tab", { name: "Prototype" })).toBeVisible();
+
+  // Collapse with ⇥, reopen from the rail; clicking the active tab collapses too.
+  await dock.getByRole("button", { name: "Collapse panel" }).click();
+  await expect(dock).toHaveCount(0);
+  await expect(rail).toBeVisible();
+  await rail.getByRole("button", { name: "Open Design" }).click();
+  await expect(tab("Design")).toHaveAttribute("aria-selected", "true");
+  await tab("Design").click();
+  await expect(rail).toBeVisible();
+  await rail.getByRole("button", { name: "Expand panel" }).click();
+  await expect(dock).toBeVisible();
+
+  // ⌘J opens Chat and focuses the design chat's composer.
+  await canvas(page).click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press(`${mod}+j`);
+  await expect(tab("Chat")).toHaveAttribute("aria-selected", "true");
+  await expect(dock.getByRole("textbox", { name: "Message" })).toBeFocused();
+
+  // The dock is remembered across a reload.
+  await canvas(page).click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(rail).toBeVisible();
+  await page.reload();
+  await expect(savedState(page)).toContainText("Saved");
+  await expect(rail).toBeVisible();
 });

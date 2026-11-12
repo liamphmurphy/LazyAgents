@@ -165,4 +165,6 @@ test("a design with pending suggestions has an amber Review button in the sheet'
   }));
   await review.click();
   await expect(page).toHaveURL(new RegExp(`/apps/designs/${D}\\?review=1`));
+  // The proposals are already cached from the sheet, yet the editor still opens on its Review tab (LAZYAGENTS-157).
+  await expect(page.getByRole("dialog", { name: "Review" }).getByTestId("review-panel")).toBeVisible();
 });
