@@ -850,6 +850,9 @@
  * live, and swallows a quick click on the trigger.
  */
 .motion-dialog-fast[data-state="open"] { animation: motion-float-in 100ms var(--motion-ease) both; }
+/* Bottom sheets (components/ui/sheet.tsx) slide up from the bottom edge. */
+.motion-sheet[data-state="open"] { animation: motion-sheet-in var(--motion-slow) var(--motion-ease) both; }
+.motion-sheet[data-state="closed"] { animation: motion-sheet-out var(--motion-exit) ease-in both; }
 .motion-float { transform-origin: var(--radix-popper-transform-origin); }
 .motion-float[data-state="open"] { animation: motion-float-in var(--motion-fast) var(--motion-ease) both; }
 .motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
@@ -900,6 +903,8 @@
 @keyframes motion-float-in { from { opacity: 0; transform: scale(0.97); } }
 @keyframes motion-flyout-in { from { opacity: 0; transform: translateX(-8px) scale(0.96); } }
 @keyframes motion-pop { from { opacity: 0; transform: scale(0.4); } }
+@keyframes motion-sheet-in { from { transform: translateY(100%); } }
+@keyframes motion-sheet-out { to { transform: translateY(100%); } }
 @keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes motion-slide { from { opacity: 0; transform: translateX(calc(var(--slide-from, 0) * 32px)) scale(0.94); } }
 
@@ -908,6 +913,7 @@
   .motion-scrim,
   .motion-dialog,
   .motion-dialog-fast,
+  .motion-sheet,
   .motion-float,
   .motion-pop,
   .motion-pop-child svg,

@@ -179,3 +179,32 @@ export function TicketRow({
     </div>
   );
 }
+
+/**
+ * Compact-screen ticket row (DESIGN.md §3 Responsive): 64px, the whole row opens the ticket.
+ * Status glyph, the title over key · priority · points, and the agent's square on the right.
+ * Nothing in it waits for hover.
+ */
+export function CompactTicketRow({ t }: { t: TicketSummary }) {
+  return (
+    <Link
+      href={`/tickets/${t.key}`}
+      data-ticket-row={t.key}
+      className="flex h-[64px] items-center gap-3 border-b border-border-row px-4 active:bg-row-hover"
+    >
+      <StatusGlyph state={t.status} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="truncate text-[15px] font-medium text-fg">
+          <ViewTransition name={`ticket-title-${t.key}`} share="auto" default="none"><span>{t.title}</span></ViewTransition>
+        </span>
+        <span className="flex items-center gap-2 text-xs text-fg-tertiary">
+          <span className="font-mono">{t.key}</span>
+          <PriorityGlyph priority={t.priority} />
+          {t.estimate_points != null && <span className="font-mono" title={`${t.estimate_points} points`}>{t.estimate_points} pts</span>}
+          {isBlocked(t) && <Flag tone="human">Blocked</Flag>}
+        </span>
+      </span>
+      {t.assignee ? <AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} size="md" /> : <UnassignedAvatar size={24} />}
+    </Link>
+  );
+}
