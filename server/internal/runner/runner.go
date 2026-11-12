@@ -1596,8 +1596,12 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 		defer cancel()
 		_ = r.q().SetRunSession(qctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
 	})
-	// Always at turn end, so a turn that reports nothing (Codex) reads as unknown.
-	write(context.WithoutCancel(ctx), res.Usage.ContextTokens)
+	// At turn end, the final value. A Claude turn that never reached a request
+	// (a rejected resume, an early crash) keeps the last known size; a Codex
+	// turn writes 0, since its context is unknown.
+	if n := res.Usage.ContextTokens; n > 0 || c.spec.Harness == agentdef.HarnessCodex {
+		write(context.WithoutCancel(ctx), n)
+	}
 	return res, raw, code, err
 }
 
