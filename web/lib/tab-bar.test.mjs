@@ -5,14 +5,14 @@ import { NAV_GROUPS } from "./project-scope.ts";
 
 const counts = { inbox: 0, runs: 0, scheduled: 0, wiki: 0, settings: 0 };
 
-test("the bar has Chat, Inbox, Runs, Tickets and More", () => {
-  assert.deepEqual(TABS.map((t) => t.label), ["Chat", "Inbox", "Runs", "Tickets", "More"]);
+test("the bar has Chat, Needs you (the tray), Runs, Tickets and More", () => {
+  assert.deepEqual(TABS.map((t) => t.label), ["Chat", "Needs you", "Runs", "Tickets", "More"]);
 });
 
 test("a path selects its section's tab, and anything else selects More", () => {
   assert.equal(currentTab("/"), "chat");
   assert.equal(currentTab("/chat/abc"), "chat");
-  assert.equal(currentTab("/inbox"), "inbox");
+  assert.equal(currentTab("/inbox"), "needs");
   assert.equal(currentTab("/runs"), "runs");
   assert.equal(currentTab("/tickets"), "tickets");
   assert.equal(currentTab("/more"), "more");
@@ -31,7 +31,7 @@ test("run and ticket detail screens hide the bar; their lists keep it", () => {
 });
 
 test("counts reach the link name for Inbox and Runs only", () => {
-  assert.equal(badgeLabel("Inbox", "inbox", { ...counts, inbox: 3 }), "Inbox 3 unread");
+  assert.equal(badgeLabel("Needs you", "inbox", { ...counts, inbox: 3 }), "Needs you 3 waiting");
   assert.equal(badgeLabel("Runs", "runs", { ...counts, runs: 2 }), "Runs 2 running");
   assert.equal(badgeLabel("Inbox", "inbox", counts), "Inbox");
   assert.equal(badgeLabel("Wiki", "wiki", { ...counts, wiki: 1 }), "Wiki");

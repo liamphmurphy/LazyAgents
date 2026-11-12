@@ -95,7 +95,7 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
 
 test("the epic page's Needs you banner approves inline and Start ready skips blocked tickets", async ({ page }) => {
   const api = await installBoardApi(page);
-  api.inbox.push({ id: "approval:ap-5", kind: "approval", title: "Review board", summary: "Merge the PR", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, run_id: "run-5" });
+  api.inbox.push({ id: "approval:ap-5", kind: "approval", title: "Review board", summary: "Merge the PR", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: true, run_id: "run-5" });
   await page.goto("/epics/epic-1");
   const banner = page.getByRole("region", { name: "Needs you" });
   await expect(banner).toContainText("WEB-5");

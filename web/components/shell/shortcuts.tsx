@@ -45,8 +45,8 @@ export function ShortcutsDialog() {
           </div>
           <div className="overflow-y-auto px-6 pb-5">
             {SHORTCUTS.map((s) => (
-              <section key={s.section} aria-labelledby={`shortcuts-${s.section}`}>
-                <h3 id={`shortcuts-${s.section}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+              <section key={s.section} aria-labelledby={`shortcuts-${s.section.replaceAll(" ", "-")}`}>
+                <h3 id={`shortcuts-${s.section.replaceAll(" ", "-")}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
                   {s.section}
                 </h3>
                 <dl>

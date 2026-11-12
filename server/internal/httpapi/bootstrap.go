@@ -87,6 +87,11 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 	if len(items) > 0 {
 		out.Counts.Inbox = int(items[0].UnreadCount)
 	}
+	for _, it := range items {
+		if !it.Resolved && !it.Read && inboxNeedsYou(it.Kind, it.Summary) {
+			out.Counts.NeedsYou++
+		}
+	}
 	sugg, err := s.Q.CountSuggestions(ctx, ws)
 	if err != nil {
 		return nil, err

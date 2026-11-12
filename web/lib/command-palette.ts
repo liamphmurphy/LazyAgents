@@ -301,6 +301,18 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     ],
   },
   {
+    section: "Needs you tray",
+    items: [
+      { label: "Next / previous item", keys: ["J", "K"] },
+      { label: "Open the item’s page", keys: ["↵"] },
+      { label: "Switch between Needs you and Updates", keys: ["←", "→"] },
+      { label: "Approve the selected approval", keys: ["A"] },
+      { label: "Deny the selected approval (with an optional reason)", keys: ["D"] },
+      { label: "Reply to the selected question", keys: ["R"] },
+      { label: "Close the tray, or leave the reply box", keys: ["Esc"] },
+    ],
+  },
+  {
     section: "Inbox",
     items: [
       { label: "Next / previous item", keys: ["J", "K"] },
