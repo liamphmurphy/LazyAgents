@@ -340,6 +340,96 @@ func TestContinueRunReusesWorktreeAndSession(t *testing.T) {
 	}
 }
 
+func TestContinuedRunIsToldWhichCommitsChanged(t *testing.T) {
+	for _, mode := range []string{"moved", "unchanged", "diverged"} {
+		t.Run(mode, func(t *testing.T) {
+			moved := mode == "moved"
+			e := setup(t)
+			e.subagent("scribe")
+			logPath := filepath.Join(t.TempDir(), "log.jsonl")
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_LOG", logPath)
+			first := "Write FILE=-"
+			if mode == "diverged" {
+				first = "Write FILE=src/out.txt" // outside allowed_paths: not merged, the branch keeps it
+			}
+			if moved {
+				first = "Write FILE=docs/a.txt"
+				t.Setenv("FAKE_HARNESS_ROUND2_COMMIT", "docs/main.txt")
+				// A cloned origin, so the ticket's whole change has a base.
+				origin := t.TempDir()
+				for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "base"}} {
+					cmd := exec.Command("git", a...)
+					cmd.Dir = origin
+					if out, err := cmd.CombinedOutput(); err != nil {
+						t.Fatalf("git %v: %v\n%s", a, err, out)
+					}
+				}
+				if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url=$1, default_branch='main' WHERE key='PAY'", origin); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": first, "allowed_paths": []string{"docs/"}}}))
+			t.Setenv("FAKE_HARNESS_ROUND2", script(t, []args{{"agent": "scribe", "task": "Fix it: FILE=docs/b.txt", "allowed_paths": []string{"docs/"}, "continue_run_id": "$1"}}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			parent := e.run("PAY-214")
+			kids := e.children(parent)
+			if len(kids) != 2 || kids[0].State != "completed" || kids[1].State != "completed" {
+				t.Fatalf("children %+v\n%s", kids, deref(parent.Outcome))
+			}
+			c1, c2 := e.contractOf(kids[0]), e.contractOf(kids[1])
+			var prompts []string
+			for _, l := range readLog(t, logPath) {
+				if strings.Contains(l["prompt"], "delegated part of") {
+					prompts = append(prompts, l["full_prompt"])
+				}
+			}
+			if len(prompts) != 2 {
+				t.Fatalf("child prompts %d", len(prompts))
+			}
+			if want := "You are at `" + c1.BaseSHA + "` on branch `" + c1.Branch + "`."; !strings.Contains(prompts[0], want) || strings.Contains(prompts[0], "previous run") {
+				t.Fatalf("first prompt lacks %q:\n%s", want, prompts[0])
+			}
+			if want := "You are at `" + c2.BaseSHA + "` on branch `" + c2.Branch + "`."; !strings.Contains(prompts[1], want) {
+				t.Fatalf("second prompt lacks %q:\n%s", want, prompts[1])
+			}
+			if mode == "diverged" {
+				if !c2.Diverged || !strings.Contains(prompts[1], "so it was not fast-forwarded; the main agent's branch is at `") {
+					t.Fatalf("contract %s, prompt:\n%s", kids[1].Contract, prompts[1])
+				}
+				return
+			}
+			if c2.Diverged || c2.PrevHeadSHA == "" {
+				t.Fatalf("second contract %s", kids[1].Contract)
+			}
+			if !moved {
+				if c2.PrevHeadSHA != c2.BaseSHA || !strings.Contains(prompts[1], "has not changed since your previous run") {
+					t.Fatalf("contract %s, prompt:\n%s", kids[1].Contract, prompts[1])
+				}
+				return
+			}
+			// The sub agent last stood at its own commit; the main agent merged it and committed on top.
+			if prev := e.checksOf(kids[0]).HeadSHA; c2.PrevHeadSHA != prev || c2.BaseSHA == prev {
+				t.Fatalf("prev %s want %s, head %s", c2.PrevHeadSHA, prev, c2.BaseSHA)
+			}
+			if !strings.Contains(prompts[0], "The ticket's whole change (against `origin/main`) is `git diff ") {
+				t.Fatalf("first prompt lacks the whole change:\n%s", prompts[0])
+			}
+			// The whole change covers the sub agent's earlier commit too, not just the latest range.
+			whole := prompts[1][strings.Index(prompts[1], "The ticket's whole change"):strings.Index(prompts[1], "Since your previous run")]
+			if !strings.Contains(whole, "docs/a.txt") || !strings.Contains(whole, "docs/main.txt") {
+				t.Fatalf("whole change:\n%s", whole)
+			}
+			for _, want := range []string{"moved `" + c2.PrevHeadSHA + ".." + c2.BaseSHA + "`", "docs/main.txt", "Main agent commits docs/main.txt", "Review exactly this range."} {
+				if !strings.Contains(prompts[1], want) {
+					t.Fatalf("second prompt lacks %q:\n%s", want, prompts[1])
+				}
+			}
+		})
+	}
+}
+
 // tickUntil doesn't wait for held fake processes to exit.
 func (e env) tickUntil(what string, ready func() bool) {
 	e.t.Helper()

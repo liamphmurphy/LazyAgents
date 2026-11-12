@@ -145,6 +145,66 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 	return report.String()
 }
 
+// checkoutSection tells a delegated run's first turn exactly where its worktree
+// stands: its HEAD and branch, the ticket's whole change as a diff range and,
+// for a continued run, the commits the main agent's branch gained since the
+// sub agent's previous run. A git query that fails omits its part.
+func (r *Runner) checkoutSection(ctx context.Context, c runCtx, env map[string]string) string {
+	var contract runs.Contract
+	if len(c.run.Contract) == 0 || json.Unmarshal(c.run.Contract, &contract) != nil || contract.Worktree == "" || contract.BaseSHA == "" {
+		return ""
+	}
+	ws, dir, name := wsID(c.run), contract.Worktree, "lazyagents-checkout-"+c.run.ID.String()
+	git := func(script string) string { return r.gitOut(ctx, ws, dir, name, script, env) }
+	head := contract.BaseSHA
+	var b strings.Builder
+	b.WriteString("\n\n## Checkout\n\nYou are at `" + head + "` on branch `" + contract.Branch + "`.")
+	var bases []string
+	if c.spec.Repository != nil && c.spec.Repository.EpicBranch != "" {
+		bases = append(bases, "origin/"+c.spec.Repository.EpicBranch)
+	}
+	if c.project.DefaultBranch != "" {
+		bases = append(bases, "origin/"+c.project.DefaultBranch, c.project.DefaultBranch)
+	}
+	for _, ref := range bases {
+		fork := git("git rev-parse -q --verify " + shellQuote(ref+"^{commit}") + " >/dev/null && git merge-base " + shellQuote(ref) + " HEAD")
+		if fork == "" {
+			continue
+		}
+		b.WriteString("\n\nThe ticket's whole change (against `" + ref + "`) is `git diff " + fork + "..HEAD`")
+		if stat := git("git diff --stat " + shellQuote(fork) + " HEAD"); stat != "" {
+			b.WriteString(":\n\n```\n" + lastLines(stat, 40) + "\n```")
+		} else {
+			b.WriteString(".")
+		}
+		break
+	}
+	if contract.ContinueRunID != "" && contract.PrevHeadSHA != "" {
+		prev := contract.PrevHeadSHA
+		switch {
+		case contract.Diverged:
+			b.WriteString("\n\nYour branch has commits the main agent's branch doesn't, so it was not fast-forwarded")
+			if pb := r.gitOut(ctx, ws, "", name, "git rev-parse HEAD", env); pb != "" {
+				b.WriteString("; the main agent's branch is at `" + pb + "`")
+			}
+			b.WriteString(".")
+		case prev == head:
+			b.WriteString("\n\nThe main agent's branch has not changed since your previous run.")
+		default:
+			rng := shellQuote(prev + ".." + head)
+			b.WriteString("\n\nSince your previous run the main agent's branch moved `" + prev + ".." + head + "`:")
+			if log := git("git log --oneline -20 " + rng); log != "" {
+				b.WriteString("\n\n```\n" + log + "\n```")
+			}
+			if stat := git("git diff --stat " + rng); stat != "" {
+				b.WriteString("\n\n```\n" + lastLines(stat, 40) + "\n```")
+			}
+			b.WriteString("\n\nReview exactly this range.")
+		}
+	}
+	return b.String()
+}
+
 func isDone(state string) bool {
 	return state == "completed" || state == "failed" || state == "cancelled"
 }
