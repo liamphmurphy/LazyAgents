@@ -906,8 +906,11 @@ test("each reply shows its tokens and cost on hover or focus", async ({ page }) 
   const tooltip = page.getByTestId("usage-tooltip");
   await expect(tooltip).toHaveCount(0);
 
-  await reply.getByTestId("model-tag").focus();
-  await expect(tooltip).toContainText("Input48.2K41K cached · 7.2K uncached");
+  // The composer takes focus back once the send settles (it's beside Activity now), so focus until the tooltip holds.
+  await expect(async () => {
+    await reply.getByTestId("model-tag").focus();
+    await expect(tooltip).toContainText("Input48.2K41K cached · 7.2K uncached", { timeout: 1000 });
+  }).toPass();
   await expect(tooltip).toContainText("Output1.3K");
   await expect(tooltip).toContainText("Cost$0.042");
   await page.keyboard.press("Escape");
@@ -941,7 +944,10 @@ test("a reply shows the effort Vesper picked for it, and why", async ({ page }) 
   await page.getByRole("button", { name: "Open Activity" }).click();
   const tag = page.getByTestId("activity-turn").getByTestId("model-tag");
   await expect(tag).toHaveText("Claude Code · Opus 5.5 · High (auto)");
-  await tag.focus();
+  await expect(async () => {
+    await tag.focus();
+    await expect(page.getByTestId("usage-tooltip")).toContainText("Effort", { timeout: 1000 });
+  }).toPass();
   await expect(page.getByTestId("usage-tooltip")).toContainText("EffortHighautomatic · aimed for extra high · raised after a retry or edit");
 });
 

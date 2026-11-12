@@ -190,7 +190,7 @@ export function EditorLayout({
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
         {/* An app's panels unmount while the dock is collapsed, as they always have. */}
-        {docked && !compact && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open ? panels : null} />}
+        {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open ? panels : null} railOnly={compact} />}
       </div>
       {compact && docked && (
         <Sheet open={sheetOpen} onOpenChange={(o) => (o ? setSheetOpen(true) : dispatch({ type: "collapse" }))} title={active?.label ?? ""} className="h-[85dvh]">
@@ -232,6 +232,7 @@ export function Dock({
   dispatch,
   panels,
   overlay = "xl",
+  railOnly = false,
 }: {
   uid: string;
   tabs: DockTab[];
@@ -240,12 +241,14 @@ export function Dock({
   /** The tab panels, if not the default dockPanels; null renders none (they unmount while collapsed). */
   panels?: ReactNode;
   overlay?: "xl" | "lg";
+  /** Phones: only the rail, whose icons open the owner's sheet. */
+  railOnly?: boolean;
 }) {
   const active = tabs.find((t) => t.id === state.tab) ?? tabs[0];
   if (!tabs.length || state.hidden) return null;
   return (
     <>
-      <aside
+      {!railOnly && <aside
         aria-label="Panel"
         hidden={!state.open}
         className={cx(
@@ -291,8 +294,8 @@ export function Dock({
           </button>
         </div>
         {panels === undefined ? dockPanels(uid, tabs, active?.id) : panels}
-      </aside>
-      {!state.open && (
+      </aside>}
+      {(railOnly || !state.open) && (
         <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">
           <button
             type="button"
