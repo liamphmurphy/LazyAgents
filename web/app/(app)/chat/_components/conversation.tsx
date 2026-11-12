@@ -3,7 +3,7 @@
 import { canvasFenceIds } from "@/lib/chat-canvas";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
 import { useEntrances } from "@/components/ui/motion";
@@ -114,7 +114,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
+const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -208,6 +208,111 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
       )}
     </li>
   );
+});
+
+type ChatAsides = NonNullable<ReturnType<typeof useChatAsides>["data"]>;
+
+/**
+ * The transcript's messages. Typing in the composer re-renders the whole chat screen, so
+ * everything handed to a Bubble here is kept referentially stable (memoized, or read through
+ * a ref when it is a callback) and a keystroke only re-checks props instead of re-rendering
+ * every message's markdown.
+ */
+function BubbleList({ list, chat, persona, speakerName, names, highlight, running, since, locked, archived, editPending, lastUser, videosByMessage, asideList, pinnedRef, editLast }: {
+  list: Message[];
+  chat: ChatInfo;
+  persona: PersonaLook;
+  speakerName: string;
+  names: Map<string, string>;
+  highlight: string | null;
+  running: boolean;
+  since?: string;
+  locked: boolean;
+  archived: boolean;
+  editPending: boolean;
+  lastUser?: Message;
+  videosByMessage: Map<string, ChatVideo[]>;
+  asideList?: ChatAsides;
+  pinnedRef: RefObject<boolean>;
+  editLast: (body: string) => void;
+}) {
+  const turns = useMemo(() => turnWindows(list), [list]);
+  const latest = useRef({ editLast, retryBody: lastUser?.body_md });
+  useEffect(() => {
+    latest.current = { editLast, retryBody: lastUser?.body_md };
+  });
+  const onEdit = useCallback((body: string) => {
+    pinnedRef.current = true;
+    latest.current.editLast(body);
+  }, [pinnedRef]);
+  const onRetry = useCallback(() => {
+    pinnedRef.current = true;
+    if (latest.current.retryBody !== undefined) latest.current.editLast(latest.current.retryBody);
+  }, [pinnedRef]);
+  // The last reply's window stays open while the next turn runs: that turn's asides are live, below.
+  const asideNodes = useMemo(() => {
+    const out = new Map<string, ReactNode>();
+    for (const [id, t] of turns) {
+      const asked = asidesInWindow(asideList, t.since, t.until ?? (running ? since : undefined));
+      if (asked.length) out.set(id, <ReplyAsides asides={asked} name={speakerName} />);
+    }
+    return out;
+  }, [turns, asideList, running, since, speakerName]);
+  const canEdit = !running && !locked && !editPending && !archived;
+  const canRetry = !running && !editPending && !archived && !!lastUser;
+  const lastId = list.at(-1)?.id;
+  return list.map((m, i) => (
+    <Bubble key={m.id} m={m} chat={chat} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} highlighted={highlight === m.id}
+      editable={canEdit && m.id === lastUser?.id}
+      onEdit={onEdit}
+      onRetry={canRetry && m.id === lastId ? onRetry : undefined}
+      summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
+      videos={videosByMessage.get(m.id)}
+      asides={asideNodes.get(m.id) ?? null} />
+  ));
+}
+
+/**
+ * What a card in a reply can do. The value only changes with the chat's data, not with the
+ * draft, so the cards in every reply don't re-render per keystroke; the callbacks are read
+ * through a ref for the same reason.
+ */
+function ReplyActions({ list, chat, running, disabled, agent, ask, researchMore, children }: {
+  list: Message[];
+  chat: { id: string; project?: string; archived: boolean };
+  running: boolean;
+  disabled: boolean;
+  agent: string;
+  ask: (messageId: string, body: string) => void;
+  researchMore: (artifactId: string, title: string) => void;
+  children: ReactNode;
+}) {
+  const callbacks = useRef({ ask, researchMore });
+  useEffect(() => {
+    callbacks.current = { ask, researchMore };
+  });
+  const canvas = useMemo(() => {
+    const last = new Map<string, string>();
+    let newest: string | undefined;
+    for (const m of list) {
+      if (m.role !== "assistant") continue;
+      for (const canvasId of canvasFenceIds(m.body_md)) {
+        last.set(canvasId, m.id);
+        newest = canvasId;
+      }
+    }
+    return { newest, lastMessage: (canvasId: string) => last.get(canvasId), live: running, readOnly: chat.archived, agent };
+  }, [list, running, chat.archived, agent]);
+  const value = useMemo(() => ({
+    ask: (messageId: string, body: string) => callbacks.current.ask(messageId, body),
+    researchMore: (artifactId: string, title: string) => callbacks.current.researchMore(artifactId, title),
+    disabled,
+    chatId: chat.id,
+    project: chat.project,
+    canvas,
+    nextMessage: (id: string) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md,
+  }), [disabled, chat.id, chat.project, canvas, list]);
+  return <RecommendActions.Provider value={value}>{children}</RecommendActions.Provider>;
 }
 
 const snippet = (s: string) => (s.length > 120 ? `${s.slice(0, 120).trimEnd()}…` : s);
@@ -591,18 +696,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const group = participants.length > 1;
   // Who answers next (or is answering now): the last speaker, else the host.
   const speaker = personaLook(c.speaker ?? c.persona);
-  const canvasCards = (() => {
-    const last = new Map<string, string>();
-    let newest: string | undefined;
-    for (const m of list ?? []) {
-      if (m.role !== "assistant") continue;
-      for (const canvasId of canvasFenceIds(m.body_md)) {
-        last.set(canvasId, m.id);
-        newest = canvasId;
-      }
-    }
-    return { newest, lastMessage: (canvasId: string) => last.get(canvasId), live: running, readOnly: c.archived, agent: (c.speaker ?? c.persona)?.name ?? "Assistant" };
-  })();
   // Restoring a chat opened from the Archived list shows it under Active again.
   const restored = () => {
     if (!search.has("view")) return;
@@ -800,23 +893,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           ) : (
             <>
             <VideoPlayers.Provider value={players}>
-            <RecommendActions.Provider value={{ ask: askAuthor, disabled: running || locked || !!unavailable || c.archived, chatId: c.id, project: c.project, researchMore, canvas: canvasCards, nextMessage: (id) => list.slice(list.findIndex((m) => m.id === id) + 1).find((m) => m.role === "user")?.body_md }}>
+            <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
-              {list.map((m, i) => (
-                <Bubble key={m.id} m={m} chat={c} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} highlighted={highlight === m.id}
-                  editable={!running && !locked && !edit.isPending && !c.archived && m.id === lastUser?.id}
-                  onEdit={(body) => { pinned.current = true; edit.mutate(body); }}
-                  onRetry={!running && !edit.isPending && !c.archived && lastUser && m.id === list.at(-1)?.id ? () => { pinned.current = true; edit.mutate(lastUser.body_md); } : undefined}
-                  summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
-                  videos={videosByMessage.get(m.id)}
-                  asides={(() => {
-                    // The last reply's window stays open while the next turn runs: that turn's asides are live, below.
-                    const t = turns.get(m.id);
-                    const asked = t && asidesInWindow(asideList, t.since, t.until ?? (running ? since : undefined));
-                    return asked?.length ? <ReplyAsides asides={asked} name={speaker.name} /> : null;
-                  })()} />
-              ))}
+              <BubbleList list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
+                locked={locked} archived={c.archived} editPending={edit.isPending} lastUser={lastUser} videosByMessage={videosByMessage} asideList={asideList}
+                pinnedRef={pinned} editLast={edit.mutate} />
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
               <SecretRequests chatId={c.id} disabled={c.archived} />
@@ -850,7 +932,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               )}
               <li ref={end} aria-hidden />
             </ol>
-            </RecommendActions.Provider>
+            </ReplyActions>
             </VideoPlayers.Provider>
             {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}
             {newReply && (
