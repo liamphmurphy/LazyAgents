@@ -7,6 +7,7 @@ import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { Icon } from "@/components/ui/icon";
 import { CanvasView } from "./canvas-view";
 import { CodeFence } from "./code-fence";
+import { DesignCard } from "./design-card";
 import { RecommendActions } from "./recommend-fence";
 import { SvgFenceMessage } from "./svg-fence";
 
@@ -24,6 +25,8 @@ export function CanvasFence({ code, info }: { code: string; info?: string }) {
   const panel = useCanvasPanel();
   const canvas = list.data?.canvases.find((c) => c.id === id);
   if (!id || !chatId || (list.data && !canvas) || list.isError) return <CodeFence code={code} info={info} />;
+  // A design opens beside the chat (design-panel), not in place.
+  if (canvas?.kind === "design") return <DesignCard id={id!} title={canvas.title} />;
   const live = !!messageId && chat?.lastMessage(id) === messageId;
   const expanded = (panel.focus ?? (panel.collapsed ? undefined : chat?.newest)) === id;
   if (canvas && live && expanded && !panel.fullscreen) {
