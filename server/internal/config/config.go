@@ -48,6 +48,10 @@ type Config struct {
 	// MemoryConsolidateInterval is how often personal memories are
 	// consolidated (duplicates merged; 0 disables).
 	MemoryConsolidateInterval int // seconds
+	// RolloverContextTokens (ROLLOVER_CONTEXT_TOKENS) continues a main agent
+	// in a fresh session, briefed from run state, when its delegations finish
+	// and its context is at least this many tokens. 0 never rolls over.
+	RolloverContextTokens int
 }
 
 // Runner configures `vesper runner` (docs/dev/plan.md §6.5).
@@ -252,6 +256,12 @@ func Load() (Config, error) {
 	}
 	if c.MemoryConsolidateInterval, err = intEnv("MEMORY_CONSOLIDATE_INTERVAL_S", 6*60*60); err != nil {
 		return c, err
+	}
+	if c.RolloverContextTokens, err = intEnv("ROLLOVER_CONTEXT_TOKENS", 0); err != nil {
+		return c, err
+	}
+	if c.RolloverContextTokens < 0 {
+		return c, fmt.Errorf("config: ROLLOVER_CONTEXT_TOKENS=%d must be 0 (off) or a token count", c.RolloverContextTokens)
 	}
 	return c, nil
 }

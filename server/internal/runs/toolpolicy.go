@@ -67,6 +67,21 @@ func WebTool(tool string) bool {
 	return false
 }
 
+// LeadRun reports an undelegated ticket run: the only kind that may get the
+// explorer sub agent (agentdef.ExplorerOn).
+func LeadRun(run store.Run) bool {
+	return run.Purpose == "ticket" && run.ParentRunID == nil
+}
+
+// subagentDecision rules on Claude Code's sub agent tool: only the explorer,
+// and only when the run has it.
+func subagentDecision(spec agentdef.Resolved, run store.Run, input map[string]any) ToolDecision {
+	if typ, _ := input["subagent_type"].(string); typ == agentdef.ExplorerAgent && agentdef.ExplorerOn(spec, LeadRun(run)) {
+		return ToolDecision{Decision: "allow"}
+	}
+	return ToolDecision{Decision: "deny", Reason: "Only the explorer sub agent is available; delegate other work with the delegate tool"}
+}
+
 func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDecision, error) {
 	deny := func(reason string) (ToolDecision, error) { return ToolDecision{Decision: "deny", Reason: reason}, nil }
 	if c.RunID == nil {
@@ -83,6 +98,10 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 	spec, err := Spec(run)
 	if err != nil {
 		return ToolDecision{}, err
+	}
+	if in.Tool == "Agent" || in.Tool == "Task" { // Task: its name before Claude Code 2.1
+		// ToolScopes would send it to tests:run, which a lead has.
+		return subagentDecision(spec, run, in.Input), nil
 	}
 	if WebTool(in.Tool) && run.Purpose == PurposeLearning {
 		// Only a reviewer has the web, and only to open what the course cites.
@@ -179,6 +198,17 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 			return deny(scope + " is denied for this run")
 		}
 	}
+	if run.ParentRunID != nil && len(run.Contract) > 0 {
+		var contract Contract
+		if json.Unmarshal(run.Contract, &contract) == nil && len(contract.AllowedPaths) > 0 {
+			for _, target := range writeTargets(in) {
+				f, ok := repoPath(target, contract.Worktree)
+				if ok && (strings.HasPrefix(f, "/") || f == ".." || strings.HasPrefix(f, "../") || !contract.PathAllowed(f)) {
+					return deny("This run may only change: " + strings.Join(contract.AllowedPaths, ", ") + ". Report anything else with complete_run.")
+				}
+			}
+		}
+	}
 	detail := map[string]any{"tool_name": in.Tool, "tool_input": in.Input}
 	raw, _ := json.Marshal(detail)
 	var approvedIDs []store.ApprovalRequest
@@ -249,6 +279,62 @@ func (s *Service) CheckTool(ctx context.Context, c Caller, in ToolCheck) (ToolDe
 		}
 	}
 	return ToolDecision{Decision: "allow"}, nil
+}
+
+// writeTargets lists the files a write tool call names: file_path or
+// notebook_path for Claude Code's Edit, Write and NotebookEdit, and the
+// "*** Add/Update/Delete File:" (and "*** Move to:") headers of Codex's
+// apply_patch. Other tools, and calls whose target can't be read, list none.
+func writeTargets(in ToolCheck) []string {
+	switch in.Tool {
+	case "Edit", "Write", "NotebookEdit":
+		for _, key := range []string{"file_path", "notebook_path"} {
+			if p, _ := in.Input[key].(string); strings.TrimSpace(p) != "" {
+				return []string{strings.TrimSpace(p)}
+			}
+		}
+	case "apply_patch":
+		patch, _ := in.Input["input"].(string)
+		if patch == "" {
+			patch, _ = in.Input["patch"].(string)
+		}
+		if patch == "" {
+			patch, _ = in.Input["command"].(string)
+		}
+		var out []string
+		for _, line := range strings.Split(patch, "\n") {
+			line = strings.TrimSpace(line)
+			for _, h := range []string{"*** Add File:", "*** Update File:", "*** Delete File:", "*** Move to:"} {
+				if p, ok := strings.CutPrefix(line, h); ok && strings.TrimSpace(p) != "" {
+					out = append(out, strings.TrimSpace(p))
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// repoPath turns a write target into the repo-relative path allowed_paths are
+// written against: cleaned, with everything up to and including the run's
+// worktree directory removed. ok is false when it can't be determined. A path
+// still absolute or above the checkout afterwards is outside the worktree, so
+// PathAllowed refuses it (allowed_paths are repo-relative without "..").
+func repoPath(target, worktree string) (string, bool) {
+	p := path.Clean(strings.ReplaceAll(target, `\`, "/"))
+	if p == "." || p == "" {
+		return "", false
+	}
+	if worktree = strings.Trim(path.Clean(worktree), "/"); worktree != "" && worktree != "." {
+		if i := strings.LastIndex("/"+p+"/", "/"+worktree+"/"); i >= 0 {
+			p = strings.TrimPrefix(("/" + p + "/")[i+len(worktree)+2:], "/")
+			p = strings.TrimSuffix(p, "/")
+			if p == "" {
+				return "", false
+			}
+		}
+	}
+	return p, true
 }
 
 // imageToolName reports Codex's image tool however a hook names it: the plain

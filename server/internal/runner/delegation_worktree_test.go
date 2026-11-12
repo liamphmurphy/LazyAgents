@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -177,6 +179,67 @@ func TestParallelDelegationMergesBothChildren(t *testing.T) {
 	}
 }
 
+// Parallel children each pass alone; their test commands are then run on the
+// merged checkout, and a child that breaks them there is unmerged.
+func TestParallelDelegationIntegration(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testerCmd string
+		fail      bool
+	}{
+		// Passes in tester's own worktree, which lacks scribe's docs/a.txt.
+		"breaking child is unmerged": {"test ! -f docs/a.txt", true},
+		"combined tests pass":        {"test -f src/b.txt", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := setup(t)
+			sp := spy(e)
+			e.subagent("scribe")
+			e.subagent("tester")
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_SYNC", t.TempDir())
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{
+				{"agent": "scribe", "task": "Write FILE=docs/a.txt", "allowed_paths": []string{"docs/"}, "test_command": "test -f docs/a.txt"},
+				{"agent": "tester", "task": "Write FILE=src/b.txt", "allowed_paths": []string{"src/"}, "test_command": tc.testerCmd},
+			}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			parent := e.run("PAY-214")
+			out := deref(parent.Outcome)
+			kids := e.children(parent)
+			if len(kids) != 2 {
+				t.Fatalf("children %d\n%s", len(kids), out)
+			}
+			first, second := e.checksOf(kids[0]), e.checksOf(kids[1])
+			if !first.Passed || !second.Passed || !first.Merged || first.Integration != "" {
+				t.Fatalf("checks\n%s\n%s", kids[0].Checks, kids[1].Checks)
+			}
+			checkout := out[strings.Index(out, "=== checkout"):]
+			if !tc.fail {
+				if !second.Merged || second.Integration != "passed" || strings.Count(out, "**MERGED**") != 2 ||
+					strings.Count(out, "Integration with the other delegated runs: passed.") != 1 || !strings.Contains(checkout, "src/b.txt") {
+					t.Fatalf("checks %s\nreport:\n%s", kids[1].Checks, out)
+				}
+				return
+			}
+			if second.Merged || second.Integration != "failed" || second.IntegrationCommand != tc.testerCmd || !strings.Contains(second.MergeNote, "the merge was undone") {
+				t.Fatalf("checks %s", kids[1].Checks)
+			}
+			for _, want := range []string{"**FAILED**. `" + tc.testerCmd + "` failed", "**NOT MERGED**", second.Branch, "continue_run_id"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("report lacks %q:\n%s", want, out)
+				}
+			}
+			// The parent's HEAD is the first merge: scribe's file is there, tester's isn't.
+			if !strings.Contains(checkout, "docs/a.txt") || strings.Contains(checkout, "src/b.txt") || strings.Count(checkout, "Merge commit") != 1 {
+				t.Fatalf("parent checkout:\n%s", checkout)
+			}
+			if !strings.Contains(sp.branches, second.Branch) {
+				t.Fatalf("branch %s not kept: %q", second.Branch, sp.branches)
+			}
+		})
+	}
+}
+
 func TestFailedChecksLeaveBranchUnmerged(t *testing.T) {
 	e := setup(t)
 	sp := spy(e)
@@ -275,6 +338,39 @@ func TestDirtyParentCheckoutRejectsDelegation(t *testing.T) {
 	}
 }
 
+// Both CLIs report session-cumulative usage on resume, so a continued run
+// must take its baseline from the run it continues, not book the whole session.
+func TestContinuedRunIsBilledOnlyForItsOwnUsage(t *testing.T) {
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
+		t.Run(h, func(t *testing.T) {
+			e := setup(t)
+			sp := agents.DefaultSpec()
+			sp.Harness = h
+			if h == agentdef.HarnessCodex {
+				sp.Model = "gpt-5-codex" // has a built-in price
+			}
+			if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "scribe", Role: "Dev", Kind: agents.KindSub}, &sp); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt", "allowed_paths": []string{"docs/"}}}))
+			t.Setenv("FAKE_HARNESS_ROUND2", script(t, []args{{"agent": "scribe", "task": "Fix it: FILE=docs/b.txt", "allowed_paths": []string{"docs/"}, "continue_run_id": "$1"}}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			kids := e.children(e.run("PAY-214"))
+			if len(kids) != 2 || deref(kids[1].HarnessSessionID) == "" || deref(kids[1].HarnessSessionID) != deref(kids[0].HarnessSessionID) {
+				t.Fatalf("children %+v", kids)
+			}
+			if kids[0].CostUsdMicros == 0 || kids[1].CostUsdMicros != kids[0].CostUsdMicros {
+				t.Fatalf("continued child billed %d micros, first child %d", kids[1].CostUsdMicros, kids[0].CostUsdMicros)
+			}
+			if h == agentdef.HarnessCodex && (kids[0].InputTokens == 0 || kids[1].InputTokens != kids[0].InputTokens) {
+				t.Fatalf("continued child used %d input tokens, first child %d", kids[1].InputTokens, kids[0].InputTokens)
+			}
+		})
+	}
+}
+
 func TestContinueRunReusesWorktreeAndSession(t *testing.T) {
 	for name, reject := range map[string]bool{"resumes the session": false, "falls back to a fresh session": true} {
 		t.Run(name, func(t *testing.T) {
@@ -335,6 +431,96 @@ func TestContinueRunReusesWorktreeAndSession(t *testing.T) {
 			// The repair started from the merged state and was merged in turn.
 			if out := deref(parent.Outcome); !strings.Contains(out, "docs/a.txt") || !strings.Contains(out, "docs/b.txt") || strings.Count(out, "**MERGED**") != 1 {
 				t.Fatalf("outcome:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestContinuedRunIsToldWhichCommitsChanged(t *testing.T) {
+	for _, mode := range []string{"moved", "unchanged", "diverged"} {
+		t.Run(mode, func(t *testing.T) {
+			moved := mode == "moved"
+			e := setup(t)
+			e.subagent("scribe")
+			logPath := filepath.Join(t.TempDir(), "log.jsonl")
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_LOG", logPath)
+			first := "Write FILE=-"
+			if mode == "diverged" {
+				first = "Write FILE=src/out.txt" // outside allowed_paths: not merged, the branch keeps it
+			}
+			if moved {
+				first = "Write FILE=docs/a.txt"
+				t.Setenv("FAKE_HARNESS_ROUND2_COMMIT", "docs/main.txt")
+				// A cloned origin, so the ticket's whole change has a base.
+				origin := t.TempDir()
+				for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "base"}} {
+					cmd := exec.Command("git", a...)
+					cmd.Dir = origin
+					if out, err := cmd.CombinedOutput(); err != nil {
+						t.Fatalf("git %v: %v\n%s", a, err, out)
+					}
+				}
+				if _, err := e.pool.Exec(e.ctx, "UPDATE projects SET repo_url=$1, default_branch='main' WHERE key='PAY'", origin); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": first, "allowed_paths": []string{"docs/"}}}))
+			t.Setenv("FAKE_HARNESS_ROUND2", script(t, []args{{"agent": "scribe", "task": "Fix it: FILE=docs/b.txt", "allowed_paths": []string{"docs/"}, "continue_run_id": "$1"}}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			parent := e.run("PAY-214")
+			kids := e.children(parent)
+			if len(kids) != 2 || kids[0].State != "completed" || kids[1].State != "completed" {
+				t.Fatalf("children %+v\n%s", kids, deref(parent.Outcome))
+			}
+			c1, c2 := e.contractOf(kids[0]), e.contractOf(kids[1])
+			var prompts []string
+			for _, l := range readLog(t, logPath) {
+				if strings.Contains(l["prompt"], "delegated part of") {
+					prompts = append(prompts, l["full_prompt"])
+				}
+			}
+			if len(prompts) != 2 {
+				t.Fatalf("child prompts %d", len(prompts))
+			}
+			if want := "You are at `" + c1.BaseSHA + "` on branch `" + c1.Branch + "`."; !strings.Contains(prompts[0], want) || strings.Contains(prompts[0], "previous run") {
+				t.Fatalf("first prompt lacks %q:\n%s", want, prompts[0])
+			}
+			if want := "You are at `" + c2.BaseSHA + "` on branch `" + c2.Branch + "`."; !strings.Contains(prompts[1], want) {
+				t.Fatalf("second prompt lacks %q:\n%s", want, prompts[1])
+			}
+			if mode == "diverged" {
+				if !c2.Diverged || !strings.Contains(prompts[1], "so it was not fast-forwarded; the main agent's branch is at `") {
+					t.Fatalf("contract %s, prompt:\n%s", kids[1].Contract, prompts[1])
+				}
+				return
+			}
+			if c2.Diverged || c2.PrevHeadSHA == "" {
+				t.Fatalf("second contract %s", kids[1].Contract)
+			}
+			if !moved {
+				if c2.PrevHeadSHA != c2.BaseSHA || !strings.Contains(prompts[1], "has not changed since your previous run") {
+					t.Fatalf("contract %s, prompt:\n%s", kids[1].Contract, prompts[1])
+				}
+				return
+			}
+			// The sub agent last stood at its own commit; the main agent merged it and committed on top.
+			if prev := e.checksOf(kids[0]).HeadSHA; c2.PrevHeadSHA != prev || c2.BaseSHA == prev {
+				t.Fatalf("prev %s want %s, head %s", c2.PrevHeadSHA, prev, c2.BaseSHA)
+			}
+			if !strings.Contains(prompts[0], "The ticket's whole change (against `origin/main`) is `git diff ") {
+				t.Fatalf("first prompt lacks the whole change:\n%s", prompts[0])
+			}
+			// The whole change covers the sub agent's earlier commit too, not just the latest range.
+			whole := prompts[1][strings.Index(prompts[1], "The ticket's whole change"):strings.Index(prompts[1], "Since your previous run")]
+			if !strings.Contains(whole, "docs/a.txt") || !strings.Contains(whole, "docs/main.txt") {
+				t.Fatalf("whole change:\n%s", whole)
+			}
+			for _, want := range []string{"moved `" + c2.PrevHeadSHA + ".." + c2.BaseSHA + "`", "docs/main.txt", "Main agent commits docs/main.txt", "Review exactly this range."} {
+				if !strings.Contains(prompts[1], want) {
+					t.Fatalf("second prompt lacks %q:\n%s", want, prompts[1])
+				}
 			}
 		})
 	}
@@ -485,6 +671,9 @@ func TestDelegationReportReplaysStoredChecks(t *testing.T) {
 	})
 	releaseFile(t, hold)
 	e.runner.Wait()
+	// Both children wait on their checks; checking them wakes the parent.
+	e.runner.TickChecks(e.ctx)
+	e.runner.Wait()
 	parent := e.run("PAY-214")
 	kids := e.children(parent)
 	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
@@ -579,5 +768,106 @@ func TestChildCancelledBeforeParentProcessExits(t *testing.T) {
 	}
 	if len(e.children(parent)[0].Checks) == 0 {
 		t.Fatal("cancelled child was never reported")
+	}
+}
+
+// rolloverWake runs a main agent that delegates one task and reports
+// FAKE_HARNESS_CONTEXT_TOKENS=tokens with ROLLOVER_CONTEXT_TOKENS=limit, and
+// returns the parent run and the log line of its delegation wake.
+func rolloverWake(t *testing.T, limit int64, tokens string) (env, store.Run, map[string]string) {
+	t.Helper()
+	e := setup(t)
+	e.runner.Cfg.RolloverContextTokens = limit
+	e.subagent("scribe")
+	logPath := filepath.Join(t.TempDir(), "log.jsonl")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_LOG", logPath)
+	t.Setenv("FAKE_HARNESS_CONTEXT_TOKENS", tokens)
+	t.Setenv("FAKE_HARNESS_PLAN", "Delegate the doc|Review the result")
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt with the release notes",
+		"acceptance_criteria": []string{"docs/a.txt exists"}, "allowed_paths": []string{"docs/"}, "test_command": "test -f docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.until("completed", e.state("PAY-214=completed"))
+	parent := e.run("PAY-214")
+	var parentLines []map[string]string
+	for _, l := range readLog(t, logPath) {
+		if !strings.Contains(l["full_prompt"], "delegated part of") {
+			parentLines = append(parentLines, l)
+		}
+	}
+	if len(parentLines) != 2 {
+		t.Fatalf("parent invocations %d: %+v", len(parentLines), parentLines)
+	}
+	if !strings.HasPrefix(deref(parent.Outcome), "RESUMED") {
+		t.Fatalf("outcome %s", deref(parent.Outcome))
+	}
+	return e, parent, parentLines[1]
+}
+
+func TestLargeLeadRollsOverAtDelegationWake(t *testing.T) {
+	e, parent, wake := rolloverWake(t, 100000, "180000")
+	if wake["resume"] != "" {
+		t.Fatalf("rolled-over turn resumed session %q", wake["resume"])
+	}
+	p := wake["full_prompt"]
+	for _, want := range []string{
+		"Your earlier session was closed to keep context small; this brief is your state.",
+		"## Acceptance criteria", // the ticket's, from the run brief
+		"## Plan", "Delegate the doc", "Review the result",
+		"## Git", "Branch: ",
+		"## What you delegated", "@scribe", "Write FILE=docs/a.txt with the release notes", "- docs/a.txt exists", "Test command: `test -f docs/a.txt`",
+		"## Delegation report", "## Automated checks", "**MERGED**",
+	} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("rollover prompt lacks %q:\n%s", want, p)
+		}
+	}
+	// The task is quoted without the contract's sections.
+	_, delegated, _ := strings.Cut(p, "## What you delegated")
+	delegated, _, _ = strings.Cut(delegated, "## Delegation report")
+	if strings.Contains(delegated, "## Allowed files") || strings.Contains(delegated, "## Tests") {
+		t.Fatalf("delegated section repeats the contract headings:\n%s", delegated)
+	}
+	if !e.hasLifecycle(parent.ID, "session_rollover") {
+		t.Fatalf("no session_rollover event: %s", e.eventTypes(parent.ID))
+	}
+	evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: parent.ID, Seq: 0})
+	for _, ev := range evs {
+		var pl map[string]any
+		_ = json.Unmarshal(ev.Payload, &pl)
+		if pl["state"] == "session_rollover" && (pl["reason"] != "delegation" || pl["context_tokens"] != float64(180000)) {
+			t.Fatalf("rollover event %s", ev.Payload)
+		}
+	}
+	// The fresh session's turn is billed for its own process, not the session so far.
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 {
+		t.Fatalf("parent turns %d", len(turns))
+	}
+	var u0, u1 harness.Usage
+	_ = json.Unmarshal(turns[0].Usage, &u0)
+	_ = json.Unmarshal(turns[1].Usage, &u1)
+	if u0.CostUSD == 0 || u1.CostUSD != u0.CostUSD {
+		t.Fatalf("rolled-over turn cost %v, first turn %v", u1.CostUSD, u0.CostUSD)
+	}
+}
+
+func TestSmallLeadResumesAtDelegationWake(t *testing.T) {
+	for name, c := range map[string]struct {
+		limit  int64
+		tokens string
+	}{"below": {100000, "50000"}, "disabled": {0, "180000"}} {
+		t.Run(name, func(t *testing.T) {
+			e, parent, wake := rolloverWake(t, c.limit, c.tokens)
+			if wake["resume"] == "" {
+				t.Fatal("delegation wake didn't resume the session")
+			}
+			if p := wake["full_prompt"]; strings.Contains(p, "Your earlier session was closed") || strings.Contains(p, "## What you delegated") || !strings.Contains(p, "## Automated checks") {
+				t.Fatalf("wake prompt:\n%s", p)
+			}
+			if e.hasLifecycle(parent.ID, "session_rollover") {
+				t.Fatal("unexpected session_rollover event")
+			}
+		})
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/httpapi"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -341,6 +342,22 @@ func TestCrashFailsRun(t *testing.T) {
 	e.until("completed", e.state("PAY-224=completed"))
 }
 
+func TestRunRecordsContextTokens(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "complete")
+	t.Setenv("FAKE_HARNESS_CONTEXT_TOKENS", "180000")
+	e.dispatch("PAY-224")
+	e.until("completed", e.state("PAY-224=completed"))
+	if r := e.run("PAY-224"); r.ContextTokens != 180000 {
+		t.Fatalf("context_tokens %d, want 180000", r.ContextTokens)
+	}
+	turns, _ := e.q.ListTurns(e.ctx, e.run("PAY-224").ID)
+	var u harness.Usage
+	if len(turns) == 0 || json.Unmarshal(turns[0].Usage, &u) != nil || u.ContextTokens != 180000 || u.OtherOutputBytes == 0 {
+		t.Fatalf("turn usage %+v", u)
+	}
+}
+
 func TestPauseResumeAndGuards(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "slow")
@@ -441,6 +458,9 @@ func TestCodexOverride(t *testing.T) {
 	evs := e.eventTypes(run.ID)
 	if !strings.Contains(evs, "tool_call:request_approval") || run.HarnessSessionID == nil || run.CostSource == nil || *run.CostSource != "computed" {
 		t.Fatalf("codex turn: %s cost=%v", evs, run.CostSource)
+	}
+	if run.ContextTokens != 0 { // Codex doesn't report it: 0 is unknown
+		t.Fatalf("codex context_tokens %d", run.ContextTokens)
 	}
 	tk, _ := tracker.Get(e.ctx, e.q, e.ws, "PAY-214")
 	aps, _ := e.q.PendingApprovalsForTicket(e.ctx, tk.ID)
@@ -636,6 +656,8 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "delegate")
+	report := "## Findings\n\n- child.txt:1 written as asked"
+	t.Setenv("FAKE_HARNESS_CHILD_REPORT", report)
 	if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "Scribe", Role: "Docs", Kind: agents.KindSub}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -652,6 +674,10 @@ func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
 	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
 	if len(turns) != 2 || turns[1].Trigger != "delegation" {
 		t.Fatalf("parent turns %+v", turns)
+	}
+	// The child's report reaches the parent through the real MCP path.
+	if deref(kids[0].Report) != report || !strings.Contains(turns[1].InputMessage, "Wrote child.txt\n\n#### Report\n\n"+report) {
+		t.Fatalf("report %q; wake message:\n%s", deref(kids[0].Report), turns[1].InputMessage)
 	}
 	// The child worked in its own worktree and branch; its commit was merged into the parent's.
 	var ct runs.Contract

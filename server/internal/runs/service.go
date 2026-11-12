@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -74,6 +75,9 @@ type Service struct {
 	// Transcripts fetches a chat message's YouTube links ahead of its turn; nil
 	// leaves that to the chat's own tool call.
 	Transcripts *transcript.YouTube
+	// RolloverContextTokens mirrors the runner's setting (ROLLOVER_CONTEXT_TOKENS):
+	// a main agent at least this large continues in a fresh session. 0 is off.
+	RolloverContextTokens int64
 }
 
 type Caller = agents.Caller
@@ -385,6 +389,9 @@ func (s *Service) running(ctx context.Context, q *store.Queries, c Caller, key s
 	case "running":
 		return run, t, nil
 	case "waiting":
+		if deref(run.WaitReason) == "checks" {
+			return run, t, apperr.Conflict("you already called complete_run and the server is checking your work; end your turn")
+		}
 		return run, t, apperr.Conflict("the run is waiting for a person (%s); call await_signal", deref(run.WaitReason))
 	case "paused":
 		return run, t, apperr.Conflict("a person paused this run; stop and call await_signal")
@@ -457,15 +464,35 @@ func (s *Service) PostPlan(ctx context.Context, c Caller, key string, steps []st
 
 var stepStates = []string{"pending", "current", "done", "needs_human", "failed"}
 
-// UpdateStep sets one step's state. Marking a step current clears any other
-// current step, so the plan always shows one place the agent is at. Marking a
-// step done while nothing is current promotes the next pending step; that
-// step's position is returned (0 when nothing advanced).
-func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state string) (int, error) {
+// StepNoteLimit bounds a step's handoff note, in runes.
+const StepNoteLimit = 1500
+
+// StepResult is what UpdateStep did.
+type StepResult struct {
+	// Current is the step promoted to current (0 when nothing advanced).
+	Current int
+	// Rollover asks the agent to end its turn: its next turn starts in a
+	// fresh session (runs.rollover_requested). ContextTokens is the size that
+	// triggered it.
+	Rollover      bool
+	ContextTokens int64
+}
+
+// UpdateStep sets one step's state and, when note is non-empty, its handoff
+// note. Marking a step current clears any other current step, so the plan
+// always shows one place the agent is at. Marking a step done while nothing is
+// current promotes the next pending step. When that happens on a lead ticket
+// run whose context is at least RolloverContextTokens, it also flags the run
+// to continue in a fresh session (see wantsRollover).
+func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state, note string) (StepResult, error) {
+	var res StepResult
 	if !slices.Contains(stepStates, state) {
-		return 0, apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
+		return res, apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
 	}
-	advanced := 0
+	note = strings.TrimSpace(note)
+	if utf8.RuneCountInString(note) > StepNoteLimit {
+		return res, apperr.Invalid("note", "must be at most %d characters", StepNoteLimit)
+	}
 	err := s.tx(ctx, func(q *store.Queries) error {
 		run, _, err := s.running(ctx, q, c, key)
 		if err != nil {
@@ -483,7 +510,16 @@ func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, s
 		if rows == 0 {
 			return apperr.Invalid("step", "no step %d in the plan", n)
 		}
-		if err := event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": n, "state": state}); err != nil {
+		if note != "" {
+			if err := q.SetStepNote(ctx, store.SetStepNoteParams{RunID: run.ID, Position: int32(n), Note: &note}); err != nil {
+				return err
+			}
+		}
+		ev := map[string]any{"kind": "step", "step": n, "state": state}
+		if note != "" {
+			ev["note"] = note
+		}
+		if err := event(ctx, q, run.ID, "message", ev); err != nil {
 			return err
 		}
 		if state != "done" {
@@ -508,10 +544,30 @@ func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, s
 		if _, err := q.SetStepState(ctx, store.SetStepStateParams{RunID: run.ID, Position: next, State: "current"}); err != nil {
 			return err
 		}
-		advanced = int(next)
-		return event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": advanced, "state": "current"})
+		res.Current = int(next)
+		if err := event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": res.Current, "state": "current"}); err != nil {
+			return err
+		}
+		if !s.wantsRollover(run) {
+			return nil
+		}
+		if err := q.SetRunRolloverRequested(ctx, store.SetRunRolloverRequestedParams{ID: run.ID, RolloverRequested: true}); err != nil {
+			return err
+		}
+		res.Rollover, res.ContextTokens = true, run.ContextTokens
+		return nil
 	})
-	return advanced, err
+	return res, err
+}
+
+// wantsRollover reports whether a run that just finished a plan step should
+// continue in a fresh session: the setting is on, it's a managed lead ticket
+// run (delegated runs are short and their sessions are continued by the
+// parent), and its last recorded context is at least the setting.
+func (s *Service) wantsRollover(run store.Run) bool {
+	limit := s.RolloverContextTokens
+	return limit > 0 && run.ParentRunID == nil && run.Purpose == "ticket" && run.Mode == "managed" &&
+		run.ContextTokens >= limit
 }
 
 // ---------------------------------------------------------------- events
@@ -757,6 +813,9 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 		} else if err != nil {
 			return err
 		}
+		if v == VerdictChangesRequested && reproCleared(ch) {
+			v = VerdictApproved
+		}
 		latest[ch.AgentID] = v
 	}
 	spec, err := Spec(run)
@@ -774,9 +833,44 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 	return nil
 }
 
+// reproCleared reports a review whose findings the server verified fixed: the
+// reviewer said its repro_command covers every blocking finding, and
+// recheck_review ran it green on the main agent's branch.
+func reproCleared(ch store.Run) bool {
+	var contract Contract
+	var checks Checks
+	if len(ch.Contract) == 0 || len(ch.Checks) == 0 || json.Unmarshal(ch.Contract, &contract) != nil || json.Unmarshal(ch.Checks, &checks) != nil {
+		return false
+	}
+	return contract.ReproCoversAll && contract.ReproCommand != "" && checks.ReproFixed
+}
+
+// MaxReportRunes caps a delegated run's complete_run report.
+const MaxReportRunes = 8000
+
+// Repro is what a delegated reviewer reports about the failing tests it
+// committed (complete_run repro_command and repro_covers_all).
+type Repro struct {
+	Command   string
+	CoversAll bool
+}
+
 // Complete ends the run and moves the ticket (default: In Review). Done needs
 // configured independent-review approval; existing review rejections always block Done.
-func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, verdict string) error {
+func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, report, status, verdict string) error {
+	return s.CompleteWithRepro(ctx, c, key, outcome, report, status, verdict, Repro{})
+}
+
+// CompleteWithRepro is Complete for a delegated reviewer that also reports
+// its repro command.
+func (s *Service) CompleteWithRepro(ctx context.Context, c Caller, key, outcome, report, status, verdict string, repro Repro) error {
+	repro.Command = strings.TrimSpace(repro.Command)
+	if len([]rune(repro.Command)) > maxContractRunes {
+		return apperr.Invalid("repro_command", "must be at most %d characters", maxContractRunes)
+	}
+	if repro.CoversAll && repro.Command == "" {
+		return apperr.Invalid("repro_covers_all", "needs repro_command")
+	}
 	if status == "" {
 		status = "in_review"
 	}
@@ -787,6 +881,10 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 		return apperr.Invalid("verdict", "must be approved or changes_requested")
 	}
 	outcome = strings.TrimSpace(outcome)
+	report = strings.TrimSpace(report)
+	if n := utf8.RuneCountInString(report); n > MaxReportRunes {
+		return apperr.Invalid("report", "is %d characters; keep it to %d", n, MaxReportRunes)
+	}
 	if c.RunID != nil {
 		// A delegated run reports back to its parent instead of moving the ticket.
 		var delegated bool
@@ -798,8 +896,14 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 			return err
 		}
 		if delegated {
-			return s.completeChild(ctx, c, key, outcome, verdict)
+			return s.completeChild(ctx, c, key, outcome, report, verdict, repro)
 		}
+	}
+	if report != "" {
+		return apperr.Invalid("report", "only a delegated run sends a report")
+	}
+	if repro.Command != "" {
+		return apperr.Invalid("repro_command", "only a delegated reviewer or QA run reports a repro_command")
 	}
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {

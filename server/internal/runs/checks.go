@@ -32,6 +32,58 @@ type Checks struct {
 	Merged         bool     `json:"merged"`
 	MergeConflicts []string `json:"merge_conflicts,omitempty"`
 	MergeNote      string   `json:"merge_note,omitempty"`
+	// Integration is "passed" or "failed" when, after this run was merged, the
+	// test commands of every delegated run merged in the same report were run
+	// on the combined checkout; "" when it was the only one merged.
+	// IntegrationCommand is the command that failed, IntegrationTail its output.
+	Integration        string `json:"integration,omitempty"`
+	IntegrationCommand string `json:"integration_command,omitempty"`
+	IntegrationTail    string `json:"integration_tail,omitempty"`
+	// ReproCommand is the reviewer's repro_command, run in its worktree: it
+	// must fail (ReproExit non-zero) for the branch to merge. ReproExit is nil
+	// when it didn't finish.
+	ReproCommand string `json:"repro_command,omitempty"`
+	ReproExit    *int   `json:"repro_exit,omitempty"`
+	ReproTail    string `json:"repro_tail,omitempty"`
+	// RecheckRequested is set by recheck_review until the runner has run
+	// ReproCommand in the main agent's checkout. ReproFixed says it passed there,
+	// at RecheckSHA, in the turn RecheckTurn; RecheckExit and RecheckTail are
+	// that run's result (RecheckExit nil when it didn't finish).
+	RecheckRequested bool   `json:"recheck_requested,omitempty"`
+	RecheckTurn      int    `json:"recheck_turn,omitempty"`
+	RecheckSHA       string `json:"recheck_sha,omitempty"`
+	RecheckExit      *int   `json:"recheck_exit,omitempty"`
+	RecheckTail      string `json:"recheck_tail,omitempty"`
+	// RecheckNote says why the command wasn't run (a dirty checkout, the
+	// reviewer's tests changed since it committed them).
+	RecheckNote string `json:"recheck_note,omitempty"`
+	ReproFixed  bool   `json:"repro_fixed,omitempty"`
+	// Bounces is how many times the server sent a mechanical check failure
+	// back to the sub agent before these checks (the contract's Bounces).
+	Bounces int `json:"bounces,omitempty"`
+}
+
+// Bounceable reports whether failed checks are mechanical, so the sub agent
+// can fix them in its own session: uncommitted files, files outside the
+// allowed paths, or a failing test command. A reviewer's or QA's run (one that
+// reported a verdict or a ReproCommand) judges code it doesn't own and may be
+// expected to leave failing tests, so only its files count.
+func (k Checks) Bounceable(reviewer bool) bool {
+	if !k.Ran || k.Passed || k.Error != "" || k.ChildState != "completed" {
+		return false
+	}
+	if len(k.Uncommitted) > 0 || len(k.OutOfBounds) > 0 {
+		return true
+	}
+	return !reviewer && k.ReproCommand == "" && k.TestCommand != "" && (k.TestExit == nil || *k.TestExit != 0)
+}
+
+// BounceMessage is the turn that sends failed checks back to the sub agent;
+// bounce counts this one (1 for the first), max is MaxCheckBounces.
+func (k Checks) BounceMessage(bounce, max int) string {
+	k.Branch, k.MergeNote, k.Bounces = "", "", 0 // nothing was merged; that part is for the main agent
+	return "The server checked your work against the delegation's contract before reporting to the main agent, and sent it back:\n\n" +
+		k.Report() + fmt.Sprintf("\nFix this and call complete_run again. Retry %d of %d.", bounce, max)
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -43,7 +95,35 @@ func (k *Checks) Evaluate(contract Contract) {
 		}
 	}
 	k.Passed = k.Ran && k.ChildState == "completed" && len(k.OutOfBounds) == 0 && len(k.Uncommitted) == 0 &&
-		k.Error == "" && (k.TestCommand == "" || (k.TestExit != nil && *k.TestExit == 0))
+		k.Error == "" && (k.TestCommand == "" || (k.TestExit != nil && *k.TestExit == 0)) &&
+		(k.ReproCommand == "" || (k.ReproExit != nil && *k.ReproExit != 0))
+}
+
+// RecheckReport is the "## Review recheck" section of the main agent's resume
+// message after recheck_review.
+// coversAll is the reviewer's repro_covers_all.
+func (k Checks) RecheckReport(runID string, coversAll bool) string {
+	var b strings.Builder
+	b.WriteString("## Review recheck\n\n")
+	switch {
+	case k.ReproFixed && coversAll:
+		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`, so the findings of review run %s are verified fixed; its changes_requested verdict no longer blocks Done.\n", k.ReproCommand, k.RecheckSHA, runID)
+	case k.ReproFixed:
+		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`. Review run %s didn't say its tests cover every blocking finding, so its changes_requested verdict still needs a re-review (continue_run_id) before Done.\n", k.ReproCommand, k.RecheckSHA, runID)
+	case k.RecheckNote != "":
+		b.WriteString("**NOT RUN**: " + k.RecheckNote + "\n")
+	case k.RecheckExit == nil:
+		fmt.Fprintf(&b, "**FAILED**: `%s` did not finish on your branch", k.ReproCommand)
+		if k.RecheckTail != "" {
+			b.WriteString(":\n```\n" + k.RecheckTail + "\n```\n")
+		} else {
+			b.WriteString(".\n")
+		}
+		b.WriteString("Fix it, commit, and call recheck_review again.\n")
+	default:
+		fmt.Fprintf(&b, "**FAILED**: `%s` still fails on your branch at `%s` (exit %d):\n```\n%s\n```\nFix it, commit, and call recheck_review again.\n", k.ReproCommand, k.RecheckSHA, *k.RecheckExit, k.RecheckTail)
+	}
+	return b.String()
 }
 
 const maxListed = 30
@@ -101,6 +181,25 @@ func (k Checks) Report() string {
 			fmt.Fprintf(&b, "\nTest command `%s` failed (exit %d):\n```\n%s\n```\n", k.TestCommand, *k.TestExit, k.TestTail)
 		}
 	}
+	if k.ReproCommand != "" {
+		switch {
+		case k.ReproExit == nil:
+			fmt.Fprintf(&b, "\nThe reviewer's repro `%s` did not finish, so it doesn't demonstrate the findings; the branch was not merged. Read the report.\n", k.ReproCommand)
+		case *k.ReproExit == 0:
+			fmt.Fprintf(&b, "\n`%s` already passes, so it doesn't demonstrate the findings; the branch was not merged. Read the report.\n", k.ReproCommand)
+		case k.Merged:
+			fmt.Fprintf(&b, "\nThe reviewer's failing tests are merged into your branch. `%s` fails now (exit %d):\n```\n%s\n```\nMake it pass, then call recheck_review.\n", k.ReproCommand, *k.ReproExit, k.ReproTail)
+		default:
+			fmt.Fprintf(&b, "\nThe reviewer's repro `%s` fails (exit %d), but its tests weren't merged (see below).\n", k.ReproCommand, *k.ReproExit)
+		}
+	}
+	if k.Bounces > 0 {
+		if k.Passed {
+			fmt.Fprintf(&b, "\nPassed on attempt %d after the server sent the check failure back.\n", k.Bounces+1)
+		} else {
+			fmt.Fprintf(&b, "\nStill failing on attempt %d: the server sent the check failure back %d time(s) already.\n", k.Bounces+1, k.Bounces)
+		}
+	}
 	if k.Passed {
 		b.WriteString("\nThese checks don't judge correctness against the acceptance criteria: review the diff for that.\n")
 	}
@@ -109,6 +208,12 @@ func (k Checks) Report() string {
 }
 
 func (k Checks) writeMerge(b *strings.Builder) {
+	switch k.Integration {
+	case "passed":
+		b.WriteString("\nIntegration with the other delegated runs: passed.\n")
+	case "failed":
+		fmt.Fprintf(b, "\nIntegration with the other delegated runs: **FAILED**. `%s` failed on your branch once this run was merged with the others:\n```\n%s\n```\n", k.IntegrationCommand, k.IntegrationTail)
+	}
 	switch {
 	case k.Merged:
 		fmt.Fprintf(b, "\n**MERGED** branch `%s` into your branch (git merge --no-ff).\n", k.Branch)

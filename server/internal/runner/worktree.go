@@ -91,7 +91,8 @@ if [ ! -d ` + wt + ` ]; then
   if git show-ref -q --verify refs/heads/` + br + `; then git worktree add -q ` + wt + ` ` + br + `; else git worktree add -q -b ` + br + ` ` + wt + ` HEAD; fi
 fi
 cd ` + wt + `
-if git merge-base --is-ancestor HEAD ` + pb + `; then git merge -q --ff-only ` + pb + ` >/dev/null; fi
+echo "PREV $(git rev-parse HEAD)"
+if git merge-base --is-ancestor HEAD ` + pb + `; then git merge -q --ff-only ` + pb + ` >/dev/null; else echo DIVERGED; fi
 mkdir -p .lazyagents/context
 if [ -f AGENTS.md ] && ! grep -q 'lazyagents:start' AGENTS.md; then cp AGENTS.md .lazyagents/AGENTS.repo.md; fi
 if git ls-files --error-unmatch AGENTS.md >/dev/null 2>&1; then git update-index --skip-worktree AGENTS.md; fi
@@ -103,6 +104,15 @@ git rev-parse HEAD
 	}
 	contract.BaseSHA = lastLines(out, 1)
 	contract.BaseUncommitted = nil
+	contract.PrevHeadSHA, contract.Diverged = "", false
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if sha, ok := strings.CutPrefix(line, "PREV "); ok {
+			contract.PrevHeadSHA = sha
+		} else if line == "DIVERGED" {
+			contract.Diverged = true
+		}
+	}
 	unlock()
 	unlock = nil
 	output, setupErr := run("lazyagents-wt-dependencies", contract.Worktree, dependencySetupScript())

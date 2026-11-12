@@ -54,6 +54,7 @@ services:
       RUNNER_MCP_URL: http://host.docker.internal:${API_PORT:-8000}/mcp
       RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-4}
+      ROLLOVER_CONTEXT_TOKENS: ${ROLLOVER_CONTEXT_TOKENS:-0}
       # Each turn's sandboxed Docker API socket; turns mount the volume read-only.
       RUNNER_DOCKER_PROXY_DIR: /run/lazyagents-docker
       RUNNER_DOCKER_PROXY_VOLUME: lazyagents-dev-docker-proxy

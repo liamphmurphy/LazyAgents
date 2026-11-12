@@ -44,20 +44,39 @@
 //	delegate_script     delegate as FAKE_HARNESS_DELEGATIONS (a JSON array of delegate
 //	                    arguments) says, optionally writing an uncommitted dirty.txt first
 //	                    (FAKE_HARNESS_DIRTY); on resume run FAKE_HARNESS_ROUND2 once (a
-//	                    "$1" continue_run_id is the first delegated run's id), then
+//	                    "$1" continue_run_id is the first delegated run's id; with
+//	                    FAKE_HARNESS_ROUND2_COMMIT=<path> it first commits that file), then
 //	                    complete_run with the whole resume message as the outcome
+//	plan_rollover       claim, post a two-step plan, mark step 1 done with a note; end the
+//	                    turn when update_step answers rollover: true (after an empty
+//	                    commit), else complete_run. The fresh session's turn completes
 //
 // A delegated run (any delegate* mode) writes the file named by FILE=<path> in its
-// task (default child.txt) in its worktree and commits it. Test knobs: FAKE_HARNESS_LOG
+// task (default child.txt) in its worktree and commits it (FILE=- changes nothing). Test knobs: FAKE_HARNESS_LOG
 // appends one JSON line per invocation (cwd, resume session, first prompt line);
 // FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
 // them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
 // for <file> before working (in chat mode, a reply to the prompt "held" does,
 // after saying it's working); FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
 // that lost the session. The log line also names the harness (claude or codex).
+// FAKE_HARNESS_CHILD_REPORT is the report a delegated run that wrote its file
+// passes to complete_run.
+// FAKE_HARNESS_CONTEXT_TOKENS sets the prompt size each Claude assistant line's
+// usage reports (default 2000). FAKE_HARNESS_PLAN="a|b" makes delegate_script's
+// first turn post that plan before delegating. FAKE_HARNESS_CHILD_REPRO makes
+// a delegated run finish as a reviewer (verdict changes_requested) reporting it
+// as repro_command, with repro_covers_all when FAKE_HARNESS_CHILD_COVERS_ALL is
+// set. FAKE_HARNESS_RECHECK=<path> makes a resumed delegate_script parent told
+// to call recheck_review write "fixed" to <path>, commit it and call it for its
+// first delegated run, then on the recheck's result try complete_run
+// status=done (falling back to in_review with "DONE REFUSED: <error>");
+// FAKE_HARNESS_RECHECK_DIRTY=<path> leaves that file uncommitted first.
+// FAKE_HARNESS_CHILD_UNCOMMITTED leaves a delegated run's file uncommitted. A
+// delegated run whose checks the server sent back commits whatever is left
+// uncommitted and calls complete_run again.
 //
-// Resumed turns (--resume) finish the run with complete_run, unless
-// FAKE_HARNESS_RESUME=idle.
+// Resumed turns (--resume, or a session rollover's brief) finish the run with
+// complete_run, unless FAKE_HARNESS_RESUME=idle.
 package main
 
 import (
@@ -98,9 +117,23 @@ var (
 func emit(v map[string]any) {
 	if !codex {
 		v["session_id"] = session
+		if m, ok := v["message"].(map[string]any); ok && v["type"] == "assistant" && m["usage"] == nil {
+			m["usage"] = contextUsage()
+		}
 	}
 	b, _ := json.Marshal(v)
 	fmt.Println(string(b))
+}
+
+// contextUsage is the usage of a Claude assistant line: a request whose
+// prompt is FAKE_HARNESS_CONTEXT_TOKENS (default 2000) tokens, mostly cached.
+func contextUsage() map[string]any {
+	n := int64(2000)
+	if v := os.Getenv("FAKE_HARNESS_CONTEXT_TOKENS"); v != "" {
+		fmt.Sscan(v, &n)
+	}
+	cached := n * 9 / 10
+	return map[string]any{"input_tokens": n - cached, "cache_read_input_tokens": cached, "cache_creation_input_tokens": 0, "output_tokens": 1}
 }
 
 func item(event string, it map[string]any) {
@@ -687,6 +720,20 @@ func main() {
 		result(false, "Still looking around.")
 		return
 	}
+	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.HasPrefix(prompt, "The server checked your work") {
+		// The server sent a delegated run's failed checks back: commit what's
+		// left uncommitted and report again.
+		_ = exec.Command("git", "add", "-A", "--", ".", ":(exclude).lazyagents").Run()
+		if exec.Command("git", "diff", "--cached", "--quiet").Run() != nil {
+			if out, err := exec.Command("git", "commit", "-q", "-m", "Fix what the checks found").CombinedOutput(); err != nil {
+				result(true, "git commit: "+string(out))
+				os.Exit(2)
+			}
+		}
+		call("complete_run", map[string]any{"outcome": "Fixed what the checks found"})
+		result(false, "Done.")
+		return
+	}
 	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.Contains(prompt, "delegated part of") {
 		// A delegated run: no claim; work in its worktree, commit, and report back.
 		if resume != "" && os.Getenv("FAKE_HARNESS_REJECT_RESUME") != "" {
@@ -713,6 +760,11 @@ func main() {
 		if _, rest, ok := strings.Cut(prompt, "FILE="); ok && len(strings.Fields(rest)) > 0 {
 			file = strings.Fields(rest)[0]
 		}
+		if file == "-" { // FILE=- : change nothing
+			call("complete_run", map[string]any{"outcome": "Nothing to change"})
+			result(false, "Done.")
+			return
+		}
 		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 			result(true, err.Error())
 			os.Exit(2)
@@ -722,12 +774,23 @@ func main() {
 			os.Exit(2)
 		}
 		for _, args := range [][]string{{"add", file}, {"commit", "-q", "-m", "Add " + file}} {
+			if os.Getenv("FAKE_HARNESS_CHILD_UNCOMMITTED") != "" {
+				break
+			}
 			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 				result(true, "git "+args[0]+": "+string(out))
 				os.Exit(2)
 			}
 		}
-		call("complete_run", map[string]any{"outcome": "Wrote " + file})
+		done := map[string]any{"outcome": "Wrote " + file}
+		if rep := os.Getenv("FAKE_HARNESS_CHILD_REPORT"); rep != "" {
+			done["report"] = rep
+		}
+		if repro := os.Getenv("FAKE_HARNESS_CHILD_REPRO"); repro != "" {
+			done["verdict"], done["repro_command"] = "changes_requested", repro
+			done["repro_covers_all"] = os.Getenv("FAKE_HARNESS_CHILD_COVERS_ALL") != ""
+		}
+		call("complete_run", done)
 		if hold := os.Getenv("FAKE_HARNESS_LINGER"); hold != "" {
 			_ = os.WriteFile(hold+".started", nil, 0o644)
 			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {
@@ -741,10 +804,45 @@ func main() {
 		result(true, "You have hit your usage limit")
 		os.Exit(1)
 	}
-	if resume != "" {
+	// A delegation wake that rolled over to a fresh session is a resumed turn too.
+	if resume != "" || strings.HasPrefix(prompt, "Your earlier session was closed to keep context small") {
+		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" && os.Getenv("FAKE_HARNESS_RECHECK") != "" {
+			switch {
+			case strings.Contains(prompt, "## Review recheck"):
+				out := call("complete_run", map[string]any{"outcome": "DONE\n" + prompt, "status": "done"})
+				if e, ok := out["error"].(string); ok {
+					call("complete_run", map[string]any{"outcome": "DONE REFUSED: " + e + "\n" + prompt, "status": "in_review"})
+				}
+				result(false, "Done.")
+				return
+			case strings.Contains(prompt, "call recheck_review"):
+				// "Fix" the findings, then have the server rerun the reviewer's tests.
+				f := os.Getenv("FAKE_HARNESS_RECHECK")
+				_ = os.WriteFile(f, []byte("fixed\n"), 0o644)
+				_ = exec.Command("git", "add", f).Run()
+				_ = exec.Command("git", "commit", "-q", "-m", "Fix "+f).Run()
+				if d := os.Getenv("FAKE_HARNESS_RECHECK_DIRTY"); d != "" {
+					_ = os.WriteFile(d, []byte("not committed\n"), 0o644)
+				}
+				raw, _ := os.ReadFile(".lazyagents/children")
+				ids := strings.Fields(string(raw))
+				out := call("recheck_review", map[string]any{"run_id": ids[0]})
+				if e, ok := out["error"].(string); ok {
+					call("complete_run", map[string]any{"outcome": "RECHECK REFUSED: " + e, "status": "todo"})
+				}
+				result(false, "Waiting for the recheck.")
+				return
+			}
+		}
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
 				_ = os.WriteFile(".lazyagents/round2", nil, 0o600)
+				if f := os.Getenv("FAKE_HARNESS_ROUND2_COMMIT"); f != "" {
+					_ = os.MkdirAll(filepath.Dir(f), 0o755)
+					_ = os.WriteFile(f, []byte("the main agent's change\n"), 0o644)
+					_ = exec.Command("git", "add", f).Run()
+					_ = exec.Command("git", "commit", "-q", "-m", "Main agent commits "+f).Run()
+				}
 				delegateScript(call, "FAKE_HARNESS_ROUND2")
 				text("Delegated again. Ending my turn until it reports back.")
 				result(false, "Waiting for the sub agent.")
@@ -846,6 +944,9 @@ func main() {
 		if os.Getenv("FAKE_HARNESS_DIRTY") != "" {
 			_ = os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0o644)
 		}
+		if steps := os.Getenv("FAKE_HARNESS_PLAN"); steps != "" {
+			call("post_plan", map[string]any{"steps": strings.Split(steps, "|")})
+		}
 		delegateScript(call, "FAKE_HARNESS_DELEGATIONS")
 		if hold := os.Getenv("FAKE_HARNESS_PARENT_HOLD"); hold != "" {
 			_ = os.WriteFile(hold+".started", nil, 0o644)
@@ -861,6 +962,20 @@ func main() {
 		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
 		text("Delegated to @scribe. Ending my turn until it reports back.")
 		result(false, "Waiting for the sub agent.")
+		return
+	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "plan_rollover" {
+		call("post_plan", map[string]any{"steps": []string{"Write the change", "Ship it"}})
+		time.Sleep(200 * time.Millisecond) // let the runner record this turn's context size
+		out := call("update_step", map[string]any{"step": 1, "state": "done", "note": "The setting lives in config.go; keep it off by default."})
+		if out["rollover"] == true {
+			_ = exec.Command("git", "commit", "-q", "--allow-empty", "-m", "Write the change").Run()
+			text("Ending my turn for a fresh session.")
+			result(false, "Ending my turn.")
+			return
+		}
+		call("complete_run", map[string]any{"outcome": "Done without a rollover"})
+		result(false, "Done.")
 		return
 	}
 	call("post_plan", map[string]any{"steps": []string{"Read context", "Make the change", "Apply to staging"}})

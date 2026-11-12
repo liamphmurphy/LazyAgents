@@ -59,6 +59,15 @@ SELECT * FROM run_turns WHERE id = $1;
 -- name: SetRunSession :exec
 UPDATE runs SET harness_session_id = $2 WHERE id = $1;
 
+-- name: SetRunRolloverRequested :exec
+UPDATE runs SET rollover_requested = $2 WHERE id = $1;
+
+-- name: SetRunContextTokens :exec
+UPDATE runs SET context_tokens = $2 WHERE id = $1;
+
+-- name: SetRunReport :exec
+UPDATE runs SET report = $2 WHERE id = $1;
+
 -- name: SetRunWorkspace :exec
 UPDATE runs SET workspace_volume = $2 WHERE id = $1;
 
@@ -295,3 +304,30 @@ ORDER BY started_at;
 SELECT coalesce(checkpoint_branch, '')::text FROM runs
 WHERE ticket_id = sqlc.arg(ticket_id) AND id <> sqlc.arg(id) AND parent_run_id IS NULL AND purpose = 'ticket'
 ORDER BY started_at DESC LIMIT 1;
+
+-- name: RunToolOutputBytes :one
+-- What filled a run's context: its turns' tool output bytes, by group.
+SELECT
+  coalesce(sum((usage->>'explore_output_bytes')::bigint), 0)::bigint AS explore_output_bytes,
+  coalesce(sum((usage->>'shell_output_bytes')::bigint), 0)::bigint AS shell_output_bytes,
+  coalesce(sum((usage->>'other_output_bytes')::bigint), 0)::bigint AS other_output_bytes
+FROM run_turns WHERE run_id = $1;
+
+-- name: ClaimChecksRun :one
+-- A delegated run that called complete_run and waits on its checks, once its
+-- harness process has exited: this runner leases it to check the result. Only
+-- runs this runner or a dead runner last held.
+UPDATE runs SET runner_id = sqlc.arg(runner_id),
+  execution_token = sqlc.narg(execution_token), execution_expires_at = sqlc.narg(execution_expires_at)
+WHERE id = (
+  SELECT r.id FROM runs r
+  WHERE r.state = 'waiting' AND r.wait_reason = 'checks' AND r.parent_run_id IS NOT NULL
+    AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+    AND (r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
+      OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.id AND (b.status = 'running' OR b.execution_expires_at > now()))
+  ORDER BY r.started_at
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING *;

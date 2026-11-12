@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -21,7 +22,7 @@ func TestProfileToolsExist(t *testing.T) {
 // Board writes are lead-only (ADR Kanban board, Decision 6): chat, planning
 // and delegated runs are neither served nor allowed them.
 func TestBoardToolsLeadOnly(t *testing.T) {
-	for _, tool := range []string{"estimate_ticket", "check_epic_criterion"} {
+	for _, tool := range []string{"estimate_ticket", "check_epic_criterion", "recheck_review"} {
 		if _, ok := ByName[tool]; !ok {
 			t.Fatalf("%s isn't in Tools", tool)
 		}
@@ -38,6 +39,11 @@ func TestBoardToolsLeadOnly(t *testing.T) {
 		if !slices.ContainsFunc(profileTools(profileLead), func(tl Tool) bool { return tl.Name == tool }) {
 			t.Errorf("lead profile doesn't serve %s", tool)
 		}
+	}
+	// The sub agent profile names the role and points at the brief and AGENTS.md,
+	// which carries the lifecycle rules.
+	if s := profileInstructions[profileSubagent]; strings.Contains(s, "claim_ticket") || strings.Contains(s, "complete_run") || !strings.Contains(s, "AGENTS.md") {
+		t.Errorf("sub agent profile text restates rules: %q", s)
 	}
 	// get_ticket (with the estimate and epic payload) stays on every profile.
 	for name, list := range map[string][]string{"chat": chatTools, "planning": planningTools, "subagent": subagentTools} {

@@ -82,7 +82,7 @@ func TestMockupGateAndReview(t *testing.T) {
 		t.Fatalf("unticking is allowed: %v", err)
 	}
 	for _, status := range []string{"in_review", "done"} {
-		if err := svc.Complete(ctx, atlas, "", "done", status, ""); !isConflict(err) || !strings.Contains(err.Error(), "mockup") {
+		if err := svc.Complete(ctx, atlas, "", "done", "", status, ""); !isConflict(err) || !strings.Contains(err.Error(), "mockup") {
 			t.Fatalf("complete %s: %v", status, err)
 		}
 	}
@@ -191,7 +191,7 @@ func TestMockupGateAndReview(t *testing.T) {
 			t.Fatalf("check_criterion after approval: %v", err)
 		}
 	}
-	if err := svc.Complete(ctx, atlas, "", "done", "in_review", ""); err != nil {
+	if err := svc.Complete(ctx, atlas, "", "done", "", "in_review", ""); err != nil {
 		t.Fatalf("complete after approval: %v", err)
 	}
 
