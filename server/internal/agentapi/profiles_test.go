@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -38,6 +39,11 @@ func TestBoardToolsLeadOnly(t *testing.T) {
 		if !slices.ContainsFunc(profileTools(profileLead), func(tl Tool) bool { return tl.Name == tool }) {
 			t.Errorf("lead profile doesn't serve %s", tool)
 		}
+	}
+	// The sub agent profile names the role and points at the brief and AGENTS.md,
+	// which carries the lifecycle rules.
+	if s := profileInstructions[profileSubagent]; strings.Contains(s, "claim_ticket") || strings.Contains(s, "complete_run") || !strings.Contains(s, "AGENTS.md") {
+		t.Errorf("sub agent profile text restates rules: %q", s)
 	}
 	// get_ticket (with the estimate and epic payload) stays on every profile.
 	for name, list := range map[string][]string{"chat": chatTools, "planning": planningTools, "subagent": subagentTools} {

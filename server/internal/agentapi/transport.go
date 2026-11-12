@@ -271,9 +271,7 @@ var profileInstructions = map[string]string{
 	profileChat:        `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
 	profileAside:       `You are answering an aside in a Vesper chat: one question about a reply that is still running. Use the Vesper tools only to read; you can't change anything here.`,
 	profilePlanning:    `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
-	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
-Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.
-When you need a person, call request_approval or await_human and end your turn. Finish with complete_run and a short summary.`,
+	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions.`,
 	profileLead: `You are working through Vesper, the tracker your team uses to supervise agents.
 Your run instructions are in AGENTS.md, so you don't need whoami. Call claim_ticket; it returns the ticket, so skip get_ticket. Read only relevant attached context; reuse local context instead of fetching it again. post_plan once before editing (step 1 starts current); update_step(n, done) advances to the next step. Tick several criteria at once with check_criterion ns.
 Scopes marked requires_approval need request_approval first; brokered ones (like db:migrate) run via

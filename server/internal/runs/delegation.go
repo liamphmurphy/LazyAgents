@@ -182,10 +182,8 @@ func (c Contract) PathAllowed(file string) bool {
 // ChildPrompt is the first message of a delegated run.
 func ChildPrompt(ticket, parentHandle, task string, contract Contract) string {
 	p := "@" + parentHandle + " delegated part of " + ticket + " to you. You work in your own git worktree on your own branch, cut from the main agent's; " +
-		"other sub agents may be working in parallel in theirs, so stay inside your task. Do not call claim_ticket. " +
-		"Do only what the task says, commit your work to the current branch (the server merges it into the main agent's branch once checks pass), then call complete_run " +
-		"with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why. " +
-		"This brief is self-contained: call get_ticket only if you need context it lacks."
+		"other sub agents may be working in parallel in theirs, so stay inside your task and do only what it says. " +
+		"AGENTS.md says how to commit and finish."
 	if contract.ContinueRunID != "" {
 		p += " This continues your earlier run on this ticket: same worktree and branch, so your earlier work is still here. The task below is the follow-up."
 	}
@@ -508,12 +506,15 @@ func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.R
 		return "", false, err
 	}
 	var ended []store.Run
+	first := true // no earlier report: the parent hasn't seen the full guidance yet
 	for _, k := range kids {
 		if !slices.Contains(Terminal, k.State) {
 			return "", false, nil
 		}
 		if len(k.Checks) == 0 {
 			ended = append(ended, k)
+		} else {
+			first = false
 		}
 	}
 	if len(ended) == 0 {
@@ -545,6 +546,9 @@ func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.R
 		for i, k := range ended {
 			msg += fmt.Sprintf("\n\n### %d. %s", i+1, line(k))
 		}
+	}
+	if !first {
+		return msg + "\n\nChecks and merge results follow, as before.", true, nil
 	}
 	msg += "\n\nThe server checks each delegated run in its worktree against its contract (changed files, allowed paths, test command) and merges the ones that passed into your branch before you resume; those results follow. " +
 		"Don't repeat checks that already ran or re-read the ticket you already have. Read the diff for what they can't judge, verify the acceptance criteria, and delegate again (continue_run_id sends fixes to the same sub agent) or fix small remaining work yourself. " +
