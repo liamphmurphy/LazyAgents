@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -111,6 +112,8 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 	ws := wsID(parent.run)
 	parentBranch := r.gitOut(ctx, ws, "", "lazyagents-branch-"+parent.run.ID.String(), "git symbolic-ref --short HEAD", env)
 	var report strings.Builder
+	var mergedCmds []string // test commands of the children merged so far in this report
+	merged := 0
 	for _, child := range ended {
 		var contract runs.Contract
 		if len(child.Contract) > 0 {
@@ -124,6 +127,9 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 			k = r.checkChild(ctx, child, contract, parentBranch, env)
 			k.ReportedTurn = reportedTurn
 			r.mergeChild(ctx, ws, parentBranch, child, contract, &k, env)
+			if k.Merged && merged > 0 {
+				r.integrate(ctx, ws, child, &k, appendCmd(mergedCmds, k.TestCommand), env)
+			}
 			r.addTiming(child.ID, 0, 0, time.Since(checksStart))
 			if b, err := json.Marshal(k); err == nil {
 				if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: b}); err != nil {
@@ -131,6 +137,10 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 				}
 			}
 			r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checks", "passed": k.Passed, "ran": k.Ran, "merged": k.Merged, "branch": k.Branch})
+		}
+		if k.Merged {
+			merged++
+			mergedCmds = appendCmd(mergedCmds, k.TestCommand)
 		}
 		report.WriteString("\n\n")
 		if len(ended) > 1 {
@@ -143,6 +153,62 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 		report.WriteString(k.Report())
 	}
 	return report.String()
+}
+
+func appendCmd(cmds []string, cmd string) []string {
+	if cmd == "" || slices.Contains(cmds, cmd) {
+		return cmds
+	}
+	return append(slices.Clone(cmds), cmd)
+}
+
+// integrate runs the test commands of every delegated run merged so far in
+// this report on the parent's merged checkout, after child's merge. The tree
+// was green before it, so a failure is child's: its merge is undone, as long as
+// HEAD is still that merge commit.
+func (r *Runner) integrate(ctx context.Context, ws string, child store.Run, k *runs.Checks, cmds []string, env map[string]string) {
+	if len(cmds) == 0 {
+		return
+	}
+	for _, cmd := range cmds {
+		tctx, cancel := context.WithTimeout(ctx, testCheckTimeout)
+		out, code, err := r.execIn(tctx, ws, "", "lazyagents-integration-"+child.ID.String(), cmd, env)
+		timedOut := tctx.Err() != nil
+		cancel()
+		if err == nil && !timedOut && code == 0 {
+			continue
+		}
+		k.Integration = "failed"
+		k.IntegrationCommand = cmd
+		if timedOut {
+			out += "\n(timed out)"
+		}
+		k.IntegrationTail = lastLines(redact(out, env), 40)
+		r.undoMerge(ctx, ws, child, k, env)
+		return
+	}
+	k.Integration = "passed"
+}
+
+// undoMerge resets the parent's branch to before child's merge commit, only
+// when HEAD is that merge (second parent child's checked commit).
+func (r *Runner) undoMerge(ctx context.Context, ws string, child store.Run, k *runs.Checks, env map[string]string) {
+	defer r.wtLock(ws)()
+	script := `[ "$(git rev-parse -q --verify HEAD^2)" = ` + shellQuote(k.HeadSHA) + ` ] || { echo NOT_HEAD; exit 1; }
+git reset -q --hard HEAD^`
+	mctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
+	out, code, err := r.execIn(mctx, ws, "", "lazyagents-unmerge-"+child.ID.String(), script, env)
+	if err != nil || code != 0 {
+		if strings.Contains(out, "NOT_HEAD") {
+			k.MergeNote = "Its merge was kept: `" + k.IntegrationCommand + "` failed once combined with the other delegated runs' changes, but your branch has moved past the merge, so it wasn't undone."
+		} else {
+			k.MergeNote = "Its merge was kept: `" + k.IntegrationCommand + "` failed once combined with the other delegated runs' changes, and undoing the merge failed: " + lastLines(strings.TrimSpace(redact(out, env)), 8)
+		}
+		return
+	}
+	k.Merged = false
+	k.MergeNote = "It merged cleanly, but `" + k.IntegrationCommand + "` failed once combined with the other delegated runs' changes, so the merge was undone."
 }
 
 func isDone(state string) bool {

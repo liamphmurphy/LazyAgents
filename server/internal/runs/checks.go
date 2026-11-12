@@ -32,6 +32,13 @@ type Checks struct {
 	Merged         bool     `json:"merged"`
 	MergeConflicts []string `json:"merge_conflicts,omitempty"`
 	MergeNote      string   `json:"merge_note,omitempty"`
+	// Integration is "passed" or "failed" when, after this run was merged, the
+	// test commands of every delegated run merged in the same report were run
+	// on the combined checkout; "" when it was the only one merged.
+	// IntegrationCommand is the command that failed, IntegrationTail its output.
+	Integration        string `json:"integration,omitempty"`
+	IntegrationCommand string `json:"integration_command,omitempty"`
+	IntegrationTail    string `json:"integration_tail,omitempty"`
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -109,6 +116,12 @@ func (k Checks) Report() string {
 }
 
 func (k Checks) writeMerge(b *strings.Builder) {
+	switch k.Integration {
+	case "passed":
+		b.WriteString("\nIntegration with the other delegated runs: passed.\n")
+	case "failed":
+		fmt.Fprintf(b, "\nIntegration with the other delegated runs: **FAILED**. `%s` failed on your branch once this run was merged with the others:\n```\n%s\n```\n", k.IntegrationCommand, k.IntegrationTail)
+	}
 	switch {
 	case k.Merged:
 		fmt.Fprintf(b, "\n**MERGED** branch `%s` into your branch (git merge --no-ff).\n", k.Branch)
