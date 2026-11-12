@@ -635,6 +635,12 @@ func main() {
 		result(false, reply)
 		return
 	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "design-review" {
+		answer := fakeDesignReview(call, prompt)
+		text(answer)
+		result(false, answer)
+		return
+	}
 	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
 		latest := prompt

@@ -1,6 +1,7 @@
 package runner_test
 
 import (
+	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,4 +98,78 @@ func TestDesignReviewFeedbackAndSelectionReachTheNextTurn(t *testing.T) {
 	if again := msgs[len(msgs)-1].BodyMd; strings.Contains(again, want) {
 		t.Fatalf("feedback repeated:\n%s", again)
 	}
+}
+
+// The fake harness's design-review mode: a first turn that suggests three
+// changes to the mobile-flow starter's first frame, a turn with a selection
+// that acts on it, and a turn that quotes the person's review feedback.
+func TestFakeHarnessDesignReview(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "design-review")
+	svc := &designs.Service{Pool: e.pool, Runs: e.runs}
+	cv, chat, err := svc.Create(e.ctx, e.ws, e.me.ID, "Checkout", "mobile-flow", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply := func(body string, refs ...runs.ChatContextRef) string {
+		t.Helper()
+		if _, err := e.runs.PostChatMessage(e.ctx, e.ws, e.me.ID, chat.ID, runs.ChatMessageInput{Body: body, ContextRefs: refs}); err != nil {
+			t.Fatal(err)
+		}
+		e.until("reply", func() bool { return e.chat(chat.ID).State == "idle" })
+		msgs, _ := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 50})
+		return msgs[len(msgs)-1].BodyMd
+	}
+
+	if got := reply("Tidy this design"); got != "I suggested 3 changes." {
+		t.Fatalf("first turn: %q", got)
+	}
+	ps, err := e.q.ListDesignProposals(e.ctx, store.ListDesignProposalsParams{CanvasID: cv.ID})
+	if err != nil || len(ps) != 1 || ps[0].Status != "pending" || ps[0].Summary != "Tidy the Start screen" {
+		t.Fatalf("proposals: %+v %v", ps, err)
+	}
+	ops, _ := design.DecodeOps(ps[0].Ops)
+	var names, whys []string
+	for _, op := range ops {
+		names, whys = append(names, op["op"].(string)), append(whys, op["why"].(string))
+	}
+	if strings.Join(names, ",") != "add_node,set_node,remove_node" ||
+		strings.Join(whys, "|") != "Add a promo code field|Make the button stand out|Remove the placeholder copy" {
+		t.Fatalf("ops: %v %v", names, whys)
+	}
+	if cur, _ := e.q.LatestChatCanvasVersion(e.ctx, cv.ID); cur.Seq != 1 {
+		t.Fatalf("the design changed: version %d", cur.Seq)
+	}
+
+	// A selection: it patches the first selected node.
+	d, _ := design.Parse(mustBody(t, e, cv.ID))
+	page := d["pages"].([]any)[0].(map[string]any)
+	node := page["children"].([]any)[1].(map[string]any)["id"].(string)
+	got := reply("Fade this", runs.ChatContextRef{Kind: "canvas", ID: &cv.ID, Selection: &canvas.Selection{Page: page["id"].(string), Nodes: []string{node}, Viewport: canvas.Viewport{W: 800, H: 600, Zoom: 1}}})
+	if got != "You selected "+node {
+		t.Fatalf("selection turn: %q", got)
+	}
+	ps, _ = e.q.ListDesignProposals(e.ctx, store.ListDesignProposalsParams{CanvasID: cv.ID})
+	if len(ps) != 2 || !strings.Contains(string(ps[1].Ops), "Acting on your selection") {
+		t.Fatalf("selection proposal: %+v", ps)
+	}
+
+	// Review feedback reaches the next turn and is quoted.
+	mine, _ := e.q.GetMyCanvas(e.ctx, store.GetMyCanvasParams{ID: cv.ID, WorkspaceID: e.ws, UserID: e.me.ID})
+	if _, err := svc.Resolve(e.ctx, mine, e.ws, e.me.ID, ps[0].ID, []designs.Decision{
+		{I: 0, State: designs.Accepted}, {I: 1, State: designs.Accepted}, {I: 2, State: designs.Rejected, Reason: "keep it for now"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := reply("Thanks"); !strings.HasPrefix(got, "Noted: ") || !strings.Contains(got, "rejected 'Remove the placeholder copy': keep it for now") {
+		t.Fatalf("feedback turn: %q", got)
+	}
+}
+
+func mustBody(t *testing.T, e env, id uuid.UUID) string {
+	t.Helper()
+	v, err := e.q.LatestChatCanvasVersion(e.ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.Body
 }
