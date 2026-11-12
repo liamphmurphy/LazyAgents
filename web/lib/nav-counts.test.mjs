@@ -9,8 +9,9 @@ test("with nothing loaded every count is zero", () => {
   assert.deepEqual(navCounts({}), { inbox: 0, runs: 0, scheduled: 0, wiki: 0, settings: 0 });
 });
 
-test("inbox comes from the bootstrap's unread count", () => {
-  assert.equal(navCounts({ bootstrap: { counts: { inbox: 4 } } }).inbox, 4);
+test("the Needs you badge counts only items to act on, not every unread inbox item", () => {
+  assert.equal(navCounts({ bootstrap: { counts: { inbox: 6, needs_you: 4 } } }).inbox, 4);
+  assert.equal(navCounts({ bootstrap: { counts: { inbox: 6 } } }).inbox, 0);
 });
 
 test("runs comes from the runner's live count", () => {

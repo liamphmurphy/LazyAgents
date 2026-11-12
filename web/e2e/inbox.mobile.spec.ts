@@ -20,7 +20,7 @@ const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString(
 const PREVIEW = Array.from({ length: 12 }, (_, i) => `ALTER TABLE ledger_entries_p${i} ATTACH PARTITION ledger_entries FOR VALUES FROM ('2026-${String(i + 1).padStart(2, "0")}-01');`).join("\n");
 
 async function installInboxApi(page: Page) {
-  const base = { project: "WEB", resolved: false, read: false };
+  const base = { project: "WEB", resolved: false, read: false, needs_you: true };
   const inbox: S["InboxItem"][] = [
     { ...base, id: `approval:${APPROVAL}`, kind: "approval", title: "Partition ledger entries", summary: "Run 0042_partition_ledger_entries on staging", href: "/tickets/WEB-1", ticket_key: "WEB-1", created_at: minutesAgo(12), agent: atlas, run_id: APPROVAL_RUN },
     { ...base, id: `question:${QUESTION_RUN}`, kind: "question", title: "Retry policy for payouts", summary: "Should retries cap at 5 or 8?", href: `/runs/${QUESTION_RUN}`, ticket_key: "WEB-2", created_at: minutesAgo(18), agent: quill, run_id: QUESTION_RUN },
@@ -47,7 +47,7 @@ async function installInboxApi(page: Page) {
       workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [], epics: [], projects: [project], labels: [],
-      counts: { inbox: inbox.length, wiki_suggestions: 0, live_agents: 0 },
+      counts: { inbox: inbox.length, needs_you: inbox.length, wiki_suggestions: 0, live_agents: 0 },
     } satisfies S["Bootstrap"]);
     if (path === "/inbox") return json({ items: inbox });
     if (path === "/tickets/WEB-1") return json(ticket);

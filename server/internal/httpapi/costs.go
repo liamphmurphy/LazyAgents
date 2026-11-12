@@ -159,6 +159,10 @@ func (s *Server) GetCosts(ctx context.Context, req api.GetCostsRequestObject) (a
 		arg.ChatID = &c.ID
 	}
 
+	if p.Epic != nil {
+		// Workspace-scoped by the query itself: another workspace's epic matches no runs.
+		arg.EpicID = p.Epic
+	}
 	rows, err := s.Q.CostUnits(ctx, arg)
 	if err != nil {
 		return nil, err

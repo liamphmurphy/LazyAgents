@@ -45,13 +45,16 @@ export async function installBoardApi(page: Page) {
   const me = { type: "user" as const, id: "user", name: "Liam" };
   // Mutable so specs can archive projects or bump the shell's live counts.
   const projects: S["Project"][] = [project, ops];
-  const counts: S["Bootstrap"]["counts"] = { inbox: 0, wiki_suggestions: 0, live_agents: 0 };
+  const counts: S["Bootstrap"]["counts"] = { inbox: 0, needs_you: 0, wiki_suggestions: 0, live_agents: 0 };
   const runner: S["RunnerStatus"] = { online: true, runners: [], slots: 3, busy: 0, live: 0, queued: 0, host_folder_workspaces: false };
   let newCriterionId = 0;
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
   const savedViews: S["SavedView"][] = [];
+  // Open Inbox items; approval/question/blocked ones mark their ticket Needs you.
+  const inbox: S["InboxItem"][] = [];
+  const decisions: Array<{ id: string; decision: string }> = [];
   let rejection: { status: number; message: string; field?: string } | undefined;
   const criteriaRequests: string[] = [];
   let gate: Promise<void> | undefined;
@@ -100,6 +103,14 @@ export async function installBoardApi(page: Page) {
         tickets: ts.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, priority: t.priority })) };
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
+    if (path === "/inbox" && request.method() === "GET") return json({ items: inbox });
+    const decided = path.match(/^\/approvals\/([^/]+)\/(approve|deny)$/);
+    if (decided && request.method() === "POST") {
+      decisions.push({ id: decided[1], decision: decided[2] });
+      const item = inbox.find((i) => i.id === `approval:${decided[1]}`);
+      if (item) item.resolved = true;
+      return json({});
+    }
     if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/chat-models") return json([]);
     if (path === "/runner") return json(runner);
@@ -252,6 +263,7 @@ export async function installBoardApi(page: Page) {
     const menu = menuResponse(request.method(), path);
     if (menu) return json(menu);
     // Runs' header shows the last 7 days' spend.
+    if (path === "/inbox" && request.method() === "GET") return json({ items: [] });
     if (path === "/costs" && request.method() === "GET") {
       const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };
       return json({ total: none, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 }, days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [] } satisfies S["CostReport"]);
@@ -271,7 +283,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests, savedViews,
+    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests, savedViews, inbox, decisions,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
