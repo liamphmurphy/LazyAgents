@@ -850,6 +850,93 @@ func (q *Queries) SavedLibraryLinks(ctx context.Context, arg SavedLibraryLinksPa
 	return items, nil
 }
 
+const searchLibraryItems = `-- name: SearchLibraryItems :many
+SELECT l.id, l.kind, l.title, l.filename, l.url, l.site, l.note, l.link_status, l.width, l.height, l.duration_ms, l.chat_id, l.created_at,
+  c.title AS chat_title, p.name AS persona_name
+FROM library_items l
+LEFT JOIN chat_sessions c ON c.id = l.chat_id
+LEFT JOIN personas p ON p.id = l.persona_id
+WHERE l.workspace_id = $1 AND l.user_id = $2 AND l.kind <> 'document'
+  AND ($3::text IS NULL OR l.kind = $3)
+  AND NOT EXISTS (
+    SELECT 1 FROM unnest($4::text[]) w
+    WHERE concat_ws(' ', l.title, l.filename, l.note, l.site, l.url, l.summary) NOT ILIKE '%' || w || '%')
+ORDER BY l.created_at DESC, l.id DESC
+LIMIT $5
+`
+
+type SearchLibraryItemsParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Kind        *string
+	Words       []string
+	RowLimit    int32
+}
+
+type SearchLibraryItemsRow struct {
+	ID          uuid.UUID
+	Kind        string
+	Title       string
+	Filename    string
+	Url         string
+	Site        string
+	Note        string
+	LinkStatus  string
+	Width       *int32
+	Height      *int32
+	DurationMs  *int32
+	ChatID      *uuid.UUID
+	CreatedAt   time.Time
+	ChatTitle   *string
+	PersonaName *string
+}
+
+// The caller's items for a persona to find, newest first: optionally one kind,
+// and only those whose title, file name, note, site, address or summary holds
+// every word. Documents are left out: they're the person's own (Docs), never
+// agent context.
+func (q *Queries) SearchLibraryItems(ctx context.Context, arg SearchLibraryItemsParams) ([]SearchLibraryItemsRow, error) {
+	rows, err := q.db.Query(ctx, searchLibraryItems,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Kind,
+		arg.Words,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchLibraryItemsRow{}
+	for rows.Next() {
+		var i SearchLibraryItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Title,
+			&i.Filename,
+			&i.Url,
+			&i.Site,
+			&i.Note,
+			&i.LinkStatus,
+			&i.Width,
+			&i.Height,
+			&i.DurationMs,
+			&i.ChatID,
+			&i.CreatedAt,
+			&i.ChatTitle,
+			&i.PersonaName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setLibraryLinkStatus = `-- name: SetLibraryLinkStatus :one
 UPDATE library_items SET link_status = $4
 WHERE id = $1 AND workspace_id = $2 AND user_id = $3 AND kind = 'link'

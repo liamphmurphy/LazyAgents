@@ -281,6 +281,9 @@ export type ChatStatusKind =
   | "research"
   | "space"
   | "saved-links"
+  | "projects"
+  | "library"
+  | "inbox"
   | "chart"
   | "diagram"
   | "app"
@@ -360,9 +363,14 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "search_knowledge":
     case "find_pattern":
       return status("wiki", "looking through the wiki");
+    case "write_note":
+      return status("wiki", "writing a wiki note");
     case "get_ticket":
     case "list_epics":
+    case "list_tickets":
       return status("ticket-lookup", "checking tickets");
+    case "list_projects":
+      return status("projects", "looking over your projects");
     case "get_epic":
       return status("ticket-lookup", "checking an epic");
     case "create_ticket":
@@ -402,14 +410,32 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("web-page", "reading a page");
     case "list_saved_links":
       return status("saved-links", "checking your saved links");
+    case "save_link":
+      return status("saved-links", "saving a link");
+    case "search_library":
+      return status("library", "looking through your Library");
+    case "read_library_item":
+      return status("library", "opening something from your Library");
+    case "list_inbox":
+      return status("inbox", "checking what needs you");
     case "propose_persona":
       return status("persona", "sketching a new persona");
     case "create_space":
       return status("space", "setting up a space");
     case "create_scheduled_task":
       return status("schedule", "scheduling a task");
+    case "list_scheduled_tasks":
+      return status("schedule", "checking your scheduled tasks");
+    case "update_scheduled_task":
+      return status("schedule", "changing a scheduled task");
+    case "delete_scheduled_task":
+      return status("schedule", "removing a scheduled task");
     case "create_learning_module":
       return status("learning", "starting a learning module");
+    case "list_learning_modules":
+      return status("learning", "looking over your learning modules");
+    case "get_learning_progress":
+      return status("learning", "checking your progress");
     case "submit_research_report":
       return status("research", "writing up its research");
     case "search_repositories":
@@ -458,6 +484,10 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("connector", "suggesting a connector");
     case "propose_secret":
       return status("secret", "asking for a secret");
+    case "list_connectors":
+      return status("connector", "checking your connectors");
+    case "list_secret_names":
+      return status("secret", "checking which secrets you have");
     case "list_workflows":
     case "read_workflow":
       return status("workflow", "looking over a workflow");
@@ -610,6 +640,15 @@ const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate
 
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
+/** A URL's site, never its path or query, which can carry tokens. */
+function hostOf(raw: string): string {
+  try {
+    return new URL(raw).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 /**
  * What a step is doing right now, safe for the chat tab: a file's name but not its path,
  * search terms, page names and sites. A shell command stays its kind of work ("Running tests"),
@@ -667,6 +706,11 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return o.ticket ? `Reading ${clip(str(o.ticket))}` : general;
     case "list_epics":
       return o.project ? `Looking over ${clip(str(o.project))} epics` : general;
+    case "list_tickets": {
+      const statuses = Array.isArray(o.status) ? o.status.map(str) : [];
+      const which = [o.project ? str(o.project).toUpperCase() : "", statuses.length === 1 && statuses[0] !== "all" ? statuses[0].replace(/_/g, "-") : ""].filter(Boolean).join(" ");
+      return which ? `Looking over ${clip(which)} tickets` : general;
+    }
     case "update_ticket":
       return o.ticket ? `Updating ${clip(str(o.ticket))}` : general;
     case "comment_ticket":
@@ -681,8 +725,20 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Setting up", o.name);
     case "create_scheduled_task":
       return named("Scheduling", o.name);
+    case "update_scheduled_task":
+      return named("Changing", known(o.task_id));
+    case "save_link":
+      return named("Saving", o.title || hostOf(str(o.url)));
+    case "search_library":
+      return o.q ? `Searching “${clip(str(o.q))}”` : general;
+    case "read_library_item":
+      return named("Opening", known(o.item_id));
+    case "delete_scheduled_task":
+      return named("Removing", known(o.task_id));
     case "create_learning_module":
       return named("Starting a module on", o.topic);
+    case "get_learning_progress":
+      return named("Checking progress on", known(o.module_id));
     case "get_run":
       return known(o.id) ? `Checking ${known(o.id)}` : general;
     case "list_runs":
@@ -711,7 +767,7 @@ function resultJSON(output?: string): Record<string, unknown> | undefined {
   }
 }
 
-/** The names the turn has seen for canvases, workflows and runs, by id. */
+/** The names the turn has seen for canvases, workflows, runs, scheduled tasks, Library items and learning modules, by id. */
 function knownNames(calls: ToolCall[]): Map<string, string> {
   const names = new Map<string, string>();
   const note = (id: unknown, name: unknown) => {
@@ -742,6 +798,21 @@ function knownNames(calls: ToolCall[]): Map<string, string> {
         break;
       case "list_runs":
         for (const r of records(out.runs)) note(r.id, r.ticket);
+        break;
+      case "list_scheduled_tasks":
+        for (const t of records(out.tasks)) note(t.task_id, t.name);
+        break;
+      case "search_library":
+        for (const it of records(out.items)) note(it.item_id, it.title);
+        break;
+      case "save_link":
+        note(out.item_id, out.title);
+        break;
+      case "create_learning_module":
+        note(out.module_id, out.topic);
+        break;
+      case "list_learning_modules":
+        for (const m of records(out.modules)) note(m.module_id, m.topic);
         break;
       case "get_run": {
         const run = out.run as Record<string, unknown> | undefined;

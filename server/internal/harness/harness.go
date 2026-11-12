@@ -286,7 +286,7 @@ func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project,
 		b.WriteString(sectionStart + "\n# Vesper chat: default project " + project + "\n\nNew tickets and epics go to " + project + " unless you pass another project key.\n\n")
 	}
 	b.WriteString("This is a conversation with a person. Answer directly; ending your reply ends this turn.\n")
-	b.WriteString("Use list_runs, get_run, get_ticket, list_epics, get_epic, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
+	b.WriteString("Use list_tickets, list_projects, list_runs, get_run, get_ticket, list_epics, get_epic, search_knowledge, read_page, read_artifact and get_backlinks to look things up in any project; list_tickets, list_runs, list_epics and search_knowledge take a project key to narrow. Cite sources with [[…]].\n")
 	b.WriteString("Use create_ticket and create_epic when the person asks. Return identifiers for created items. Use update_ticket, update_ticket_blockers, update_epic and comment_ticket to change existing tickets and epics when the person asks, or to keep a ticket you work on in this chat current. Do not call claim_ticket, complete_run or propose_tickets. ")
 	switch {
 	case allowed(spec, "repo:write"):

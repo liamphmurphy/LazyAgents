@@ -83,6 +83,9 @@ const LABELS: Record<ChatStatusKind, string> = {
   research: "Writing up research",
   space: "Setting up a space",
   "saved-links": "Checking saved links",
+  projects: "Looking over projects",
+  library: "Searching your Library",
+  inbox: "Checking your Inbox",
   chart: "Drawing a chart",
   diagram: "Drawing a diagram",
   app: "Building an app",
@@ -127,6 +130,31 @@ const sparkle = (x: number, y: number, s: number) =>
   `M${x} ${y - s}l${s * 0.25} ${s * 0.75}l${s * 0.75} ${s * 0.25}l${-s * 0.75} ${s * 0.25}l${-s * 0.25} ${s * 0.75}l${-s * 0.25} ${-s * 0.75}l${-s * 0.75} ${-s * 0.25}l${s * 0.75} ${-s * 0.25}z`;
 
 const vars = (v: Record<string, string | number>) => v as CSSProperties;
+
+/** A done-coloured badge with a check, centred at (x, y). */
+const doneBadge = (x: number, y: number) => (
+  <>
+    <circle className="scene-done" cx={x} cy={y} r="5.5" />
+    {badgeCheck(x, y)}
+  </>
+);
+
+/** A project folder 30 wide at x: its tab, its body and two lines of name. */
+const folder = (x: number) => (
+  <>
+    <rect className="scene-paper" x={x + 2} y="15" width="12" height="7" rx="1.5" />
+    <rect className="scene-paper" x={x} y="19" width="30" height="25" rx="2.5" />
+    <path className="scene-line" strokeWidth="1.5" d={`M${x + 6} 28H${x + 22} M${x + 6} 35H${x + 16}`} />
+  </>
+);
+
+/** A Library tile at (x, y) holding a thumbnail of one kind of thing made. */
+const shelfTile = (x: number, y: number, thumb: ReactNode) => (
+  <>
+    <rect className="scene-paper" x={x} y={y} width="22" height="19" rx="2" />
+    {thumb}
+  </>
+);
 
 /** Kinds split off a broader one keep its scene: the step rail's glyph is what tells them apart. */
 type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save";
@@ -651,6 +679,75 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <path className="scene-line" strokeWidth="1.5" d="M64 13H76 M64 19H72" />
       <path className="scene-line" strokeWidth="1.5" opacity="0.6" d="M44 29H82 M44 35H70" />
       <path className="scene-warm scene-story scene-sl-r" d="M78 6V20l4-3 4 3V6z" />
+    </>
+  ),
+  // Three folders land, the default one lifts, its tab lights and gets a check.
+  projects: (
+    <>
+      <g className="scene-story scene-pj-f0">{folder(16)}</g>
+      <g className="scene-story scene-pj-f1">
+        <g className="scene-story scene-pj-lift">
+          {folder(51)}
+          <rect className="scene-accent scene-story scene-pj-tab" x="53" y="15" width="12" height="7" rx="1.5" />
+          <rect className="scene-paper" style={{ fill: "none" }} x="51" y="19" width="30" height="25" rx="2.5" />
+          <g className="scene-story scene-pj-check">{doneBadge(81, 19)}</g>
+        </g>
+      </g>
+      <g className="scene-story scene-pj-f2">{folder(86)}</g>
+    </>
+  ),
+  // A lens browses the shelf of things made; the video matches and pops forward.
+  library: (
+    <>
+      {shelfTile(30, 6, (
+        <>
+          <path className="scene-accent" opacity="0.55" d="M33 22l5-6 4 4 3-3 4 5z" />
+          <circle className="scene-warm" cx="46" cy="11" r="2" />
+        </>
+      ))}
+      {shelfTile(56, 6, <path className="scene-line" strokeWidth="1.5" d="M60 11H74 M60 15.5H72 M60 20H68" />)}
+      {shelfTile(82, 6, <path className="scene-accent" opacity="0.8" d="M86 22v-5h3v5z M91 22v-9h3v9z M96 22v-7h3v7z" />)}
+      {shelfTile(30, 31, (
+        <>
+          <rect className="scene-empty" x="33" y="35" width="7" height="5" rx="1" />
+          <rect className="scene-empty" x="44" y="42" width="7" height="5" rx="1" />
+          <path className="scene-line" strokeWidth="1.2" d="M40 37.5C44 37.5 44 44.5 44 44.5" />
+        </>
+      ))}
+      <g className="scene-story scene-lib-pop">
+        {shelfTile(56, 31, <path className="scene-accent" d="M64 35.5v10l8-5z" />)}
+        <rect className="scene-accent scene-story scene-lib-hit" opacity="0.3" x="56" y="31" width="22" height="19" rx="2" />
+      </g>
+      {shelfTile(82, 31, <path className="scene-muted" opacity="0.6" d="M85 47l5-6 4 4 3-3 4 5z" />)}
+      <g className="scene-story scene-lib-lens">
+        <circle cx="41" cy="15.5" r="6.5" fill="var(--surface)" fillOpacity="0.4" stroke="var(--accent)" strokeWidth="2" />
+        <path className="scene-line-accent" d="M45.6 20.1l4.4 4.4" />
+      </g>
+    </>
+  ),
+  // What needs the person drops into the tray one by one, then the count pops.
+  inbox: (
+    <>
+      {(
+        [
+          ["scene-accent", 5, 80],
+          ["scene-warm", 14, 74],
+          ["scene-done", 23, 84],
+        ] as const
+      ).map(([dot, y, end], i) => (
+        <g key={y} className={`scene-story scene-ib-c${i}`}>
+          <rect className="scene-paper" x="42" y={y} width="48" height="8" rx="2" />
+          <circle className={dot} cx="47" cy={y + 4} r="2" />
+          <path className="scene-line" strokeWidth="1.5" d={`M52 ${y + 4}H${end}`} />
+        </g>
+      ))}
+      <path className="scene-paper" strokeLinejoin="round" d="M28 34h20l4 6h28l4-6h20v16H28z" />
+      <g className="scene-story scene-ib-n">
+        <circle className="scene-warm" cx="108" cy="34" r="6.5" />
+        <text x="108" y="37" textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily="system-ui" fill="var(--surface)">
+          3
+        </text>
+      </g>
     </>
   ),
   // The line draws across the axes and each point pops as it's reached.

@@ -328,6 +328,30 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M6.2 9.8l3.6-3.6" />
     </>
   ),
+  // A folder whose name is being read.
+  projects: (
+    <>
+      <path className="glyph-s" d="M1.5 4.5V13a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3h-4a1 1 0 0 0-1 1.5z" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4.5 9.5h7" />
+    </>
+  ),
+  // Books on a shelf; the middle one is being pulled.
+  library: (
+    <>
+      <path className="glyph-s" d="M1.5 14.5h13" />
+      <rect className="glyph-s" x="2.5" y="3.5" width="2.6" height="11" rx=".5" />
+      <rect className="glyph-s glyph-a glyph-bob" x="6.3" y="5.5" width="2.6" height="9" rx=".5" />
+      <path className="glyph-s" d="M10.2 5.6l2.4-.7 2.4 9-2.4.6z" />
+    </>
+  ),
+  // A tray with an item dropping in.
+  inbox: (
+    <>
+      <path className="glyph-s" d="M1.5 9.5l2-6h9l2 6" />
+      <path className="glyph-s" d="M1.5 9.5h3.5l1 2h4l1-2h3.5v4.5h-13z" />
+      <path className="glyph-s glyph-a glyph-drop glyph-live" d="M5.5 6.5h5" />
+    </>
+  ),
   chart: (
     <>
       <path className="glyph-s" d="M2 1.5v12.5h12.5" />

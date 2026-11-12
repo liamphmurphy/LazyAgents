@@ -186,6 +186,15 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 		delete(out, "memory")
 		out["next"] = "Your instructions and available context are already in AGENTS.md. The ticket is in ticket_details, so skip get_ticket; read only context relevant to this task, and post_plan before editing. Work directly by default; delegate only when justified. Reuse existing session context on resume."
 	}
+	// A retry would otherwise start cold and repeat the last attempt's dead end.
+	prior, err := priorRuns(ctx, d, run)
+	if err != nil {
+		return nil, err
+	}
+	if len(prior) > 0 {
+		out["prior_attempts"] = len(prior)
+		out["next"] = fmt.Sprintf("This ticket was tried %d time(s) before: call get_prior_attempts before post_plan to see how it ended and where its work was saved. ", len(prior)) + out["next"].(string)
+	}
 	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
 		out["requires_mockup"] = t.RequiresMockup
 		if out["mockup"], err = mockupInfo(ctx, d, t); err != nil {
@@ -898,6 +907,7 @@ var Tools = []Tool{
 		func(ctx context.Context, d Deps, c agents.Caller, in PRIn) (any, error) {
 			return ok(nil), d.Runs.SetPR(ctx, c, in.Ticket, in.URL, in.Draft)
 		}),
+	define("get_prior_attempts", "Earlier runs on your ticket, newest first: how each ended and why, its plan, and the branch its work was saved to. Read it before planning when your ticket was tried before, so you don't repeat a dead end.", getPriorAttempts),
 	define("check_criterion", "Tick acceptance criteria once you've verified them; pass ns to tick several in one call.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CriterionIn) (any, error) {
 			if (in.N != 0) == (len(in.Ns) > 0) {
@@ -956,6 +966,10 @@ var Tools = []Tool{
 	define("finance_categorize", "Set a transaction's category when the person says what it is. By default it saves a rule that categorizes this merchant's past and future transactions too; tell them. Only in the Finance app's Ask chat.", financeCategorize),
 	define("finance_map_csv", "Map the columns of a CSV the person is importing in the Finance app, when Vesper asks you to. Vesper reads every row with your mapping and refuses it with the first row that doesn't read; fix it and call again. Only in the Finance app's Ask chat.", financeMapCSV),
 	define("list_saved_links", "List the pages and videos this person saved to their Library, newest first: what's still to read and what they've finished. Use it when it's useful to bring up something they saved.", listSavedLinks),
+	define("search_library", "Find things in the person's Library made with their personas: images, videos, diagrams and saved links, newest first. Shows what each is and where it came from, not its file; their documents aren't searched.", searchLibrary),
+	define("read_library_item", "One Library item in full: a saved link's note and summary, and the chat and persona it came from.", readLibraryItem),
+	define("save_link", "Save a page or video to the person's reading list in their Library when they ask you to keep it. Vesper doesn't open the page: give its title and why it's worth reading.", saveLink),
+	define("list_inbox", "What needs the person: the open items in their Inbox (approvals, agents' questions, reviews, blocked runs, mockups, suggestions, scheduled results), newest first, with how many are unread. Read-only: they decide each item on its own card, and reading here doesn't mark anything read.", listInbox),
 	define("submit_findings", "Report what you found: specific claims, each with the pages that support it. Call it as you go; it adds to what you've already sent.", submitFindings),
 	define("list_workflows", "List the person's workflows, drafts included: id, name, description and whether each is published.", listWorkflows),
 	define("read_workflow", "Read a workflow's current draft graph before proposing a change to it.", readWorkflow),
@@ -966,16 +980,25 @@ var Tools = []Tool{
 	define("submit_review", "Submit your verdict on lessons you reviewed. Only when reviewing a module.", submitReview),
 	define("submit_research_report", "Save the finished research report. Only when Vesper asks you to write one up.", submitResearchReport),
 	define("get_video_transcript", "Read the timestamped captions of a YouTube video the person shared, to watch along with them: react to what's actually said. Pass from_seconds/to_seconds for the part they're at.", videoTranscript),
+	define("list_connectors", "The person's MCP connectors: name, host, whether each is working (with its last error) and whether you can use it in this chat, plus connectors already proposed here. Check it before propose_connector.", listConnectors),
+	define("list_secret_names", "The names of the person's API secrets (never their values): handle, allowed hosts, expiry and whether you can use each in this chat, plus secrets already proposed here. Check it before propose_secret.", listSecretNames),
 	proposeConnector,
 	proposeSecret,
 	define("create_space", "Create a space for the person: a home for their chats on one topic, with instructions every chat there gets. New chats in it start with you. Use it when the person asks for one; tell them you made it and link it.", createSpace),
 	define("create_scheduled_task", "Schedule a task that runs on its own (daily, weekly, monthly or cron): you get its instructions as a message each time and the result goes to the person's Inbox. Use it when the person asks for something recurring; confirm the time and time zone, then tell them it's scheduled.", createScheduledTask),
+	define("list_scheduled_tasks", "List the person's scheduled tasks: when each runs, whether it's paused, its revision and how its last run went.", listScheduledTasks),
+	define("update_scheduled_task", "Change one of the person's scheduled tasks when they ask: rename it, rewrite its instructions, move its time or repeat, or pause and resume it (enabled). Pass the revision from list_scheduled_tasks; what you leave out stays as it is.", updateScheduledTask),
+	define("delete_scheduled_task", "Delete one of the person's scheduled tasks for good. Only when they ask; to stop it for a while, pause it with update_scheduled_task instead.", deleteScheduledTask),
 	define("create_learning_module", "Start a Guided Learning module on a topic for the person. Vesper drafts an outline for them to approve, then writes lessons with checks; you're its tutor. Use it when the person wants to learn something in depth.", createLearningModule),
+	define("list_learning_modules", "List the person's Guided Learning modules: topic, level, state and the lesson they're on.", listLearningModules),
+	define("get_learning_progress", "Where the person is in a learning module you tutor: each lesson's progress (complete once every check is right, solid if right first time), the lesson they're on, and checks they've missed and not yet got right.", getLearningProgress),
 	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. If you can make images, give it a profile picture with avatar_prompt. Tell the person you proposed it.", proposePersona),
 	define("reply_to_run", "Pass the person's answer to a run this chat started that asked them something. Only after they've answered in this chat.", replyToRun),
 	define("list_runs", "List ticket runs in every project, newest first: live runs by default, or finished/all. Filter by project, ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
+	define("list_tickets", "List tickets in every active project, most urgent first: the open ones unless you pass status. Filter by project, status, epic, assigned agent or words; open one with get_ticket.", listChatTickets),
+	define("list_projects", "List the projects you can read: key, name, repository, and which one is this chat's default.", listChatProjects),
 	define("update_ticket", "Edit an existing ticket from this chat: title, description, acceptance criteria, status, priority, estimate, epic, agent or mockup requirement, and link the pull request for work you did here (pr_url). Pass the revision from get_ticket. Only when the person asks, or to keep a ticket you're working on in this chat current.", updateChatTicket),
 	define("comment_ticket", "Comment on a ticket as yourself, linked back to this chat: findings, repro details, corrections. Only when the person asks, or to record what you learned working on it here.", commentChatTicket),
 	define("update_ticket_blockers", "Add or remove the tickets a ticket waits on: a started run of it queues until every blocker is Done. Returns what it's blocked by afterwards. Refused while the ticket has a live run, or when it would make a cycle.", updateTicketBlockers),
