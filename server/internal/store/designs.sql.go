@@ -403,6 +403,57 @@ func (q *Queries) ListDesignProposals(ctx context.Context, arg ListDesignProposa
 	return items, nil
 }
 
+const listTicketDesignFrames = `-- name: ListTicketDesignFrames :many
+SELECT l.canvas_id, l.node_id, cv.title, v.body
+FROM (SELECT DISTINCT fl.canvas_id, fl.node_id, t.workspace_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
+      WHERE t.id = $1 OR ($2::uuid IS NOT NULL AND t.epic_id = $2::uuid)) l
+JOIN chat_canvases cv ON cv.id = l.canvas_id AND cv.kind = 'design'
+JOIN chat_sessions c ON c.id = cv.session_id AND c.workspace_id = l.workspace_id
+JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
+ORDER BY cv.updated_at DESC, l.node_id
+LIMIT 10
+`
+
+type ListTicketDesignFramesParams struct {
+	TicketID uuid.UUID
+	EpicID   *uuid.UUID
+}
+
+type ListTicketDesignFramesRow struct {
+	CanvasID uuid.UUID
+	NodeID   string
+	Title    string
+	Body     string
+}
+
+// The design frames linked to a ticket, or for an epic review (epic_id set)
+// to any ticket of the epic, with their design's current body. Most recently
+// changed designs first; at most 10 frames reach a run.
+func (q *Queries) ListTicketDesignFrames(ctx context.Context, arg ListTicketDesignFramesParams) ([]ListTicketDesignFramesRow, error) {
+	rows, err := q.db.Query(ctx, listTicketDesignFrames, arg.TicketID, arg.EpicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTicketDesignFramesRow{}
+	for rows.Next() {
+		var i ListTicketDesignFramesRow
+		if err := rows.Scan(
+			&i.CanvasID,
+			&i.NodeID,
+			&i.Title,
+			&i.Body,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserDesigns = `-- name: ListUserDesigns :many
 SELECT cv.id, cv.title, cv.updated_at, c.id AS chat_id, v.seq, v.body, s.project_id,
   (SELECT count(*) FROM design_proposals p WHERE p.canvas_id = cv.id AND p.status = 'pending')::int AS pending_proposals,

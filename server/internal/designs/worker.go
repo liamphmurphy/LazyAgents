@@ -180,3 +180,20 @@ func (w *Worker) Layout(ctx context.Context, body, page string) ([]LaidPage, err
 	}
 	return out.Pages, nil
 }
+
+// Inspect asks the worker for a node's Inspect output (web/lib/designs/inspect.ts):
+// code for target css, tailwind or react, with spacing, type, tokens and assets.
+func (w *Worker) Inspect(ctx context.Context, body, node, target string) (map[string]any, error) {
+	res, raw, err := w.post(ctx, "/inspect", map[string]string{"body": body, "node": node, "target": target})
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, failure(res, raw)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("%w: unreadable inspect reply", ErrUnavailable)
+	}
+	return out, nil
+}

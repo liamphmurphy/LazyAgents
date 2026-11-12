@@ -342,3 +342,13 @@ func HasPage(body, id string) bool {
 	_, _, ok := findPage(d, id)
 	return ok
 }
+
+// NodeOf returns a node of the body by id (the stored map; don't modify it).
+func NodeOf(body, id string) (map[string]any, bool) {
+	d, err := Parse(body)
+	if err != nil {
+		return nil, false
+	}
+	l, ok := find(d, id)
+	return l.n, ok
+}
