@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
@@ -227,4 +228,50 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 	}
 	k.Evaluate(contract)
 	return k
+}
+
+// gitBrief lists the run's git state for a fresh session: the branch,
+// uncommitted files, and the commits and diff stat since it forked from
+// origin/<epic or default branch>. Each part is left out when its command fails.
+func (r *Runner) gitBrief(ctx context.Context, c runCtx, env map[string]string) string {
+	ws, dir, name := wsID(c.run), childDir(c.run), "lazyagents-brief-"+c.run.ID.String()
+	git := func(script string) (string, bool) {
+		cctx, cancel := context.WithTimeout(ctx, checkTimeout)
+		defer cancel()
+		out, code, err := r.execIn(cctx, ws, dir, name, script, env)
+		return strings.TrimSpace(out), err == nil && code == 0
+	}
+	var b strings.Builder
+	if branch, ok := git("git symbolic-ref --short HEAD"); ok && branch != "" {
+		b.WriteString("Branch: " + branch + "\n")
+	}
+	if status, ok := git("git status --porcelain"); ok {
+		if files := parseStatus(status); len(files) > 0 {
+			b.WriteString("Uncommitted files: " + strings.Join(files, ", ") + "\n")
+		} else {
+			b.WriteString("Uncommitted files: none\n")
+		}
+	}
+	upstream := ""
+	if c.spec.Repository != nil {
+		upstream = cmp.Or(c.spec.Repository.EpicBranch, c.spec.Repository.DefaultBranch)
+	}
+	if upstream == "" {
+		upstream = c.project.DefaultBranch
+	}
+	if upstream != "" {
+		ref := "origin/" + upstream
+		if base, ok := git("git merge-base " + shellQuote(ref) + " HEAD"); ok && base != "" {
+			if log, ok := git("git log --oneline -20 " + shellQuote(base) + "..HEAD"); ok {
+				b.WriteString("\nCommits since " + ref + ":\n" + cmp.Or(log, "(none)") + "\n")
+			}
+			if stat, ok := git("git diff --stat " + shellQuote(base) + "..HEAD"); ok && stat != "" {
+				b.WriteString("\nDiff stat since " + ref + ":\n" + lastLines(stat, 40) + "\n")
+			}
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "## Git\n\n" + b.String()
 }
