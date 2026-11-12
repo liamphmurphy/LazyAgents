@@ -143,7 +143,7 @@ test("with nothing going on the orb dims and the panel says so", async ({ page }
   const panel = orb(page).locator("#orb-panel");
   await expect(panel).toContainText("No personas working right now");
   await expect(panel).toContainText("not checked yet");
-  await expect(panel.locator(".orb-usub").first()).toHaveText("Not read yet");
+  await expect(panel.locator(".orb-usub").first()).toHaveText("Usage not checked yet");
 });
 
 // The motion was approved as a mockup; these pin its timings so a refactor can't drift from it.
@@ -202,7 +202,7 @@ test("rings wear each harness's colour, warn near the limit, and sweep while a c
   await expect(panel.locator(".orb-sec").nth(1)).toContainText("checking…");
   await expect(panel.locator(".orb-urow").nth(0).locator(".orb-track i")).toHaveClass("warn");
   await expect(panel.locator(".orb-urow").nth(1)).toContainText("…");
-  await expect(panel.locator(".orb-usub").nth(1)).toHaveText("Checking…");
+  await expect(panel.locator(".orb-usub").nth(1)).toHaveText("Checking usage…");
 
   // The reading lands: the sweep stops and the ring eases to it in Codex's colour.
   state.dock = { personas: [], harnesses: harnesses({ claude: claudeNearLimit }) };

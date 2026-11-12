@@ -200,6 +200,7 @@ export function DesignCanvas(p: CanvasProps) {
       place(t, wx, wy);
       p.onEditing(t.id);
       p.onTool("select");
+      e.preventDefault(); // the editor autofocuses now; the default mousedown focus would blur (and close) it
       return;
     }
     if (tool === "sticky") {
@@ -207,6 +208,7 @@ export function DesignCanvas(p: CanvasProps) {
       place(s, wx, wy);
       p.onEditing(s.id);
       p.onTool("select");
+      e.preventDefault(); // the editor autofocuses now; the default mousedown focus would blur (and close) it
       return;
     }
     if (tool === "connector") {
