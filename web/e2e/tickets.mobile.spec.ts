@@ -12,9 +12,9 @@ test("Tickets opens as a grouped list with one line of sideways-scrolling filter
   await expect(page.getByRole("link", { name: "New ticket" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Tickets layout" }).locator('[aria-current="page"]')).toHaveText("List");
 
-  // Grouped by status, In progress first, with 64px rows.
+  // Grouped by status, In progress (in review included) first, with 64px rows.
   const groups = page.locator("section[aria-label]");
-  await expect(groups.first()).toHaveAttribute("aria-label", "In Progress, 1");
+  await expect(groups.first()).toHaveAttribute("aria-label", "In progress, 2");
   const row = page.locator('[data-ticket-row="WEB-1"]');
   await expect(row).toContainText("Build ticket modal");
   await expect(row).toContainText("WEB-1");

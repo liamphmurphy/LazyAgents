@@ -29,12 +29,11 @@ test("rows show estimate, criteria, blocked and PR; grouping lives in the URL", 
   api.tickets[4].pr = { number: 41, state: "open" };
   await page.goto("/tickets?project=WEB");
 
-  await expect(row(page, "WEB-1")).toContainText("Blocked · 1");
+  await expect(row(page, "WEB-1")).toContainText("Blocked by 1");
   await expect(row(page, "WEB-1")).toContainText("1/1");
   await expect(row(page, "WEB-1").getByTitle("3 points")).toBeVisible();
   await expect(row(page, "WEB-2").getByTitle("Not estimated")).toBeVisible();
-  await expect(row(page, "WEB-5")).toContainText("#41");
-  await expect(row(page, "WEB-5")).toContainText("Open");
+  await expect(row(page, "WEB-5")).toContainText("In review · PR #41");
 
   await page.getByRole("button", { name: "Group by Status" }).click();
   await page.getByRole("menuitemradio", { name: "Epic" }).click();
@@ -216,10 +215,77 @@ test("row checkbox focus permits list shortcuts while search keeps typing", asyn
   await page.keyboard.press("x");
   await page.keyboard.press("Escape");
   await expect(checkbox).not.toBeChecked();
-  const search = page.getByPlaceholder("Search", { exact: true });
+  const search = page.getByLabel("Filter tickets");
   await search.fill("jkx");
   await expect(search).toHaveValue("jkx");
   await expect(checkbox).not.toBeChecked();
+});
+
+test("tickets waiting on the person are grouped first with an Open action", async ({ page }) => {
+  const api = await installBoardApi(page);
+  api.inbox.push(
+    { id: "approval:ap-1", kind: "approval", title: "Other epic work", summary: "Push to main", href: "/tickets/WEB-4", project: "WEB", ticket_key: "WEB-4", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: true, run_id: "run-4" },
+    { id: "review:t-5", kind: "review", title: "Review board", summary: "Ready for your review", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: true },
+  );
+  await page.goto("/tickets?project=WEB");
+  const sections = page.locator("main section[aria-label]");
+  await expect(sections.first()).toHaveAttribute("aria-label", "Needs you, 1");
+  const needs = page.getByRole("region", { name: "Needs you, 1" });
+  await expect(needs.locator("[data-ticket-row]")).toHaveAttribute("data-ticket-row", "WEB-4");
+  await expect(row(page, "WEB-4")).toContainText("Wants approval: Push to main");
+  await expect(needs.getByRole("link", { name: "Open what WEB-4 needs" })).toHaveAttribute("href", "/tickets/WEB-4");
+  // A review isn't a run waiting on the person; the rest follow in status buckets.
+  await expect(page.getByRole("region", { name: "In progress, 1" })).toContainText("WEB-5");
+  await expect(page.getByRole("region", { name: "Ready, 1" })).toBeVisible();
+  // The board shows the same state on the card.
+  await page.goto("/tickets?layout=board&project=WEB");
+  const card = page.locator('[data-ticket-key="WEB-4"]');
+  await expect(card).toHaveAttribute("data-needs-you", "true");
+  await expect(card).toContainText("Wants approval: Push to main");
+  await expect(card.getByRole("link", { name: "Open what WEB-4 needs" })).toBeVisible();
+  expect(api.unhandled).toEqual([]);
+});
+
+test("filter tokens narrow the list and round-trip through the URL", async ({ page }) => {
+  const api = await installBoardApi(page);
+  await page.goto("/tickets?project=WEB");
+  const box = page.getByLabel("Filter tickets");
+  await box.fill('epic:"Other epic" agent:reviewer status:in_progress board');
+  await expect(page).toHaveURL(/epic=epic-2/);
+  await expect(page).toHaveURL(/assignee=reviewer/);
+  await expect(page).toHaveURL(/status=in_progress/);
+  await expect(page).toHaveURL(/q=board/);
+  await box.fill("epic:nothing");
+  await expect(page.getByRole("status").filter({ hasText: "No match for epic:nothing" })).toBeVisible();
+  await expect(page).not.toHaveURL(/epic=/);
+  // Opening a filtered link shows its filters as tokens.
+  await page.goto("/tickets?project=WEB&epic=epic-1&status=todo");
+  await expect(box).toHaveValue('epic:"Kanban board" status:todo');
+  // project: moves the picker and leaves the box, so it can't reset the picker later.
+  await box.fill("project:ops bug");
+  await expect(page).toHaveURL(/project=OPS/);
+  await expect(box).toHaveValue("bug");
+  // A late debounce from before the navigation must not switch the project back.
+  await page.waitForTimeout(600);
+  await expect(page).toHaveURL(/project=OPS/);
+  await expect(page).toHaveURL(/q=bug/);
+  expect(api.unhandled).toEqual([]);
+});
+
+test("Back to a filter the box applied shows it again", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
+  const api = await installBoardApi(page);
+  api.savedViews.push({ id: "sv-plain", name: "Plain", query: "view=active", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" });
+  await page.goto("/tickets?project=WEB");
+  const box = page.getByLabel("Filter tickets");
+  await box.fill("status:done");
+  await expect(page).toHaveURL(/status=done/);
+  await page.getByRole("group", { name: "Saved views" }).getByRole("link", { name: "Plain" }).click();
+  await expect(page).toHaveURL(/sv=sv-plain/);
+  await expect(box).toHaveValue("");
+  await page.goBack();
+  await expect(page).toHaveURL(/status=done/);
+  await expect(box).toHaveValue("status:done");
 });
 
 test.describe("on a touch screen", () => {
