@@ -1,6 +1,5 @@
 "use client";
 
-import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -25,10 +24,10 @@ import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
-import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
-import { DesignPanel } from "./design-panel";
+import { CanvasButton } from "@/components/domain/canvas-view";
+import { ChatPanelHost } from "./chat-panel-host";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
-import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
+import { PlaygroundButton } from "@/components/domain/playground";
 import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
@@ -334,7 +333,6 @@ export function ChatScreen({ id }: { id?: string }) {
   const router = useRouter();
   const search = useSearchParams();
   const current = useChat(id);
-  const canvas = useCanvasPanel();
   const turnRunning = current.data?.state === "running";
   const health = useHarnessHealth();
   const boot = useBootstrap();
@@ -397,11 +395,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {/* The playground sits beside the chat: a running app needs the width more than a canvas does. */}
-          {id && <DesignPanel key={id} chatId={id} live={turnRunning} />}
-          {id && <PlaygroundPanel chatId={id} />}
-          {id && <PlaygroundFullscreen chatId={id} />}
-          {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}
+          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} />}
       </div>
     </div>
   );
