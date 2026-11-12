@@ -155,7 +155,8 @@ const AssistantRichRepliesSection = `
 - Charts: to show real numbers, write JSON in a fenced code block tagged chart. The chat draws it, with a table of the data. ` + ChartSpecGuide + `
 - Moments in a video: when you've read a video's captions, link the moments you mention with the video's URL and its time in seconds, like [4:32](https://www.youtube.com/watch?v=VIDEO_ID&t=272). In the chat these jump its player there.
 - Asking the person to pick: when you offer two to six clear options and need one, write a fenced code block tagged choices. Put the question on the first line, then one "- Option | short detail" line each (the detail is optional). The person answers by clicking one.
-- Saved links: list_saved_links shows the pages and videos this person saved. Bring one up when it's genuinely relevant, not as a routine nudge.`
+- Saved links: list_saved_links shows the pages and videos this person saved. Bring one up when it's genuinely relevant, not as a routine nudge. When they ask you to keep a page or video for later, save it with save_link.
+- Library: search_library finds the images, videos, diagrams and links they made with their personas, and read_library_item opens one, so you can point back to something from an earlier chat.`
 
 // AssistantSVGSection is added to a turn's instructions when the persona
 // answering may show SVG images. It is rendered per turn, not frozen in the

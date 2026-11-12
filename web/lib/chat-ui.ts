@@ -410,6 +410,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("web-page", "reading a page");
     case "list_saved_links":
       return status("saved-links", "checking your saved links");
+    case "save_link":
+      return status("saved-links", "saving a link");
+    case "search_library":
+      return status("library", "looking through your Library");
+    case "read_library_item":
+      return status("library", "opening something from your Library");
     case "propose_persona":
       return status("persona", "sketching a new persona");
     case "create_space":
@@ -624,6 +630,15 @@ const BOOKKEEPING = new Set(["TodoWrite", "todowrite", "TaskCreate", "TaskUpdate
 
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
+/** A URL's site, never its path or query, which can carry tokens. */
+function hostOf(raw: string): string {
+  try {
+    return new URL(raw).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 /**
  * What a step is doing right now, safe for the chat tab: a file's name but not its path,
  * search terms, page names and sites. A shell command stays its kind of work ("Running tests"),
@@ -702,6 +717,12 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Scheduling", o.name);
     case "update_scheduled_task":
       return named("Changing", known(o.task_id));
+    case "save_link":
+      return named("Saving", o.title || hostOf(str(o.url)));
+    case "search_library":
+      return o.q ? `Searching “${clip(str(o.q))}”` : general;
+    case "read_library_item":
+      return named("Opening", known(o.item_id));
     case "delete_scheduled_task":
       return named("Removing", known(o.task_id));
     case "create_learning_module":
@@ -734,7 +755,7 @@ function resultJSON(output?: string): Record<string, unknown> | undefined {
   }
 }
 
-/** The names the turn has seen for canvases, workflows, runs and scheduled tasks, by id. */
+/** The names the turn has seen for canvases, workflows, runs, scheduled tasks and Library items, by id. */
 function knownNames(calls: ToolCall[]): Map<string, string> {
   const names = new Map<string, string>();
   const note = (id: unknown, name: unknown) => {
@@ -768,6 +789,12 @@ function knownNames(calls: ToolCall[]): Map<string, string> {
         break;
       case "list_scheduled_tasks":
         for (const t of records(out.tasks)) note(t.task_id, t.name);
+        break;
+      case "search_library":
+        for (const it of records(out.items)) note(it.item_id, it.title);
+        break;
+      case "save_link":
+        note(out.item_id, out.title);
         break;
       case "get_run": {
         const run = out.run as Record<string, unknown> | undefined;

@@ -175,6 +175,9 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "list_scheduled_tasks", input: {} }, "schedule"],
     [{ tool: "mcp__lazyagents__update_scheduled_task", input: {} }, "schedule"],
     [{ tool: "delete_scheduled_task", input: {} }, "schedule"],
+    [{ tool: "mcp__lazyagents__save_link", input: {} }, "saved-links"],
+    [{ tool: "search_library", input: {} }, "library"],
+    [{ tool: "read_library_item", input: {} }, "library"],
     [{ tool: "mcp__lazyagents__write_note", input: { body: "secret" } }, "wiki"],
     [{ tool: "reply_block", input: { kind: "chart" } }, "chart"],
     [{ tool: "reply_block", input: { kind: "mermaid" } }, "diagram"],
@@ -377,6 +380,11 @@ test("stepDetail names canvases, workflows, tickets, images, personas, runs and 
     [{ tool: "mcp__lazyagents__list_projects", input: {} }, "Looking over your projects"],
     [{ tool: "mcp__lazyagents__list_scheduled_tasks", input: {} }, "Checking your scheduled tasks"],
     [{ tool: "mcp__lazyagents__update_scheduled_task", input: { task_id: "t9", instructions: "secret" } }, "Changing a scheduled task"],
+    [{ tool: "mcp__lazyagents__save_link", input: { url: "https://youtube.com/watch?v=1", title: "Truth or Drink" } }, "Saving “Truth or Drink”"],
+    [{ tool: "mcp__lazyagents__save_link", input: { url: "https://www.example.com/a?token=secret" } }, "Saving “example.com”"],
+    [{ tool: "mcp__lazyagents__search_library", input: { q: "dusk logo" } }, "Searching “dusk logo”"],
+    [{ tool: "mcp__lazyagents__search_library", input: {} }, "Looking through your Library"],
+    [{ tool: "mcp__lazyagents__read_library_item", input: { item_id: "i9" } }, "Opening something from your Library"],
     [{ tool: "mcp__lazyagents__update_ticket", input: { ticket: "PAY-214", description: "secret" } }, "Updating PAY-214"],
     [{ tool: "mcp__lazyagents__comment_ticket", input: { ticket: "PAY-214", body: "secret" } }, "Commenting on PAY-214"],
     [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
@@ -399,6 +407,8 @@ test("tools that take an id use the name an earlier call in the turn gave it", (
   const tasks = { tool: "list_scheduled_tasks", input: {}, output: JSON.stringify({ tasks: [{ task_id: "t1", name: "Weekly check-in" }] }) };
   assert.equal(detail([tasks, { tool: "update_scheduled_task", input: { task_id: "t1" } }]), "Changing “Weekly check-in”");
   assert.equal(detail([tasks, { tool: "delete_scheduled_task", input: { task_id: "t1" } }]), "Removing “Weekly check-in”");
+  const found = { tool: "search_library", input: { q: "logo" }, output: JSON.stringify({ items: [{ item_id: "i1", title: "Dusk logo v3" }] }) };
+  assert.equal(detail([found, { tool: "read_library_item", input: { item_id: "i1" } }]), "Opening “Dusk logo v3”");
   const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
   // No name to show, so the detail would only repeat the step's title.
   assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);

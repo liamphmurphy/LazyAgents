@@ -230,3 +230,63 @@ func TestChatManagesScheduledTasks(t *testing.T) {
 		t.Fatalf("after delete = %d %v", code, out)
 	}
 }
+
+// A persona saves a link the person wants to keep and finds things in their
+// Library again, but never their documents.
+func TestChatSearchesLibraryAndSavesLinks(t *testing.T) {
+	c := newPersonaChat(t, "")
+	code, out := c.call(t, "save_link", map[string]any{"url": "https://www.youtube.com/watch?v=Z3Kal4Xazf4", "title": "Truth or Drink: Alan vs Sam", "note": "The one you said you'd rewatch."})
+	if code != 200 || out["state"] != "saved" {
+		t.Fatalf("save_link = %d %v", code, out)
+	}
+	saved := fmt.Sprint(out["item_id"])
+	if code, out := c.call(t, "save_link", map[string]any{"url": "https://www.youtube.com/watch?v=Z3Kal4Xazf4"}); code != 200 || out["state"] != "already_saved" || fmt.Sprint(out["item_id"]) != saved {
+		t.Fatalf("save again = %d %v", code, out)
+	}
+	if code, out := c.call(t, "save_link", map[string]any{"url": "https://example.com/rust/ownership/"}); code != 200 || out["title"] != "example.com/rust/ownership" {
+		t.Fatalf("untitled link = %d %v", code, out)
+	}
+	for _, bad := range []string{"ftp://example.com/x", "https://user:pw@example.com/", "javascript:alert(1)", ""} {
+		if code, out := c.call(t, "save_link", map[string]any{"url": bad}); code != 422 {
+			t.Errorf("save_link %q = %d %v, want 422", bad, code, out)
+		}
+	}
+	item, err := c.q.GetLibraryItem(c.ctx, store.GetLibraryItemParams{ID: uuid.MustParse(saved), WorkspaceID: c.ws, UserID: c.user})
+	if err != nil || item.Kind != "link" || item.VideoID != "Z3Kal4Xazf4" || item.Site != "youtube.com" || item.LinkStatus != "to_read" || item.PersonaID == nil || *item.PersonaID != c.persona {
+		t.Fatalf("saved item = %+v, %v", item, err)
+	}
+
+	// The person's own documents never reach a persona, even when they match.
+	doc, err := c.q.CreateLibraryItem(c.ctx, store.CreateLibraryItemParams{WorkspaceID: c.ws, UserID: c.user, Kind: "document", Title: "Alan diary", Filename: "diary.md", ContentType: "text/markdown", SizeBytes: 12, BlobKey: "docs/diary"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, out = c.call(t, "search_library", map[string]any{"q": "alan SAM"})
+	items := list(out, "items")
+	if code != 200 || len(items) != 1 || items[0]["item_id"] != saved || items[0]["link_status"] != "to_read" || items[0]["persona"] != "Hackerman" {
+		t.Fatalf("search_library = %d %v", code, out)
+	}
+	if code, out := c.call(t, "search_library", map[string]any{"q": "alan"}); code != 200 || len(list(out, "items")) != 1 {
+		t.Fatalf("documents leaked into search: %d %v", code, out)
+	}
+	if code, out := c.call(t, "search_library", map[string]any{"kind": "image"}); code != 200 || len(list(out, "items")) != 0 {
+		t.Fatalf("kind filter = %d %v", code, out)
+	}
+	if code, out := c.call(t, "search_library", map[string]any{}); code != 200 || len(list(out, "items")) != 2 {
+		t.Fatalf("newest = %d %v", code, out)
+	}
+	for _, bad := range []map[string]any{{"kind": "document"}, {"limit": 51}} {
+		if code, out := c.call(t, "search_library", bad); code != 422 {
+			t.Errorf("search_library %v = %d %v, want 422", bad, code, out)
+		}
+	}
+
+	code, out = c.call(t, "read_library_item", map[string]any{"item_id": saved})
+	got, _ := out["item"].(map[string]any)
+	if code != 200 || got["note"] != "The one you said you'd rewatch." || got["chat_href"] != "/chat/"+c.chat.ID.String() || got["persona"] != "Hackerman" {
+		t.Fatalf("read_library_item = %d %v", code, out)
+	}
+	if code, out := c.call(t, "read_library_item", map[string]any{"item_id": doc.ID}); code != 422 {
+		t.Fatalf("read a document = %d %v", code, out)
+	}
+}

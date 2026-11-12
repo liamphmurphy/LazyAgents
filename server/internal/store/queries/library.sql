@@ -119,3 +119,21 @@ WHERE workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND 
   AND (sqlc.narg(status)::text IS NULL OR link_status = sqlc.narg(status))
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(row_limit);
+
+-- name: SearchLibraryItems :many
+-- The caller's items for a persona to find, newest first: optionally one kind,
+-- and only those whose title, file name, note, site, address or summary holds
+-- every word. Documents are left out: they're the person's own (Docs), never
+-- agent context.
+SELECT l.id, l.kind, l.title, l.filename, l.url, l.site, l.note, l.link_status, l.width, l.height, l.duration_ms, l.chat_id, l.created_at,
+  c.title AS chat_title, p.name AS persona_name
+FROM library_items l
+LEFT JOIN chat_sessions c ON c.id = l.chat_id
+LEFT JOIN personas p ON p.id = l.persona_id
+WHERE l.workspace_id = sqlc.arg(workspace_id) AND l.user_id = sqlc.arg(user_id) AND l.kind <> 'document'
+  AND (sqlc.narg(kind)::text IS NULL OR l.kind = sqlc.narg(kind))
+  AND NOT EXISTS (
+    SELECT 1 FROM unnest(sqlc.arg(words)::text[]) w
+    WHERE concat_ws(' ', l.title, l.filename, l.note, l.site, l.url, l.summary) NOT ILIKE '%' || w || '%')
+ORDER BY l.created_at DESC, l.id DESC
+LIMIT sqlc.arg(row_limit);

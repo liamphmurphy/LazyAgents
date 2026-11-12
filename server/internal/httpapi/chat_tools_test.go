@@ -132,6 +132,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_tickets":         map[string]any{},
 		"list_projects":        map[string]any{},
 		"list_scheduled_tasks": map[string]any{},
+		"search_library":       map[string]any{},
 		"list_runs":            map[string]any{},
 		"search_repositories":  map[string]any{},
 		"list_saved_links":     map[string]any{},
@@ -139,7 +140,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":       map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "write_note", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi"}
+	needArgs := []string{"use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "write_note", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "read_library_item", "save_link", "create_space", "create_scheduled_task", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
