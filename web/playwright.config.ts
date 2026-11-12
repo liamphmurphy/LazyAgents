@@ -13,7 +13,16 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL: external ?? "http://localhost:3100", trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Desktop specs; *.mobile.spec.ts belong to the mobile project.
+    { name: "chromium", testIgnore: ["**/designs-review.spec.ts", "**/*.mobile.spec.ts"], use: { ...devices["Desktop Chrome"] } },
+    // Compact shell: iPhone 15 emulated on Chromium (CI installs only Chromium), at 390×844.
+    {
+      name: "mobile",
+      testMatch: "**/*.mobile.spec.ts",
+      use: { ...devices["iPhone 15"], defaultBrowserType: "chromium", viewport: { width: 390, height: 844 } },
+    },
+  ],
   webServer: external
     ? undefined
     : {
