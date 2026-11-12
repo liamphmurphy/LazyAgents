@@ -959,6 +959,7 @@ var Tools = []Tool{
 	define("search_library", "Find things in the person's Library made with their personas: images, videos, diagrams and saved links, newest first. Shows what each is and where it came from, not its file; their documents aren't searched.", searchLibrary),
 	define("read_library_item", "One Library item in full: a saved link's note and summary, and the chat and persona it came from.", readLibraryItem),
 	define("save_link", "Save a page or video to the person's reading list in their Library when they ask you to keep it. Vesper doesn't open the page: give its title and why it's worth reading.", saveLink),
+	define("list_inbox", "What needs the person: the open items in their Inbox (approvals, agents' questions, reviews, blocked runs, mockups, suggestions, scheduled results), newest first, with how many are unread. Read-only: they decide each item on its own card, and reading here doesn't mark anything read.", listInbox),
 	define("submit_findings", "Report what you found: specific claims, each with the pages that support it. Call it as you go; it adds to what you've already sent.", submitFindings),
 	define("list_workflows", "List the person's workflows, drafts included: id, name, description and whether each is published.", listWorkflows),
 	define("read_workflow", "Read a workflow's current draft graph before proposing a change to it.", readWorkflow),

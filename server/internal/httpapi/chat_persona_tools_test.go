@@ -290,3 +290,65 @@ func TestChatSearchesLibraryAndSavesLinks(t *testing.T) {
 		t.Fatalf("read a document = %d %v", code, out)
 	}
 }
+
+// A persona sees what's waiting on the person without deciding or marking
+// anything.
+func TestChatReadsTheInbox(t *testing.T) {
+	c := newPersonaChat(t, "PAY")
+	before, err := c.q.ListInbox(c.ctx, store.ListInboxParams{WorkspaceID: c.ws, UserID: c.user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := 0
+	kinds := map[string]int{}
+	for _, r := range before {
+		if !r.Resolved {
+			open++
+			kinds[r.Kind]++
+		}
+	}
+	if open == 0 {
+		t.Fatal("the demo workspace should have open Inbox items")
+	}
+
+	code, out := c.call(t, "list_inbox", map[string]any{"limit": 100})
+	items := list(out, "items")
+	if code != 200 || len(items) != min(open, 100) || out["unread"] != float64(before[0].UnreadCount) {
+		t.Fatalf("list_inbox = %d %d items, want %d: %v", code, len(items), open, out["unread"])
+	}
+	for _, it := range items {
+		if it["resolved"] == true || it["href"] == "" {
+			t.Fatalf("item %v", it)
+		}
+	}
+	var kind string
+	for k := range kinds {
+		kind = k
+		break
+	}
+	if code, out := c.call(t, "list_inbox", map[string]any{"kind": kind, "limit": 100}); code != 200 || len(list(out, "items")) != kinds[kind] {
+		t.Fatalf("kind %s = %d %v", kind, code, out)
+	}
+	code, out = c.call(t, "list_inbox", map[string]any{"project": "pay", "limit": 2})
+	if code != 200 || len(list(out, "items")) > 2 {
+		t.Fatalf("project = %d %v", code, out)
+	}
+	for _, it := range list(out, "items") {
+		if it["project"] != "PAY" {
+			t.Fatalf("project filter let through %v", it)
+		}
+	}
+	for _, bad := range []map[string]any{{"project": "NOPE"}, {"limit": 101}} {
+		if code, out := c.call(t, "list_inbox", bad); code != 422 {
+			t.Errorf("list_inbox %v = %d %v, want 422", bad, code, out)
+		}
+	}
+
+	after, err := c.q.ListInbox(c.ctx, store.ListInboxParams{WorkspaceID: c.ws, UserID: c.user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) == 0 || after[0].UnreadCount != before[0].UnreadCount {
+		t.Fatalf("reading from chat changed what's unread: %d → %d", before[0].UnreadCount, after[0].UnreadCount)
+	}
+}

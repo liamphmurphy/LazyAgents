@@ -416,6 +416,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("library", "looking through your Library");
     case "read_library_item":
       return status("library", "opening something from your Library");
+    case "list_inbox":
+      return status("inbox", "checking what needs you");
     case "propose_persona":
       return status("persona", "sketching a new persona");
     case "create_space":
