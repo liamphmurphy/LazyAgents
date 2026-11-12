@@ -170,6 +170,7 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "submit_research_report", input: {} }, "research"],
     [{ tool: "create_space", input: {} }, "space"],
     [{ tool: "list_saved_links", input: {} }, "saved-links"],
+    [{ tool: "mcp__lazyagents__write_note", input: { body: "secret" } }, "wiki"],
     [{ tool: "reply_block", input: { kind: "chart" } }, "chart"],
     [{ tool: "reply_block", input: { kind: "mermaid" } }, "diagram"],
     [{ tool: "reply_block", input: { kind: "app" } }, "app"],

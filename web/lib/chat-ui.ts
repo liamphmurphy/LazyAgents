@@ -360,6 +360,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "search_knowledge":
     case "find_pattern":
       return status("wiki", "looking through the wiki");
+    case "write_note":
+      return status("wiki", "writing a wiki note");
     case "get_ticket":
     case "list_epics":
       return status("ticket-lookup", "checking tickets");
