@@ -100,3 +100,15 @@ ORDER BY seq;
 -- name: CountDesignProposalsByCanvas :many
 SELECT canvas_id, count(*)::int AS pending FROM design_proposals
 WHERE canvas_id = ANY(@ids::uuid[]) AND status = 'pending' GROUP BY canvas_id;
+
+-- name: ListTicketDesignFrames :many
+-- The design frames linked to a ticket, or for an epic review (epic_id set)
+-- to any ticket of the epic, with their design's current body. Most recently
+-- changed designs first; at most 10 frames reach a run.
+SELECT l.canvas_id, l.node_id, cv.title, v.body
+FROM (SELECT DISTINCT fl.canvas_id, fl.node_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
+      WHERE t.id = @ticket_id OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND t.epic_id = sqlc.narg(epic_id)::uuid)) l
+JOIN chat_canvases cv ON cv.id = l.canvas_id AND cv.kind = 'design'
+JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
+ORDER BY cv.updated_at DESC, l.node_id
+LIMIT 10;

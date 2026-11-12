@@ -26,10 +26,10 @@ const acceptanceDesign = "../../../docs/design/fixtures/acceptance-design.json"
 
 // stubWorker stands in for the Node design worker.
 type stubWorker struct {
-	mu      sync.Mutex
-	down    bool
-	renders []map[string]any
-	layouts int
+	mu       sync.Mutex
+	down     bool
+	renders  []map[string]any
+	layouts  int
 	inspects []map[string]any
 }
 
