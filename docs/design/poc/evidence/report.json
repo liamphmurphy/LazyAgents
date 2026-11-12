@@ -1,0 +1,173 @@
+{
+  "generated": "2026-11-12T01:49:24.141Z",
+  "validation": {
+    "fixture": [],
+    "fixtureBytes": 34615,
+    "invalidCases": {
+      "unknown field on a frame": "schema: /pages/0/children/0 must NOT have unevaluated properties",
+      "unknown token": "n_cart: token $nope isn't a colour in dusk-web",
+      "duplicate id": "duplicate id n_cart",
+      "link to a node that isn't a top-level frame": "link k_cart_ship: to n_cart_btn isn't a top-level frame",
+      "image asset missing": "n_pay_card: asset a_missing isn't in assets",
+      "connector endpoint on another page": "n_c1: endpoint n_cart is on another page",
+      "override outside the component": "n_cart_btn: override n_cart isn't inside n_btn",
+      "font on a run (Inter only)": "schema: /pages/1/children/0/children/0/text/paragraphs/0/runs/0 must NOT have additional properties",
+      "children on a shape": "schema: /pages/1/children/0/children/0 must NOT have unevaluated properties",
+      "fill sizing without auto layout": "n_st_cart: fill sizing needs a parent with auto layout",
+      "lower-case hex colour": "schema: /pages/0/children/0/fill must match pattern \"^(#[0-9A-F]{6}([0-9A-F]{2})?|\\$[a-z0-9][a-z0-9-]{0,63})$\"",
+      "schema 2": "schema: /schema must be equal to constant"
+    },
+    "tokensInSync": true
+  },
+  "chromium": "158.0.8127.18",
+  "parity": {
+    "n_pay": {
+      "box": {
+        "x": 946,
+        "y": 0,
+        "w": 393,
+        "h": 852
+      },
+      "ops": 44,
+      "width": 786,
+      "height": 1704,
+      "differing": 347,
+      "ratio": 0.0002590820580821656,
+      "percent": 0.0259,
+      "withAntiAliasing": {
+        "differing": 5619,
+        "percent": 0.4195
+      }
+    },
+    "n_state": {
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 720,
+        "h": 420
+      },
+      "ops": 32,
+      "width": 1440,
+      "height": 840,
+      "differing": 133,
+      "ratio": 0.0001099537037037037,
+      "percent": 0.011,
+      "withAntiAliasing": {
+        "differing": 2434,
+        "percent": 0.2012
+      }
+    }
+  },
+  "mermaid": {
+    "input": "fixtures/checkout.mmd",
+    "shapes": 11,
+    "sections": 2,
+    "connectors": 11,
+    "valid": [],
+    "warnings": [
+      "line 15: classDef is ignored (styling isn't imported)",
+      "line 16: class is ignored (styling isn't imported)",
+      "charge: cylinder drawn as a rectangle",
+      "archive: asymmetric shape drawn as a rectangle"
+    ],
+    "refusals": {
+      "sequenceDiagram\n  A->>B: hi": "line 1: expected 'flowchart' or 'graph' and a direction (TD, TB, BT, LR or RL); only flowcharts can be imported: \"sequenceDiagram\"",
+      "flowchart LR\n  A -->": "line 2: the edge has no target node: \"A -->\"",
+      "flowchart LR\n  A[open --> B": "line 2: node A opens [ but never closes it with ]: \"[open --> B\"",
+      "flowchart LR\n  A ~~> B": "line 2: expected an edge (-->, ---, -.->, ==>) or the end of the line: \"~~> B\"",
+      "flowchart LR\n  subgraph x\n  A --> B": "subgraph x has no 'end'",
+      "": "line 1: the text is empty; expected 'flowchart LR' or similar"
+    }
+  },
+  "panzoom": {
+    "nodes": 2035,
+    "bodyBytes": 404182,
+    "bodyBytesPretty": 889374,
+    "valid": [],
+    "layoutMs": 7.4,
+    "ops": 4590,
+    "viewport": "1440x900 @2x",
+    "attr": {
+      "raf": {
+        "frames": 359,
+        "p50": 16.7,
+        "p95": 16.7,
+        "p99": 16.8,
+        "max": 16.8,
+        "over16_7": 0,
+        "over33": 0,
+        "fps": 60,
+        "longTasks": 0,
+        "elements": 4632
+      },
+      "mainThreadPerFrameMs": {
+        "n": 364,
+        "p50": 1.2,
+        "p95": 13.6,
+        "max": 17.4,
+        "over25": 0,
+        "over33": 0
+      },
+      "rasterPerFrameMs": {
+        "n": 363,
+        "p50": 4.8,
+        "p95": 9.2,
+        "max": 16.5,
+        "over25": 0,
+        "over33": 0
+      },
+      "drawnFrameIntervalMs": {
+        "n": 363,
+        "p50": 16.6,
+        "p95": 19.2,
+        "max": 91.1,
+        "over25": 2,
+        "over33": 1
+      }
+    },
+    "css": {
+      "raf": {
+        "frames": 359,
+        "p50": 16.7,
+        "p95": 16.7,
+        "p99": 16.8,
+        "max": 16.8,
+        "over16_7": 0,
+        "over33": 0,
+        "fps": 60,
+        "longTasks": 0,
+        "elements": 4632
+      },
+      "mainThreadPerFrameMs": {
+        "n": 364,
+        "p50": 0.3,
+        "p95": 0.5,
+        "max": 12.7,
+        "over25": 0,
+        "over33": 0
+      },
+      "rasterPerFrameMs": {
+        "n": 363,
+        "p50": 0,
+        "p95": 0.1,
+        "max": 22.2,
+        "over25": 0,
+        "over33": 0
+      },
+      "drawnFrameIntervalMs": {
+        "n": 363,
+        "p50": 16.6,
+        "p95": 19.1,
+        "max": 87.9,
+        "over25": 1,
+        "over33": 1
+      }
+    }
+  },
+  "caps": {
+    "body": 2097152,
+    "nodes": 10000,
+    "depth": 32,
+    "textChars": 5000
+  }
+}

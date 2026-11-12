@@ -1,0 +1,16 @@
+%% Representative Mermaid flowchart for the Designs import PoC (LAZYAGENTS-145).
+flowchart LR
+  start([Open cart]) --> cart[Cart]
+  cart -->|Checkout| ship[Shipping address]
+  subgraph pay [Payment]
+    card[Card details] --> check{Card OK?}
+    check -- yes --> charge[(Charge card)]
+    check -. no .-> declined[Declined banner]
+    declined -.->|retry| card
+  end
+  ship --> card
+  charge ==> done((Done))
+  charge --> email[Send receipt] & ledger[Update ledger]
+  email --- archive>Archive]
+  classDef warn fill:#f96
+  class declined warn
