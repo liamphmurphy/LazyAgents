@@ -178,7 +178,7 @@ test("⌘. hides the Vesper sidebar and the dock, and restores both without touc
 
   await page.keyboard.press(`${mod}+Period`);
   await expect(menu).toBeVisible();
-  await expect(menu).toHaveAttribute("data-expanded", "");
+  await expect(menu).toHaveAttribute("data-expanded", "true");
   await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBe("1");
 });

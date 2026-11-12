@@ -189,7 +189,8 @@ export function EditorLayout({
           </aside>
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
-        {docked && !compact && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={panels} />}
+        {/* An app's panels unmount while the dock is collapsed, as they always have. */}
+        {docked && !compact && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open ? panels : null} />}
       </div>
       {compact && docked && (
         <Sheet open={sheetOpen} onOpenChange={(o) => (o ? setSheetOpen(true) : dispatch({ type: "collapse" }))} title={active?.label ?? ""} className="h-[85dvh]">
@@ -221,8 +222,8 @@ export function dockPanels(uid: string, tabs: DockTab[], activeId: string | unde
 /**
  * The desktop dock on the right of an EditorLayout or the chat: a tab strip with ⇥ over the active
  * tab's panel, or, collapsed, a 44px rail of tab icons in the same place. Controlled: the owner
- * keeps the state (EditorLayout in localStorage, the chat in the URL). The panels stay mounted
- * while collapsed. `overlay` is the breakpoint below which the open dock floats over the content.
+ * keeps the state (EditorLayout in localStorage, the chat in the URL). By default the panels stay
+ * mounted while collapsed (the chat's playground shouldn't reload). `overlay` is the breakpoint below which the open dock floats over the content.
  */
 export function Dock({
   uid,
@@ -236,6 +237,7 @@ export function Dock({
   tabs: DockTab[];
   state: DockState;
   dispatch: (a: DockAction) => void;
+  /** The tab panels, if not the default dockPanels; null renders none (they unmount while collapsed). */
   panels?: ReactNode;
   overlay?: "xl" | "lg";
 }) {
@@ -288,7 +290,7 @@ export function Dock({
             <span aria-hidden>⇥</span>
           </button>
         </div>
-        {panels ?? dockPanels(uid, tabs, active?.id)}
+        {panels === undefined ? dockPanels(uid, tabs, active?.id) : panels}
       </aside>
       {!state.open && (
         <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">

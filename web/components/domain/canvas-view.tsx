@@ -544,7 +544,8 @@ export function CanvasDock({ chatId, live, readOnly, agent }: { chatId: string; 
   const panel = useCanvasPanel();
   const canvases = useChatCanvases(chatId, live).data?.canvases;
   const id = panel.focus ?? canvases?.at(-1)?.id;
-  if (!id) return null;
+  // While it's over the window (CanvasFullscreen) it shows only there.
+  if (!id || panel.maximized) return null;
   return (
     <section aria-label="Canvas" data-testid="canvas-dock" className="flex min-h-0 flex-1 flex-col bg-surface-sunken">
       <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onFullscreen={() => panel.maximize(id)} onClose={panel.exitFull} />

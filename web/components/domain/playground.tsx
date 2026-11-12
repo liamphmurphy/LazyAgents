@@ -243,13 +243,15 @@ export function PlaygroundFullscreen({ chatId }: { chatId: string }) {
   const panel = usePlaygroundPanel();
   const pg = useChatPlayground(chatId).data;
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
-  const exit = useRef(panel.exitFull);
+  // Only while it's showing: Escape elsewhere mustn't open the playground (in the dock, as a tab).
+  const shown = panel.fullscreen && !!pg;
+  const exit = useRef<(() => void) | null>(null);
   useEffect(() => {
-    exit.current = panel.exitFull;
+    exit.current = shown ? panel.exitFull : null;
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current();
+      if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

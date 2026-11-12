@@ -396,9 +396,12 @@ export function ChatActivity({ chatId }: { chatId: string }) {
   const focus = useActivityFocus();
   if (!chat) return null;
   return (
-    <div data-testid="chat-activity" className="flex-1 overflow-y-auto px-4 py-4">
-      <ActivityBody chat={chat} list={list} groups={groups} focus={focus} />
-    </div>
+    // Its own tooltip provider: the dock sits outside the conversation's.
+    <Tooltip.Provider delayDuration={200}>
+      <div data-testid="chat-activity" className="flex-1 overflow-y-auto px-4 py-4">
+        <ActivityBody chat={chat} list={list} groups={groups} focus={focus} />
+      </div>
+    </Tooltip.Provider>
   );
 }
 
