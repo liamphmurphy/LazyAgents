@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type ReactNode, type RefObject } from "react";
+import { Fragment, useState, type ReactNode, type RefObject } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { addChip, chipFromTarget, removeChip, type Chip } from "@/lib/chat-context";
 import { CHAT_COMMANDS, commandMenu, literalBody, parseCommand } from "@/lib/chat-commands";
 import { insertMention, mentionQuery, mentionSuggestions } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
+import type { ComposerOption, ComposerOptionId } from "@/lib/composer-options";
 import { LinkEditor } from "@/components/domain/link-editor";
 import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-chips";
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
@@ -28,9 +29,11 @@ export type ComposerCommands = {
 
 /**
  * The one message box, for a conversation and for the welcome before its first message:
- * [[ context and Add context, files, @ persona mentions, / commands, then the caller's own
- * options (left) and actions (right, before Send). Its parent owns the draft, chips and files
- * so it can send them, clear them and seed them from links.
+ * [[ context and Add context, files, @ persona mentions, / commands. Its controls come from
+ * the caller's composerOptions list: the "options" ones on the left, the "actions" ones on the
+ * right before the caller's actions (Stop) and Send; controls holds each one's control, while
+ * Add context and Attach are the composer's own. Its parent owns the draft, chips and files so
+ * it can send them, clear them and seed them from links.
  */
 export function Composer({
   text,
@@ -47,6 +50,7 @@ export function Composer({
   disabled,
   rows = 1,
   options,
+  controls = {},
   actions,
   send,
   onCycle,
@@ -68,7 +72,10 @@ export function Composer({
   placeholder: string;
   disabled: boolean;
   rows?: number;
-  options?: ReactNode;
+  /** composerOptions(…): which controls show, in order. */
+  options: ComposerOption[];
+  controls?: Partial<Record<ComposerOptionId, ReactNode>>;
+  /** Shown after the option actions, before Send (Stop). */
   actions?: ReactNode;
   send: { label: string; disabled: boolean; title?: string; tone?: SendTone };
   /** Tab in a draft with no menu open: the caller switches how Send sends (back for Shift+Tab). */
@@ -144,6 +151,14 @@ export function Composer({
     if (!match) return setCommandError(`No ${command.args} matches “${arg}”.`);
     runCommand(match.run);
   };
+  const control = (o: ComposerOption) =>
+    o.id === "context" ? (
+      <AddContext key={o.id} onPick={attach} onClosed={() => inputRef.current?.focus()} disabled={disabled} compact create={create} />
+    ) : o.id === "attach" ? (
+      <AttachButton key={o.id} onFiles={files.add} disabled={disabled} compact />
+    ) : (
+      <Fragment key={o.id}>{controls[o.id]}</Fragment>
+    );
   const submitComposer = () => {
     const command = parseCommand(text);
     if (command) runTyped(command);
@@ -295,11 +310,10 @@ export function Composer({
           {/* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */}
           <div className="flex items-end gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <AddContext onPick={attach} onClosed={() => inputRef.current?.focus()} disabled={disabled} compact create={create} />
-              <AttachButton onFiles={files.add} disabled={disabled} compact />
-              {options}
+              {options.filter((o) => o.place === "options").map(control)}
             </div>
             <div className="flex flex-none items-center gap-1">
+              {options.filter((o) => o.place === "actions").map(control)}
               {actions}
               <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
             </div>

@@ -110,6 +110,14 @@ export function ModelPicker({
 /** The composer's short effort name: "Auto" rather than "Automatic", which the menu spells out. */
 const effortShort = (e: Effort | undefined) => (e ? EFFORT_LABELS[e] : "Auto");
 
+/** What the composer's model control reads: the model, and the effort unless both are automatic. */
+export function modelEffortSummary(groups: Group[] | undefined, value: Selection, hasEfforts: boolean, effort: Effort | undefined) {
+  const model = value.auto ? "Auto" : modelLabel(groups, value).model;
+  // "Auto · Auto" says nothing twice: an all-automatic choice is just "Auto".
+  const shown = hasEfforts && !(value.auto && !effort) ? effortShort(effort) : undefined;
+  return { model, effort: shown, text: shown ? `${model} · ${shown}` : model };
+}
+
 /**
  * The composer's model and effort, as one quiet control ("Opus 5.5 · Auto"): they're set
  * together and rarely change. One menu: the models by harness, then the reasoning effort
@@ -133,10 +141,8 @@ export function ModelEffortPicker({
   disabled?: boolean;
 }) {
   const l = modelLabel(groups, value);
-  const model = value.auto ? "Auto" : l.model;
   const options: (Effort | undefined)[] = efforts.length ? [undefined, ...efforts] : [];
-  // "Auto · Auto" says nothing twice: an all-automatic choice is just "Auto".
-  const showEffort = options.length > 0 && !(value.auto && !effort);
+  const summary = modelEffortSummary(groups, value, efforts.length > 0, effort);
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -148,9 +154,9 @@ export function ModelEffortPicker({
           className={composerGhost}
         >
           <span className="truncate">
-            {model}
-            {showEffort && <span className="text-fg-tertiary"> · </span>}
-            {showEffort && effortShort(effort)}
+            {summary.model}
+            {summary.effort && <span className="text-fg-tertiary"> · </span>}
+            {summary.effort}
           </span>
           <Icon name="chev" size={13} strokeWidth={1.6} className="flex-none text-fg-tertiary" />
         </button>
