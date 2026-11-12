@@ -186,6 +186,15 @@ func claim(ctx context.Context, d Deps, c agents.Caller, in ClaimIn) (any, error
 		delete(out, "memory")
 		out["next"] = "Your instructions and available context are already in AGENTS.md. The ticket is in ticket_details, so skip get_ticket; read only context relevant to this task, and post_plan before editing. Work directly by default; delegate only when justified. Reuse existing session context on resume."
 	}
+	// A retry would otherwise start cold and repeat the last attempt's dead end.
+	prior, err := priorRuns(ctx, d, run)
+	if err != nil {
+		return nil, err
+	}
+	if len(prior) > 0 {
+		out["prior_attempts"] = len(prior)
+		out["next"] = fmt.Sprintf("This ticket was tried %d time(s) before: call get_prior_attempts before post_plan to see how it ended and where its work was saved. ", len(prior)) + out["next"].(string)
+	}
 	if t, err := d.Q.GetTicketByID(ctx, *run.TicketID); err == nil {
 		out["requires_mockup"] = t.RequiresMockup
 		if out["mockup"], err = mockupInfo(ctx, d, t); err != nil {
@@ -898,6 +907,7 @@ var Tools = []Tool{
 		func(ctx context.Context, d Deps, c agents.Caller, in PRIn) (any, error) {
 			return ok(nil), d.Runs.SetPR(ctx, c, in.Ticket, in.URL, in.Draft)
 		}),
+	define("get_prior_attempts", "Earlier runs on your ticket, newest first: how each ended and why, its plan, and the branch its work was saved to. Read it before planning when your ticket was tried before, so you don't repeat a dead end.", getPriorAttempts),
 	define("check_criterion", "Tick acceptance criteria once you've verified them; pass ns to tick several in one call.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CriterionIn) (any, error) {
 			if (in.N != 0) == (len(in.Ns) > 0) {
