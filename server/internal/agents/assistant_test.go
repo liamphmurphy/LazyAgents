@@ -70,3 +70,13 @@ func TestAssistantInstructionsInteractiveApps(t *testing.T) {
 		}
 	}
 }
+
+// The canvas section says when a mockup is a single svg canvas and when it is
+// a design, so personas don't have to guess between the two tools.
+func TestAssistantCanvasSectionRoutesMockupsAndDesigns(t *testing.T) {
+	for _, want := range []string{"Mockup or design?", "design_create", "canvas_create with kind svg", "start with a single svg canvas"} {
+		if !strings.Contains(agents.AssistantCanvasSection, want) {
+			t.Errorf("canvas section lacks %q", want)
+		}
+	}
+}
