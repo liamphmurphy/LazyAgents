@@ -36,7 +36,7 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
-  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string;
+  created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string; temporary?: boolean;
   effort?: Effort; auto_model?: boolean;
   // Personas that joined besides the host (chat_participants); listed by their persona filter too.
   guest_persona_ids?: string[];
@@ -687,6 +687,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         harness: (b.harness as Harness) ?? "claude-code", model: String(b.model ?? "opus-5.5"), effort: b.effort as Effort | undefined,
         state: "idle", archived: false, revision: 1, message_count: 0, created_at: now(), updated_at: now(),
         persona_id: (b.persona_id as string | undefined) ?? defaultPersona()?.id,
+        ...(b.temporary ? { temporary: true } : {}),
       };
       // A coding persona's chat works in the requested repo (default: its first) on its own branch.
       const owner = personas.find((p) => p.id === c.persona_id);

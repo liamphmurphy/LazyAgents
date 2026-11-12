@@ -50,7 +50,7 @@ import { SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
@@ -73,17 +73,16 @@ import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitc
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
-import { SecretsChip } from "./secrets-chip";
+import { ChatTitleMenu } from "./title-menu";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
 import { CompactChatHeader } from "./compact-chat-header";
 import { useCompact } from "@/lib/viewport";
 import { composerOptions } from "@/lib/composer-options";
-import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
+import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
-import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 import { hoverReveal } from "@/lib/reveal";
@@ -861,34 +860,13 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
         <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
-          <h1 className="min-w-0 truncate text-[14.5px] font-semibold">{chatTitle(c)}</h1>
-          {group && (
-            <span
-              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden"
-              data-testid="chat-participants"
-              title={participants.map((p) => p.name).join(", ")}
-            >
-              <span className="sr-only">Personas: </span>
-              <PersonaStack personas={participants} />
-              <span className="truncate">
-                {participants.map((p, i) => (
-                  <span key={p.id ?? p.name}>
-                    {i > 0 && <span className="text-fg-tertiary">, </span>}
-                    <PersonaName persona={p} />
-                  </span>
-                ))}
-              </span>
-            </span>
-          )}
-          {c.workspace_path && <WorkspaceFolderChip path={c.workspace_path} className="max-md:hidden @max-[720px]:hidden" />}
-          <SecretsChip chatId={c.id} />
-          {c.repo_url && c.commit_email && myEmails.length > 1 && (
-            <CommitEmailChip email={c.commit_email} open={commitPickerOpen} onClick={() => setCommitPickerOpen((o) => !o)} />
-          )}
-          {/* In a space the project sits with the space's context chips below. */}
-          {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
-          {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-xs text-fg-secondary">Archived</span>}
-          {c.temporary && <TemporaryBadge />}
+          <ChatTitleMenu
+            chat={c}
+            participants={participants}
+            running={running}
+            commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
+            onCommitEmail={() => setCommitPickerOpen((o) => !o)}
+          />
           <span className="flex-1" />
           <ChatRunsPill chatId={c.id} />
           {!dockActivity && (

@@ -389,6 +389,7 @@ test("Temporary on the Welcome makes the chat temporary", async ({ page }) => {
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
   expect(mock.created).toEqual([{ temporary: true }]);
+  await expect(page.getByTestId("chat-title-status").getByRole("img", { name: /^Temporary chat/ })).toBeVisible();
   expect(mock.unhandled).toEqual([]);
 });
 

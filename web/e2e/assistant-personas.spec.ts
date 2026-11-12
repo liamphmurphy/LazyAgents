@@ -257,9 +257,11 @@ test("a chat whose checkout is a host folder shows the folder with a copy button
   const path = "/Users/me/vesper/workspaces/0199aaaa-run";
   mock.chats[0].workspace_path = path;
   await page.reload();
-  const chip = page.getByTestId("workspace-folder").first();
+  await expect(page.getByTestId("chat-title-status").getByRole("img", { name: `Workspace folder: ${path}` })).toBeVisible();
+  await page.getByTestId("chat-title-menu").click();
+  const chip = page.getByTestId("workspace-folder");
   await expect(chip).toContainText(path);
   await expect(chip).toHaveAttribute("title", `Checkout on this machine:\n${path}`);
-  await expect(chip.getByRole("button", { name: "Copy folder path" })).toBeVisible();
+  await expect(chip).toHaveAccessibleName(`Copy folder path ${path}`);
   expect(mock.unhandled).toEqual([]);
 });

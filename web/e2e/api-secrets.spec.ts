@@ -56,7 +56,7 @@ test("a request with a secret waits in the chat; writes can only be allowed once
   await expect(card).toContainText("api.acme.com is an allowed host");
   await expect(card.getByRole("button", { name: "Always allow reads" })).toHaveCount(0);
   await expect(card.getByTestId("secret-approval-body")).toHaveText('{"order":"ord_9f2"}');
-  await expect(page.getByTestId("secrets-chip")).toContainText("acme-jwt waiting");
+  await expect(page.getByTestId("chat-title-status").getByRole("img", { name: "Secret acme-jwt waiting" })).toBeVisible();
   await card.getByRole("button", { name: "Allow once" }).click();
   await expect(card).toHaveCount(0);
   expect(mock.secretDecisions).toEqual(["allow"]);
@@ -64,7 +64,9 @@ test("a request with a secret waits in the chat; writes can only be allowed once
   // Afterwards the header says it was used, and it can be turned off for this chat.
   mock.chatSecrets.push({ id: "21111111-1111-4111-8111-111111111112", name: "Acme API JWT", handle: "acme-jwt", calls: 1, methods: ["POST"], last_used_at: new Date().toISOString(), enabled: true });
   // Chat usage polls every 5 s.
-  await expect(page.getByTestId("secrets-chip")).toContainText("acme-jwt used 1×", { timeout: 10_000 });
+  await expect(page.getByTestId("chat-title-status").getByRole("img", { name: "Secrets: acme-jwt used 1×" })).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId("chat-title-menu").click();
+  await expect(page.getByTestId("secrets-chip")).toContainText("acme-jwt used 1×");
   await page.getByTestId("secrets-chip").click();
   await page.getByRole("button", { name: "Turn off for this chat" }).click();
   await expect.poll(() => mock.chatSecrets[0].enabled).toBe(false);
