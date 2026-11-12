@@ -2,8 +2,10 @@ package agentapi
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -31,6 +33,9 @@ func designFlows(ctx context.Context, d Deps, c agents.Caller, in DesignFlowsIn)
 		return nil, apperr.Invalid("canvas_id", "isn't a design")
 	}
 	v, err := d.Q.LatestChatCanvasVersion(ctx, cv.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}

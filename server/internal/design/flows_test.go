@@ -89,7 +89,7 @@ func TestFlowsSkipBrokenLinks(t *testing.T) {
 }
 
 func TestMermaidQuotesLabels(t *testing.T) {
-	if got := mermaidText("Say \"hi\"\nnow"); got != `"Say #quot;hi#quot; now"` {
+	if got := mermaidText("Say \"hi\"\nnow #1;"); got != `"Say #quot;hi#quot; now #35;1;"` {
 		t.Fatal(got)
 	}
 }

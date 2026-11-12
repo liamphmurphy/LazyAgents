@@ -1,7 +1,8 @@
 // Prototype links (ADR-designs §3.1 Link): the Prototype tab's edits, the
 // wires on the canvas and Present mode's player. Pure, so it's unit-tested.
-//   - A link whose target is no longer a top-level frame (removed by an edit
-//     that merged in) is broken: the editor flags it, Present ignores it.
+//   - A link whose target no longer exists (removed by an edit that merged
+//     in) is broken: the editor flags it, Present ignores it. The validator
+//     still refuses a target that exists but isn't a top-level frame.
 //   - Every edit returns the same design object when nothing changes.
 import { ancestors, find, newId } from "./edit.ts";
 import type { Design, DesignNode, Link } from "./schema.ts";

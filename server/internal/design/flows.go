@@ -98,11 +98,11 @@ func FlowsOf(d Doc, page string) (Flows, error) {
 		id := l["id"].(string)
 		from, ok := where[l["from"].(string)]
 		to, okTo := where[l["to"].(string)]
-		if !ok || !okTo {
-			out.Broken = append(out.Broken, id)
+		if page != "" && (!ok || from.page != page) {
 			continue
 		}
-		if page != "" && from.page != page {
+		if !ok || !okTo {
+			out.Broken = append(out.Broken, id)
 			continue
 		}
 		addScreen(from.screen, from.page)
@@ -128,10 +128,10 @@ func intPtr(v any) *int {
 	return &i
 }
 
-// mermaidText quotes a label for Mermaid: in double quotes, with quotes as
-// the #quot; entity and line breaks as spaces.
+// mermaidText quotes a label for Mermaid: in double quotes, with # and
+// quotes as entities (Mermaid reads "#…;" as one) and line breaks as spaces.
 func mermaidText(s string) string {
-	s = strings.NewReplacer(`"`, "#quot;", "\n", " ", "\r", " ").Replace(s)
+	s = strings.NewReplacer("#", "#35;", `"`, "#quot;", "\n", " ", "\r", " ").Replace(s)
 	return `"` + s + `"`
 }
 

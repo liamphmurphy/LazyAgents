@@ -46,7 +46,8 @@ function FrameView({ design, laid, frame, hotspots, hints, onLink, assetUrl, lab
             <LaidNodeSvg ops={node.ops} uid={`pr${frame}`} assetUrl={assetUrl} />
           </svg>
           {onLink &&
-            hotspots.map((l) => {
+            // After-delay links have no hotspot: they fire on their own.
+            hotspots.filter((l) => l.trigger !== "after-delay").map((l) => {
               const hb = laid.boxes.get(l.from);
               if (!hb) return null;
               const name = design.pages.flatMap((p) => p.children).find((n) => n.id === l.to)?.name ?? "the next frame";
@@ -108,6 +109,8 @@ export function PresentDesign({ id }: { id: string }) {
   const start = useMemo(() => (design ? startScreen(design, search.get("start"), search.get("page")) : undefined), [design, search]);
   const [player, setPlayer] = useState<Player>();
   const [move, setMove] = useState<Move>();
+  /** Counts frames shown (every follow, back and restart), so after-delay timers restart with each visit. */
+  const [visit, setVisit] = useState(0);
   const p = player && design && screens(design).some((s) => s.id === player.at) ? player : start ? play(start.id) : undefined;
   const at = p?.at;
 
@@ -146,6 +149,7 @@ export function PresentDesign({ id }: { id: string }) {
       if (next === p) return;
       setMove(moving(p.at, l.transition, l.duration_ms));
       setPlayer(next);
+      setVisit((v) => v + 1);
     },
     [p],
   );
@@ -157,20 +161,28 @@ export function PresentDesign({ id }: { id: string }) {
     const came = design.links.find((l) => l.to === p.at && hotspotsOf(design, prev.at).includes(l));
     setMove(came ? moving(p.at, reverse(came.transition), came.duration_ms, true) : undefined);
     setPlayer(prev);
+    setVisit((v) => v + 1);
   }, [p, design]);
   const again = useCallback(() => {
     if (!p) return;
     setMove(undefined);
     setPlayer(restart(p));
+    setVisit((v) => v + 1);
   }, [p]);
 
   const hotspots = useMemo(() => (design && at ? hotspotsOf(design, at) : []), [design, at]);
-  // After-delay links fire once the frame has been shown for their delay.
+  // After-delay links fire once the frame has been shown (its transition done) for their delay.
+  // The timer calls the latest go, so it follows from the player as it is then.
+  const goRef = useRef(go);
   useEffect(() => {
-    const timers = hotspots.filter((l) => l.trigger === "after-delay").map((l) => setTimeout(() => go(l), l.delay_ms ?? 0));
+    goRef.current = go;
+  }, [go]);
+  const settled = !move;
+  useEffect(() => {
+    if (!settled) return;
+    const timers = hotspots.filter((l) => l.trigger === "after-delay").map((l) => setTimeout(() => goRef.current(l), l.delay_ms ?? 0));
     return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per frame shown, not per render
-  }, [at, hotspots]);
+  }, [visit, hotspots, settled]);
 
   useEffect(() => {
     root.current?.requestFullscreen?.().catch(() => flash("Press F for fullscreen"));
@@ -212,7 +224,9 @@ export function PresentDesign({ id }: { id: string }) {
     const frames = transitionFrames(move.transition)!;
     const opts: KeyframeAnimationOptions = { duration: move.duration, easing: "ease-out", fill: "both" };
     const a = enterRef.current?.animate(frames.enter, opts);
-    leaveRef.current?.animate(frames.leave, opts);
+    // Going back, the old frame is on top: a dissolve fades it out (slides move it away).
+    const fadeOut = move.back && !move.transition.startsWith("slide");
+    leaveRef.current?.animate(fadeOut ? [{ opacity: 1 }, { opacity: 0 }] : frames.leave, opts);
     let live = true;
     // Without the element (it never mounted) there's nothing to wait for.
     (a?.finished ?? Promise.resolve()).then(
