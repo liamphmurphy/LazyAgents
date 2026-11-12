@@ -5312,6 +5312,13 @@ export interface components {
             chat_id: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: int32
+             * @description The current version, for its body (getDesignVersion)
+             */
+            seq: number;
+            /** @description A persona wrote at least one of its versions */
+            persona_edited: boolean;
             /** Format: uuid */
             project_id?: string | null;
             pages: number;

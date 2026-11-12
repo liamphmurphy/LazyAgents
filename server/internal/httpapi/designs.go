@@ -94,7 +94,7 @@ func (s *Server) ListDesigns(ctx context.Context, req api.ListDesignsRequestObje
 	for _, r := range rows {
 		pages, frames := design.Summary(r.Body)
 		out = append(out, api.DesignSummary{Id: r.ID, Title: r.Title, ChatId: r.ChatID, UpdatedAt: r.UpdatedAt, ProjectId: nullUUID(r.ProjectID),
-			Pages: pages, Frames: frames, PendingProposals: int(r.PendingProposals)})
+			Seq: r.Seq, Pages: pages, Frames: frames, PendingProposals: int(r.PendingProposals), PersonaEdited: r.PersonaEdited})
 	}
 	return api.ListDesigns200JSONResponse{Designs: out}, nil
 }

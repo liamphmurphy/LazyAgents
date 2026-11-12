@@ -323,11 +323,12 @@ func (q *Queries) ListDesignProposals(ctx context.Context, arg ListDesignProposa
 }
 
 const listUserDesigns = `-- name: ListUserDesigns :many
-SELECT cv.id, cv.title, cv.updated_at, c.id AS chat_id, v.body, s.project_id,
-  (SELECT count(*) FROM design_proposals p WHERE p.canvas_id = cv.id AND p.status = 'pending')::int AS pending_proposals
+SELECT cv.id, cv.title, cv.updated_at, c.id AS chat_id, v.seq, v.body, s.project_id,
+  (SELECT count(*) FROM design_proposals p WHERE p.canvas_id = cv.id AND p.status = 'pending')::int AS pending_proposals,
+  EXISTS (SELECT 1 FROM chat_canvas_versions a WHERE a.canvas_id = cv.id AND a.author_type = 'agent')::boolean AS persona_edited
 FROM chat_canvases cv
 JOIN chat_sessions c ON c.id = cv.session_id
-JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
+JOIN LATERAL (SELECT seq, body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
 LEFT JOIN design_settings s ON s.canvas_id = cv.id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND cv.kind = 'design' AND NOT c.hidden
   AND ($3::uuid IS NULL OR s.project_id = $3::uuid)
@@ -346,9 +347,11 @@ type ListUserDesignsRow struct {
 	Title            string
 	UpdatedAt        time.Time
 	ChatID           uuid.UUID
+	Seq              int32
 	Body             string
 	ProjectID        *uuid.UUID
 	PendingProposals int32
+	PersonaEdited    bool
 }
 
 // The person's designs with their current bodies, most recently changed first.
@@ -366,9 +369,11 @@ func (q *Queries) ListUserDesigns(ctx context.Context, arg ListUserDesignsParams
 			&i.Title,
 			&i.UpdatedAt,
 			&i.ChatID,
+			&i.Seq,
 			&i.Body,
 			&i.ProjectID,
 			&i.PendingProposals,
+			&i.PersonaEdited,
 		); err != nil {
 			return nil, err
 		}
