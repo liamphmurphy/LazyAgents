@@ -27,7 +27,7 @@ const CHIP_NEEDS_MS = 8000;
 const CHIP_LINGER_MS = 2000;
 const CHIPS_MAX = 2;
 
-/** Clears bottom bars and floating buttons (bulk bar, jump-to-latest). */
+/** Clears bottom bars and floating buttons (bulk bar, jump-to-latest); the compact tab bar is cleared through --tab-bar-h. */
 const ORB_BOTTOM = 80;
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -369,7 +369,7 @@ export function ActivityOrb() {
   const usage = [CLAUDE, CODEX].flatMap((id) => harnesses.filter((h) => h.harness === id));
 
   return (
-    <div ref={root} role="region" aria-label="Activity" className="orb-root" style={{ bottom }}>
+    <div ref={root} role="region" aria-label="Activity" className="orb-root" style={{ bottom: `max(${bottom}px, calc(var(--tab-bar-h, 0px) + 12px))` }}>
       <div className="orb-chips">
         {chips.map((c) => <Chip key={c.key} chip={c} onOpen={onChip} onGone={onGone} />)}
       </div>

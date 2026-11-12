@@ -358,7 +358,7 @@ export function ChatScreen({ id }: { id?: string }) {
   const conversation = useNewConversation(id);
   const resolving = !id && !fresh && !wizard && (!chats.data || !!newest);
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <div className="relative flex min-h-0 flex-1 max-md:flex-col">
           <div className="flex min-w-0 flex-1 flex-col">
             {noHarness && (

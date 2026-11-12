@@ -24,7 +24,7 @@ export function DocsScreen() {
     create.mutate(title, { onSuccess: (d) => router.push(`/apps/docs/${d.id}`) });
   };
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar crumbs={[{ label: "Apps" }, { label: "Docs" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[860px] flex-col gap-5 px-6 py-6">

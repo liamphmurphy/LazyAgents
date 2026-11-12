@@ -3,6 +3,7 @@
 import { useRouter, useSelectedLayoutSegment } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { useBootstrap } from "@/lib/api/hooks";
+import { useCompact } from "@/lib/viewport";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { ActivityOrb } from "./activity-orb";
@@ -10,6 +11,7 @@ import { CommandMenu } from "./command-menu";
 import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
 import { SystemBanner } from "./system-banner";
+import { TabBar } from "./tab-bar";
 
 /** Global single-key shortcuts (DESIGN.md §6). */
 function useShortcuts() {
@@ -50,7 +52,7 @@ function SidebarSkeleton() {
     // Matches the menu's collapsed default (an icon rail).
     <aside
       aria-busy="true"
-      className="flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3"
+      className="flex w-[52px] max-md:hidden flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3"
     >
       {[0, 1, 2, 3, 4, 5, 6].map((i) => (
         <Skeleton key={i} className="size-[26px]" />
@@ -71,14 +73,15 @@ function SectionFade({ children }: { children: ReactNode }) {
 }
 
 /**
- * Wrapping flex row: below ~800px the sidebar stacks above the content
- * (DESIGN.md §3 Responsive).
+ * Wide: a wrapping flex row with the sidebar beside the content. Below COMPACT:
+ * the content over a bottom tab bar, which detail screens hide (DESIGN.md §3 Responsive).
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useBootstrap();
+  const compact = useCompact();
   useShortcuts();
   return (
-    <div className="flex min-h-dvh flex-wrap bg-bg text-fg">
+    <div className={compact ? "flex min-h-dvh flex-col bg-bg text-fg" : "flex min-h-dvh flex-wrap bg-bg text-fg"}>
       <LiveUpdates />
       {/* usePathname needs a Suspense boundary for prerendering. */}
       <Suspense fallback={null}>
@@ -88,20 +91,25 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <ActivityOrb />
       </Suspense>
-      {data ? (
+      {compact ? null : data ? (
         <Suspense fallback={<SidebarSkeleton />}>
           <Sidebar />
         </Suspense>
       ) : (
         <SidebarSkeleton />
       )}
-      <main className="flex min-w-0 flex-[999_1_560px] flex-col">
+      <main className={compact ? "flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-h,0px)]" : "flex min-w-0 flex-[999_1_560px] flex-col"}>
         <SystemBanner />
         {/* The segment needs a Suspense boundary for prerendering; the page still paints meanwhile. */}
         <Suspense fallback={<div className={PAGE}>{children}</div>}>
           <SectionFade>{children}</SectionFade>
         </Suspense>
       </main>
+      {compact && (
+        <Suspense fallback={null}>
+          <TabBar />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -79,7 +79,7 @@ export function DecksScreen() {
   };
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar crumbs={[{ label: "Apps" }, { label: "Slides" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1000px] flex-col gap-5 px-6 py-6 max-sm:px-4">

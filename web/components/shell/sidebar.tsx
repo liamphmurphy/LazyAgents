@@ -9,6 +9,7 @@ import { useBootstrap } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { useNavCounts } from "@/lib/use-nav-counts";
 import { WORK_ITEMS, isActive, type NavBadge } from "@/lib/project-scope";
+import { badgeLabel } from "@/lib/tab-bar";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
 import { ChatHistory, NewConversationButton, PersonaRail } from "@/app/(app)/chat/_components/chat-history";
@@ -16,15 +17,6 @@ import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { AppsMenu } from "./apps-menu";
-
-const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
-
-/** The rail shows only a dot, so a count has to reach screen readers through the name. */
-function railLabel(label: string, badge: NavBadge | undefined, counts: Record<NavBadge, number>) {
-  const n = badge ? counts[badge] : 0;
-  const word = badge && BADGE_WORD[badge];
-  return n > 0 && word ? `${label} ${n} ${word}` : label;
-}
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
@@ -206,7 +198,7 @@ export function Sidebar() {
         <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
           <div className="flex w-full flex-col gap-px">
             {WORK_ITEMS.map((n) => (
-              <NavLink key={n.href} label={railLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
+              <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
                 <Icon name={n.icon} />
                 {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
               </NavLink>
