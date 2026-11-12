@@ -7,15 +7,17 @@ import { useDoc, useMarkDocReviewed } from "@/lib/api/docs-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import type { Schemas } from "@/lib/api/client";
 import { editorKeeps, locateQuote } from "@/lib/doc-markdown";
-import { reviewBase, reviewSegments } from "@/lib/doc-review";
+import { reviewBase, reviewSegments, splitBlocks } from "@/lib/doc-review";
+import type { DockState } from "@/lib/editor-layout";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
-import { TopBar } from "@/components/shell/topbar";
+import { EditorLayout, type DockTab, type EditorHeader } from "@/components/shell/editor-layout";
 import { CanvasView, Rail, type Target } from "@/components/domain/canvas-view";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
+import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { DocEditor, type DocEditorHandle, type Picked, type SaveState } from "./doc-editor";
-import { DocReview } from "./doc-review";
+import { DocReview, DocReviewList, useDocReview } from "./doc-review";
 import { ExportMenu } from "./export-menu";
 
 type Comment = Schemas["ChatCanvasComment"];
@@ -24,10 +26,19 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Not saved", error: "Not saved" };
 
+/** The document's headings, in order, as plain text with their level. */
+function outlineOf(body: string): { level: number; text: string }[] {
+  return splitBlocks(body).flatMap((b) => {
+    const m = /^(#{1,6})\s+(.*)$/.exec(b.split("\n")[0]);
+    return m ? [{ level: m[1].length, text: m[2].replace(/\s+#+\s*$/, "").replace(/[*_`~]|\[([^\]]*)\]\([^)]*\)/g, "$1").trim() }] : [];
+  });
+}
+
 /**
- * A document full page: you type on it, its persona works on it with you.
- * The document's own chat sits beside it; the persona's edits come back as
- * suggestions to accept or reject, and comments sit in the margin.
+ * A document full page, on the shared editor layout: you type on it, its
+ * persona works on it with you from the dock's Chat tab, the persona's edits
+ * come back as suggestions in place (listed in the Review tab), and comments
+ * sit in the margin. The outline of headings is on the left, collapsed by default.
  */
 export function DocScreen({ id }: { id: string }) {
   const doc = useDoc(id);
@@ -37,16 +48,16 @@ export function DocScreen({ id }: { id: string }) {
   const live = chat?.state === "running";
   const readOnly = !!chat?.archived;
   const persona = (chat?.speaker ?? chat?.persona)?.name ?? "Assistant";
+  const look = personaLook(chat?.speaker ?? chat?.persona);
   const head = useChatCanvas(chatId, chatId ? id : undefined, undefined, live);
   const c = head.data;
-  const [chatOpen, setChatOpen] = useState(true);
 
   // The persona's versions since the person's last edit or review wait on
   // them. Nothing is decided mid-turn: the changes are still coming in.
   const base = c ? reviewBase(c.versions, doc.data?.reviewed_seq ?? 0) : 0;
   const reviewing = !!c && !live && base > 0 && c.seq > base;
   const before = useChatCanvas(chatId, reviewing ? id : undefined, base).data;
-  const baseBody = before?.viewing_seq === base ? before.body : undefined;
+  const baseBody = reviewing && before?.viewing_seq === base ? before.body : undefined;
   const actions = useCanvasActions(chatId, id);
   const reviewed = useMarkDocReviewed(id);
   // Versions that changed nothing in the end need no decision.
@@ -54,8 +65,20 @@ export function DocScreen({ id }: { id: string }) {
   useEffect(() => {
     if (empty && c && !reviewed.isPending) reviewed.mutate(c.seq);
   }, [empty, c, reviewed]);
+  const review = useDocReview({
+    base: baseBody,
+    head: baseBody === undefined ? undefined : c?.body,
+    persona,
+    onAcceptAll: () => c && reviewed.mutate(c.seq),
+    onResolve: (body, note) => c && actions.save.mutate({ base_seq: c.seq, body, note }),
+  });
+  const reviewBusy = readOnly || reviewed.isPending || actions.save.isPending;
+  const reviewError = reviewed.error || actions.save.error ? errorText(reviewed.error ?? actions.save.error) : undefined;
+  const suggesting = reviewing && baseBody !== undefined && !empty;
 
   const editable = useMemo(() => (c ? editorKeeps(c.body) : true), [c]);
+  const outline = useMemo(() => (c ? outlineOf(c.body) : []), [c]);
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   // The version the editor's text was last saved as; comments anchor to it.
   const saved = useRef<{ seq: number; body: string }>({ seq: 0, body: "" });
@@ -63,7 +86,24 @@ export function DocScreen({ id }: { id: string }) {
     if (c && c.seq > saved.current.seq) saved.current = { seq: c.seq, body: c.body };
   }, [c]);
   const editor = useRef<DocEditorHandle>(null);
+  const page = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
+
+  // ---- The dock: asking the persona brings Chat up; suggestions arriving bring Review up.
+  const [show, setShow] = useState({ tab: "chat", n: 0 });
+  const showTab = (tab: string) => setShow((s) => ({ tab, n: s.n + 1 }));
+  const [suggestionsShown, setSuggestionsShown] = useState(false);
+  if (suggesting !== suggestionsShown) {
+    setSuggestionsShown(suggesting);
+    if (suggesting) setShow((s) => ({ tab: "review", n: s.n + 1 }));
+  }
+  const [dock, setDock] = useState<DockState>();
+  const chatShowing = !dock || (dock.open && !dock.hidden && dock.tab === "chat");
+  const lastReply = chat?.last_message_at;
+  const [seenReply, setSeenReply] = useState<string>();
+  // The reply that was there on load, or that arrived while Chat showed, counts as read.
+  if (lastReply && seenReply !== lastReply && (chatShowing || seenReply === undefined)) setSeenReply(lastReply);
+  const unread = !chatShowing && !!lastReply && !!seenReply && lastReply !== seenReply && !live;
 
   const send = useSendChatMessage(chatId);
   const [notice, setNotice] = useState<string>();
@@ -82,7 +122,7 @@ export function DocScreen({ id }: { id: string }) {
   const highlights = useMemo(() => open.filter((x) => !x.target_lost && x.anchor.quote).map((x) => ({ quote: x.anchor.quote!, active: x.id === activeId })), [open, activeId]);
 
   const ask = async (body: string) => {
-    setChatOpen(true);
+    showTab("chat");
     await send.mutateAsync({ body });
   };
   const flushed = async () => {
@@ -103,7 +143,7 @@ export function DocScreen({ id }: { id: string }) {
       if (r) {
         const made = await actions.add.mutateAsync({ seq: at.seq, body: message, start: r.start, end: r.end });
         await actions.send.mutateAsync({ comment_ids: [made.id], message });
-        setChatOpen(true);
+        showTab("chat");
       } else await ask(`${message}\n\nThe passage, in the document:\n> ${p.quote.replace(/\n/g, "\n> ")}`);
     } catch (e) {
       setNotice(errorText(e));
@@ -119,130 +159,177 @@ export function DocScreen({ id }: { id: string }) {
       setNotice(errorText(e));
     }
   };
+  // Headings on the page whose text matches, in order; the nth such heading is the outline's nth of that text.
+  const jumpTo = (i: number) => {
+    const h = outline[i];
+    const nth = outline.slice(0, i).filter((x) => x.text === h.text).length;
+    const found = [...(page.current?.querySelectorAll("h1, h2, h3, h4, h5, h6") ?? [])].filter((el) => el.textContent?.trim() === h.text);
+    found[nth]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const title = c?.title ?? doc.data?.title ?? "Document";
   const showRail = !reviewing && editable && (open.length > 0 || resolved.length > 0 || !!target);
+  const saveBad = saveState.s === "error" || saveState.s === "conflict";
 
-  return (
-    <div className="flex h-app flex-col">
-      <TopBar
-        crumbs={[{ label: "Apps" }, { label: "Docs", href: "/apps/docs" }, { label: title }]}
-        actions={
-          doc.data && (
-            <>
-              <span data-testid="doc-presence" className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
-                <span aria-hidden className={cx("grid size-[18px] place-items-center rounded-full bg-accent-soft text-[10px] font-bold text-accent", live && "animate-pulse")}>{persona.slice(0, 1)}</span>
-                {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
+  const header: EditorHeader = {
+    back: { href: "/apps/docs", label: "Docs" },
+    title,
+    saveState: c && (
+      <span data-testid="doc-save-state" title={saveState.message} className={cx(saveBad && "text-pill-blocked-fg")}>
+        {SAVE_LABEL[saveState.s]} · v{c.seq}
+      </span>
+    ),
+    presence: doc.data && (
+      <span data-testid="doc-presence" className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
+        <PersonaAvatar persona={look} size={22} className={cx(live && "animate-pulse ring-2 ring-[#3FC1B0] motion-reduce:animate-none")} />
+        {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
+      </span>
+    ),
+    actions: doc.data ? [<ExportMenu key="share" trigger="Share" id={id} title={title} current={async () => (await flushed()).body} />] : undefined,
+  };
+
+  const failed = doc.isError || head.isError ? (
+    <div className="mx-auto w-full max-w-[720px] p-6">
+      <Banner tone="blocked" title="Couldn’t open this document">{errorText(doc.error ?? head.error)}</Banner>
+    </div>
+  ) : null;
+
+  const main = !c ? (
+    <div aria-busy="true" className="mx-auto flex w-full max-w-[820px] flex-col gap-3 p-6">
+      <Skeleton className="h-7 w-1/2" />
+      <Skeleton className="h-[320px]" />
+    </div>
+  ) : (
+    <div data-testid="doc-page" className="relative flex min-h-0 min-w-0 flex-1">
+      {!outlineOpen && outline.length > 0 && (
+        <Button variant="secondary" className="absolute left-3 top-[52px] z-20 max-md:hidden" aria-label="Show outline" title="Show outline" onClick={() => setOutlineOpen(true)}>
+          <span aria-hidden>☰</span>
+          <span className="max-xl:hidden">Outline</span>
+        </Button>
+      )}
+      <div ref={page} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        {notice && (
+          <p role="alert" className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-pill-blocked-fg">
+            {notice}
+          </p>
+        )}
+        {saveState.s === "conflict" && (
+          <div className="mx-auto mt-3 max-w-[720px] px-8">
+            <Banner tone="blocked" title="This document changed while you were typing">
+              <span className="flex flex-wrap items-center gap-2">
+                Your last edits aren&apos;t saved yet.
+                <Button variant="secondary" onClick={() => editor.current?.takeTheirs(c.seq, c.body)}>Use the latest version</Button>
+                <Button variant="primary" onClick={() => void editor.current?.keepMine(c.seq)}>Keep mine</Button>
               </span>
-              {c && (
-                <span data-testid="doc-save-state" title={saveState.message} className={cx("text-[12px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
-                  {SAVE_LABEL[saveState.s]} · v{c.seq}
-                </span>
-              )}
-              <ExportMenu id={id} title={title} current={async () => (await flushed()).body} />
-              <Button variant={chatOpen ? "secondary" : "primary"} aria-pressed={chatOpen} onClick={() => setChatOpen((o) => !o)}>
-                ✦ {chatOpen ? "Hide chat" : `Chat with ${persona}`}
-              </Button>
-            </>
+            </Banner>
+          </div>
+        )}
+        {reviewing ? (
+          !suggesting ? (
+            <div aria-busy="true" className="mx-auto max-w-[720px] p-8"><Skeleton className="h-[320px]" /></div>
+          ) : (
+            <DocReview review={review} busy={reviewBusy} error={reviewError} />
           )
-        }
-      />
-      {doc.isError || head.isError ? (
-        <div className="mx-auto w-full max-w-[720px] p-6">
-          <Banner tone="blocked" title="Couldn’t open this document">{errorText(doc.error ?? head.error)}</Banner>
-        </div>
-      ) : !c ? (
-        <div aria-busy="true" className="mx-auto flex w-full max-w-[820px] flex-col gap-3 p-6">
-          <Skeleton className="h-7 w-1/2" />
-          <Skeleton className="h-[320px]" />
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1">
-          {chatOpen && (
-            <aside aria-label={`Chat with ${persona}`} data-testid="doc-chat" className="flex min-h-0 w-[380px] flex-none flex-col border-r border-border-subtle bg-sidebar max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[min(380px,100%)] max-lg:shadow-[var(--shadow-float)]">
-              {/* A document keeps its one chat: /new starts another document instead. */}
-              <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/docs")} />
-            </aside>
-          )}
-          <main data-testid="doc-page" className="flex min-h-0 min-w-0 flex-1">
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-              {notice && (
-                <p role="alert" className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-pill-blocked-fg">
-                  {notice}
-                </p>
-              )}
-              {saveState.s === "conflict" && (
-                <div className="mx-auto mt-3 max-w-[720px] px-8">
-                  <Banner tone="blocked" title="This document changed while you were typing">
-                    <span className="flex flex-wrap items-center gap-2">
-                      Your last edits aren&apos;t saved yet.
-                      <Button variant="secondary" onClick={() => editor.current?.takeTheirs(c.seq, c.body)}>Use the latest version</Button>
-                      <Button variant="primary" onClick={() => void editor.current?.keepMine(c.seq)}>Keep mine</Button>
-                    </span>
-                  </Banner>
-                </div>
-              )}
-              {reviewing ? (
-                baseBody === undefined || empty ? (
-                  <div aria-busy="true" className="mx-auto max-w-[720px] p-8"><Skeleton className="h-[320px]" /></div>
-                ) : (
-                  <DocReview
-                    key={`${base}-${c.seq}`}
-                    base={baseBody}
-                    head={c.body}
-                    persona={persona}
-                    busy={readOnly || reviewed.isPending || actions.save.isPending}
-                    error={reviewed.error || actions.save.error ? errorText(reviewed.error ?? actions.save.error) : undefined}
-                    onAcceptAll={() => reviewed.mutate(c.seq)}
-                    onResolve={(body, note) => actions.save.mutate({ base_seq: c.seq, body, note })}
-                  />
-                )
-              ) : editable ? (
-                <DocEditor
-                  ref={editor}
-                  body={c.body}
-                  seq={c.seq}
-                  locked={live || readOnly}
-                  persona={persona}
-                  highlights={highlights}
-                  onSave={async (body, baseSeq) => {
-                    const v = await actions.save.mutateAsync({ base_seq: baseSeq, body, note: "Edited" });
-                    saved.current = { seq: v.seq, body };
-                    return v.seq;
-                  }}
-                  onState={(s, message) => setSaveState({ s, message })}
-                  onAsk={(instruction, after) => void mention(instruction, after)}
-                  onPick={(p, message) => void pick(p, message)}
-                />
-              ) : (
-                <div className="flex min-h-full flex-col bg-surface-sunken">
-                  <p className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-fg-tertiary">
-                    This document has HTML or footnotes the editor can&apos;t keep, so it opens as Markdown. Edit it under Edit.
-                  </p>
-                  <CanvasView chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={persona} page />
-                </div>
-              )}
-            </div>
-            {showRail && (
-              <Rail
-                inline={false}
-                threads={open}
-                replies={replies}
-                resolved={resolved}
-                target={target?.t ?? null}
-                activeId={activeId}
-                setActive={setActiveId}
-                agent={persona}
-                readOnly={readOnly || live}
-                actions={actions}
-                seq={target?.seq ?? c.seq}
-                onComposerDone={() => setTarget(null)}
-                numberOf={(x) => [...open, ...resolved].findIndex((y) => y.id === x.id) + 1}
-              />
-            )}
-          </main>
-        </div>
+        ) : editable ? (
+          <DocEditor
+            ref={editor}
+            body={c.body}
+            seq={c.seq}
+            locked={live || readOnly}
+            persona={persona}
+            highlights={highlights}
+            onSave={async (body, baseSeq) => {
+              const v = await actions.save.mutateAsync({ base_seq: baseSeq, body, note: "Edited" });
+              saved.current = { seq: v.seq, body };
+              return v.seq;
+            }}
+            onState={(s, message) => setSaveState({ s, message })}
+            onAsk={(instruction, after) => void mention(instruction, after)}
+            onPick={(p, message) => void pick(p, message)}
+          />
+        ) : (
+          <div className="flex min-h-full flex-col bg-surface-sunken">
+            <p className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-fg-tertiary">
+              This document has HTML or footnotes the editor can&apos;t keep, so it opens as Markdown. Edit it under Edit.
+            </p>
+            <CanvasView chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={persona} page />
+          </div>
+        )}
+      </div>
+      {showRail && (
+        <Rail
+          inline={false}
+          threads={open}
+          replies={replies}
+          resolved={resolved}
+          target={target?.t ?? null}
+          activeId={activeId}
+          setActive={setActiveId}
+          agent={persona}
+          readOnly={readOnly || live}
+          actions={actions}
+          seq={target?.seq ?? c.seq}
+          onComposerDone={() => setTarget(null)}
+          numberOf={(x) => [...open, ...resolved].findIndex((y) => y.id === x.id) + 1}
+        />
       )}
     </div>
   );
+
+  const left =
+    outlineOpen && c ? (
+      <nav aria-label="Outline" className="flex min-h-0 flex-1 flex-col gap-1 p-3">
+        <div className="flex items-center justify-between px-1 pb-1">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Outline</span>
+          <button type="button" aria-label="Hide outline" title="Hide outline" onClick={() => setOutlineOpen(false)} className="grid size-6 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
+            ×
+          </button>
+        </div>
+        {outline.length ? (
+          <ol className="flex flex-col">
+            {outline.map((h, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => jumpTo(i)}
+                  style={{ paddingLeft: `${8 + (h.level - Math.min(...outline.map((x) => x.level))) * 12}px` }}
+                  className={cx("w-full truncate rounded-md py-1 pr-2 text-left text-[13px] hover:bg-hover", h.level === 1 ? "text-fg" : "text-fg-secondary")}
+                >
+                  {h.text}
+                </button>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="px-1 text-[12px] text-fg-tertiary">No headings yet.</p>
+        )}
+      </nav>
+    ) : undefined;
+
+  const dockTabs: DockTab[] = [
+    {
+      id: "chat",
+      label: "Chat",
+      icon: "msg",
+      avatar: <PersonaAvatar persona={look} size={16} />,
+      busy: live,
+      unread,
+      content: (
+        <div data-testid="doc-chat" aria-label={`Chat with ${persona}`} className="flex min-h-0 flex-1 flex-col">
+          {/* A document keeps its one chat: /new starts another document instead. */}
+          {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/docs")} />}
+        </div>
+      ),
+    },
+  ];
+  if (suggesting)
+    dockTabs.push({
+      id: "review",
+      label: "Review",
+      icon: "check",
+      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{review.left}</span>,
+      content: <DocReviewList review={review} persona={persona} busy={reviewBusy} error={reviewError} />,
+    });
+
+  return <EditorLayout app="docs" header={header} left={left} main={failed ?? main} dock={dockTabs} show={show} onDockChange={setDock} />;
 }
