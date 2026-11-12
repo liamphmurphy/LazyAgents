@@ -845,6 +845,9 @@
 .motion-scrim[data-state="closed"] { animation: motion-fade-out var(--motion-exit) ease-in both; }
 .motion-dialog[data-state="open"] { animation: motion-panel-in var(--motion-slow) var(--motion-ease) both; }
 .motion-dialog[data-state="closed"] { animation: motion-panel-out var(--motion-exit) ease-in both; }
+/* The compact chat's history drawer slides in from the left edge. */
+.motion-drawer-left[data-state="open"] { animation: motion-drawer-left-in var(--motion-slow) var(--motion-ease) both; }
+.motion-drawer-left[data-state="closed"] { animation: motion-drawer-left-out var(--motion-exit) ease-in both; }
 /*
  * Menus and the command menu only animate in: while one plays an exit its dismiss layer is still
  * live, and swallows a quick click on the trigger.
@@ -899,6 +902,8 @@
 @keyframes motion-fade-in { from { opacity: 0; } }
 @keyframes motion-fade-out { to { opacity: 0; } }
 @keyframes motion-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+@keyframes motion-drawer-left-in { from { transform: translateX(-100%); } }
+@keyframes motion-drawer-left-out { to { transform: translateX(-100%); } }
 @keyframes motion-panel-out { to { opacity: 0; transform: translateY(6px) scale(0.985); } }
 @keyframes motion-float-in { from { opacity: 0; transform: scale(0.97); } }
 @keyframes motion-flyout-in { from { opacity: 0; transform: translateX(-8px) scale(0.96); } }
@@ -912,6 +917,7 @@
 @media (prefers-reduced-motion: reduce) {
   .motion-scrim,
   .motion-dialog,
+  .motion-drawer-left,
   .motion-dialog-fast,
   .motion-sheet,
   .motion-float,

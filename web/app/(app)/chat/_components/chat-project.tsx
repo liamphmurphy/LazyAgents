@@ -12,7 +12,10 @@ const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-m
  * The chat's default project: where new tickets and epics go unless the persona names another.
  * The chat reads every project either way. dashed: the chip among a space chat's context chips.
  */
-export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean; dashed?: boolean }) {
+type ProjectChat = { id: string; project?: string; revision: number; archived: boolean };
+
+/** The projects a chat can default to (archived ones only if it already does), and the move to another. */
+export function useChatProject(chat: ProjectChat, disabled: boolean) {
   const boot = useBootstrap();
   const update = useUpdateChat();
   const projects = (boot.data?.projects ?? []).filter((p) => !p.archived || p.key === chat.project);
@@ -21,6 +24,31 @@ export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: stri
   const pick = (project: string) => {
     if (project !== (chat.project ?? "")) update.mutate({ id: chat.id, patch: { revision: chat.revision, project } });
   };
+  return { projects, current, locked, pick, update };
+}
+
+/** No default, then every project, as radio items: inside the picker's menu or a submenu of the compact chat menu. */
+export function ProjectRadioItems({ chat, projects, onPick, itemClassName = item }: { chat: ProjectChat; projects: ReturnType<typeof useChatProject>["projects"]; onPick: (project: string) => void; itemClassName?: string }) {
+  return (
+    <DropdownMenu.RadioGroup value={chat.project ?? ""} onValueChange={onPick}>
+      <DropdownMenu.RadioItem value="" className={itemClassName}>
+        <span className="flex-1 text-fg-secondary">No default</span>
+        <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+      </DropdownMenu.RadioItem>
+      <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
+      {projects.map((p) => (
+        <DropdownMenu.RadioItem key={p.key} value={p.key} className={itemClassName}>
+          <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
+          <span className="flex-1 truncate">{p.name}</span>
+          <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
+        </DropdownMenu.RadioItem>
+      ))}
+    </DropdownMenu.RadioGroup>
+  );
+}
+
+export function ChatProjectPicker({ chat, disabled, dashed }: { chat: ProjectChat; disabled: boolean; dashed?: boolean }) {
+  const { projects, current, locked, pick, update } = useChatProject(chat, disabled);
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -43,20 +71,7 @@ export function ChatProjectPicker({ chat, disabled, dashed }: { chat: { id: stri
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[240px]")}>
-          <DropdownMenu.RadioGroup value={chat.project ?? ""} onValueChange={pick}>
-            <DropdownMenu.RadioItem value="" className={item}>
-              <span className="flex-1 text-fg-secondary">No default</span>
-              <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
-            </DropdownMenu.RadioItem>
-            <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
-            {projects.map((p) => (
-              <DropdownMenu.RadioItem key={p.key} value={p.key} className={item}>
-                <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
-                <span className="flex-1 truncate">{p.name}</span>
-                <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
-              </DropdownMenu.RadioItem>
-            ))}
-          </DropdownMenu.RadioGroup>
+          <ProjectRadioItems chat={chat} projects={projects} onPick={pick} />
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
