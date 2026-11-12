@@ -484,6 +484,10 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("connector", "suggesting a connector");
     case "propose_secret":
       return status("secret", "asking for a secret");
+    case "list_connectors":
+      return status("connector", "checking your connectors");
+    case "list_secret_names":
+      return status("secret", "checking which secrets you have");
     case "list_workflows":
     case "read_workflow":
       return status("workflow", "looking over a workflow");

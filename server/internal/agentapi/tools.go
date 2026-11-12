@@ -970,6 +970,8 @@ var Tools = []Tool{
 	define("submit_review", "Submit your verdict on lessons you reviewed. Only when reviewing a module.", submitReview),
 	define("submit_research_report", "Save the finished research report. Only when Vesper asks you to write one up.", submitResearchReport),
 	define("get_video_transcript", "Read the timestamped captions of a YouTube video the person shared, to watch along with them: react to what's actually said. Pass from_seconds/to_seconds for the part they're at.", videoTranscript),
+	define("list_connectors", "The person's MCP connectors: name, host, whether each is working (with its last error) and whether you can use it in this chat, plus connectors already proposed here. Check it before propose_connector.", listConnectors),
+	define("list_secret_names", "The names of the person's API secrets (never their values): handle, allowed hosts, expiry and whether you can use each in this chat, plus secrets already proposed here. Check it before propose_secret.", listSecretNames),
 	proposeConnector,
 	proposeSecret,
 	define("create_space", "Create a space for the person: a home for their chats on one topic, with instructions every chat there gets. New chats in it start with you. Use it when the person asks for one; tell them you made it and link it.", createSpace),

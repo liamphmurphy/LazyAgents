@@ -135,6 +135,8 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"search_library":        map[string]any{},
 		"list_inbox":            map[string]any{},
 		"list_learning_modules": map[string]any{},
+		"list_connectors":       map[string]any{},
+		"list_secret_names":     map[string]any{},
 		"list_runs":             map[string]any{},
 		"search_repositories":   map[string]any{},
 		"list_saved_links":      map[string]any{},

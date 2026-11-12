@@ -434,3 +434,51 @@ func TestChatReadsLearningProgress(t *testing.T) {
 		t.Fatalf("unknown module = %d %v", code, out)
 	}
 }
+
+// A persona sees what the person has connected, and which of it it may use
+// here, without a connector's full address or any secret's value.
+func TestChatListsConnectorsAndSecretNames(t *testing.T) {
+	c := newPersonaChat(t, "")
+	gh, err := c.q.CreateConnector(c.ctx, store.CreateConnectorParams{WorkspaceID: c.ws, UserID: c.user, Name: "GitHub", Slug: "github", Url: "https://api.githubcopilot.com/mcp/?token=leak-me", AuthKind: "token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.q.AddConnectorPersona(c.ctx, store.AddConnectorPersonaParams{ConnectorID: gh.ID, PersonaID: c.persona}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.q.CreateConnector(c.ctx, store.CreateConnectorParams{WorkspaceID: c.ws, UserID: c.user, Name: "Calendar", Slug: "calendar", Url: "https://calendar.example.com/mcp", AuthKind: "oauth"}); err != nil {
+		t.Fatal(err)
+	}
+	key, err := c.q.CreateUserSecret(c.ctx, store.CreateUserSecretParams{ID: uuid.New(), WorkspaceID: c.ws, UserID: c.user, Name: "Weather", Handle: "weather", Placement: "bearer", AllowedHosts: []string{"api.weather.example"},
+		ReadPolicy: "allow", WritePolicy: "ask", Nonce: []byte("n"), Ciphertext: []byte("sealed-value")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.q.AddUserSecretPersona(c.ctx, store.AddUserSecretPersonaParams{SecretID: key.ID, PersonaID: c.persona}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := c.call(t, "list_connectors", map[string]any{})
+	if raw, _ := json.Marshal(out); strings.Contains(string(raw), "leak-me") || strings.Contains(string(raw), "/mcp") {
+		t.Fatalf("a connector's address leaked: %s", raw)
+	}
+	usable := map[string]bool{}
+	for _, cn := range list(out, "connectors") {
+		usable[fmt.Sprint(cn["slug"])] = cn["usable_here"] == true
+		if cn["slug"] == "github" && (cn["host"] != "api.githubcopilot.com" || cn["status"] != "needs_sign_in") {
+			t.Fatalf("github = %v", cn)
+		}
+	}
+	if code != 200 || len(usable) != 2 || !usable["github"] || usable["calendar"] {
+		t.Fatalf("list_connectors = %d %v", code, out)
+	}
+
+	code, out = c.call(t, "list_secret_names", map[string]any{})
+	if raw, _ := json.Marshal(out); strings.Contains(string(raw), "sealed-value") {
+		t.Fatalf("a secret leaked: %s", raw)
+	}
+	secrets := list(out, "secrets")
+	if code != 200 || len(secrets) != 1 || secrets[0]["handle"] != "weather" || secrets[0]["usable_here"] != true || secrets[0]["expired"] != nil {
+		t.Fatalf("list_secret_names = %d %v", code, out)
+	}
+}
