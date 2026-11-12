@@ -20,20 +20,19 @@ function SecretChip({ name }: { name: string }) {
   );
 }
 
-/** Requests with a secret waiting for a yes or no, and secrets a persona asked for in this chat. */
-export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
+/**
+ * Requests with a secret waiting for a yes or no. Shown inside the running status card,
+ * so a request and the step that needs it read as one thing.
+ */
+export function SecretApprovalCards({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
   const approvals = useApiSecretApprovals(chatId);
-  const proposals = useApiSecretProposals(chatId);
   const decide = useDecideApiSecretApproval(chatId);
-  const decline = useDeclineApiSecretProposal();
-  const [reviewing, setReviewing] = useState<Schemas["ApiSecretProposal"] | null>(null);
   const waiting = approvals.data?.approvals ?? [];
-  const proposed = proposals.data?.proposals ?? [];
-  if (!waiting.length && !proposed.length) return null;
+  if (!waiting.length) return null;
   const busy = decide.isPending || !!disabled;
-  const error = message(decide.error) ?? message(decline.error);
+  const error = message(decide.error);
   return (
-    <li className="flex flex-col gap-2" data-testid="secret-requests">
+    <>
       {waiting.map((a) => {
         const by = personaLook(a.persona);
         const read = a.method === "GET" || a.method === "HEAD";
@@ -42,7 +41,7 @@ export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?
           host = new URL(a.url).hostname;
         } catch {}
         return (
-          <div key={a.id} data-testid="secret-approval" className="flex max-w-[min(720px,100%)] flex-col gap-2.5 rounded-xl border border-pill-human-fg/40 bg-surface px-3.5 py-3">
+          <div key={a.id} data-testid="secret-approval" className="flex flex-col gap-2.5 rounded-lg border border-pill-human-fg/35 bg-pill-human-bg px-3 py-2.5">
             <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] text-fg">
               <PersonaAvatar persona={by} size={18} />
               <PersonaName persona={by} />
@@ -76,6 +75,21 @@ export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?
           </div>
         );
       })}
+      {error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{error}</p>}
+    </>
+  );
+}
+
+/** Secrets a persona asked for in this chat. Requests that use one live in the status card ({@link SecretApprovalCards}). */
+export function SecretRequests({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
+  const proposals = useApiSecretProposals(chatId);
+  const decline = useDeclineApiSecretProposal();
+  const [reviewing, setReviewing] = useState<Schemas["ApiSecretProposal"] | null>(null);
+  const proposed = proposals.data?.proposals ?? [];
+  if (!proposed.length) return null;
+  const error = message(decline.error);
+  return (
+    <li className="flex flex-col gap-2" data-testid="secret-requests">
       {proposed.map((p) => {
         const by = personaLook(p.proposed_by);
         return (

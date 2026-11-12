@@ -4,8 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
 import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, turnNotes, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep } from "@/lib/chat-ui";
+import { useConnectorApprovals } from "@/lib/api/connector-hooks";
+import { useApiSecretApprovals } from "@/lib/api/secret-hooks";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
+import { Icon } from "@/components/ui/icon";
 import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
+import { ConnectorApprovalCards } from "./connector-requests";
+import { SecretApprovalCards } from "./secret-requests";
 import { StepGlyph } from "./step-glyph";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
 
@@ -157,7 +162,7 @@ const STEP_BAR: Record<ChatStep["state"], string> = {
 /** Pulses the step under way, until the person presses Stop. */
 const stepPulse = (s: ChatStep, stopping?: boolean) => (s.state === "active" && !stopping ? "motion-safe:animate-pulse" : "");
 
-function StepRail({ steps, stopping, onOpenStep }: { steps: ChatStep[]; stopping?: boolean; onOpenStep?: (key: string) => void }) {
+function StepRail({ steps, stopping, awaiting, onOpenStep }: { steps: ChatStep[]; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void }) {
   const { earlier, shown, later } = foldSteps(steps);
   return (
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
@@ -174,6 +179,7 @@ function StepRail({ steps, stopping, onOpenStep }: { steps: ChatStep[]; stopping
             <div className="flex min-w-0 items-center gap-2.5">
               <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" || s.state === "failed" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
               {s.state === "failed" && <span className="sr-only">(failed)</span>}
+              {awaiting && s.state === "active" && <span data-testid="step-awaiting" className="flex-none rounded-full bg-pill-human-bg px-2 text-[10.5px] text-pill-human-fg">Waiting for approval</span>}
               {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
               {s.tag && <TagPill tag={s.tag} />}
               {onOpenStep && (s.reasoning || s.intent) && (
@@ -200,7 +206,7 @@ function StepRail({ steps, stopping, onOpenStep }: { steps: ChatStep[]; stopping
  * and links to its full reasoning in the Activity tab. It
  * collapses to a progress strip, and folds old steps so a long turn stays short.
  */
-export function ChatStatus({ runId, since, persona, stopping, onOpenStep }: { runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void }) {
+export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, onOpenStep }: { chatId: string; disabled?: boolean; runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void }) {
   const q = useChatRunEvents(runId);
   const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
   const status = useMemo(() => chatStatus(calls), [calls]);
@@ -210,21 +216,41 @@ export function ChatStatus({ runId, since, persona, stopping, onOpenStep }: { ru
   const scene = useHeldScene(status.kind);
   const hasRail = steps.length > 1 || !!steps[0]?.detail || !!steps[0]?.intent;
   const done = steps.filter((s) => s.state === "done").length;
+  // A tool call or API request waiting on the person is part of this turn, so it opens in this card.
+  const connectorWaiting = useConnectorApprovals(chatId).data?.approvals.length ?? 0;
+  const secretWaiting = useApiSecretApprovals(chatId).data?.approvals.length ?? 0;
+  const awaiting = !stopping && connectorWaiting + secretWaiting > 0;
   return (
-    <div data-testid="chat-status-card" className="@container w-full max-w-[min(720px,100%)] rounded-xl border border-border bg-surface">
+    <div data-testid="chat-status-card" data-awaiting={awaiting || undefined}
+      className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-300 ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : "border-border"}`}>
       <div className="flex h-[72px] items-center gap-3 px-3.5">
-        <span className="flex-none motion-safe:animate-pulse">
+        <span className={`flex-none ${awaiting ? "" : "motion-safe:animate-pulse"}`}>
           <PersonaAvatar persona={persona} size={28} />
         </span>
         <div className="min-w-0 flex-1">
-          <p role="status" aria-live="polite" className="truncate text-[13.5px] text-fg" data-testid="chat-status">
-            {stopping ? "Stopping…" : `${persona.name} is ${status.phrase}…`}
+          <p role="status" aria-live="polite" className={`truncate text-[13.5px] ${awaiting ? "text-pill-human-fg" : "text-fg"}`} data-testid="chat-status">
+            {stopping ? "Stopping…" : awaiting ? `${persona.name} needs your approval` : `${persona.name} is ${status.phrase}…`}
           </p>
           <p aria-hidden className="truncate text-xs text-fg-tertiary @max-[300px]:hidden">
-            {planned ? `Step ${Math.min(done + 1, steps.length)} of ${steps.length}` : sceneLabel(scene.current)}
+            {awaiting ? "Paused until you decide" : planned ? `Step ${Math.min(done + 1, steps.length)} of ${steps.length}` : sceneLabel(scene.current)}
           </p>
         </div>
-        <ActivityScene current={scene.current} previous={scene.previous} stopping={stopping} />
+        {awaiting ? (
+          <span aria-hidden className="grid h-[38px] w-14 flex-none place-items-center rounded-md border border-pill-human-fg/50 text-pill-human-fg motion-safe:animate-pulse">
+            <Icon name="shield" size={20} />
+          </span>
+        ) : (
+          <ActivityScene current={scene.current} previous={scene.previous} stopping={stopping} />
+        )}
+      </div>
+      {/* Always mounted so the panel can animate open and shut instead of popping in. */}
+      <div className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${awaiting ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="overflow-hidden">
+          <div role="group" aria-label="Waiting for your approval" className="flex flex-col gap-2 px-3.5 pb-3">
+            <ConnectorApprovalCards chatId={chatId} disabled={disabled} />
+            <SecretApprovalCards chatId={chatId} disabled={disabled} />
+          </div>
+        </div>
       </div>
       {hasRail && (
         <>
@@ -235,7 +261,7 @@ export function ChatStatus({ runId, since, persona, stopping, onOpenStep }: { ru
               ))}
             </div>
           ) : (
-            <StepRail steps={steps} stopping={stopping} onOpenStep={onOpenStep} />
+            <StepRail steps={steps} stopping={stopping} awaiting={awaiting} onOpenStep={onOpenStep} />
           )}
           <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
             {collapsed ? "Show steps" : "Hide steps"}
