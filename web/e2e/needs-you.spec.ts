@@ -65,6 +65,7 @@ async function installTray(page: Page) {
 
 const pill = (page: Page) => page.getByRole("button", { name: /^Needs you,/ });
 const tray = (page: Page) => page.getByRole("dialog", { name: "Needs you" });
+const row = (page: Page, key: string) => page.locator(`main [data-ticket-row="${key}"]`);
 const selected = (page: Page) => tray(page).locator('[data-tray-row][aria-current="true"]');
 
 test("approve, deny and answer from the tray, with the badge counting only Needs you", async ({ page }) => {
@@ -200,4 +201,41 @@ test("the shortcuts sheet lists the tray keys", async ({ page }) => {
   for (const label of ["Next / previous item", "Open the item’s page", "Switch between Needs you and Updates", "Reply to the selected question", "Approve the selected approval", "Deny the selected approval (with an optional reason)", "Close the tray, or leave the reply box"]) {
     await expect(sheet.getByText(label, { exact: true })).toBeVisible();
   }
+});
+
+test("the Tickets list's Needs you group holds the same tickets as the tray's Needs you tab", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
+  const board = await installBoardApi(page);
+  const base = { project: "WEB", resolved: false, read: false, href: "/tickets/WEB-1", agent: atlas };
+  const inbox: S["InboxItem"][] = [
+    { ...base, needs_you: true, id: `approval:${APPROVAL}`, kind: "approval", title: "Build ticket modal", summary: "Push", ticket_key: "WEB-1", created_at: minutesAgo(30), run_id: RUN },
+    // Kinds outside approval, question and blocked: the server's flag decides.
+    { ...base, needs_you: true, id: "dispatch:web-2", kind: "dispatch", title: "Write integration checks", summary: "Ready to start", ticket_key: "WEB-2", created_at: minutesAgo(20) },
+    { ...base, needs_you: true, id: "review:web-5", kind: "review", title: "Review board", summary: "PR #7", ticket_key: "WEB-5", created_at: minutesAgo(15) },
+    { ...base, needs_you: true, id: "mention:ask", kind: "mention", title: "Other epic work", summary: "@liam which tone?", ticket_key: "WEB-4", created_at: minutesAgo(10) },
+    // Updates: never under Needs you, on either screen.
+    { ...base, needs_you: false, id: "mention:fyi", kind: "mention", title: "Review board", summary: "@liam FYI", ticket_key: "WEB-5", created_at: minutesAgo(5) },
+    { ...base, needs_you: false, id: "merged:3", kind: "merged", title: "ADR and contract", summary: "PR #3 merged", ticket_key: "WEB-3", created_at: minutesAgo(4) },
+    // Handled already: neither shows it.
+    { ...base, needs_you: true, id: "approval:old", kind: "approval", title: "Other epic work", summary: "Old", ticket_key: "WEB-4", created_at: minutesAgo(60), resolved: true },
+  ];
+  board.inbox.push(...inbox);
+  board.counts.needs_you = 4;
+  await page.goto("/tickets?project=WEB");
+
+  const group = page.getByRole("region", { name: /^Needs you, \d+$/ });
+  await expect(group.locator("[data-ticket-row]")).toHaveCount(4);
+  const listed = await group.locator("[data-ticket-row]").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-ticket-row")));
+
+  await pill(page).click();
+  const needs = tray(page).getByRole("tabpanel", { name: "Needs you" });
+  await expect(needs.locator("[data-tray-row]")).toHaveCount(4);
+  const ids = await needs.locator("[data-tray-row]").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-tray-row")));
+  const inTray = new Set(ids.map((id) => inbox.find((i) => i.id === id)?.ticket_key).filter(Boolean));
+
+  expect(new Set(listed)).toEqual(inTray);
+  expect([...inTray].sort()).toEqual(["WEB-1", "WEB-2", "WEB-4", "WEB-5"]);
+  // Each kind reads as its own state.
+  await expect(row(page, "WEB-5")).toContainText("Review requested: PR #7");
+  await expect(row(page, "WEB-4")).toContainText("Mentioned you: @liam which tone?");
 });

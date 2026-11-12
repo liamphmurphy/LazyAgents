@@ -26,7 +26,7 @@ import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/r
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 import { CostValue, RunThread } from "./run-thread";
-import { ContextButton, RunContext, useContextPanel } from "./run-context";
+import { ContextButton, RunContext, useRunContextPanel } from "./run-context";
 import { RunFiles } from "./run-files";
 import { RunGraphView } from "./run-graph-view";
 import { CompactRunDetail } from "./run-compact";
@@ -363,7 +363,7 @@ export function RunLogScreen({ id }: { id: string }) {
   // the Raw log (details), Graph and Files open from the Context panel.
   const [nav, setNav] = useState(() => ({ hash: typeof window === "undefined" ? "" : window.location.hash }));
   const mode = pickRunView(params.get("view"), nav.hash, null);
-  const [contextOpen, setContextOpen] = useContextPanel();
+  const [contextOpen, setContextOpen] = useRunContextPanel();
   const anchor = mode === "details" ? parseRunAnchor(nav.hash) : null;
   const [follow, setFollow] = useState(() => !anchor);
   const detailsScroll = useRef<number | null>(null);

@@ -1,9 +1,10 @@
 // Pure logic for the Work screens in the chat look (LAZYAGENTS-164): which
 // tickets wait on the person, the list's groups (Needs you first), each row's
-// state text, the filter box's tokens and an epic's progress. Type-only
-// imports so node can run it directly in unit tests.
+// state text, the filter box's tokens and an epic's progress. Pure, with
+// .ts imports, so node can run it directly in unit tests.
 import type { components } from "./api/schema";
 import { groupTickets, isBlocked, type GroupBy, type TicketGroup } from "./ticket-list.ts";
+import { isOpen, kindRank } from "./inbox.ts";
 
 type TicketSummary = components["schemas"]["TicketSummary"];
 type TicketStatus = components["schemas"]["TicketStatus"];
@@ -11,9 +12,7 @@ type InboxItem = components["schemas"]["InboxItem"];
 
 /* -------------------------------------------------------------- needs you */
 
-/** Inbox kinds where a ticket's run waits on the person, most urgent first. */
-export const NEEDS_KINDS = ["approval", "question", "blocked"] as const;
-export type NeedsKind = (typeof NEEDS_KINDS)[number];
+export type NeedsKind = InboxItem["kind"];
 
 export type NeedsYou = {
   kind: NeedsKind;
@@ -25,15 +24,21 @@ export type NeedsYou = {
   created_at: string;
 };
 
-/** The ticket keys whose run waits on the person, with the most urgent open item each. */
-export function needsYouByTicket(items: readonly Pick<InboxItem, "id" | "kind" | "ticket_key" | "resolved" | "summary" | "href" | "run_id" | "created_at">[] | undefined) {
+type NeedsItem = Pick<InboxItem, "id" | "kind" | "ticket_key" | "resolved" | "read" | "needs_you" | "summary" | "href" | "run_id" | "created_at">;
+
+/**
+ * The ticket keys the person has to act on, with the most urgent open item
+ * each. The same rule as the tray's Needs you tab: open items the server marks
+ * needs_you. The kind only ranks them (the Inbox's urgency order, then the
+ * longest wait) and labels them.
+ */
+export function needsYouByTicket(items: readonly NeedsItem[] | undefined) {
   const out = new Map<string, NeedsYou>();
-  const rank = (k: string) => (NEEDS_KINDS as readonly string[]).indexOf(k);
   for (const i of items ?? []) {
-    if (i.resolved || !i.ticket_key || rank(i.kind) < 0) continue;
+    if (!i.needs_you || !isOpen(i) || !i.ticket_key) continue;
     const prev = out.get(i.ticket_key);
-    if (prev && (rank(prev.kind) < rank(i.kind) || (prev.kind === i.kind && prev.created_at <= i.created_at))) continue;
-    out.set(i.ticket_key, { kind: i.kind as NeedsKind, id: i.id, summary: i.summary, href: i.href, run_id: i.run_id, created_at: i.created_at });
+    if (prev && (kindRank(prev.kind) - kindRank(i.kind) || Date.parse(prev.created_at) - Date.parse(i.created_at)) <= 0) continue;
+    out.set(i.ticket_key, { kind: i.kind, id: i.id, summary: i.summary, href: i.href, run_id: i.run_id, created_at: i.created_at });
   }
   return out;
 }
@@ -43,11 +48,29 @@ export function approvalId(n: Pick<NeedsYou, "id" | "kind">): string | undefined
   return n.kind === "approval" && n.id.startsWith("approval:") ? n.id.slice("approval:".length) : undefined;
 }
 
-const NEEDS_PREFIX: Record<NeedsKind, string> = { approval: "Wants approval", question: "Asked you", blocked: "Run stopped" };
+/** Each kind's state text, before the item's summary. */
+export const NEEDS_PREFIX: Record<NeedsKind, string> = {
+  approval: "Wants approval",
+  question: "Asked you",
+  blocked: "Run stopped",
+  stalled: "Run stalled",
+  mockup: "Mockup to review",
+  planning: "Plan to review",
+  review: "Review requested",
+  dispatch: "Ready to dispatch",
+  mention: "Mentioned you",
+  suggestion: "Wiki edit to review",
+  workflow_gate: "Workflow gate",
+  scheduled: "Scheduled task",
+  connector_approval: "Connector to approve",
+  secret_approval: "Secret to approve",
+  secret_expiring: "Secret expiring",
+  merged: "PR merged",
+};
 
 /** A row's current-state text: what it waits on, what blocks it, or where it is. */
 export function stateText(t: Pick<TicketSummary, "status" | "unmet_dependencies" | "pr">, needs?: Pick<NeedsYou, "kind" | "summary">): { text: string; tone: "human" | "blocked" | "quiet" } {
-  if (needs) return { text: needs.summary ? `${NEEDS_PREFIX[needs.kind]}: ${needs.summary}` : NEEDS_PREFIX[needs.kind], tone: "human" };
+  if (needs) return { text: needs.summary ? `${NEEDS_PREFIX[needs.kind] ?? "Needs you"}: ${needs.summary}` : NEEDS_PREFIX[needs.kind] ?? "Needs you", tone: "human" };
   if (isBlocked(t as TicketSummary)) return { text: `Blocked by ${t.unmet_dependencies}`, tone: "blocked" };
   const pr = t.pr ? ` · PR #${t.pr.number}${t.pr.state === "merged" ? " merged" : ""}` : "";
   const text: Record<TicketStatus, string> = {
