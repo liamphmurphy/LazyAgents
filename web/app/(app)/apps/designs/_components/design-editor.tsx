@@ -626,6 +626,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       await flush();
       if (conflicted.current) throw new Error("Choose between your version and the latest first.");
       await resolve.mutateAsync({ proposalId: review.proposal.id, decisions: review.body.decisions });
+      // The last suggestion ends the review, so a later one waits behind its banner instead of taking over the dock.
+      if ((proposals?.length ?? 0) <= 1) setReviewing(false);
       setSelected([]);
       setMode("diff");
     } catch (e) {

@@ -78,7 +78,7 @@ export function EditorLayout({
   chatTab?: string;
   /** Opens `tab` whenever `n` changes, e.g. when the canvas asks to start a review. */
   show?: { tab: string; n: number };
-  /** The dock's state after every change, e.g. to clear an unread mark while its tab shows. */
+  /** The dock's state after every change, e.g. to clear an unread mark while its tab shows. `open` is false while a phone's sheet is closed. */
   onDockChange?: (s: DockState) => void;
 }) {
   const uid = useId();
@@ -108,9 +108,11 @@ export function EditorLayout({
     if (loaded) saveDock(window.localStorage, app, state);
   }, [app, state, loaded]);
 
+  // On phones the dock is visible only while its sheet is open, so that's what `open` reports.
+  const reportedOpen = compact ? sheetOpen && state.open : state.open;
   useEffect(() => {
-    onDockChange?.(state);
-  }, [state, onDockChange]);
+    onDockChange?.({ ...state, open: reportedOpen });
+  }, [state, reportedOpen, onDockChange]);
 
   const dispatch = useCallback(
     (a: DockAction) => {
@@ -140,9 +142,10 @@ export function EditorLayout({
   }, [dispatch, dock, chatTab]);
 
   // A new `show` opens its tab (adjusting state while rendering, so it lands with the same paint).
+  // It waits for the remembered state to load, so a `show` present at mount isn't overwritten by it.
   const showN = show?.n ?? 0;
-  const [shownN, setShownN] = useState(showN);
-  if (showN !== shownN) {
+  const [shownN, setShownN] = useState(0);
+  if (loaded && showN !== shownN) {
     setShownN(showN);
     if (show?.tab) {
       setState((s) => dockReducer(s, { type: "open", tab: show.tab }));
