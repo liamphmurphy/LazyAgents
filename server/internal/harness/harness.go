@@ -76,6 +76,27 @@ type Usage struct {
 	ToolCalls                int64   `json:"tool_calls"`
 	CostUSD                  float64 `json:"cost_usd"`
 	CostSource               string  `json:"cost_source"` // harness | computed | unknown | ""
+	// ContextTokens is the prompt size (input + cache read + cache creation)
+	// of the main agent's latest request. 0 means unknown: Codex reports
+	// only cumulative totals, so consumers must not read 0 as "empty".
+	ContextTokens int64 `json:"context_tokens,omitempty"`
+	// Bytes of the main agent's tool results, before clipping, by group:
+	// Read/Grep/Glob, Bash, and everything else.
+	ExploreOutputBytes int64 `json:"explore_output_bytes,omitempty"`
+	ShellOutputBytes   int64 `json:"shell_output_bytes,omitempty"`
+	OtherOutputBytes   int64 `json:"other_output_bytes,omitempty"`
+}
+
+// AddToolOutput tallies n bytes of a tool's result under its group.
+func (u *Usage) AddToolOutput(tool string, n int64) {
+	switch tool {
+	case "Read", "Grep", "Glob":
+		u.ExploreOutputBytes += n
+	case "Bash":
+		u.ShellOutputBytes += n
+	default:
+		u.OtherOutputBytes += n
+	}
 }
 
 // Result is what a parser learned by the end of a turn.

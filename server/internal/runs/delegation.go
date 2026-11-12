@@ -63,6 +63,12 @@ type Contract struct {
 	// ResumeSession is set while the run's first turn resumes the continued
 	// run's harness session; the runner clears it if that session is gone.
 	ResumeSession bool `json:"resume_session,omitempty"`
+	// PrevHeadSHA is the worktree's HEAD before the runner fast-forwarded it to
+	// the main agent's branch; for a continued run, where the sub agent last
+	// stood. Diverged is set when the worktree's branch had commits the main
+	// agent's didn't, so it wasn't fast-forwarded. The runner sets both.
+	PrevHeadSHA string `json:"prev_head_sha,omitempty"`
+	Diverged    bool   `json:"diverged,omitempty"`
 }
 
 const (
@@ -111,6 +117,7 @@ func (c Contract) Normalize() (Contract, error) {
 		}
 	}
 	c.BaseSHA, c.BaseUncommitted, c.Branch, c.Worktree, c.ResumeSession = "", nil, "", "", false
+	c.PrevHeadSHA, c.Diverged = "", false
 	return c, nil
 }
 

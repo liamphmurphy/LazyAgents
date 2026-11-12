@@ -283,8 +283,20 @@ func (p *claudeParser) Line(b []byte) []Event {
 		// can be a large tool result instead of two.
 		var msg struct {
 			Content []claudeBlock `json:"content"`
+			Usage   *claudeUsage  `json:"usage"`
 		}
-		if json.Unmarshal(l.Message, &msg) != nil {
+		err := json.Unmarshal(l.Message, &msg)
+		if l.Type == "assistant" && l.Parent == nil && err == nil && msg.Usage != nil {
+			// This request's prompt size; only the main agent's counts.
+			var cached int64
+			if msg.Usage.CacheReadTokens != nil {
+				cached = *msg.Usage.CacheReadTokens
+			}
+			if n := msg.Usage.InputTokens + cached + msg.Usage.CacheCreationTokens; n > 0 {
+				p.res.Usage.ContextTokens = n
+			}
+		}
+		if err != nil {
 			var raw struct {
 				Content json.RawMessage `json:"content"`
 			}
@@ -319,8 +331,12 @@ func (p *claudeParser) Line(b []byte) []Event {
 				_ = json.Unmarshal(bl.Input, &input)
 				out = append(out, Event{"tool_call", map[string]any{"id": bl.ID, "tool": bl.Name, "input": input}})
 			case "tool_result":
+				text := blockText(bl.Content)
+				if l.Parent == nil { // a sub agent's results never enter the main context
+					p.res.Usage.AddToolOutput(p.tools[bl.ToolUseID], int64(len(text)))
+				}
 				out = append(out, Event{"tool_result", map[string]any{
-					"id": bl.ToolUseID, "tool": p.tools[bl.ToolUseID], "is_error": bl.IsError, "output": clip(blockText(bl.Content), 4000),
+					"id": bl.ToolUseID, "tool": p.tools[bl.ToolUseID], "is_error": bl.IsError, "output": clip(text, 4000),
 				}})
 			}
 		}

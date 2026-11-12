@@ -8,8 +8,8 @@ import (
 )
 
 func TestContractNormalizeAndPaths(t *testing.T) {
-	c, err := runs.Contract{AcceptanceCriteria: []string{" a ", ""}, AllowedPaths: []string{"internal/runs/", "docs/*.md", "go.mod"}, TestCommand: " go test ./... ", BaseSHA: "x"}.Normalize()
-	if err != nil || len(c.AcceptanceCriteria) != 1 || c.AcceptanceCriteria[0] != "a" || c.TestCommand != "go test ./..." || c.BaseSHA != "" {
+	c, err := runs.Contract{AcceptanceCriteria: []string{" a ", ""}, AllowedPaths: []string{"internal/runs/", "docs/*.md", "go.mod"}, TestCommand: " go test ./... ", BaseSHA: "x", PrevHeadSHA: "y", Diverged: true}.Normalize()
+	if err != nil || len(c.AcceptanceCriteria) != 1 || c.AcceptanceCriteria[0] != "a" || c.TestCommand != "go test ./..." || c.BaseSHA != "" || c.PrevHeadSHA != "" || c.Diverged {
 		t.Fatalf("normalize: %+v %v", c, err)
 	}
 	for file, want := range map[string]bool{

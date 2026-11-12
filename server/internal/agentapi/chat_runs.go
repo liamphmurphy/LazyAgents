@@ -213,8 +213,15 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 		}
 		children = append(children, cr)
 	}
+	filled, err := d.Q.RunToolOutputBytes(ctx, r.ID)
+	if err != nil {
+		return nil, err
+	}
+	// context_tokens is the latest request's prompt size; 0 means unknown (Codex).
 	return map[string]any{"run": run, "plan": plan, "delegated_runs": children,
-		"input_tokens": r.InputTokens, "output_tokens": r.OutputTokens}, nil
+		"input_tokens": r.InputTokens, "output_tokens": r.OutputTokens, "context_tokens": r.ContextTokens,
+		"explore_output_bytes": filled.ExploreOutputBytes, "shell_output_bytes": filled.ShellOutputBytes,
+		"other_output_bytes": filled.OtherOutputBytes}, nil
 }
 
 type ReplyToRunIn struct {

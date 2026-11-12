@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
@@ -145,6 +146,66 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 	return report.String()
 }
 
+// checkoutSection tells a delegated run's first turn exactly where its worktree
+// stands: its HEAD and branch, the ticket's whole change as a diff range and,
+// for a continued run, the commits the main agent's branch gained since the
+// sub agent's previous run. A git query that fails omits its part.
+func (r *Runner) checkoutSection(ctx context.Context, c runCtx, env map[string]string) string {
+	var contract runs.Contract
+	if len(c.run.Contract) == 0 || json.Unmarshal(c.run.Contract, &contract) != nil || contract.Worktree == "" || contract.BaseSHA == "" {
+		return ""
+	}
+	ws, dir, name := wsID(c.run), contract.Worktree, "lazyagents-checkout-"+c.run.ID.String()
+	git := func(script string) string { return r.gitOut(ctx, ws, dir, name, script, env) }
+	head := contract.BaseSHA
+	var b strings.Builder
+	b.WriteString("\n\n## Checkout\n\nYou are at `" + head + "` on branch `" + contract.Branch + "`.")
+	var bases []string
+	if c.spec.Repository != nil && c.spec.Repository.EpicBranch != "" {
+		bases = append(bases, "origin/"+c.spec.Repository.EpicBranch)
+	}
+	if c.project.DefaultBranch != "" {
+		bases = append(bases, "origin/"+c.project.DefaultBranch, c.project.DefaultBranch)
+	}
+	for _, ref := range bases {
+		fork := git("git rev-parse -q --verify " + shellQuote(ref+"^{commit}") + " >/dev/null && git merge-base " + shellQuote(ref) + " HEAD")
+		if fork == "" {
+			continue
+		}
+		b.WriteString("\n\nThe ticket's whole change (against `" + ref + "`) is `git diff " + fork + "..HEAD`")
+		if stat := git("git diff --stat " + shellQuote(fork) + " HEAD"); stat != "" {
+			b.WriteString(":\n\n```\n" + lastLines(stat, 40) + "\n```")
+		} else {
+			b.WriteString(".")
+		}
+		break
+	}
+	if contract.ContinueRunID != "" && contract.PrevHeadSHA != "" {
+		prev := contract.PrevHeadSHA
+		switch {
+		case contract.Diverged:
+			b.WriteString("\n\nYour branch has commits the main agent's branch doesn't, so it was not fast-forwarded")
+			if pb := r.gitOut(ctx, ws, "", name, "git rev-parse HEAD", env); pb != "" {
+				b.WriteString("; the main agent's branch is at `" + pb + "`")
+			}
+			b.WriteString(".")
+		case prev == head:
+			b.WriteString("\n\nThe main agent's branch has not changed since your previous run.")
+		default:
+			rng := shellQuote(prev + ".." + head)
+			b.WriteString("\n\nSince your previous run the main agent's branch moved `" + prev + ".." + head + "`:")
+			if log := git("git log --oneline -20 " + rng); log != "" {
+				b.WriteString("\n\n```\n" + log + "\n```")
+			}
+			if stat := git("git diff --stat " + rng); stat != "" {
+				b.WriteString("\n\n```\n" + lastLines(stat, 40) + "\n```")
+			}
+			b.WriteString("\n\nReview exactly this range.")
+		}
+	}
+	return b.String()
+}
+
 func isDone(state string) bool {
 	return state == "completed" || state == "failed" || state == "cancelled"
 }
@@ -227,4 +288,50 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 	}
 	k.Evaluate(contract)
 	return k
+}
+
+// gitBrief lists the run's git state for a fresh session: the branch,
+// uncommitted files, and the commits and diff stat since it forked from
+// origin/<epic or default branch>. Each part is left out when its command fails.
+func (r *Runner) gitBrief(ctx context.Context, c runCtx, env map[string]string) string {
+	ws, dir, name := wsID(c.run), childDir(c.run), "lazyagents-brief-"+c.run.ID.String()
+	git := func(script string) (string, bool) {
+		cctx, cancel := context.WithTimeout(ctx, checkTimeout)
+		defer cancel()
+		out, code, err := r.execIn(cctx, ws, dir, name, script, env)
+		return strings.TrimSpace(out), err == nil && code == 0
+	}
+	var b strings.Builder
+	if branch, ok := git("git symbolic-ref --short HEAD"); ok && branch != "" {
+		b.WriteString("Branch: " + branch + "\n")
+	}
+	if status, ok := git("git status --porcelain"); ok {
+		if files := parseStatus(status); len(files) > 0 {
+			b.WriteString("Uncommitted files: " + strings.Join(files, ", ") + "\n")
+		} else {
+			b.WriteString("Uncommitted files: none\n")
+		}
+	}
+	upstream := ""
+	if c.spec.Repository != nil {
+		upstream = cmp.Or(c.spec.Repository.EpicBranch, c.spec.Repository.DefaultBranch)
+	}
+	if upstream == "" {
+		upstream = c.project.DefaultBranch
+	}
+	if upstream != "" {
+		ref := "origin/" + upstream
+		if base, ok := git("git merge-base " + shellQuote(ref) + " HEAD"); ok && base != "" {
+			if log, ok := git("git log --oneline -20 " + shellQuote(base) + "..HEAD"); ok {
+				b.WriteString("\nCommits since " + ref + ":\n" + cmp.Or(log, "(none)") + "\n")
+			}
+			if stat, ok := git("git diff --stat " + shellQuote(base) + "..HEAD"); ok && stat != "" {
+				b.WriteString("\nDiff stat since " + ref + ":\n" + lastLines(stat, 40) + "\n")
+			}
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "## Git\n\n" + b.String()
 }
