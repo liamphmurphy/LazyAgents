@@ -218,6 +218,13 @@ func Apply(body string, ops []Op) (string, error) {
 		if err := applyOp(d, op); err != nil {
 			return "", opErr(i, "%s", err.Error())
 		}
+		// Later ops walk what this one added, so its structure must hold
+		// now; the cross-reference rules wait for the end, since a later op
+		// may complete what an earlier one starts.
+		normalizeDoc(d)
+		if err := cDesign(d, ""); err != nil {
+			return "", opErr(i, "%s", strings.TrimPrefix(err.Error(), "body: "))
+		}
 	}
 	out, err := Finish(d)
 	if err != nil {
@@ -226,8 +233,9 @@ func Apply(body string, ops []Op) (string, error) {
 	return out, nil
 }
 
-// ApplyEach applies ops one by one on a body, skipping any op that no longer
-// applies (its target is gone, or the result wouldn't be valid). It returns
+// ApplyEach applies ops together when they still apply; otherwise one by one
+// on a body, skipping any op that no longer applies (its target is gone, or
+// the result wouldn't be valid). It returns
 // the result and, per op, whether it was applied.
 func ApplyEach(body string, ops []Op) (string, []bool, error) {
 	d, err := Parse(body)
@@ -238,6 +246,14 @@ func ApplyEach(body string, ops []Op) (string, []bool, error) {
 		return "", nil, err
 	}
 	ok := make([]bool, len(ops))
+	// All together first: an op may only be valid with a later one (a token
+	// it uses, the auto layout its fill sizing needs).
+	if out, err := Apply(body, ops); err == nil {
+		for i := range ok {
+			ok[i] = true
+		}
+		return out, ok, nil
+	}
 	for i, op := range ops {
 		next := clone(d).(map[string]any)
 		if CheckOp(i, op, false) != nil || applyOp(next, op) != nil {

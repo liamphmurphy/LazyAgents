@@ -145,7 +145,12 @@ func (s *Service) Duplicate(ctx context.Context, ws, user uuid.UUID, src store.G
 	if err != nil {
 		return cv, chat, err
 	}
-	return cv, chat, q.CopyDesignAssets(ctx, store.CopyDesignAssetsParams{ToCanvas: cv.ID, FromCanvas: src.ID})
+	if err := q.CopyDesignAssets(ctx, store.CopyDesignAssetsParams{ToCanvas: cv.ID, FromCanvas: src.ID}); err != nil {
+		// Don't leave a copy whose images are missing.
+		_ = s.Runs.DeleteChat(context.WithoutCancel(ctx), ws, user, chat.ID)
+		return store.ChatCanvas{}, store.ChatSession{}, err
+	}
+	return cv, chat, nil
 }
 
 // Rename sets a design's title.

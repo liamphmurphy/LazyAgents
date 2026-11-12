@@ -180,3 +180,30 @@ func TestRemintAndStarters(t *testing.T) {
 		t.Fatal("unknown starter accepted")
 	}
 }
+
+// Malformed nodes from an earlier op are refused before a later op walks them.
+func TestApplyRefusesMalformedInsertsWithoutPanicking(t *testing.T) {
+	base := minimal(t)
+	for _, o := range []string{
+		`[{"op":"add_node","parent":"p_flows","node":{"id":"n_x"}},{"op":"add_node","parent":"n_x","node":{"type":"text"}}]`,
+		`[{"op":"add_node","parent":"p_flows","node":{"id":"n_g","type":"group","x":0,"y":0,"w":1,"h":1,"children":[1]}},{"op":"remove_node","id":"n_box"}]`,
+		`[{"op":"add_node","parent":"p_flows","node":{"id":"n_s","type":"shape","shape":"rect","x":0,"y":0,"w":1,"h":1,"text":{"paragraphs":[1]}}},{"op":"set_text","id":"n_s","text":"hi"}]`,
+		`[{"op":"add_page","page":{"id":5,"name":"x","children":[{"id":"n_q"}]}},{"op":"move_node","id":"n_box","after":"n_q"}]`,
+		`[{"op":"add_node","parent":"p_flows","node":{"id":"n_p","type":"frame","x":0,"y":0,"w":1,"h":1,"children":[{"id":7}]}},{"op":"remove_node","id":"n_p"}]`,
+	} {
+		if _, err := Apply(base, ops(t, o)); err == nil || !strings.Contains(err.Error(), "op 0") {
+			t.Errorf("%s: %v", o, err)
+		}
+	}
+}
+
+// Ops valid only together are all applied when nothing changed underneath.
+func TestApplyEachKeepsOpsThatNeedALaterOne(t *testing.T) {
+	o := ops(t, `[{"op":"set_node","id":"n_box","fields":{"sizing":{"w":"fill"}}},{"op":"move_node","id":"n_box","parent":"n_home"}]`)
+	if _, err := Apply(minimal(t), o); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := ApplyEach(minimal(t), o); err != nil || !ok[0] || !ok[1] {
+		t.Fatal(ok, err)
+	}
+}
