@@ -67,7 +67,6 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await expect(context.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
   await expect(context.getByText("Requires mockup", { exact: true })).toBeVisible();
   await expect(page.locator("article details")).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath("epic-context.png"), fullPage: true });
   await expect(page.locator("article").getByRole("region", { name: "Epic completion" })).toHaveCount(0);
 
   const panel = context.getByRole("region", { name: "Epic completion" });
