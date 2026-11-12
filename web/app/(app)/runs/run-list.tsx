@@ -244,10 +244,10 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
   }, []);
 
   // The tray's "Open all" lands on /runs#needs-you: bring the group into view once it's there.
-  const ready = !data.loading;
+  const hasNeeds = data.shownNeeds.length > 0;
   useEffect(() => {
-    if (ready && window.location.hash === "#needs-you") document.getElementById("needs-you")?.scrollIntoView({ block: "start" });
-  }, [ready]);
+    if (hasNeeds && window.location.hash === "#needs-you") document.getElementById("needs-you")?.scrollIntoView({ block: "start" });
+  }, [hasNeeds]);
 
   const selectedNeeds = data.shownNeeds.find((i) => i.run_id === selected)?.id;
   const empty = !data.loading && !data.error && data.shownNeeds.length === 0 && data.groups.length === 0;
@@ -277,6 +277,11 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
         <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} />
       </div>
       <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-3">
+        {data.shownNeeds.length > 0 && (
+          <Group id="needs-you" label="Needs you" count={data.shownNeeds.length} tone="human">
+            {data.shownNeeds.map((i) => <NeedsRow key={i.id} item={i} active={i.id === selectedNeeds} query={query} />)}
+          </Group>
+        )}
         {data.error ? (
           <div role="alert" className="flex flex-col items-start gap-2 px-3 py-4 text-[13px] text-pill-blocked-fg">
             Couldn’t load runs. {data.error.message}
@@ -292,11 +297,6 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
           </p>
         ) : (
           <>
-            {data.shownNeeds.length > 0 && (
-              <Group id="needs-you" label="Needs you" count={data.shownNeeds.length} tone="human">
-                {data.shownNeeds.map((i) => <NeedsRow key={i.id} item={i} active={i.id === selectedNeeds} query={query} />)}
-              </Group>
-            )}
             {data.groups.map((g) => (
               <Group key={g.key} id={`runs-${g.key.replace(/\W+/g, "-")}`} label={g.label} count={g.key === "running" || g.key === "queued" ? g.runs.length : undefined}>
                 {g.runs.map((r) => <RunRow key={r.id} run={r} active={r.id === selected && !selectedNeeds} query={query} />)}

@@ -1,0 +1,265 @@
+import { expect, test, type Page } from "@playwright/test";
+import type { Schemas } from "../lib/api/client";
+import { installChatApi } from "./mock-chat-api";
+
+// LAZYAGENTS-163: the chat-style Runs page. A grouped list beside the run
+// thread, the inline approval and Next line, the composer, and the Context panel.
+
+const APPROVING = "00000000-0000-4000-8000-000000000301";
+const ASKING = "00000000-0000-4000-8000-000000000302";
+const RUNNING = "00000000-0000-4000-8000-000000000303";
+const DONE = "00000000-0000-4000-8000-000000000304";
+const CHILD = "00000000-0000-4000-8000-000000000305";
+
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+const step = (position: number, state: Schemas["PlanStep"]["state"], text: string): Schemas["PlanStep"] => ({ position, state, text });
+const agent = (name: string, color_index = 0) => ({ id: `agent-${name}`, name, handle: name.toLowerCase(), color_index });
+
+function run(id: string, over: Partial<Schemas["Run"]>): Schemas["Run"] {
+  return {
+    id, ticket_key: "WEB-9", work_title: "Search index", purpose: "ticket", project_key: "WEB", agent: agent("Builder"),
+    mode: "managed", state: "running", harness: "claude-code", model: "opus", started_at: minutesAgo(12),
+    tool_calls: 3, input_tokens: 1200, output_tokens: 300, cost_usd: 0.4, cost_source: "harness", plan: [], scopes: [], approval_scopes: [], ...over,
+  };
+}
+
+const approving = run(APPROVING, {
+  ticket_key: "WEB-8", work_title: "Partition ledger entries", agent: agent("Atlas", 2), state: "waiting", wait_reason: "approval",
+  branch: "atlas/web-8-partition", pr_number: 41, pr_url: "https://github.com/acme/app/pull/41", child_count: 1, model: "gpt-5-codex", harness: "codex",
+  plan: [step(1, "done", "Write the migration"), step(2, "current", "Run it on staging"), step(3, "pending", "Open the PR")],
+});
+const asking = run(ASKING, { ticket_key: "WEB-7", work_title: "Payout retries", agent: agent("Quill", 1), state: "waiting", wait_reason: "human_reply" });
+const running = run(RUNNING, {});
+const done = run(DONE, { ticket_key: "WEB-3", work_title: "Session refresh", state: "completed", started_at: minutesAgo(80), ended_at: minutesAgo(30), outcome: "Shipped the refresh." });
+const child = run(CHILD, { ticket_key: "WEB-8", work_title: "Partition ledger entries", agent: agent("Reviewer", 3), parent_run_id: APPROVING, state: "completed", started_at: minutesAgo(8), ended_at: minutesAgo(5), cost_usd: 0.1 });
+
+const approval = (id: string, action: string): Schemas["Approval"] => ({
+  id, run_id: APPROVING, ticket_key: "WEB-8", agent: approving.agent, scope: "db:migrate", action_summary: action,
+  action_detail: {}, risk_summary: "Dry run finished with no long locks", state: "pending", brokered: true, created_at: minutesAgo(3),
+} as Schemas["Approval"]);
+
+const ev = (seq: number, type: Schemas["RunEvent"]["type"], payload: Record<string, unknown>, m: number): Schemas["RunEvent"] => ({ seq, type, payload, at: minutesAgo(m) });
+const atlasEvents = [
+  ev(1, "lifecycle", { state: "starting", runner: "runner-2", backend: "docker" }, 11),
+  ev(2, "lifecycle", { state: "turn_started", turn: 1 }, 10),
+  ev(3, "message", { text: "I wrote **0042_partition_ledger_entries** and checked it locally." }, 10),
+  ev(4, "tool_call", { id: "t1", tool: "Edit", input: { file_path: "db/migrations/0042_partition.sql" } }, 9),
+  ev(5, "tool_result", { id: "t1", output: "ok" }, 9),
+  ev(6, "message", { kind: "step", step: 1, state: "done" }, 9),
+  ev(7, "tool_call", { id: "t2", tool: "lazyagents.delegate", input: { agent: "@reviewer", task: "Review the migration for long locks" } }, 8),
+  ev(8, "tool_result", { id: "t2", output: JSON.stringify({ run_id: CHILD }) }, 8),
+  ev(9, "tool_call", { id: "t3", tool: "lazyagents.request_approval", input: { scope: "db:migrate", action: "Run 0042 on staging" } }, 3),
+];
+
+async function installRuns(page: Page) {
+  const api = await installChatApi(page);
+  const decided: string[] = [];
+  const replies: string[] = [];
+  const needs = (kind: string, title: string, over: Record<string, unknown>) => ({
+    kind, title, summary: "", href: "/inbox", project: "WEB", ticket_key: "", created_at: minutesAgo(20), resolved: false, read: false, needs_you: true, ...over,
+  });
+  api.inbox.push(
+    needs("approval", "Partition ledger entries", { id: "approval:a1", run_id: APPROVING, ticket_key: "WEB-8", agent: approving.agent, created_at: minutesAgo(3) }),
+    needs("question", "Payout retries", { id: "question:q1", run_id: ASKING, ticket_key: "WEB-7", agent: asking.agent }),
+    needs("planning", "Billing plan", { id: "planning:p1", href: "/plans/p1" }),
+  );
+  await page.route((url) => /^\/api\/v1\/(runs|approvals|tickets|epics)/.test(url.pathname), async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const path = url.pathname.replace("/api/v1", "");
+    if (path === "/runs") {
+      const live = [approving, asking, running];
+      return route.fulfill({ json: { runs: url.searchParams.get("state") === "live" ? live : [...live, done], has_more: false } });
+    }
+    const decide = /^\/approvals\/([^/]+)\/(approve|deny)$/.exec(path);
+    if (decide) {
+      decided.push(`${decide[1]}:${decide[2]}`);
+      if (["a1", "a2"].every((id) => decided.some((d) => d.startsWith(`${id}:`)))) {
+        const i = api.inbox.findIndex((x) => x.id === "approval:a1");
+        if (i >= 0) api.inbox.splice(i, 1);
+      }
+      return route.fulfill({ json: { ...approval(decide[1], ""), state: decide[2] === "approve" ? "approved" : "denied" } });
+    }
+    if (path === "/tickets/WEB-7/comments" && req.method() === "POST") {
+      replies.push((req.postDataJSON() as { body_md: string }).body_md);
+      return route.fulfill({ status: 201, json: { id: "c1", body_md: replies.at(-1), created_at: new Date().toISOString() } });
+    }
+    if (path === "/tickets/WEB-8") {
+      return route.fulfill({ json: {
+        key: "WEB-8", title: "Partition ledger entries", status: "in_progress", priority: "high", epic: { id: "e1", name: "Ledger at scale" },
+        criteria: [{ id: "c1", position: 1, text: "Entries are partitioned by month", done: true }, { id: "c2", position: 2, text: "No lock longer than 1s", done: false }],
+        branch: "atlas/web-8-partition", pr: { number: 41, state: "open", url: "https://github.com/acme/app/pull/41", additions: 120, deletions: 8 },
+        blocked_by: [], blocks: [], labels: [], artifacts: [], approvals: [], description_md: "", revision: 1, dependency_revision: 1,
+        project: { key: "WEB", name: "Web" }, requires_mockup: false, epic_review: false, mockup_gate: { required: false, from_epic: false, approved: false, mockups: [] },
+        created_at: minutesAgo(100), updated_at: minutesAgo(1),
+      } });
+    }
+    if (path.startsWith("/tickets/")) return route.fulfill({ status: 404, json: { message: "not found" } });
+    if (path === "/epics") return route.fulfill({ json: { epics: [{ epic: { id: "e1", name: "Ledger at scale" }, counts: { total: 5, done: 3, backlog: 0, todo: 1, in_progress: 1, in_review: 0 }, tickets: [] }] } });
+    const id = path.split("/").at(-1)!;
+    const after = Number(url.searchParams.get("after") ?? 0);
+    const r = { [APPROVING]: approving, [ASKING]: asking, [RUNNING]: running, [DONE]: done, [CHILD]: child }[id] ?? running;
+    const events = id === APPROVING ? atlasEvents : id === ASKING
+      ? [ev(1, "message", { text: "Reading the payout code." }, 10), ev(2, "lifecycle", { state: "waiting", reason: "Should payout retries cap at 5 or 8?" }, 2)]
+      : [ev(1, "message", { text: `${r.agent.name} at work.` }, 5)];
+    const approvals = id === APPROVING ? [approval("a1", "Run 0042 on staging"), approval("a2", "Vacuum ledger_entries on staging")].filter((a) => !decided.some((d) => d.startsWith(`${a.id}:`))) : [];
+    const state = id === APPROVING && approvals.length === 0 ? { state: "running" as const, wait_reason: undefined } : {};
+    return route.fulfill({ json: { run: { ...r, ...state }, child_runs: id === APPROVING ? [child] : [], turns: [], approvals, events: events.filter((e) => e.seq > after) } });
+  });
+  return { api, decided, replies };
+}
+
+const list = (page: Page) => page.getByRole("complementary", { name: "Runs" });
+
+test("the list groups runs beside the selected run, and the URL keeps the selection", async ({ page }) => {
+  await installRuns(page);
+  await page.goto("/runs");
+  // /runs opens the first Needs you run in place.
+  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}$`));
+  const needs = list(page).getByRole("region", { name: "Needs you" });
+  await expect(needs.getByRole("listitem")).toHaveText([/Partition ledger entries/, /Payout retries/, /Billing plan/]);
+  await expect(needs.getByRole("link", { name: /Billing plan/ })).toHaveAttribute("href", "/plans/p1");
+  await expect(needs.locator("a[aria-current=page]")).toContainText("Partition ledger entries");
+  // Runs in Needs you aren't repeated below it.
+  await expect(list(page).getByRole("region", { name: "Running" }).getByRole("listitem")).toHaveText([/Search index/]);
+  await expect(list(page).getByRole("region", { name: "Earlier today" })).toContainText("Session refresh");
+  await expect(list(page).getByRole("region", { name: "Earlier today" })).toContainText("WEB-3 · Builder");
+  await expect(list(page).getByRole("status")).toContainText("0 busy · 0 queued · 1 slots");
+
+  // The tray's Needs you lists the same items.
+  await page.getByRole("button", { name: /^Needs you,/ }).click();
+  const tray = page.getByRole("dialog", { name: "Needs you" });
+  await expect(tray.locator("[data-tray-row]")).toHaveCount(3);
+  for (const t of ["Partition ledger entries", "Payout retries", "Billing plan"]) await expect(tray.locator("[data-tray-row]").filter({ hasText: t })).toHaveCount(1);
+  // Open all lands on /runs with Needs you in view.
+  await tray.getByRole("link", { name: "Open all →" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}#needs-you$`));
+  await expect(needs).toBeInViewport();
+
+  // Selecting a row updates the URL; a reload restores the selection.
+  await list(page).getByRole("link", { name: /Search index/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${RUNNING}$`));
+  await expect(page.getByRole("heading", { name: "Search index" })).toBeVisible();
+  await page.reload();
+  await expect(list(page).locator("a[aria-current=page]")).toContainText("Search index");
+  await expect(page.getByRole("heading", { name: "Search index" })).toBeVisible();
+
+  // Search and Hide done narrow the list; "/" focuses search.
+  await page.locator("body").click({ position: { x: 900, y: 5 } });
+  await page.keyboard.press("/");
+  await expect(list(page).getByRole("searchbox", { name: "Search runs" })).toBeFocused();
+  await page.keyboard.type("session");
+  await expect(list(page).getByRole("link", { name: /Session refresh/ })).toBeVisible();
+  await expect(list(page).getByRole("link", { name: /Search index/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await list(page).getByRole("button", { name: "Hide done" }).click();
+  await expect(page).toHaveURL(/done=hide/);
+  await expect(list(page).getByText("Session refresh")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/runs-desktop.png" });
+});
+
+test("the thread decides inline with A and ⇧A, then Next opens the next item with J", async ({ page }) => {
+  const { decided } = await installRuns(page);
+  await page.goto(`/runs/${APPROVING}`);
+  const thread = page.getByRole("region", { name: "Run thread" });
+  await expect(thread.getByText("Step 2 of 3", { exact: true })).toBeVisible();
+  await expect(thread.getByRole("progressbar", { name: "Plan progress" })).toHaveAttribute("aria-valuenow", "1");
+  await expect(thread.getByText("0042_partition_ledger_entries")).toBeVisible();
+  await expect(thread.getByText(/Step 1 done · Write the migration/)).toBeVisible();
+  await expect(thread.getByText("Review the migration for long locks")).toBeVisible();
+  await expect(thread.getByRole("link", { name: "Open run ↗" })).toHaveAttribute("href", `/runs/${CHILD}`);
+  const card = thread.getByRole("group", { name: "Needs attention" });
+  await expect(card).toContainText("Run 0042 on staging");
+  await expect(card.getByRole("button", { name: "Approve all 2 for this run" })).toBeVisible();
+  await page.screenshot({ path: "test-results/run-thread.png" });
+
+  page.once("dialog", (d) => d.accept());
+  await page.locator("body").click({ position: { x: 900, y: 5 } });
+  await page.keyboard.press("Shift+A");
+  await expect.poll(() => decided).toEqual(["a1:approve", "a2:approve"]);
+  const next = thread.getByRole("link", { name: /Question · Payout retries/ });
+  await expect(next).toBeVisible();
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(new RegExp(`/runs/${ASKING}$`));
+});
+
+test("D opens Deny… and A approves one request", async ({ page }) => {
+  const { decided } = await installRuns(page);
+  await page.goto(`/runs/${APPROVING}`);
+  const card = page.getByRole("group", { name: "Needs attention" });
+  await expect(card).toContainText("Run 0042 on staging");
+  await page.locator("body").click({ position: { x: 900, y: 5 } });
+  await page.keyboard.press("d");
+  const reason = card.getByRole("textbox", { name: /Reason for denying/ });
+  await expect(reason).toBeFocused();
+  await reason.fill("Not now");
+  await reason.press("Escape");
+  await page.locator("body").click({ position: { x: 900, y: 5 } });
+  await page.keyboard.press("a");
+  await expect.poll(() => decided).toEqual(["a1:approve"]);
+  await expect(card).toContainText("Vacuum ledger_entries on staging");
+});
+
+test("the composer replies to a waiting run as a comment mentioning the agent", async ({ page }) => {
+  const { replies } = await installRuns(page);
+  await page.goto(`/runs/${ASKING}`);
+  const thread = page.getByRole("region", { name: "Run thread" });
+  await expect(thread.getByRole("group", { name: "Needs attention" })).toContainText("Should payout retries cap at 5 or 8?");
+  const composer = page.getByRole("form", { name: "Reply to Quill" });
+  const box = composer.getByRole("textbox", { name: "Reply to Quill" });
+  await expect(box).toBeFocused();
+  await box.fill("Cap them at 5.");
+  await box.press("Enter");
+  await expect(composer.getByRole("status")).toHaveText(/Sent\. Resuming Quill/);
+  expect(replies).toEqual(["@quill Cap them at 5."]);
+  // A working run takes a follow-up.
+  await page.goto(`/runs/${RUNNING}`);
+  await expect(page.getByRole("form", { name: "Follow up with Builder" })).toBeVisible();
+});
+
+test("the Context panel shows the ticket, code and run, opens the views, and remembers closing", async ({ page }) => {
+  await installRuns(page);
+  await page.goto(`/runs/${APPROVING}`);
+  const ctx = page.getByRole("complementary", { name: "Context" });
+  await expect(ctx.getByRole("link", { name: /WEB-8 Partition ledger entries/ })).toHaveAttribute("href", "/tickets/WEB-8");
+  await expect(ctx).toContainText("Ledger at scale");
+  await expect(ctx.getByRole("progressbar", { name: "Epic progress" })).toHaveAttribute("aria-valuenow", "3");
+  const criteria = ctx.getByRole("region", { name: "Acceptance criteria" });
+  await expect(criteria).toContainText("1/2");
+  await expect(criteria.getByRole("listitem").first()).toContainText("Done: Entries are partitioned by month");
+  const code = ctx.getByRole("region", { name: "Code" });
+  await expect(code).toContainText("atlas/web-8-partition");
+  await expect(code).toContainText("+120 −8");
+  await expect(code.getByRole("link", { name: /#41/ })).toHaveAttribute("href", "https://github.com/acme/app/pull/41");
+  const facts = ctx.getByRole("region", { name: "Run" });
+  // Every column of the old "More columns" table: purpose, model, started, elapsed, cost, sub runs (status, agent and work are in the list and header).
+  for (const text of ["Ticket run", "gpt-5-codex", "codex", "12m", "$0.40", "+$0.10 sub", "Sub runs1", "runner-2 · docker"]) await expect(facts).toContainText(text);
+
+  await ctx.getByRole("button", { name: "Raw log" }).click();
+  await expect(page).toHaveURL(/view=details/);
+  await expect(page.getByRole("region", { name: "Events" })).toBeVisible();
+  await ctx.getByRole("button", { name: "Graph" }).click();
+  await expect(page).toHaveURL(/view=graph/);
+  await ctx.getByRole("button", { name: "Files" }).click();
+  await expect(page.getByRole("region", { name: "Files" })).toContainText("db/migrations/0042_partition.sql");
+  await page.getByRole("button", { name: "Back to thread" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}$`));
+
+  await ctx.getByRole("button", { name: "Hide context" }).click();
+  await expect(ctx).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Partition ledger entries" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Context" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Context", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Context" })).toBeVisible();
+});
+
+test("Costs and Highlights moved to Reports; the old tabs redirect", async ({ page }) => {
+  await installRuns(page);
+  await page.goto("/runs?tab=costs&project=WEB");
+  await expect(page).toHaveURL(/\/reports\?tab=costs&project=WEB$/);
+  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
+  await page.goto("/runs?tab=highlights");
+  await expect(page).toHaveURL(/\/reports\?tab=highlights$/);
+});

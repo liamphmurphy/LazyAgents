@@ -59,15 +59,16 @@ export function WorkLink({ run }: { run: Run }) {
 /** Now · step N of M, with a thin progress bar under it. */
 function NowLine({ d }: { d: RunDetail }) {
   const run = d.run;
-  const now = nowLine(run, d.events);
   const p = stepProgress(run);
+  // The step is shown on its own, so the Now text leaves it out.
+  const now = nowLine({ ...run, plan: [] }, d.events) ?? (RUN_ENDED.includes(run.state) ? null : p.current?.text ?? null);
   if (!now && !p.total) return null;
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   return (
     <div className="flex flex-none flex-col gap-1.5 border-b border-border-subtle py-2.5">
       <p className={cx(COLUMN, "flex items-baseline gap-3 text-[13px]")}>
         <span className="flex-none text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">{now ? "Now" : "Plan"}</span>
-        {p.total > 0 && <span className="flex-none font-mono text-xs text-fg-tertiary">Step {p.current?.position ?? p.done} of {p.total}</span>}
+        {p.total > 0 && <span title={p.current?.text} className="flex-none font-mono text-xs text-fg-tertiary">Step {p.current?.position ?? p.done} of {p.total}</span>}
         <span role="status" className="min-w-0 flex-1 truncate text-fg-2">{now ?? (p.done === p.total ? "All steps done" : p.current?.text)}</span>
       </p>
       {p.total > 0 && (
@@ -359,7 +360,8 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
             </p>
           )}
           {ended && <Outcome d={d} />}
-          {asking && <Question run={run} question={latestQuestion(d.events)} />}
+          {/* An unmanaged session's await_human logs no run event; its Needs you item carries the question. */}
+          {asking && <Question run={run} question={latestQuestion(d.events) ?? (needs.find((i) => i.run_id === run.id && i.kind === "question")?.summary || null)} />}
           <ActionBox d={d} inThread keys={!ended} />
           {next && <NextLine next={next} query={query} />}
         </div>
