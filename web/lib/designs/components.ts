@@ -55,8 +55,9 @@ export function setOverride(d: Design, instance: string, child: string, patch: O
     const overrides = { ...(n.overrides ?? {}) };
     if (Object.keys(cur).length) overrides[child] = cur;
     else delete overrides[child];
-    const { overrides: _, ...rest } = n;
-    return (Object.keys(overrides).length ? { ...rest, overrides } : rest) as DesignNode;
+    const out: InstanceNode = { ...n, overrides };
+    if (!Object.keys(overrides).length) delete out.overrides;
+    return out;
   });
 }
 
