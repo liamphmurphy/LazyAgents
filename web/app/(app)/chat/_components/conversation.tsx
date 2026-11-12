@@ -81,6 +81,7 @@ import { onComposerDrop } from "@/lib/playground-report";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
+import { hoverReveal } from "@/lib/reveal";
 
 type Message = Schemas["ChatMessage"];
 type Groups = Schemas["ChatHarnessModels"][] | undefined;
@@ -99,7 +100,7 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
 }
 
 // Actions that stay out of the way until the message is hovered or focused.
-const REVEAL = "opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100";
+const REVEAL = cx(hoverReveal("msg"), "transition-opacity focus-within:opacity-100");
 const LONG_REPLY = 1500;
 
 function Divider({ children, testId }: { children: string; testId?: string }) {

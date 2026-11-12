@@ -15,6 +15,7 @@ import { Banner, Skeleton, TextInput } from "@/components/ui/primitives";
 import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
 import { PersonaAvatar, PersonaAvatarButton, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
+import { hoverReveal } from "@/lib/reveal";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -250,7 +251,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
             <RowAge chat={chat} />
           </Link>
           {/* Over the row until hovered, so titles get the full width. A delete confirmation takes its own line. */}
-          <div className={cx("absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 has-[[role=group]]:static has-[[role=group]]:basis-full has-[[role=group]]:translate-y-0 has-[[role=group]]:flex-wrap has-[[role=group]]:opacity-100", active ? "bg-selected" : "bg-hover")}>
+          <div className={cx("absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md transition-opacity focus-within:opacity-100 has-[[role=group]]:static has-[[role=group]]:basis-full has-[[role=group]]:translate-y-0 has-[[role=group]]:flex-wrap has-[[role=group]]:opacity-100", hoverReveal(), active ? "bg-selected" : "bg-hover")}>
           <IconButton icon="edit" label={`Rename ${label}`} onClick={() => { setTitle(chat.title); setEditing(true); }} />
           <IconButton
             icon="folder"

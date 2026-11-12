@@ -14,6 +14,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Field, TextArea, TextInput } from "@/components/ui/primitives";
 import { ModelPicker, type Selection } from "@/app/(app)/chat/_components/model-picker";
+import { hoverReveal } from "@/lib/reveal";
 
 const LEVELS = [
   { value: "new", label: "New", detail: "I'm starting from scratch." },
@@ -102,7 +103,7 @@ function ReviewRow({ label, onEdit, children }: { label: string; onEdit: () => v
     <button type="button" aria-label={`Edit ${label.toLowerCase()}`} onClick={onEdit} className="group flex w-full items-baseline gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover">
       <span className="w-16 flex-none text-xs text-fg-tertiary">{label}</span>
       <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{children}</span>
-      <span className="flex-none text-xs text-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Edit</span>
+      <span className={cx("flex-none text-xs text-accent transition-opacity group-focus-visible:opacity-100", hoverReveal())}>Edit</span>
     </button>
   );
 }
