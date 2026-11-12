@@ -23,6 +23,8 @@ import { LayersPanel } from "./layers-panel";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Not saved", error: "Not saved" };
+/** Until the canvas has measured itself and the page is fitted, nothing shows. */
+const HIDDEN_CAMERA: Camera = { x: -1e7, y: -1e7, z: 1 };
 /** Edits within this quiet time save as one version. */
 export const AUTOSAVE_MS = 800;
 const MAX_IMAGE_EDGE = 4096;
@@ -314,12 +316,12 @@ export function DesignEditor({ id }: { id: string }) {
   // Ids that left the page (undo, another page) drop out of the selection.
   const selected = useMemo(() => (laid ? selectedRaw.filter((s) => laid.boxes.has(s)) : []), [selectedRaw, laid]);
   const [camera, setCameraState] = useState<Camera | null>(null);
-  const [viewport, setViewport] = useState({ w: 1200, h: 800 });
+  const [viewport, setViewport] = useState({ w: 1200, h: 800, known: false });
   const camKey = page ? `designs.camera.${id}.${page.id}` : "";
   const setCamera = useCallback((c: Camera | ((c: Camera) => Camera)) => setCameraState((prev) => (typeof c === "function" ? (prev ? c(prev) : prev) : c)), []);
   // Each page keeps its own camera in this browser (ADR §3.2); a page opens fitted the first time.
   useEffect(() => {
-    if (!camKey || !laid) return;
+    if (!camKey || !laid || !viewport.known) return;
     let c: Camera | null = null;
     try {
       const v = JSON.parse(localStorage.getItem(camKey) ?? "null");
@@ -331,7 +333,7 @@ export function DesignEditor({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCameraState(c ?? fitCamera(laid.box, viewport.w, viewport.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the page changes
-  }, [camKey, !!laid]);
+  }, [camKey, !!laid, viewport.known]);
   useEffect(() => {
     if (!camera || !camKey) return;
     const t = setTimeout(() => {
@@ -623,7 +625,7 @@ export function DesignEditor({ id }: { id: string }) {
               {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
               {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
             </div>
-            {camera && (
+            {(
               <DesignCanvas
                 design={design}
                 page={page}
@@ -634,12 +636,12 @@ export function DesignEditor({ id }: { id: string }) {
                 onTool={setTool}
                 readOnly={readOnly}
                 assetUrl={assetUrl}
-                camera={camera}
+                camera={camera ?? HIDDEN_CAMERA}
                 onCamera={setCamera}
                 onEdit={apply}
                 editing={editing}
                 onEditing={setEditing}
-                onViewport={(w, h) => setViewport({ w, h })}
+                onViewport={(w, h) => setViewport({ w, h, known: true })}
               />
             )}
             <div role="toolbar" aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">

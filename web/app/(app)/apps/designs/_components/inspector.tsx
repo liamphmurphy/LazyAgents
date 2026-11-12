@@ -32,7 +32,7 @@ function Num({ label: l, value, onChange, min, max, step = 1, disabled, suffix }
   }, [value, focused]);
   return (
     <label className={cx(field, disabled && "opacity-50")}>
-      <span className="w-3.5 flex-none text-[11px] text-fg-tertiary">{l}</span>
+      <span className="min-w-3.5 flex-none text-[11px] text-fg-tertiary">{l}</span>
       <input
         aria-label={l.length > 2 ? l : undefined}
         inputMode="decimal"

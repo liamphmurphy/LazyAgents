@@ -358,8 +358,9 @@ export function DesignCanvas(p: CanvasProps) {
       style={{
         cursor,
         background: laid.background ?? "var(--color-surface-sunken)",
-        backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)",
-        backgroundSize: `${Math.max(8, 24 * camera.z)}px ${Math.max(8, 24 * camera.z)}px`,
+        // A dot grid that thins out when zoomed far out.
+        backgroundImage: camera.z >= 0.2 ? "radial-gradient(color-mix(in srgb, var(--color-fg-tertiary) 35%, transparent) 1px, transparent 1px)" : undefined,
+        backgroundSize: `${24 * camera.z * (camera.z < 0.5 ? 4 : 1)}px ${24 * camera.z * (camera.z < 0.5 ? 4 : 1)}px`,
         backgroundPosition: `${camera.x}px ${camera.y}px`,
       }}
       onPointerDown={onPointerDown}
