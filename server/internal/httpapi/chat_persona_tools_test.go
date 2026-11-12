@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -350,5 +351,86 @@ func TestChatReadsTheInbox(t *testing.T) {
 	}
 	if len(after) == 0 || after[0].UnreadCount != before[0].UnreadCount {
 		t.Fatalf("reading from chat changed what's unread: %d → %d", before[0].UnreadCount, after[0].UnreadCount)
+	}
+}
+
+// The tutor can see where the person is: lessons finished, the one they're
+// on, and checks they keep missing.
+func TestChatReadsLearningProgress(t *testing.T) {
+	c := newPersonaChat(t, "")
+	code, out := c.call(t, "create_learning_module", map[string]any{"topic": "Rust ownership", "level": "some"})
+	if code != 200 {
+		t.Fatalf("create_learning_module = %d %v", code, out)
+	}
+	module := uuid.MustParse(fmt.Sprint(out["module_id"]))
+	lesson := func(seq int32, key, status string) uuid.UUID {
+		t.Helper()
+		if err := c.q.CreateLearningLesson(c.ctx, store.CreateLearningLessonParams{CourseID: module, Seq: seq, Key: key, Title: "Lesson " + key, Objectives: []string{}, Prereqs: []string{}, Minutes: 10, Status: status}); err != nil {
+			t.Fatal(err)
+		}
+		l, err := c.q.GetLearningLessonByKey(c.ctx, store.GetLearningLessonByKeyParams{CourseID: module, Key: key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l.ID
+	}
+	check := func(lessonID uuid.UUID, prompt string, answers ...bool) {
+		t.Helper()
+		if err := c.q.CreateLearningCheck(c.ctx, store.CreateLearningCheckParams{LessonID: lessonID, Seq: 0, Objective: "o", Kind: "short", Prompt: prompt, Options: []string{}, Sources: []int32{}}); err != nil {
+			t.Fatal(err)
+		}
+		ks, err := c.q.ListLearningChecks(c.ctx, module)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range ks {
+			if k.Prompt != prompt {
+				continue
+			}
+			for _, right := range answers {
+				// Attempts read oldest first by id, which only orders across milliseconds.
+				time.Sleep(2 * time.Millisecond)
+				if _, err := c.q.CreateLearningAttempt(c.ctx, store.CreateLearningAttemptParams{CheckID: k.ID, UserID: c.user, Response: []string{"x"}, Correct: &right}); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+	check(lesson(0, "borrow", "verified"), "Who owns the value after a move?", true)                  // right first time: solid
+	check(lesson(1, "lifetimes", "verified"), "Why does this borrow outlive its owner?", false, true) // right in the end: complete
+	check(lesson(2, "traits", "verified"), "What does Send promise?", false)                          // still missed
+	lesson(3, "basics", "known")
+	if _, err := c.q.SetLearningCourseState(c.ctx, store.SetLearningCourseStateParams{ID: module, State: "ready"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.q.SetLearningCurrentLesson(c.ctx, store.SetLearningCurrentLessonParams{ID: module, CurrentLesson: "traits"}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out = c.call(t, "list_learning_modules", map[string]any{})
+	mods := list(out, "modules")
+	if code != 200 || len(mods) != 1 || mods[0]["topic"] != "Rust ownership" || mods[0]["current_lesson"] != "traits" || mods[0]["href"] != "/learn/"+module.String() {
+		t.Fatalf("list_learning_modules = %d %v", code, out)
+	}
+
+	code, out = c.call(t, "get_learning_progress", map[string]any{"module_id": module})
+	if code != 200 || out["studyable"] != float64(3) || out["complete"] != float64(2) || out["solid"] != float64(1) {
+		t.Fatalf("get_learning_progress = %d %v", code, out)
+	}
+	progress := map[string]string{}
+	for _, l := range list(out, "lessons") {
+		progress[fmt.Sprint(l["key"])] = fmt.Sprint(l["progress"])
+		if (l["key"] == "traits") != (l["current"] == true) {
+			t.Errorf("current flag on %v", l)
+		}
+	}
+	if progress["borrow"] != "solid" || progress["lifetimes"] != "complete" || progress["traits"] != "new" || progress["basics"] != "<nil>" {
+		t.Fatalf("progress = %v", progress)
+	}
+	if missed, _ := out["still_missed"].([]any); len(missed) != 1 || missed[0] != "What does Send promise?" {
+		t.Fatalf("still_missed = %v", out["still_missed"])
+	}
+	if code, out := c.call(t, "get_learning_progress", map[string]any{"module_id": uuid.New()}); code != 422 {
+		t.Fatalf("unknown module = %d %v", code, out)
 	}
 }

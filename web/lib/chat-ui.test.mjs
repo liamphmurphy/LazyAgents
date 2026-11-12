@@ -179,6 +179,8 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "search_library", input: {} }, "library"],
     [{ tool: "read_library_item", input: {} }, "library"],
     [{ tool: "mcp__lazyagents__list_inbox", input: {} }, "inbox"],
+    [{ tool: "list_learning_modules", input: {} }, "learning"],
+    [{ tool: "mcp__lazyagents__get_learning_progress", input: {} }, "learning"],
     [{ tool: "mcp__lazyagents__write_note", input: { body: "secret" } }, "wiki"],
     [{ tool: "reply_block", input: { kind: "chart" } }, "chart"],
     [{ tool: "reply_block", input: { kind: "mermaid" } }, "diagram"],
@@ -387,6 +389,8 @@ test("stepDetail names canvases, workflows, tickets, images, personas, runs and 
     [{ tool: "mcp__lazyagents__search_library", input: {} }, "Looking through your Library"],
     [{ tool: "mcp__lazyagents__read_library_item", input: { item_id: "i9" } }, "Opening something from your Library"],
     [{ tool: "mcp__lazyagents__list_inbox", input: { project: "PAY" } }, "Checking what needs you"],
+    [{ tool: "mcp__lazyagents__list_learning_modules", input: {} }, "Looking over your learning modules"],
+    [{ tool: "mcp__lazyagents__get_learning_progress", input: { module_id: "m9" } }, "Checking your progress"],
     [{ tool: "mcp__lazyagents__update_ticket", input: { ticket: "PAY-214", description: "secret" } }, "Updating PAY-214"],
     [{ tool: "mcp__lazyagents__comment_ticket", input: { ticket: "PAY-214", body: "secret" } }, "Commenting on PAY-214"],
     [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
@@ -411,6 +415,8 @@ test("tools that take an id use the name an earlier call in the turn gave it", (
   assert.equal(detail([tasks, { tool: "delete_scheduled_task", input: { task_id: "t1" } }]), "Removing “Weekly check-in”");
   const found = { tool: "search_library", input: { q: "logo" }, output: JSON.stringify({ items: [{ item_id: "i1", title: "Dusk logo v3" }] }) };
   assert.equal(detail([found, { tool: "read_library_item", input: { item_id: "i1" } }]), "Opening “Dusk logo v3”");
+  const modules = { tool: "list_learning_modules", input: {}, output: JSON.stringify({ modules: [{ module_id: "m1", topic: "Rust ownership" }] }) };
+  assert.equal(detail([modules, { tool: "get_learning_progress", input: { module_id: "m1" } }]), "Checking progress on “Rust ownership”");
   const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
   // No name to show, so the detail would only repeat the step's title.
   assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);
