@@ -137,7 +137,7 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "canvas_create", input: {} }, "canvas"],
     [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
     [{ tool: "mcp__lazyagents__design_flows", input: {} }, "design-view"],
-    ...["design_patch", "design_comment", "design_reply"].map((tool) => [{ tool: `mcp__lazyagents__${tool}`, input: {} }, "design"]),
+    ...["design_patch", "design_import", "design_comment", "design_reply"].map((tool) => [{ tool: `mcp__lazyagents__${tool}`, input: {} }, "design"]),
     ...["design_list", "design_outline", "design_read", "design_render", "design_comments"].map((tool) => [{ tool, input: {} }, "design-view"]),
     [{ tool: "mcp__lazyagents__start_playground", input: {} }, "playground"],
     [{ tool: "playground_status", input: {} }, "playground"],

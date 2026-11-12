@@ -89,3 +89,11 @@ func (s *Service) Boxes(ctx context.Context, body, page string) (map[string]desi
 	}
 	return out, nil
 }
+
+// Import asks the worker to turn Mermaid or SVG text into a node for a page.
+func (s *Service) Import(ctx context.Context, in ImportRequest) (Imported, error) {
+	if !s.Worker.Available() {
+		return Imported{}, ErrUnavailable
+	}
+	return s.Worker.Import(ctx, in)
+}

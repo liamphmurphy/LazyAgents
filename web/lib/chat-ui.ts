@@ -487,6 +487,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("design-view", "reading comments on a design");
     case "design_patch":
       return status("design", "suggesting design changes");
+    case "design_import":
+      return status("design", "importing a diagram into a design");
     case "design_comment":
     case "design_reply":
       return status("design", "commenting on a design");
