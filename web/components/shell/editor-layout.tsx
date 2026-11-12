@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { cx } from "@/lib/cx";
@@ -24,6 +24,8 @@ export type DockTab = {
   id: string;
   label: string;
   icon: IconName;
+  /** Drawn instead of `icon`, e.g. the persona's avatar on Chat. */
+  avatar?: ReactNode;
   badge?: ReactNode;
   busy?: boolean;
   unread?: boolean;
@@ -64,6 +66,8 @@ export function EditorLayout({
   main,
   dock,
   chatTab = "chat",
+  show,
+  onDockChange,
 }: {
   /** Key for the remembered dock state, e.g. "designs". */
   app: string;
@@ -72,6 +76,10 @@ export function EditorLayout({
   main: ReactNode;
   dock: DockTab[];
   chatTab?: string;
+  /** Opens `tab` whenever `n` changes, e.g. when the canvas asks to start a review. */
+  show?: { tab: string; n: number };
+  /** The dock's state after every change, e.g. to clear an unread mark while its tab shows. */
+  onDockChange?: (s: DockState) => void;
 }) {
   const uid = useId();
   const compact = useCompact();
@@ -84,16 +92,25 @@ export function EditorLayout({
 
   useEffect(() => claimEditorRail(), []);
 
-  // Read after mount so the server render matches the first client render.
+  // Read after mount so the server render matches the first client render. Later tab changes (a
+  // tab that comes and goes, like Review) keep the state and only move off a tab that left.
+  const loadedApp = useRef<string>(undefined);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading browser-only storage after hydration
-    setState(loadDock(window.localStorage, app, tabIds.split("\n")));
-    setLoaded(true);
+    const tabs = tabIds.split("\n");
+    if (loadedApp.current !== app) {
+      loadedApp.current = app;
+      setState(loadDock(window.localStorage, app, tabs));
+      setLoaded(true);
+    } else setState((s) => (tabs.includes(s.tab) ? s : { ...s, tab: tabs[0] ?? "" }));
   }, [app, tabIds]);
 
   useEffect(() => {
     if (loaded) saveDock(window.localStorage, app, state);
   }, [app, state, loaded]);
+
+  useEffect(() => {
+    onDockChange?.(state);
+  }, [state, onDockChange]);
 
   const dispatch = useCallback(
     (a: DockAction) => {
@@ -121,6 +138,17 @@ export function EditorLayout({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch, dock, chatTab]);
+
+  // A new `show` opens its tab (adjusting state while rendering, so it lands with the same paint).
+  const showN = show?.n ?? 0;
+  const [shownN, setShownN] = useState(showN);
+  if (showN !== shownN) {
+    setShownN(showN);
+    if (show?.tab) {
+      setState((s) => dockReducer(s, { type: "open", tab: show.tab }));
+      if (compact) setSheetOpen(true);
+    }
+  }
 
   // After ⌘J renders the Chat panel (or the sheet's focus trap settles), focus its composer.
   useEffect(() => {
@@ -245,7 +273,7 @@ function TabIcon({ tab, size = 14 }: { tab: DockTab; size?: number }) {
       {tab.busy && (
         <span aria-hidden data-busy className="absolute -inset-1.5 animate-pulse rounded-full border-2 border-accent motion-reduce:animate-none" />
       )}
-      <Icon name={tab.icon} size={size} />
+      {tab.avatar ?? <Icon name={tab.icon} size={size} />}
       {tab.unread && <span aria-hidden data-unread className="absolute -right-1.5 -top-1.5 size-2 rounded-full bg-state-human" />}
       {(tab.busy || tab.unread) && <span className="sr-only">{[tab.busy && "working", tab.unread && "unread"].filter(Boolean).join(", ")}</span>}
     </span>

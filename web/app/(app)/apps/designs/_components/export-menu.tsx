@@ -68,7 +68,8 @@ async function renderError(r: Response): Promise<string> {
  * built in full before anything is downloaded or uploaded, so a failure
  * leaves nothing behind.
  */
-export function ExportMenu({ id, title, design, pageId, selected, current }: { id: string; title: string; design?: Design; pageId?: string; selected: string[]; current: () => Promise<Design> }) {
+/** Export as a popover; `trigger` renames its button, e.g. the editor header's Share ▾. */
+export function ExportMenu({ id, title, design, pageId, selected, current, trigger }: { trigger?: string; id: string; title: string; design?: Design; pageId?: string; selected: string[]; current: () => Promise<Design> }) {
   const save = useSaveDesignExport(id);
   const [open, setOpen] = useState(false);
   const [format, setFormat] = useState<ExportFormat>("png");
@@ -195,12 +196,19 @@ export function ExportMenu({ id, title, design, pageId, selected, current }: { i
       )}
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
-          <Button variant="secondary" icon="download" disabled={!design || busy}>
-            Export
-          </Button>
+          {trigger ? (
+            <Button variant="primary" disabled={!design || busy}>
+              {trigger} <span aria-hidden>▾</span>
+            </Button>
+          ) : (
+            <Button variant="secondary" icon="download" disabled={!design || busy}>
+              Export
+            </Button>
+          )}
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content align="end" sideOffset={6} aria-label="Export" className={cx(floatPanel, "z-50 flex w-[320px] flex-col gap-3 p-3")}>
+            {trigger && <span className="text-[13px] font-semibold text-fg">Export</span>}
             <fieldset className="flex flex-col gap-0.5">
               <legend className={label}>What</legend>
               {scopes.map((s) => (

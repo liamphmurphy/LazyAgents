@@ -126,9 +126,10 @@ test.describe("@design-review", () => {
     await expect(chat.getByText(/Noted:.*Keep the placeholder copy/)).toBeVisible({ timeout: 120_000 });
 
     // 6. Direct edit on: a patch applies at once as one undoable step, and the selection rides along.
-    const direct = page.getByRole("switch", { name: "Let personas edit directly" });
+    const direct = page.getByTestId("direct-edit");
     await direct.click();
-    await expect(direct).toBeChecked();
+    await page.getByRole("menuitemradio", { name: /Edits directly/ }).click();
+    await expect(direct).toContainText("edits directly");
     await expect.poll(async () => (await get(`/designs/${id}`)).settings.direct_edit).toBe(true);
     const seqBefore = (await head(id)).seq;
     await pick(kept);
