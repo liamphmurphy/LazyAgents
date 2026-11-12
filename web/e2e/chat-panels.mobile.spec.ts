@@ -73,7 +73,7 @@ test("a canvas, then a playground, open in one sheet and switch without reloadin
   // The close button returns to the chat; the canvas stays open behind the header's Panels button.
   await sheet.getByRole("button", { name: "Close panels" }).click();
   await expect(sheet).toBeHidden();
-  await expect(page.getByRole("button", { name: "Panels, 1 open" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Panels (open)" })).toBeVisible();
 
   // Opening the playground brings the sheet back, on the playground, with both in the switch.
   await send(page, `playground: ${PG}`);
@@ -105,7 +105,7 @@ test("Escape and a drag down return to the chat; the Panels button reopens the s
 
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
-  const reopen = page.getByRole("button", { name: "Panels, 1 open" });
+  const reopen = page.getByRole("button", { name: "Panels (open)" });
   await reopen.click();
   await expect(sheet).toBeVisible();
   await expect(sheet.getByTestId("canvas-fullscreen")).toContainText("60 days.");

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activePanel, closePanel, dragCloses, openPanels, openThreads, switchPanel } from "./chat-panels.ts";
+import { activePanel, closePanel, dragCloses, hideSheet, openPanels, openThreads, sheetHidden, switchPanel } from "./chat-panels.ts";
 
 const D = "01a1bbdd-4937-7baa-af62-b3726025d331";
 const C = "01a1bbdd-4937-7baa-af62-b3726025d332";
@@ -93,4 +93,14 @@ test("a drag down closes the sheet past a quarter of its height, or as a quick f
 test("the Comments count leaves out resolved threads", () => {
   assert.equal(openThreads(undefined), 0);
   assert.equal(openThreads([{ status: "open" }, { status: "draft" }, { status: "addressed" }, { status: "resolved" }, { status: "open", parent_id: "x" }]), 3);
+});
+
+test("a dismissed sheet stays dismissed until a switch shows it again", () => {
+  const hidden = hideSheet(q(`playground=open&panel=playground`));
+  assert.equal(sheetHidden(hidden), true);
+  // The panels stay open behind it.
+  assert.deepEqual(openPanels(hidden, []), ["playground"]);
+  const shown = switchPanel(hidden, "playground");
+  assert.equal(sheetHidden(shown), false);
+  assert.equal(shown.get("playground"), "open");
 });

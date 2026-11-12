@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { useCanvasComments, useChatCanvases } from "@/lib/api/canvas-hooks";
 import { useChatPlayground } from "@/lib/api/playground-hooks";
 import { useDesignProposals } from "@/lib/api/designs-hooks";
-import { activePanel, closePanel, dragCloses, openPanels, openThreads, switchPanel, type ChatPanel, type PanelLayout } from "@/lib/chat-panels";
+import { activePanel, closePanel, dragCloses, hideSheet, openPanels, openThreads, PANELS, sheetHidden, switchPanel, type ChatPanel, type PanelLayout } from "@/lib/chat-panels";
 import { cx } from "@/lib/cx";
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,16 @@ export function useChatPanels(chatId: string, live: boolean) {
   return {
     open,
     active: activePanel(search, open),
-    /** The panels there's something to show in, frontmost first: what the compact Panels button opens. */
-    available: (["playground", "canvas", "design"] as const).filter((p) => (p === "design" ? designIds.length > 0 : p === "canvas" ? canvases.length > 0 : hasPlayground)),
-    /** Shows `p`, already open, without touching the rest of the query. */
+    /** The panels there's something to show in, for the compact header's Panels button. */
+    available: PANELS.filter((p) => (p === "design" ? designIds.length > 0 : p === "canvas" ? canvases.length > 0 : hasPlayground)),
+    /** Whether the compact sheet is dismissed (the panels stay open); switchTo shows it again. */
+    hidden: sheetHidden(search),
+    hide: () => go(hideSheet(q())),
+    /** Shows `p`, already open, in the sheet (undismissed), without touching the rest of the query. */
     pick: (p: ChatPanel) => {
       const next = q();
       next.set("panel", p);
+      next.delete("sheet");
       go(next);
     },
     switchTo: (p: ChatPanel) => go(switchPanel(q(), p, { designId: designIds.at(-1) })),
@@ -50,7 +54,7 @@ export function useChatPanels(chatId: string, live: boolean) {
  * full-height sheet over the chat ("4 Panel sheet"): a grabber, a switch over the open panels,
  * a close button, and a bottom bar with Comments and Review. Key it by chat.
  */
-export function ChatPanelHost({ chatId, live, readOnly, agent, layout = "side", sheet }: { chatId: string; live: boolean; readOnly: boolean; agent: string; layout?: PanelLayout; sheet?: SheetState }) {
+export function ChatPanelHost({ chatId, live, readOnly, agent, layout = "side" }: { chatId: string; live: boolean; readOnly: boolean; agent: string; layout?: PanelLayout }) {
   useOpenNewDesigns(chatId, live);
   const panels = useChatPanels(chatId, live);
   if (layout === "side") {
@@ -64,44 +68,14 @@ export function ChatPanelHost({ chatId, live, readOnly, agent, layout = "side", 
       </>
     );
   }
-  return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} sheet={sheet} />;
+  return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} />;
 }
 
-/**
- * The compact header's one panels button, in place of Playground and Canvas: it brings a
- * dismissed sheet back, or with nothing open opens the playground, else the newest canvas or design.
- */
-export function PanelsButton({ chatId, live, onShow }: { chatId: string; live: boolean; onShow: () => void }) {
-  const { open, available, switchTo } = useChatPanels(chatId, live);
-  if (!open.length && !available.length) return null;
-  const go = () => {
-    onShow();
-    if (!open.length) switchTo(available[0]);
-  };
-  return (
-    <button
-      type="button"
-      aria-label={open.length ? `Panels, ${open.length} open` : "Panels"}
-      onClick={go}
-      className={cx("inline-flex h-9 flex-none items-center gap-1.5 rounded-md border px-3 text-[13px] text-fg transition-colors hover:bg-hover", open.length ? "border-accent bg-accent-soft" : "border-btn-secondary-border bg-btn-secondary")}
-    >
-      Panels
-      {open.length > 0 && <span className="text-fg-tertiary">{open.length}</span>}
-    </button>
-  );
-}
-
-/** Whether the compact sheet is dismissed (back to the chat, panels still open); the header's Panels button shows it again. */
-export type SheetState = { hidden: boolean; hide: () => void; show: () => void };
-
-function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: string; live: boolean; readOnly: boolean; agent: string; panels: ReturnType<typeof useChatPanels>; sheet?: SheetState }) {
+function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string; live: boolean; readOnly: boolean; agent: string; panels: ReturnType<typeof useChatPanels> }) {
   const router = useRouter();
   const focus = useCanvasPanel().focus;
   const canvases = useChatCanvases(chatId, live).data?.canvases;
-  const { open, active } = panels;
-  const hidden = !!sheet?.hidden;
-  const hide = sheet?.hide;
-  const show = sheet?.show;
+  const { open, active, hidden, hide } = panels;
 
   // A panel opening (a card's Open, a design the persona starts) comes to the front, bringing a dismissed sheet back.
   const key = open.join(",");
@@ -110,14 +84,13 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
     const opened = open.filter((p) => !seen.current.includes(p));
     seen.current = open;
     if (!opened.length) return;
-    show?.();
-    if (opened.at(-1) !== active) panels.pick(opened.at(-1)!);
+    panels.pick(opened.at(-1)!);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the set of open panels changes
   }, [key]);
 
   // Escape returns to the chat, unless the panel used it (a design dropping its selection) or focus is in a field.
   useEffect(() => {
-    if (hidden || !active || !hide) return;
+    if (hidden || !active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.("input, textarea, select, [contenteditable]")) return;
       hide();
@@ -130,7 +103,7 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
   const ref = useRef<HTMLElement>(null);
   const [dy, setDy] = useState(0);
   const startDrag = (e: ReactPointerEvent) => {
-    if (!hide || e.button > 0 || (e.target as Element).closest("button")) return;
+    if (e.button > 0 || (e.target as Element).closest("button")) return;
     const id = e.pointerId;
     const y0 = e.clientY;
     const t0 = e.timeStamp;
@@ -187,11 +160,9 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
               </button>
             ))}
           </span>
-          {hide && (
-            <button type="button" aria-label="Close panels" onClick={hide} className="grid size-9 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg">
-              <Icon name="x" size={16} />
-            </button>
-          )}
+          <button type="button" aria-label="Close panels" onClick={hide} className="grid size-9 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg">
+            <Icon name="x" size={16} />
+          </button>
         </div>
       </div>
       {/* Every open panel stays mounted, so switching doesn't reload a playground or lose a canvas's scroll. */}

@@ -44,6 +44,19 @@ export function switchPanel(q: URLSearchParams, panel: ChatPanel, opts: { design
     next.set("playground", "open");
   }
   next.set("panel", panel);
+  next.delete("sheet");
+  return next;
+}
+
+/** Whether the compact sheet is dismissed: back to the chat with its panels still open, until a switch shows it again. */
+export function sheetHidden(q: Query): boolean {
+  return q.get("sheet") === "hidden";
+}
+
+/** The query with the compact sheet dismissed; switchPanel shows it again. */
+export function hideSheet(q: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.set("sheet", "hidden");
   return next;
 }
 
