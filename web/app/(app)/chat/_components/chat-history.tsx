@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextInput } from "@/components/ui/primitives";
 import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
-import { PersonaAvatar, PersonaAvatarButton, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
+import { PersonaAvatar, PersonaAvatarButton, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -131,6 +131,24 @@ export function PersonaRail({ id, viewed }: { id?: string; viewed: string | null
   );
 }
 
+/**
+ * Who's in the conversation: every persona, stacked, once more than one has joined (whichever
+ * persona is picked, so a guest's list shows the host too); under All, the host's avatar alone.
+ */
+function RowPersonas({ chat, all }: { chat: Chat; all: boolean }) {
+  const participants = chat.participants ?? [];
+  if (participants.length > 1) {
+    const names = participants.map((p) => p.name).join(", ");
+    return (
+      <span title={names} className="flex-none">
+        <PersonaStack personas={participants.map(personaLook)} size={18} />
+        <span className="sr-only">With {names}: </span>
+      </span>
+    );
+  }
+  return all ? <PersonaAvatar persona={personaLook(chat.persona)} /> : null;
+}
+
 /** When the conversation was last active, right-aligned on its one-line row. */
 function RowAge({ chat }: { chat: Chat }) {
   return <time dateTime={chat.last_message_at ?? chat.created_at} className="flex-none text-xs text-fg-tertiary">{shortAgo(chat.last_message_at ?? chat.created_at)}</time>;
@@ -171,7 +189,7 @@ function ArchivedRow({ chat, active, onDeleted, all }: { chat: Chat; active: boo
         aria-current={active ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
       >
-        {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
+        <RowPersonas chat={chat} all={all} />
         <span className="min-w-0 flex-1 truncate">{chatTitle(chat)}</span>
         <RowAge chat={chat} />
       </Link>
@@ -216,7 +234,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
             aria-current={active ? "page" : undefined}
             className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
           >
-            {all && <PersonaAvatar persona={personaLook(chat.persona)} />}
+            <RowPersonas chat={chat} all={all} />
             <span className="flex min-w-0 flex-1 items-center gap-2">
               {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
               <span className="truncate">{label}</span>

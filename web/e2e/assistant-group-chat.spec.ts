@@ -79,3 +79,23 @@ test("a proposal's picture holds approval until it's ready, then shows on the ca
   await card.getByRole("button", { name: "Approve Muse" }).click();
   await expect.poll(() => mock.decisions).toEqual([{ id: proposal.id, decision: "approve" }]);
 });
+
+test("a group chat shows everyone in it in the history and lists under each of its personas", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
+  const id = await openChat(page);
+  mock.chats.find((c) => c.id === id)!.guest_persona_ids = [NOVA.id];
+  await page.reload();
+  await page.getByRole("button", { name: "Expand menu" }).click();
+
+  const history = page.getByRole("complementary", { name: "Chat history" });
+  const row = history.locator(`a[href="/chat/${id}"]`);
+  // Atlas (the host, the default) lists it with both avatars stacked.
+  await expect(row.getByTestId("persona-stack").locator("> span")).toHaveCount(2);
+  await expect(row).toContainText("With Atlas, Nova");
+
+  // Picking Nova, who joined, lists it too.
+  await history.getByRole("group", { name: "Show conversations for" }).getByRole("button", { name: "Nova" }).click();
+  await expect.poll(() => mock.chatPersonaFilters).toContain(NOVA.id);
+  await expect(row.getByTestId("persona-stack")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/chat/${id}`));
+});
