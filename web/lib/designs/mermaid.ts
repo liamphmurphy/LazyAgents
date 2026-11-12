@@ -24,6 +24,7 @@ export class MermaidError extends Error {}
 export const MAX_SOURCE = 50_000;
 export const MAX_NODES = 300;
 export const MAX_EDGES = 600;
+export const MAX_LINE = 2_000;
 
 type Kind = "rect" | "round" | "stadium" | "circle" | "diamond" | "hexagon" | "cylinder" | "flag";
 const SHAPES: [string, string, Kind][] = [
@@ -127,6 +128,8 @@ export function parseFlowchart(src: string): Chart {
   };
 
   for (let ln = 0; ln < lines.length; ln++) {
+    // Bounds the edge regexes' backtracking on hostile input.
+    if (lines[ln].length > MAX_LINE) fail(ln, `the line is ${lines[ln].length} characters; the cap is ${MAX_LINE}`);
     for (let s of lines[ln].replace(/%%.*$/, "").split(";")) {
       s = s.trim();
       if (!s) continue;
