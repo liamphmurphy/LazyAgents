@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -272,6 +273,39 @@ func TestDirtyParentCheckoutRejectsDelegation(t *testing.T) {
 	}
 	if out := deref(parent.Outcome); !strings.Contains(out, "commit your work before delegating") || !strings.Contains(out, "dirty.txt") {
 		t.Fatalf("parent told:\n%s", out)
+	}
+}
+
+// Both CLIs report session-cumulative usage on resume, so a continued run
+// must take its baseline from the run it continues, not book the whole session.
+func TestContinuedRunIsBilledOnlyForItsOwnUsage(t *testing.T) {
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
+		t.Run(h, func(t *testing.T) {
+			e := setup(t)
+			sp := agents.DefaultSpec()
+			sp.Harness = h
+			if h == agentdef.HarnessCodex {
+				sp.Model = "gpt-5-codex" // has a built-in price
+			}
+			if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "scribe", Role: "Dev", Kind: agents.KindSub}, &sp); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt", "allowed_paths": []string{"docs/"}}}))
+			t.Setenv("FAKE_HARNESS_ROUND2", script(t, []args{{"agent": "scribe", "task": "Fix it: FILE=docs/b.txt", "allowed_paths": []string{"docs/"}, "continue_run_id": "$1"}}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			kids := e.children(e.run("PAY-214"))
+			if len(kids) != 2 || deref(kids[1].HarnessSessionID) == "" || deref(kids[1].HarnessSessionID) != deref(kids[0].HarnessSessionID) {
+				t.Fatalf("children %+v", kids)
+			}
+			if kids[0].CostUsdMicros == 0 || kids[1].CostUsdMicros != kids[0].CostUsdMicros {
+				t.Fatalf("continued child billed %d micros, first child %d", kids[1].CostUsdMicros, kids[0].CostUsdMicros)
+			}
+			if h == agentdef.HarnessCodex && (kids[0].InputTokens == 0 || kids[1].InputTokens != kids[0].InputTokens) {
+				t.Fatalf("continued child used %d input tokens, first child %d", kids[1].InputTokens, kids[0].InputTokens)
+			}
+		})
 	}
 }
 
