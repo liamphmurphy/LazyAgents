@@ -131,7 +131,14 @@ func TestDelegationToSubagents(t *testing.T) {
 
 	// Finishing reports to the parent and leaves the ticket where it was.
 	before, _ := tracker.Get(ctx, q, ws, st)
-	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", "", ""); err != nil {
+	if err := svc.Complete(ctx, sub, "", "too long", strings.Repeat("é", 9000), "", ""); !isInvalid(err) || !strings.Contains(err.Error(), "report") {
+		t.Fatalf("9,000-rune report: %v", err)
+	}
+	if err := svc.Complete(ctx, main, "", "not delegated", "a report", "todo", ""); !isInvalid(err) || !strings.Contains(err.Error(), "only a delegated run") {
+		t.Fatalf("report from the main agent: %v", err)
+	}
+	report := strings.Repeat("x", runs.MaxReportRunes-40) + "\n- docs/migrations.md:12 FINDING"
+	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", "  "+report+"\n", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := tracker.Get(ctx, q, ws, st)
@@ -143,10 +150,16 @@ func TestDelegationToSubagents(t *testing.T) {
 	if c.State != "completed" || p.State != "running" {
 		t.Fatalf("child %s, parent %s", c.State, p.State)
 	}
+	if deref(c.Report) != report {
+		t.Fatalf("stored report = %.80q", deref(c.Report))
+	}
 	turns, _ := q.ListTurns(ctx, parent.ID)
 	last := turns[len(turns)-1]
 	if last.Trigger != "delegation" || !strings.Contains(last.InputMessage, "Wrote docs/migrations.md") || !strings.Contains(last.InputMessage, "@scribe") {
 		t.Fatalf("parent turn = %+v", last)
+	}
+	if !strings.Contains(last.InputMessage, "Wrote docs/migrations.md\n\n#### Report\n\n"+report) {
+		t.Fatalf("wake message lacks the report:\n%.300s", last.InputMessage)
 	}
 
 	// Direct work is the default; an explicit policy still requires review.
@@ -158,7 +171,7 @@ func TestDelegationToSubagents(t *testing.T) {
 	}
 	parent, _ = q.GetRun(ctx, store.GetRunParams{ID: parent.ID, WorkspaceID: ws})
 	// Done needs a reviewer's all clear: none yet, then a rejection, then approval.
-	if err := svc.Complete(ctx, main, "", "all good", "done", ""); !isConflict(err) {
+	if err := svc.Complete(ctx, main, "", "all good", "", "done", ""); !isConflict(err) {
 		t.Fatalf("done without a verdict: %v", err)
 	}
 	if err := runs.ReviewClear(ctx, q, parent); !isConflict(err) {

@@ -224,7 +224,7 @@ func TestRunLifecycle(t *testing.T) {
 	}
 	// Rejection leaves the lead running so it can implement or delegate the gaps.
 	for _, status := range []string{"", "in_review", "done"} {
-		if err := svc.Complete(ctx, atlas, "", "Partial implementation", status, ""); !isConflict(err) {
+		if err := svc.Complete(ctx, atlas, "", "Partial implementation", "", status, ""); !isConflict(err) {
 			t.Fatalf("completion with unchecked criteria (%q): %v", status, err)
 		}
 	}
@@ -249,7 +249,7 @@ func TestRunLifecycle(t *testing.T) {
 	if _, err := svc.CreateReport(ctx, atlas, "", "Staging migration report", "# Staging migration report\n\nApplied in 140ms.\n"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", "", ""); err != nil {
+	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	tk, _ = tracker.Get(ctx, q, ws, "PAY-214")
