@@ -31,11 +31,11 @@ func TestContractNormalizeAndPaths(t *testing.T) {
 }
 
 func TestChildPromptRendersContract(t *testing.T) {
-	plain := runs.ChildPrompt("PAY-1", "atlas", "Do it", runs.Contract{})
+	plain := runs.ChildPrompt("PAY-1", "atlas", "Do it", runs.Contract{}, true)
 	if strings.Contains(plain, "Acceptance criteria") || strings.Contains(plain, "Allowed files") || strings.Contains(plain, "## Tests") {
 		t.Fatalf("empty contract rendered sections:\n%s", plain)
 	}
-	p := runs.ChildPrompt("PAY-1", "atlas", "Do it", runs.Contract{AcceptanceCriteria: []string{"it works"}, AllowedPaths: []string{"docs/"}, TestCommand: "make test"})
+	p := runs.ChildPrompt("PAY-1", "atlas", "Do it", runs.Contract{AcceptanceCriteria: []string{"it works"}, AllowedPaths: []string{"docs/"}, TestCommand: "make test"}, true)
 	for _, want := range []string{"## Task\n\nDo it", "- it works", "- docs/", "`make test`", "@atlas delegated part of PAY-1", "own git worktree", "in parallel", "AGENTS.md"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q:\n%s", want, p)
@@ -46,6 +46,14 @@ func TestChildPromptRendersContract(t *testing.T) {
 		if strings.Contains(plain, bad) {
 			t.Errorf("prompt restates %q:\n%s", bad, plain)
 		}
+	}
+	// A sub agent that can't write is told so, and isn't told to commit.
+	ro := runs.ChildPrompt("PAY-1", "atlas", "Review it", runs.Contract{}, false)
+	if !strings.Contains(ro, "You can't change files in this run (repo:write is not allowed)") || strings.Contains(ro, "commit") {
+		t.Errorf("read-only prompt:\n%s", ro)
+	}
+	if strings.Contains(plain, "can't change files") {
+		t.Errorf("writable prompt says read-only:\n%s", plain)
 	}
 }
 

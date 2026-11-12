@@ -1170,15 +1170,28 @@ var Tools = []Tool{
 	define("read_page", "Read a wiki page or any document by title, path, ADR id or [[Page#Section]]. Lists the page's outgoing [[links]]; reads count as citations.", readPage),
 	define("write_note", "Write a wiki note. Under agents/<your handle>/ (always writable) keep only durable lessons that would help a future run on this codebase, not a log of what you did. General, reusable lessons go through propose_pattern; project decisions go in ADR/Architecture notes. Other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
 	define("get_backlinks", "What links to a page, document, ticket, epic or agent, with the sentence around each link.", getBacklinks),
-	define("list_subagents", "Sub agents you can delegate part of a ticket to with delegate: handle, role and specialty. Main agents only.",
+	define("list_subagents", "Sub agents you can delegate part of a ticket to with delegate: handle, role, specialty, model and what each may do (can_write, can_run_tests). A sub agent that can't write can't take allowed_paths; ask it for findings in its report. Main agents only.",
 		func(ctx context.Context, d Deps, c agents.Caller, _ Empty) (any, error) {
 			subs, err := d.Runs.ListSubagents(ctx, c)
 			if err != nil {
 				return nil, err
 			}
 			items := make([]map[string]any, len(subs))
-			for i, a := range subs {
-				items[i] = map[string]any{"handle": a.Handle, "name": a.Name, "role": a.Role, "specialty": a.Specialty}
+			for i, sa := range subs {
+				a := sa.Agent
+				item := map[string]any{"handle": a.Handle, "name": a.Name, "role": a.Role, "specialty": a.Specialty}
+				if sa.Unavailable != "" {
+					item["unavailable"] = sa.Unavailable
+				} else {
+					scopes := map[string]string{}
+					for _, s := range sa.Spec.Scopes {
+						scopes[s.Scope] = string(s.Mode)
+					}
+					item["harness"], item["model"], item["scopes"] = sa.Spec.Harness, sa.Spec.Model, scopes
+					item["can_write"] = sa.CanWrite()
+					item["can_run_tests"] = sa.Spec.Mode("tests:run") == agentdef.Allowed
+				}
+				items[i] = item
 			}
 			return map[string]any{"subagents": items}, nil
 		}),
@@ -1189,8 +1202,14 @@ var Tools = []Tool{
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"state": "delegated", "agent": dg.Agent.Handle, "run_id": dg.Run.ID,
-				"message": "@" + dg.Agent.Handle + " is working on it in its own worktree. Delegate any other disjoint parts now, then end your turn: you'll be resumed once, when every delegated run has finished."}, nil
+			msg := "@" + dg.Agent.Handle + " is working on it in its own worktree. Delegate any other disjoint parts now, then end your turn: you'll be resumed once, when every delegated run has finished."
+			out := map[string]any{"state": "delegated", "agent": dg.Agent.Handle, "run_id": dg.Run.ID}
+			if dg.ReadOnly {
+				msg += " It can't change files, so it will report findings instead of committing."
+				out["read_only"] = true
+			}
+			out["message"] = msg
+			return out, nil
 		}),
 	define("complete_run", "Finish the run: In Review and Done require all acceptance criteria verified and checked. Implement or delegate remaining work before finishing; use todo only to explicitly hand unfinished work back. Use status=done only when every reviewer/QA sub agent you delegated to completed with verdict=approved. If you were delegated a task, this reports your summary back to the main agent instead and leaves the ticket alone; a reviewer/QA agent sets verdict=approved or changes_requested.",
 		func(ctx context.Context, d Deps, c agents.Caller, in CompleteIn) (any, error) {
