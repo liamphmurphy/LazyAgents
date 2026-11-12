@@ -7,6 +7,8 @@
 			flush_interval -1
 		}
 	}
+	# The design worker is for the API only (it also checks a bearer token).
+	respond /internal/* 404
 	handle {
 		reverse_proxy web:3000
 	}

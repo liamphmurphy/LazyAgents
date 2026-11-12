@@ -1,0 +1,217 @@
+// The Designs render worker (ADR-designs §2.2): the Go API posts a design body
+// here and gets a PNG or settled node boxes back. Both routes go through
+// `authorized` first; with no DESIGN_WORKER_TOKEN set every call is refused.
+import { createHash, timingSafeEqual } from "node:crypto";
+import { join } from "node:path";
+import { renderAsync } from "@resvg/resvg-js";
+import { makeLayout, type Box, type LaidPage } from "./layout.ts";
+import { DesignError, normalize, type Design, type DesignNode, type Page } from "./schema.ts";
+import { toSvg } from "./svg.ts";
+
+export const MAX_EDGE = 4096;
+export const MAX_CONCURRENT = 4;
+export const TIMEOUT_MS = 10_000;
+const MAX_REQUEST = 48 * 1024 * 1024;
+const FONT_FILES = ["Regular", "Italic", "Medium", "MediumItalic", "SemiBold", "SemiBoldItalic", "Bold", "BoldItalic"].map((n) => `Inter-${n}.ttf`);
+
+export class WorkerError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** Replaceable in tests (to hold a render open). */
+export const deps = {
+  rasterize: async (svg: string, width: number, signal: AbortSignal): Promise<{ png: Buffer; width: number; height: number }> => {
+    const dir = join(process.cwd(), "public", "fonts", "designs");
+    const img = await renderAsync(
+      svg,
+      {
+        font: { fontFiles: FONT_FILES.map((f) => join(dir, f)), loadSystemFonts: false, defaultFontFamily: "Inter" },
+        fitTo: { mode: "width", value: width },
+        shapeRendering: 2,
+        textRendering: 2,
+        imageRendering: 0,
+      },
+      signal,
+    );
+    return { png: img.asPng(), width: img.width, height: img.height };
+  },
+};
+
+const digest = (s: string) => createHash("sha256").update(s).digest();
+
+/** Bearer token check in constant time; false when the token isn't configured. */
+export function authorized(req: Request, token = process.env.DESIGN_WORKER_TOKEN): boolean {
+  if (!token) return false;
+  const h = req.headers.get("authorization") ?? "";
+  const given = h.startsWith("Bearer ") ? h.slice(7) : "";
+  return timingSafeEqual(digest(given), digest(token)) && given.length > 0;
+}
+
+const json = (status: number, body: unknown) => Response.json(body, { status });
+const fail = (e: unknown) => {
+  if (e instanceof WorkerError) return json(e.status, { message: e.message });
+  if (e instanceof DesignError) return json(400, { message: e.message });
+  console.error("design worker:", e);
+  return json(500, { message: "render failed" });
+};
+
+type Obj = Record<string, unknown>;
+async function readBody(req: Request): Promise<Obj> {
+  const text = await req.text();
+  if (text.length > MAX_REQUEST) throw new WorkerError(400, "request is too large");
+  let v: unknown;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    throw new WorkerError(400, "request isn't valid JSON");
+  }
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw new WorkerError(400, "request must be a JSON object");
+  if (typeof (v as Obj).body !== "string") throw new WorkerError(400, "body: must be the design JSON as a string");
+  return v as Obj;
+}
+const optId = (v: unknown, prefix: string, name: string) => {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "string" || !v.startsWith(prefix)) throw new WorkerError(400, `${name}: must be an id starting with ${prefix}`);
+  return v;
+};
+
+const walk = (nodes: DesignNode[], f: (n: DesignNode) => void) => {
+  for (const n of nodes) {
+    f(n);
+    if ("children" in n && Array.isArray(n.children)) walk(n.children, f);
+  }
+};
+
+const ASSET = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/;
+
+let running = 0;
+
+async function render(req: Obj): Promise<Response> {
+  const nodeId = optId(req.node, "n_", "node");
+  const pageId = optId(req.page, "p_", "page");
+  if (nodeId && pageId) throw new WorkerError(400, "give node or page, not both");
+  const scale = req.scale === undefined ? 1 : req.scale;
+  if (typeof scale !== "number" || !(scale >= 1 && scale <= 3)) throw new WorkerError(400, "scale: must be a number from 1 to 3");
+  const assets: Record<string, string> = {};
+  if (req.assets !== undefined) {
+    if (typeof req.assets !== "object" || req.assets === null || Array.isArray(req.assets)) throw new WorkerError(400, "assets: must be an object");
+    for (const [k, v] of Object.entries(req.assets)) {
+      if (typeof v !== "string" || !ASSET.test(v)) throw new WorkerError(400, `assets.${k}: must be a base64 PNG or JPEG data URI`);
+      assets[k] = v;
+    }
+  }
+  const design = normalize(req.body as string).design;
+  const lay = makeLayout(design);
+
+  let page: Page | undefined;
+  if (nodeId) {
+    page = design.pages.find((p) => {
+      let hit = false;
+      walk(p.children, (n) => void (hit ||= n.id === nodeId));
+      return hit;
+    });
+    if (!page) throw new WorkerError(400, `node: ${nodeId} isn't in the design`);
+  } else if (pageId) {
+    page = design.pages.find((p) => p.id === pageId);
+    if (!page) throw new WorkerError(400, `page: ${pageId} isn't in the design`);
+  } else {
+    page = design.pages[0];
+    if (!page) throw new WorkerError(400, "the design has no pages");
+  }
+  const laid = lay.layoutPage(page);
+
+  let box: Box;
+  let ops;
+  if (nodeId) {
+    // A nested node is drawn as its region of the top-level node it sits in.
+    const top = page.children.find((t) => {
+      let hit = false;
+      walk([t], (n) => void (hit ||= n.id === nodeId));
+      return hit;
+    })!;
+    const lt = laid.nodes.find((n) => n.id === top.id);
+    const b = top.id === nodeId ? lt?.box : laid.boxes.get(nodeId);
+    if (!lt || !b) throw new WorkerError(400, `node: ${nodeId} isn't drawn`);
+    box = b;
+    ops = lt.ops;
+  } else {
+    box = laid.box;
+    ops = [...laid.nodes.flatMap((n) => n.ops), ...laid.connectors];
+  }
+  if (!(box.w > 0 && box.h > 0)) throw new WorkerError(400, nodeId ? `node: ${nodeId} has no size` : "the page is empty");
+  const width = Math.max(1, Math.round(box.w * scale));
+  const height = Math.max(1, Math.round(box.h * scale));
+  if (Math.max(width, height) > MAX_EDGE) throw new WorkerError(400, `the image would be ${width}×${height} px; the longest edge is at most ${MAX_EDGE}`);
+
+  if (running >= MAX_CONCURRENT) throw new WorkerError(503, "the renderer is busy; try again shortly");
+  running++;
+  try {
+    const svg = toSvg(ops, { box, background: laid.background, assets });
+    const signal = AbortSignal.timeout(TIMEOUT_MS);
+    let out;
+    try {
+      out = await Promise.race([
+        deps.rasterize(svg, width, signal),
+        new Promise<never>((_, rej) => {
+          const late = () => rej(new WorkerError(504, "the render took too long"));
+          if (signal.aborted) late();
+          else signal.addEventListener("abort", late, { once: true });
+        }),
+      ]);
+    } catch (e) {
+      if (e instanceof WorkerError) throw e;
+      if (signal.aborted) throw new WorkerError(504, "the render took too long");
+      throw e;
+    }
+    return new Response(new Uint8Array(out.png), {
+      status: 200,
+      headers: { "content-type": "image/png", "x-design-width": String(out.width), "x-design-height": String(out.height), "cache-control": "no-store" },
+    });
+  } finally {
+    running--;
+  }
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+export function layoutBoxes(design: Design, pageId?: string): { pages: { id: string; boxes: Record<string, Box> }[] } {
+  const lay = makeLayout(design);
+  const pages = pageId ? design.pages.filter((p) => p.id === pageId) : design.pages;
+  if (pageId && !pages.length) throw new WorkerError(400, `page: ${pageId} isn't in the design`);
+  return {
+    pages: pages.map((p) => {
+      const laid: LaidPage = lay.layoutPage(p);
+      const boxes: Record<string, Box> = {};
+      walk(p.children, (n) => {
+        const b = laid.boxes.get(n.id);
+        if (b) boxes[n.id] = { x: r2(b.x), y: r2(b.y), w: r2(b.w), h: r2(b.h) };
+      });
+      return { id: p.id, boxes };
+    }),
+  };
+}
+
+const unauthorized = () => json(401, { message: "unauthorized" });
+
+export async function handleRender(req: Request): Promise<Response> {
+  if (!authorized(req)) return unauthorized();
+  try {
+    return await render(await readBody(req));
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function handleLayout(req: Request): Promise<Response> {
+  if (!authorized(req)) return unauthorized();
+  try {
+    const b = await readBody(req);
+    const pageId = optId(b.page, "p_", "page");
+    return json(200, layoutBoxes(normalize(b.body as string).design, pageId));
+  } catch (e) {
+    return fail(e);
+  }
+}
