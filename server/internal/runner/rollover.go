@@ -25,19 +25,55 @@ func (r *Runner) shouldRollOver(c runCtx) bool {
 	return limit > 0 && c.run.HarnessSessionID != nil && c.run.ContextTokens > 0 && c.run.ContextTokens >= limit
 }
 
-// rolloverPrompt briefs a fresh session at a delegation wake: the run's state,
-// its git facts, what each child reported this turn was asked to do, then
-// wake (the wake message and the delegation report).
-func (r *Runner) rolloverPrompt(ctx context.Context, c runCtx, seq int32, wake string, env map[string]string) (string, error) {
+// rolloverBrief is how a fresh session learns where its run stands: the
+// intro, the run's state (runs.RunBrief) and its git facts. Both rollovers
+// (delegation wake and plan step) open their prompt with it.
+func (r *Runner) rolloverBrief(ctx context.Context, c runCtx, env map[string]string) (string, error) {
 	brief, err := runs.RunBrief(ctx, r.q(), c.run)
 	if err != nil {
 		return "", err
 	}
-	var b strings.Builder
-	b.WriteString(rolloverIntro + "\n\n" + brief)
+	out := rolloverIntro + "\n\n" + brief
 	if git := r.gitBrief(ctx, c, env); git != "" {
-		b.WriteString("\n" + git)
+		out += "\n" + git
 	}
+	return out, nil
+}
+
+// planStepPrompt briefs a fresh session after a plan-step rollover, then
+// gives it the turn's own input (the continuation or a person's reply).
+func (r *Runner) planStepPrompt(ctx context.Context, c runCtx, input string, env map[string]string) (string, error) {
+	brief, err := r.rolloverBrief(ctx, c, env)
+	if err != nil {
+		return "", err
+	}
+	return brief + "\n## Next\n\n" + strings.TrimLeft(input, "\n"), nil
+}
+
+// takePlanStepRollover records a rollover update_step requested
+// (runs.rollover_requested) once the turn has dropped the session: it clears
+// the flag and the stored harness session and logs why.
+func (r *Runner) takePlanStepRollover(ctx context.Context, c runCtx) {
+	q := r.q()
+	if err := q.SetRunRolloverRequested(ctx, store.SetRunRolloverRequestedParams{ID: c.run.ID, RolloverRequested: false}); err != nil {
+		r.Log.Warn("rollover: clear flag", "run", c.run.ID, "err", err)
+	}
+	if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
+		r.Log.Warn("rollover: clear session", "run", c.run.ID, "err", err)
+	}
+	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_rollover", "reason": "plan_step", "context_tokens": c.run.ContextTokens})
+}
+
+// rolloverPrompt briefs a fresh session at a delegation wake: the run's state,
+// its git facts, what each child reported this turn was asked to do, then
+// wake (the wake message and the delegation report).
+func (r *Runner) rolloverPrompt(ctx context.Context, c runCtx, seq int32, wake string, env map[string]string) (string, error) {
+	brief, err := r.rolloverBrief(ctx, c, env)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	b.WriteString(brief)
 	delegated, err := r.delegatedTasks(ctx, c.run, seq)
 	if err != nil {
 		return "", err

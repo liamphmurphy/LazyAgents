@@ -63,6 +63,9 @@ func RunBrief(ctx context.Context, q *store.Queries, run store.Run) (string, err
 				line += "  <- current step"
 			}
 			b.WriteString(line + "\n")
+			if s.State == "done" && s.Note != nil && strings.TrimSpace(*s.Note) != "" {
+				b.WriteString("   Note: " + strings.ReplaceAll(strings.TrimSpace(*s.Note), "\n", "\n   ") + "\n")
+			}
 		}
 		b.WriteString("\n")
 	}

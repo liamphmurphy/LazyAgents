@@ -366,6 +366,7 @@ type StepIn struct {
 	TicketArg
 	Step  int    `json:"step" jsonschema:"Step number, from 1"`
 	State string `json:"state" jsonschema:"pending, current, done, needs_human or failed"`
+	Note  string `json:"note,omitempty" jsonschema:"When marking a step done: what the next step needs to know that the code doesn't show, e.g. decisions made, gotchas, where things live. Up to 1,500 characters."`
 }
 
 type LogEventIn struct {
@@ -882,12 +883,18 @@ var Tools = []Tool{
 		}),
 	define("update_step", "Mark a plan step done (the next pending step becomes current automatically), needs_human or failed, or current to jump to a step. One step is current at a time.",
 		func(ctx context.Context, d Deps, c agents.Caller, in StepIn) (any, error) {
-			m, err := d.Runs.UpdateStep(ctx, c, in.Ticket, in.Step, in.State)
+			r, err := d.Runs.UpdateStep(ctx, c, in.Ticket, in.Step, in.State, in.Note)
 			if err != nil {
 				return nil, err
 			}
-			if m > 0 {
-				return ok(map[string]any{"current": m}), nil
+			if r.Rollover {
+				return map[string]any{"rollover": true, "message": fmt.Sprintf("Step %d is done. Your context is large (%d tokens). "+
+					"Commit your work, then end your turn now without calling other tools: you will continue from step %d in a fresh session "+
+					"that gets your plan, notes, criteria and commits. If your note is missing something the next step needs, "+
+					"call update_step for this step again with a fuller note first.", in.Step, r.ContextTokens, r.Current)}, nil
+			}
+			if r.Current > 0 {
+				return ok(map[string]any{"current": r.Current}), nil
 			}
 			return ok(nil), nil
 		}),

@@ -1073,6 +1073,9 @@ func lastLines(s string, n int) string {
 
 // ---------------------------------------------------------------- turns
 
+// PlanRolloverInput continues a run that ended its turn for a plan-step rollover.
+const PlanRolloverInput = "Continue with the plan."
+
 // IdleNudge resumes a turn that ended without the agent saying what's next.
 const IdleNudge = "You ended your turn without calling complete_run, await_human or request_approval. " +
 	"If the work is done, call complete_run. If you need a person, call await_human or request_approval. Otherwise, continue."
@@ -1167,6 +1170,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 
+	// A plan step asked this run to continue in a fresh session: drop the
+	// session before the usage baseline, so this turn is billed from zero.
+	// It's recorded once the prompt is built (takePlanStepRollover), so a
+	// turn that stops before then rolls over next time instead.
+	planRollover := c.run.RolloverRequested
+	if planRollover {
+		c.run.HarnessSessionID = nil
+	}
 	// Skip a harness another run already found exhausted instead of burning a failing turn on it.
 	handoff, err := r.selectHarness(ctx, &c, turn)
 	if err != nil {
@@ -1305,7 +1316,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			return
 		}
 		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
-		if r.shouldRollOver(c) {
+		if planRollover && handoff == "" {
+			// The session is already gone: brief the fresh one like a delegation rollover.
+			if brief, err := r.rolloverPrompt(ctx, c, turn.Seq, prompt, env); err != nil {
+				log.Warn("rollover brief", "err", err)
+			} else {
+				prompt = brief
+			}
+		} else if r.shouldRollOver(c) {
 			// Continue in a fresh session: everything the main agent needs next
 			// is in the run's state, git and the report, and its checkout was
 			// clean when its children started.
@@ -1327,6 +1345,16 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				}
 			}
 		}
+	}
+	if planRollover {
+		if handoff == "" && turn.Trigger != "delegation" {
+			if brief, err := r.planStepPrompt(ctx, c, prompt, env); err != nil {
+				log.Warn("rollover brief", "err", err)
+			} else {
+				prompt = brief
+			}
+		}
+		r.takePlanStepRollover(ctx, c)
 	}
 	if c.run.ParentRunID != nil && turn.Seq == 1 {
 		prompt += r.checkoutSection(ctx, c, env)
@@ -1852,6 +1880,14 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	// So does a workflow step; the engine checks that it did.
 	if c.run.Purpose == runs.PurposeWorkflow {
 		r.end(ctx, c, "completed", "Workflow step finished.", runs.VerbRunCompleted)
+		return
+	}
+	// It ended its turn because update_step asked it to: continue in a fresh
+	// session (takePlanStepRollover). That isn't an idle stop.
+	if c.run.RolloverRequested {
+		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: runID, Trigger: "resume", InputMessage: PlanRolloverInput}); err != nil {
+			r.Log.Error("rollover turn", "run", runID, "err", err)
+		}
 		return
 	}
 	if c.run.IdleTurns < 1 {

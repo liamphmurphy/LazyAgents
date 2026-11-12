@@ -899,6 +899,7 @@ type PlanStep struct {
 	Position int32
 	Text     string
 	State    string
+	Note     *string
 }
 
 type PlanningSession struct {
@@ -1070,6 +1071,7 @@ type Run struct {
 	ExecutionToken      *uuid.UUID
 	ExecutionExpiresAt  *time.Time
 	ContextTokens       int64
+	RolloverRequested   bool
 }
 
 type RunEvent struct {

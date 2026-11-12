@@ -86,6 +86,9 @@ SELECT * FROM plan_steps WHERE run_id = $1 ORDER BY position;
 -- name: SetStepState :execrows
 UPDATE plan_steps SET state = $3 WHERE run_id = $1 AND position = $2;
 
+-- name: SetStepNote :exec
+UPDATE plan_steps SET note = $3 WHERE run_id = $1 AND position = $2;
+
 -- name: ClearCurrentStep :exec
 UPDATE plan_steps SET state = 'pending' WHERE run_id = $1 AND state = 'current' AND position <> $2;
 

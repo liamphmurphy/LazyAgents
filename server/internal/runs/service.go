@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -460,15 +461,35 @@ func (s *Service) PostPlan(ctx context.Context, c Caller, key string, steps []st
 
 var stepStates = []string{"pending", "current", "done", "needs_human", "failed"}
 
-// UpdateStep sets one step's state. Marking a step current clears any other
-// current step, so the plan always shows one place the agent is at. Marking a
-// step done while nothing is current promotes the next pending step; that
-// step's position is returned (0 when nothing advanced).
-func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state string) (int, error) {
+// StepNoteLimit bounds a step's handoff note, in runes.
+const StepNoteLimit = 1500
+
+// StepResult is what UpdateStep did.
+type StepResult struct {
+	// Current is the step promoted to current (0 when nothing advanced).
+	Current int
+	// Rollover asks the agent to end its turn: its next turn starts in a
+	// fresh session (runs.rollover_requested). ContextTokens is the size that
+	// triggered it.
+	Rollover      bool
+	ContextTokens int64
+}
+
+// UpdateStep sets one step's state and, when note is non-empty, its handoff
+// note. Marking a step current clears any other current step, so the plan
+// always shows one place the agent is at. Marking a step done while nothing is
+// current promotes the next pending step. When that happens on a lead ticket
+// run whose context is at least RolloverContextTokens, it also flags the run
+// to continue in a fresh session (see wantsRollover).
+func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, state, note string) (StepResult, error) {
+	var res StepResult
 	if !slices.Contains(stepStates, state) {
-		return 0, apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
+		return res, apperr.Invalid("state", "must be one of %s", strings.Join(stepStates, ", "))
 	}
-	advanced := 0
+	note = strings.TrimSpace(note)
+	if utf8.RuneCountInString(note) > StepNoteLimit {
+		return res, apperr.Invalid("note", "must be at most %d characters", StepNoteLimit)
+	}
 	err := s.tx(ctx, func(q *store.Queries) error {
 		run, _, err := s.running(ctx, q, c, key)
 		if err != nil {
@@ -486,7 +507,16 @@ func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, s
 		if rows == 0 {
 			return apperr.Invalid("step", "no step %d in the plan", n)
 		}
-		if err := event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": n, "state": state}); err != nil {
+		if note != "" {
+			if err := q.SetStepNote(ctx, store.SetStepNoteParams{RunID: run.ID, Position: int32(n), Note: &note}); err != nil {
+				return err
+			}
+		}
+		ev := map[string]any{"kind": "step", "step": n, "state": state}
+		if note != "" {
+			ev["note"] = note
+		}
+		if err := event(ctx, q, run.ID, "message", ev); err != nil {
 			return err
 		}
 		if state != "done" {
@@ -511,10 +541,30 @@ func (s *Service) UpdateStep(ctx context.Context, c Caller, key string, n int, s
 		if _, err := q.SetStepState(ctx, store.SetStepStateParams{RunID: run.ID, Position: next, State: "current"}); err != nil {
 			return err
 		}
-		advanced = int(next)
-		return event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": advanced, "state": "current"})
+		res.Current = int(next)
+		if err := event(ctx, q, run.ID, "message", map[string]any{"kind": "step", "step": res.Current, "state": "current"}); err != nil {
+			return err
+		}
+		if !s.wantsRollover(run) {
+			return nil
+		}
+		if err := q.SetRunRolloverRequested(ctx, store.SetRunRolloverRequestedParams{ID: run.ID, RolloverRequested: true}); err != nil {
+			return err
+		}
+		res.Rollover, res.ContextTokens = true, run.ContextTokens
+		return nil
 	})
-	return advanced, err
+	return res, err
+}
+
+// wantsRollover reports whether a run that just finished a plan step should
+// continue in a fresh session: the setting is on, it's a managed lead ticket
+// run (delegated runs are short and their sessions are continued by the
+// parent), and its last recorded context is at least the setting.
+func (s *Service) wantsRollover(run store.Run) bool {
+	limit := s.RolloverContextTokens
+	return limit > 0 && run.ParentRunID == nil && run.Purpose == "ticket" && run.Mode == "managed" &&
+		run.ContextTokens >= limit
 }
 
 // ---------------------------------------------------------------- events

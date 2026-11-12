@@ -99,13 +99,13 @@ func TestRunLifecycle(t *testing.T) {
 	if _, err := svc.PostPlan(ctx, atlas, "", []string{"Create partitions", "Backfill", "Apply to staging"}); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = svc.UpdateStep(ctx, atlas, "", 1, "current")
-	_, _ = svc.UpdateStep(ctx, atlas, "", 2, "current")
+	_, _ = svc.UpdateStep(ctx, atlas, "", 1, "current", "")
+	_, _ = svc.UpdateStep(ctx, atlas, "", 2, "current", "")
 	plan, _ := q.ListPlan(ctx, run.ID)
 	if plan[0].State != "pending" || plan[1].State != "current" {
 		t.Fatalf("plan states = %s %s", plan[0].State, plan[1].State)
 	}
-	if _, err := svc.UpdateStep(ctx, atlas, "", 9, "done"); !isInvalid(err) {
+	if _, err := svc.UpdateStep(ctx, atlas, "", 9, "done", ""); !isInvalid(err) {
 		t.Fatal("unknown step accepted")
 	}
 	if err := svc.LogEvent(ctx, atlas, "", "test_run", map[string]any{"passed": 312.0, "failed": 0.0, "duration_s": 252.0}); err != nil {

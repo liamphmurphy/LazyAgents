@@ -47,6 +47,9 @@
 //	                    "$1" continue_run_id is the first delegated run's id; with
 //	                    FAKE_HARNESS_ROUND2_COMMIT=<path> it first commits that file), then
 //	                    complete_run with the whole resume message as the outcome
+//	plan_rollover       claim, post a two-step plan, mark step 1 done with a note; end the
+//	                    turn when update_step answers rollover: true (after an empty
+//	                    commit), else complete_run. The fresh session's turn completes
 //
 // A delegated run (any delegate* mode) writes the file named by FILE=<path> in its
 // task (default child.txt) in its worktree and commits it (FILE=- changes nothing). Test knobs: FAKE_HARNESS_LOG
@@ -894,6 +897,20 @@ func main() {
 		call("delegate", map[string]any{"agent": "scribe", "task": "Write child.txt"})
 		text("Delegated to @scribe. Ending my turn until it reports back.")
 		result(false, "Waiting for the sub agent.")
+		return
+	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "plan_rollover" {
+		call("post_plan", map[string]any{"steps": []string{"Write the change", "Ship it"}})
+		time.Sleep(200 * time.Millisecond) // let the runner record this turn's context size
+		out := call("update_step", map[string]any{"step": 1, "state": "done", "note": "The setting lives in config.go; keep it off by default."})
+		if out["rollover"] == true {
+			_ = exec.Command("git", "commit", "-q", "--allow-empty", "-m", "Write the change").Run()
+			text("Ending my turn for a fresh session.")
+			result(false, "Ending my turn.")
+			return
+		}
+		call("complete_run", map[string]any{"outcome": "Done without a rollover"})
+		result(false, "Done.")
 		return
 	}
 	call("post_plan", map[string]any{"steps": []string{"Read context", "Make the change", "Apply to staging"}})
