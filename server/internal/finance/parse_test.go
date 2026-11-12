@@ -41,6 +41,15 @@ func TestMerchantAndRulePattern(t *testing.T) {
 		"Netflix.com 866-579-7172 CA":  {"NETFLIX COM CA", "NETFLIX COM"},
 		"T-Mobile":                     {"T MOBILE", "T MOBILE"},
 		"12345":                        {"", ""},
+		// Fidelity's cash-management debits: the payee follows "DIRECT DEBIT",
+		// but "DIRECT DEPOSIT" stays, since it's how income is recognized.
+		"DIRECT DEBIT VENMO PAYMENT (Cash)":        {"VENMO PAYMENT CASH", "VENMO PAYMENT"},
+		"DIRECT DEBIT ELAN WEB PYMT (Cash)":        {"ELAN WEB PYMT CASH", "ELAN WEB"},
+		"DIRECT DEPOSIT RVO HEALTH PAYROLL (Cash)": {"DIRECT DEPOSIT RVO HEALTH PAYROLL CASH", "DIRECT DEPOSIT"},
+		// Charges abroad lead with the foreign amount and its currency.
+		"4.55 POUND STERLING CAFFE NERO OXFORD BLACKWE": {"CAFFE NERO OXFORD BLACKWE", "CAFFE NERO"},
+		"101.64 POUND STERLING FULLER SMITH & TURNER":   {"FULLER SMITH & TURNER", "FULLER SMITH"},
+		"POUND STERLING SHOP":                           {"POUND STERLING SHOP", "POUND STERLING"},
 	} {
 		if m := Merchant(desc); m != want[0] || RulePattern(m) != want[1] {
 			t.Errorf("%q: merchant %q pattern %q, want %v", desc, m, RulePattern(m), want)
