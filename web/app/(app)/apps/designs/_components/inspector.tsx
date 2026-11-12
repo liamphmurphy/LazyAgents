@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { PRESETS, find, inAutoLayout, mapNodes, presetLabel, resizeIn, resizeNode } from "@/lib/designs/edit";
-import type { Layout } from "@/lib/designs/layout";
+import { STICKY_COLORS, type Layout } from "@/lib/designs/layout";
 import { ComponentSection, SendToTicket } from "./library-panels";
 import { SHAPE_PRESETS, type AutoLayout, type Constraints, type Design, type DesignNode, type Paint, type Paragraph, type Run } from "@/lib/designs/schema";
 
@@ -414,6 +414,27 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
             <div className="col-span-2">
               <Color name="Text" value={firstRun.color} resolved={lay.color(firstRun.color ?? "$text", mode)} disabled={readOnly} onChange={(c) => setText((ps) => mapRuns(ps, (r) => ({ ...r, color: c })), "color")} />
             </div>
+          </div>
+        </Section>
+      )}
+
+      {n.type === "sticky" && (
+        <Section title="Sticky">
+          <div className="flex gap-1.5" role="radiogroup" aria-label="Sticky colour">
+            {(Object.keys(STICKY_COLORS) as (keyof typeof STICKY_COLORS)[]).map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={(n.color ?? "yellow") === c}
+                aria-label={c}
+                title={c}
+                disabled={readOnly}
+                className={cx("size-[22px] rounded-md border", (n.color ?? "yellow") === c ? "border-accent ring-2 ring-accent/40" : "border-border")}
+                style={{ background: STICKY_COLORS[c] }}
+                onClick={() => patch({ color: c === "yellow" ? undefined : c }, "sticky-color")}
+              />
+            ))}
           </div>
         </Section>
       )}

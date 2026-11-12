@@ -97,3 +97,11 @@ func (s *Service) Inspect(ctx context.Context, body, node, target string) (map[s
 	}
 	return s.Worker.Inspect(ctx, body, node, target)
 }
+
+// Import asks the worker to turn Mermaid or SVG text into a node for a page.
+func (s *Service) Import(ctx context.Context, in ImportRequest) (Imported, error) {
+	if !s.Worker.Available() {
+		return Imported{}, ErrUnavailable
+	}
+	return s.Worker.Import(ctx, in)
+}

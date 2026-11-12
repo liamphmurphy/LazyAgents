@@ -197,3 +197,38 @@ func (w *Worker) Inspect(ctx context.Context, body, node, target string) (map[st
 	}
 	return out, nil
 }
+
+// ImportRequest is design_import's input to the worker: Mermaid or SVG text
+// for a page of the design in Body, at (X, Y) or right of the page's content.
+type ImportRequest struct {
+	Body    string   `json:"body"`
+	Page    string   `json:"page"`
+	X       *float64 `json:"x,omitempty"`
+	Y       *float64 `json:"y,omitempty"`
+	Mermaid *string  `json:"mermaid,omitempty"`
+	SVG     *string  `json:"svg,omitempty"`
+}
+
+// Imported is the node the text became (a section or group subtree, already
+// valid in the design) and what was skipped.
+type Imported struct {
+	Node     map[string]any `json:"node"`
+	Warnings []string       `json:"warnings"`
+}
+
+// Import turns Mermaid or SVG text into a node for the page. Text the worker
+// can't import comes back as a RejectedError naming the problem.
+func (w *Worker) Import(ctx context.Context, in ImportRequest) (Imported, error) {
+	var out Imported
+	res, raw, err := w.post(ctx, "/import", in)
+	if err != nil {
+		return out, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return out, failure(res, raw)
+	}
+	if err := json.Unmarshal(raw, &out); err != nil || out.Node == nil {
+		return out, fmt.Errorf("%w: unreadable import reply", ErrUnavailable)
+	}
+	return out, nil
+}

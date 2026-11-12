@@ -53,6 +53,13 @@ export function pick(path: DesignNode[], selected: readonly string[], mode: "cli
   return isBoard(path[0]) && path.length > 1 ? path[1] : path[0];
 }
 
+/**
+ * What a connector drawn from (or to) a point attaches to: the innermost node
+ * under it that isn't a section or group (those are areas, not diagram nodes),
+ * else the section itself.
+ */
+export const connectTarget = (path: DesignNode[]): DesignNode | undefined => [...path].reverse().find((n) => n.type !== "section" && n.type !== "group") ?? path.at(-1);
+
 /** Top-level-or-child nodes wholly inside a marquee (page coordinates), at the depth the marquee started in. */
 export function inMarquee(list: DesignNode[], boxes: ReadonlyMap<string, Box>, m: Box): string[] {
   const out: string[] = [];

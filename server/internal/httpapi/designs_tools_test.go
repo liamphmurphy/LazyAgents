@@ -31,6 +31,7 @@ type stubWorker struct {
 	renders  []map[string]any
 	layouts  int
 	inspects []map[string]any
+	imports  []map[string]any
 }
 
 var stubPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
@@ -60,6 +61,20 @@ func (w *stubWorker) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		// Settled boxes differ from the stored ones, so a test can tell which it got.
 		_ = json.NewEncoder(rw).Encode(map[string]any{"pages": []any{map[string]any{"id": "p_flows", "boxes": map[string]any{
 			"n_cart": map[string]any{"x": 1, "y": 2, "w": 393, "h": 852}, "n_cart_title": map[string]any{"x": 24, "y": 24, "w": 200, "h": 34}}}}})
+	case "/import":
+		w.imports = append(w.imports, in)
+		if m, _ := in["mermaid"].(string); strings.HasSuffix(m, "-->") {
+			rw.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(rw).Encode(map[string]any{"message": `mermaid: line 2: the edge has no target node: "A -->"`})
+			return
+		}
+		shape := func(id string, x float64) map[string]any {
+			return map[string]any{"id": id, "type": "shape", "shape": "roundRect", "x": x, "y": 56, "w": 96, "h": 46}
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]any{"warnings": []string{"line 3: classDef is ignored (styling isn't imported)"}, "node": map[string]any{
+			"id": "n_imported", "type": "section", "name": "Imported flowchart", "x": 2000, "y": 0, "w": 300, "h": 140,
+			"children": []any{shape("n_imp_a", 32), shape("n_imp_b", 184), map[string]any{"id": "n_imp_c", "type": "connector", "from": map[string]any{"node": "n_imp_a"}, "to": map[string]any{"node": "n_imp_b"}, "points": []any{[]float64{128, 79}, []float64{184, 79}}}},
+		}})
 	case "/inspect":
 		w.inspects = append(w.inspects, in)
 		if in["node"] == "n_gone" {
@@ -562,5 +577,73 @@ func TestDesignLibraryTools(t *testing.T) {
 	}
 	if code, out := e.tool(token, "design_link_ticket", map[string]any{"canvas_id": id, "node_id": "n_ship", "ticket": "NOPE-1"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("unknown ticket = %d %v", code, out)
+	}
+}
+
+// design_import: the worker's node arrives as one add_node suggestion (the
+// design unchanged until review), or as a version with direct edit on; text
+// the worker refuses comes back with its message and changes nothing.
+func TestDesignImportTool(t *testing.T) {
+	e, stub := newDesignToolsEnv(t)
+	id, _, token := e.acceptance()
+	chart := "flowchart LR\n  A --> B"
+
+	out := e.call(token, "design_import", map[string]any{"canvas_id": id, "page": "p_flows", "mermaid": chart})
+	if out["pending_review"] != true || out["ops"] != 1.0 || out["node_id"] != "n_imported" || out["proposal_id"] == nil {
+		t.Fatalf("design_import: %v", out)
+	}
+	if w, _ := out["warnings"].([]any); len(w) != 1 {
+		t.Fatalf("warnings: %v", out["warnings"])
+	}
+	if seq, _ := e.current(id); seq != 2 {
+		t.Fatalf("a suggested import wrote version %d", seq)
+	}
+	if len(stub.imports) != 1 || stub.imports[0]["page"] != "p_flows" || stub.imports[0]["mermaid"] != chart || stub.imports[0]["body"] == nil {
+		t.Fatalf("worker request: %v", stub.imports)
+	}
+	if n := e.call(token, "design_list", map[string]any{})["designs"].([]any)[0].(map[string]any)["pending_proposals"]; n != 1.0 {
+		t.Fatalf("pending_proposals = %v", n)
+	}
+
+	// Refusals name the problem and change nothing.
+	code, bad := e.tool(token, "design_import", map[string]any{"canvas_id": id, "page": "p_flows", "mermaid": "flowchart LR\n  A -->"})
+	if code != http.StatusUnprocessableEntity || !strings.Contains(bad["message"].(string), "line 2: the edge has no target node") {
+		t.Fatalf("bad mermaid = %d %v", code, bad)
+	}
+	for _, args := range []map[string]any{
+		{"canvas_id": id, "page": "p_nope", "mermaid": chart},
+		{"canvas_id": id, "page": "p_flows"},
+		{"canvas_id": id, "page": "p_flows", "mermaid": chart, "svg": "<svg/>"},
+		{"canvas_id": id, "page": "p_flows", "mermaid": chart, "x": 10},
+	} {
+		if code, out := e.tool(token, "design_import", args); code != http.StatusUnprocessableEntity {
+			t.Fatalf("%v = %d %v", args, code, out)
+		}
+	}
+	if code, out := e.tool(token, "design_import", map[string]any{"canvas_id": id, "page": "p_flows", "mermaid": chart, "base_version": 1}); code != http.StatusConflict {
+		t.Fatalf("stale base = %d %v", code, out)
+	}
+	if seq, _ := e.current(id); seq != 2 {
+		t.Fatalf("a refused import wrote version %d", seq)
+	}
+	if n := e.call(token, "design_list", map[string]any{})["designs"].([]any)[0].(map[string]any)["pending_proposals"]; n != 1.0 {
+		t.Fatalf("a refused import left a proposal: %v", n)
+	}
+
+	// Direct edit on: applied at once as the persona's version.
+	e.want("PATCH", "/designs/"+id+"/settings", map[string]any{"direct_edit": true}, http.StatusOK)
+	out = e.call(token, "design_import", map[string]any{"canvas_id": id, "page": "p_flows", "svg": "<svg><rect width='1' height='1'/></svg>"})
+	if out["applied"] != true || out["version"] != 3.0 {
+		t.Fatalf("direct edit: %v", out)
+	}
+	v := e.want("GET", "/designs/"+id+"/versions/3", nil, http.StatusOK)
+	if v["author_type"] != "agent" || !strings.Contains(v["body"].(string), `"id":"n_imported"`) || !strings.Contains(v["body"].(string), `"id":"n_imp_c"`) {
+		t.Fatalf("version: %v", v)
+	}
+
+	// No worker: nothing imported, and the persona is told why.
+	stub.set(true)
+	if code, out := e.tool(token, "design_import", map[string]any{"canvas_id": id, "page": "p_flows", "mermaid": chart}); code != http.StatusConflict || !strings.Contains(out["message"].(string), "nothing was imported") {
+		t.Fatalf("worker down = %d %v", code, out)
 	}
 }
