@@ -52,6 +52,9 @@ export async function installBoardApi(page: Page) {
   const boardRequests: string[] = [];
   const unhandled: string[] = [];
   const savedViews: S["SavedView"][] = [];
+  // Open Inbox items; approval/question/blocked ones mark their ticket Needs you.
+  const inbox: S["InboxItem"][] = [];
+  const decisions: Array<{ id: string; decision: string }> = [];
   let rejection: { status: number; message: string; field?: string } | undefined;
   const criteriaRequests: string[] = [];
   let gate: Promise<void> | undefined;
@@ -100,6 +103,14 @@ export async function installBoardApi(page: Page) {
         tickets: ts.map((t) => ({ id: t.id, key: t.key, title: t.title, status: t.status, priority: t.priority })) };
     }) } satisfies S["EpicOverviewList"]);
     if (path === "/tickets" && request.method() === "GET") return json({ tickets: tickets.filter((t) => !url.searchParams.get("epic") || t.epic?.id === url.searchParams.get("epic")).map(summary) });
+    if (path === "/inbox" && request.method() === "GET") return json({ items: inbox });
+    const decided = path.match(/^\/approvals\/([^/]+)\/(approve|deny)$/);
+    if (decided && request.method() === "POST") {
+      decisions.push({ id: decided[1], decision: decided[2] });
+      const item = inbox.find((i) => i.id === `approval:${decided[1]}`);
+      if (item) item.resolved = true;
+      return json({});
+    }
     if (path === "/persona-dock") return json({ personas: [], harnesses: [] });
     if (path === "/chat-models") return json([]);
     if (path === "/runner") return json(runner);
@@ -271,7 +282,7 @@ export async function installBoardApi(page: Page) {
   });
   await page.route("**/api/v1/**", handle);
   return {
-    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests, savedViews,
+    epics, tickets, criteria, patches, projects, counts, runner, boardRequests, unhandled, epicWrites, criteriaRequests, savedViews, inbox, decisions,
     failCriteria: (message?: string) => { criterionError = message; },
     rejectNext: (status: number, message: string, field?: string) => { rejection = { status, message, field }; },
     failBoard: (fail: boolean) => { boardError = fail; },
