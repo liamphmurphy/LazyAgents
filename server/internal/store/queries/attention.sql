@@ -46,12 +46,19 @@ WITH items AS (
  WHERE r.workspace_id=sqlc.arg(workspace_id) AND r.state='running'
  AND coalesce((SELECT e.at FROM run_events e WHERE e.run_id=r.id ORDER BY e.seq DESC LIMIT 1),r.started_at) < now()-interval '30 minutes'
  UNION ALL
- SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,240),'/tickets/'||t.key,p.key,t.key,c.created_at,false,
+ -- The whole comment: ListInbox reads it for a question, then shortens it.
+ SELECT 'mention:'||c.id,'mention',t.title,c.body_md,'/tickets/'||t.key,p.key,t.key,c.created_at,false,
  CASE WHEN c.author_type='agent' THEN c.author_id END,NULL,NULL
  FROM comments c JOIN tickets t ON t.id=c.ticket_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=sqlc.arg(user_id)
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND NOT (c.author_type='user' AND c.author_id=u.id)
  AND (lower(c.body_md) ~ ('@'||regexp_replace(lower(split_part(u.email,'@',1)), '([^a-z0-9_])', '\\\1','g')||'\y')
  OR strpos(lower(c.body_md),'@'||lower(u.name))>0)
+ UNION ALL
+ -- A pull request merged in the last two weeks: news for the Updates tab, nothing to act on.
+ SELECT 'merged:'||e.id,'merged',t.title,'Pull request '||coalesce('#'||(e.payload->>'number')||' ','')||'merged','/tickets/'||t.key,p.key,t.key,e.created_at,false,
+ t.assignee_agent_id,NULL,NULL
+ FROM activity_events e JOIN tickets t ON t.id=e.ticket_id JOIN projects p ON p.id=t.project_id
+ WHERE e.workspace_id=sqlc.arg(workspace_id) AND e.verb='pr_merged' AND e.created_at>now()-interval '14 days'
  UNION ALL
  SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested',
  CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id

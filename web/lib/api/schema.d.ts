@@ -4840,6 +4840,8 @@ export interface components {
             labels: components["schemas"]["Label"][];
             counts: {
                 inbox: number;
+                /** @description Open inbox items the person has to act on (the sidebar's Needs you badge); Updates are not counted */
+                needs_you: number;
                 wiki_suggestions: number;
                 live_agents: number;
             };
@@ -6991,10 +6993,10 @@ export interface components {
         InboxItem: {
             id: string;
             /**
-             * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes
+             * @description question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes; merged is a pull request merged in the last 14 days
              * @enum {string}
              */
-            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate" | "scheduled" | "connector_approval" | "secret_approval" | "secret_expiring";
+            kind: "approval" | "question" | "blocked" | "stalled" | "mockup" | "planning" | "review" | "dispatch" | "mention" | "suggestion" | "workflow_gate" | "scheduled" | "connector_approval" | "secret_approval" | "secret_expiring" | "merged";
             title: string;
             summary: string;
             href: string;
@@ -7019,6 +7021,8 @@ export interface components {
              * @description The mockup or wiki page under review
              */
             artifact_id?: string;
+            /** @description True when the person has something to do (the Needs you tab and badge); false for news that asks nothing (the Updates tab): scheduled results, merged pull requests and mentions that ask no question */
+            needs_you: boolean;
         };
         WorkflowCounts: {
             total: number;

@@ -3,7 +3,9 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -25,7 +27,11 @@ func (s *Server) ListInbox(ctx context.Context, req api.ListInboxRequestObject) 
 		if r.Kind == "suggestion" {
 			r.Href = links.NoteHref(strings.TrimPrefix(r.Href, "/wiki/"))
 		}
-		item := api.InboxItem{Id: r.ID, Kind: api.InboxItemKind(r.Kind), Title: r.Title, Summary: r.Summary, Href: r.Href, Project: r.Project, TicketKey: r.TicketKey, CreatedAt: r.CreatedAt, Resolved: r.Resolved, Read: r.Read, RunId: r.RunID, ArtifactId: r.ArtifactID}
+		needsYou := inboxNeedsYou(r.Kind, r.Summary)
+		if r.Kind == "mention" {
+			r.Summary = clip(r.Summary, 240)
+		}
+		item := api.InboxItem{Id: r.ID, Kind: api.InboxItemKind(r.Kind), NeedsYou: needsYou, Title: r.Title, Summary: r.Summary, Href: r.Href, Project: r.Project, TicketKey: r.TicketKey, CreatedAt: r.CreatedAt, Resolved: r.Resolved, Read: r.Read, RunId: r.RunID, ArtifactId: r.ArtifactID}
 		if r.AgentID != nil {
 			item.Agent = &api.AgentRef{Id: *r.AgentID, Handle: r.AgentHandle, Name: r.AgentName, ColorIndex: int(r.AgentColorIndex)}
 		}
@@ -33,6 +39,44 @@ func (s *Server) ListInbox(ctx context.Context, req api.ListInboxRequestObject) 
 	}
 	return out, nil
 }
+
+// inboxNeedsYou sorts an inbox item into the tray's Needs you tab (true, and
+// counted on the sidebar badge) or its Updates tab (false): news that asks the
+// person nothing. A mention is news unless it asks a question, because a
+// comment that asks "@you can you check X?" is a question like any await_human.
+func inboxNeedsYou(kind, body string) bool {
+	switch kind {
+	case "scheduled", "merged":
+		return false
+	case "mention":
+		return asksQuestion(body)
+	}
+	return true
+}
+
+var (
+	codeFence  = regexp.MustCompile("(?s)```.*?(```|$)")
+	inlineCode = regexp.MustCompile("`[^`\n]*`")
+	linkURL    = regexp.MustCompile(`https?://\S*[^\s?.,;:!)]`)
+)
+
+// asksQuestion: the text has a question mark outside code and links (a URL's
+// query string or a code sample doesn't ask anything).
+func asksQuestion(md string) bool {
+	md = codeFence.ReplaceAllString(md, "")
+	md = inlineCode.ReplaceAllString(md, "")
+	md = linkURL.ReplaceAllString(md, "")
+	return strings.Contains(md, "?")
+}
+
+// clip shortens s to at most n runes.
+func clip(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
+}
+
 func (s *Server) ReadInboxItem(ctx context.Context, req api.ReadInboxItemRequestObject) (api.ReadInboxItemResponseObject, error) {
 	if req.Body == nil || len(req.Body.Id) == 0 || len(req.Body.Id) > 200 {
 		return nil, &tracker.ValidationError{Field: "id", Msg: "invalid item id"}

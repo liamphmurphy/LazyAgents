@@ -5856,9 +5856,10 @@ components:
         labels: { type: array, items: { $ref: "#/components/schemas/Label" } }
         counts:
           type: object
-          required: [inbox, live_agents, wiki_suggestions]
+          required: [inbox, needs_you, live_agents, wiki_suggestions]
           properties:
             inbox: { type: integer }
+            needs_you: { type: integer, description: "Open inbox items the person has to act on (the sidebar's Needs you badge); Updates are not counted" }
             wiki_suggestions: { type: integer }
             live_agents: { type: integer }
 
@@ -7817,13 +7818,13 @@ components:
 
     InboxItem:
       type: object
-      required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read]
+      required: [id, kind, title, summary, href, project, ticket_key, created_at, resolved, read, needs_you]
       properties:
         id: { type: string }
         kind:
           type: string
-          description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes"
-          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate, scheduled, connector_approval, secret_approval, secret_expiring]
+          description: "question is a run waiting on await_human (summary is the question); blocked is a failed or blocked run; stalled is a running run with no event for 30 minutes; merged is a pull request merged in the last 14 days"
+          enum: [approval, question, blocked, stalled, mockup, planning, review, dispatch, mention, suggestion, workflow_gate, scheduled, connector_approval, secret_approval, secret_expiring, merged]
         title: { type: string }
         summary: { type: string }
         href: { type: string }
@@ -7835,6 +7836,9 @@ components:
         agent: { $ref: "#/components/schemas/AgentRef" }
         run_id: { type: string, format: uuid, description: "The run to reply to, retry or cancel" }
         artifact_id: { type: string, format: uuid, description: "The mockup or wiki page under review" }
+        needs_you:
+          type: boolean
+          description: "True when the person has something to do (the Needs you tab and badge); false for news that asks nothing (the Updates tab): scheduled results, merged pull requests and mentions that ask no question"
 
     WorkflowCounts:
       type: object
