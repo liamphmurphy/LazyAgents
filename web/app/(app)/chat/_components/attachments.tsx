@@ -344,7 +344,7 @@ export function DropOverlay({ over }: { over: boolean }) {
     >
       <div className="flex max-w-[420px] flex-col items-center gap-1 rounded-xl border-2 border-dashed border-accent bg-accent/10 px-10 py-8 text-center">
         <p className="text-[15px] font-semibold text-fg">Drop files to attach</p>
-        <p className="text-[12.5px] text-fg-secondary">PDF, images, text, Markdown, CSV · up to 25 MB each</p>
+        <p className="text-[12.5px] text-fg-secondary">PDF, images, text, Markdown, CSV, zip · up to 25 MB each</p>
         <p className="text-xs text-fg-tertiary">Files become chips in the composer before you send</p>
       </div>
     </div>

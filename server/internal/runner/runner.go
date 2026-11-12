@@ -1374,6 +1374,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	if c.run.ParentRunID != nil && turn.Seq == 1 {
 		prompt += r.checkoutSection(ctx, c, env)
 	}
+	var unpackedFiles map[string][]byte // a zip's files: delivered, but not listed in ## Context
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
 		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, turn)
@@ -1383,7 +1384,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		ctxFiles = append(ctxFiles, refFiles...)
 		prompt += refPrompt
-		attFiles, attPrompt, err := r.chatTurnAttachments(ctx, q, turn)
+		var attFiles []ContextFile
+		var attPrompt string
+		attFiles, unpackedFiles, attPrompt, err = r.chatTurnAttachments(ctx, q, turn)
 		if err != nil {
 			log.Warn("chat attachments", "err", err)
 			r.failChat(ctx, c, "Could not load the message's attached files.")
@@ -1416,6 +1419,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	paths := make([]string, len(ctxFiles))
 	files := map[string][]byte{}
 	for k, v := range refFiles {
+		files[k] = v
+	}
+	for k, v := range unpackedFiles {
 		files[k] = v
 	}
 	if c.run.Purpose == "chat" {

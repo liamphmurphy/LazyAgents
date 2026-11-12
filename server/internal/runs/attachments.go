@@ -109,6 +109,24 @@ func ChatAttachmentType(name string, size int64, head []byte) (string, error) {
 	return ct, nil
 }
 
+// ChatUploadType is ChatAttachmentType for chat messages, which also take zip
+// archives. Spaces and the library keep the narrower rule: only a chat turn
+// unpacks an archive for the assistant.
+func ChatUploadType(name string, size int64, head []byte) (string, error) {
+	if !IsZipName(name) {
+		return ChatAttachmentType(name, size, head)
+	}
+	switch {
+	case size <= 0:
+		return "", apperr.Invalid("file", "the file is empty")
+	case size > MaxChatAttachmentBytes:
+		return "", apperr.Invalid("file", "files are limited to 25 MB")
+	case !bytes.HasPrefix(head, []byte("PK\x03\x04")):
+		return "", apperr.Invalid("file", "%s doesn't look like a zip file", name)
+	}
+	return ChatAttachmentZipType, nil
+}
+
 // isText reports UTF-8 without NUL bytes. head may end mid-rune where the
 // sniffed prefix was cut, so up to utf8.UTFMax-1 trailing bytes may be partial.
 func isText(head []byte) bool {

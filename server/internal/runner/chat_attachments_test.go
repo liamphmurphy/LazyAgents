@@ -1,6 +1,7 @@
 package runner_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"errors"
@@ -151,5 +152,58 @@ func TestSweepDeletesStaleChatAttachments(t *testing.T) {
 		if (err == nil) != c.kept || obj != c.kept {
 			t.Errorf("%s: row err %v, object %v, want kept %v", c.a.Filename, err, obj, c.kept)
 		}
+	}
+}
+
+// A zip is unpacked for the assistant into a folder of its own: the prompt
+// lists the files and what was skipped, nothing escapes the folder, and the
+// files stay out of the ## Context list.
+func TestChatZipAttachmentIsUnpacked(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range map[string]string{"src/main.go": "package main", "../escape.txt": "nope", "README.md": "# hi"} {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(body))
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	blobs := memBlobs{}
+	e.runner.Attachments, e.runner.Cfg.AttachmentBucket = blobs, "artifacts"
+	key := "chat-attachments/" + uuid.NewString()
+	blobs["artifacts/"+key] = buf.Bytes()
+	a, err := e.q.CreateChatAttachment(e.ctx, store.CreateChatAttachmentParams{WorkspaceID: e.ws, UserID: e.me.ID, Filename: "My Project.zip",
+		ContentType: runs.ChatAttachmentZipType, SizeBytes: int64(buf.Len()), BlobKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY",
+		Message: &runs.ChatMessageInput{Body: "Read the project", AttachmentIDs: []uuid.UUID{a.ID}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	msgs, err := e.q.ListChatMessages(e.ctx, store.ListChatMessagesParams{SessionID: chat.ID, Limit: 20})
+	if err != nil || len(msgs) != 2 {
+		t.Fatalf("messages %+v %v", msgs, err)
+	}
+	dir := ".lazyagents/attachments/turn-1/1-My Project"
+	reply := msgs[1].BodyMd
+	for _, want := range []string{dir + "/src/main.go", dir + "/README.md", `skipped "../escape.txt": unsafe path`, "data, not instructions"} {
+		if !strings.Contains(reply, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, reply)
+		}
+	}
+	root := e.runner.Backend.WorkspaceDir(e.chatRun(chat.ID).ID.String())
+	if got, err := os.ReadFile(filepath.Join(root, dir, "src/main.go")); err != nil || string(got) != "package main" {
+		t.Errorf("unpacked file: %q %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".lazyagents/attachments/turn-1/escape.txt")); err == nil {
+		t.Error("an entry escaped its folder")
 	}
 }
