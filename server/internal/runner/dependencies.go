@@ -18,8 +18,10 @@ func dependencySetupScript() string {
 }
 
 // CacheBackend supplies a persistent cache shared by this runner's workspaces.
-// Package installations remain checkout-local; only download/browser caches
-// are shared. These caches are intended for one trusted user's projects.
+// Package installations remain checkout-local; download, browser and Go build
+// caches are shared, so a new chat doesn't compile its dependencies from
+// scratch (Go's build cache is safe for concurrent builds). These caches are
+// intended for one trusted user's projects.
 type CacheBackend interface{ DependencyCacheDir() string }
 
 func (l *Fake) DependencyCacheDir() string {
@@ -31,7 +33,7 @@ func (d *Docker) DependencyCacheDir() string { return "/cache" }
 func dependencyEnv(cache, workspace string) map[string]string {
 	return map[string]string{
 		"GOMODCACHE":               filepath.Join(cache, "go-mod"),
-		"GOCACHE":                  filepath.Join(workspace, ".lazyagents", "cache", "go-build"),
+		"GOCACHE":                  filepath.Join(cache, "go-build"),
 		"npm_config_cache":         filepath.Join(cache, "npm"),
 		"PLAYWRIGHT_BROWSERS_PATH": filepath.Join(cache, "playwright"),
 	}

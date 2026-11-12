@@ -103,7 +103,7 @@ func TestDependencySetup(t *testing.T) {
 	}
 }
 
-func TestLocalDependencyCachesSharedButBuildsSeparate(t *testing.T) {
+func TestLocalDependencyCachesAreSharedAcrossWorkspaces(t *testing.T) {
 	l := &Fake{Dir: t.TempDir()}
 	for _, id := range []string{"one", "two"} {
 		if err := l.EnsureWorkspace(context.Background(), id); err != nil {
@@ -126,7 +126,7 @@ func TestLocalDependencyCachesSharedButBuildsSeparate(t *testing.T) {
 			_ = closer.Close()
 		}
 		lines := strings.Split(strings.TrimSpace(b.String()), "\n")
-		if len(lines) != 4 || lines[0] != filepath.Join(l.DependencyCacheDir(), "go-mod") || lines[1] != filepath.Join(l.WorkspaceDir(id), ".lazyagents/cache/go-build") {
+		if len(lines) != 4 || lines[0] != filepath.Join(l.DependencyCacheDir(), "go-mod") || lines[1] != filepath.Join(l.DependencyCacheDir(), "go-build") {
 			t.Fatal(lines)
 		}
 	}

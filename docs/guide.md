@@ -104,8 +104,9 @@ Changes take effect after updating the API/runner binaries; repository manifests
 must be on the branch that new runs clone. Existing workspaces are not rewritten.
 
 Docker runs share the named volume `lazyagents-dependency-cache` at `/cache`; workspace
-cleanup preserves it. Each checkout owns its own `node_modules` and writable Go
-build cache under `.lazyagents/cache/go-build`. Codex grants cache writes to
+cleanup preserves it. It holds Go modules, npm downloads, Playwright browsers
+and the Go build cache (`/cache/go-build`), so a new chat doesn't compile its
+dependencies from scratch. Each checkout owns its own `node_modules`. Codex grants cache writes to
 execution/repository writers; scoper keeps read-only tool permissions. Shared
 caches are intended for projects trusted by the same user, not unrelated tenants.
 Playwright browser versions follow the project lockfile; Linux OS library changes
