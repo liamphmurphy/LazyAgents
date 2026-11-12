@@ -44,6 +44,19 @@ export function switchPanel(q: URLSearchParams, panel: ChatPanel, opts: { design
     next.set("playground", "open");
   }
   next.set("panel", panel);
+  next.delete("sheet");
+  return next;
+}
+
+/** Whether the compact sheet is dismissed: back to the chat with its panels still open, until a switch shows it again. */
+export function sheetHidden(q: Query): boolean {
+  return q.get("sheet") === "hidden";
+}
+
+/** The query with the compact sheet dismissed; switchPanel shows it again. */
+export function hideSheet(q: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.set("sheet", "hidden");
   return next;
 }
 
@@ -58,4 +71,18 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
   }
   if (next.get("panel") === panel) next.delete("panel");
   return next;
+}
+
+/**
+ * Whether a drag down on the sheet's grabber, released `dy` px below where it started after `ms`,
+ * closes the sheet: past a quarter of its height (at least 120px), or a quick flick of 40px or more.
+ */
+export function dragCloses(dy: number, ms: number, height: number): boolean {
+  if (dy >= Math.max(120, height / 4)) return true;
+  return dy >= 40 && dy / Math.max(ms, 1) > 0.5;
+}
+
+/** The threads a Comments button counts: top-level comments that aren't resolved (replies don't count). */
+export function openThreads(comments: readonly { status: string; parent_id?: string | null }[] | undefined): number {
+  return (comments ?? []).filter((c) => !c.parent_id && c.status !== "resolved").length;
 }
