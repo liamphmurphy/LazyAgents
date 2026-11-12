@@ -263,6 +263,7 @@ export type ChatStatusKind =
   | "image"
   | "image-view"
   | "canvas"
+  | "design-view"
   | "canvas-comment"
   | "playground"
   | "runs"
@@ -472,6 +473,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "canvas_comment":
     case "canvas_reply":
       return status("canvas-comment", "commenting on a canvas");
+    case "design_flows":
+      return status("design-view", "tracing a design's flow");
     case "start_playground":
       return status("playground", "spinning up a playground");
     case "playground_status":
@@ -694,6 +697,8 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
     case "canvas_comment":
     case "canvas_reply":
       return named("Commenting on", known(o.canvas_id));
+    case "design_flows":
+      return named("Tracing the flow of", known(o.canvas_id));
     case "read_workflow":
       return named("Looking over", known(o.workflow_id));
     case "propose_workflow_edit":

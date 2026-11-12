@@ -136,6 +136,7 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "get_video_transcript", input: {} }, "video"],
     [{ tool: "canvas_create", input: {} }, "canvas"],
     [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
+    [{ tool: "mcp__lazyagents__design_flows", input: {} }, "design-view"],
     [{ tool: "mcp__lazyagents__start_playground", input: {} }, "playground"],
     [{ tool: "playground_status", input: {} }, "playground"],
     [{ tool: "read_workflow", input: {} }, "workflow"],
