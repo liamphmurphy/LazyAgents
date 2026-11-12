@@ -185,9 +185,16 @@ func TestDelegationToSubagents(t *testing.T) {
 		t.Fatalf("clear after approval: %v", err)
 	}
 
-	// The runner has consumed the previous report before another delegation.
+	// The runner has consumed (and checked) the previous report before another delegation.
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE runs SET checks='{"passed":true}' WHERE id=$1`, child.ID); err != nil {
+		t.Fatal(err)
+	}
+	firstWake := last.InputMessage
+	if !strings.Contains(firstWake, "The server checks each delegated run") {
+		t.Fatalf("first wake lacks the full guidance: %q", firstWake)
 	}
 	// A failed child tells the parent; cancelling a parent takes its child down.
 	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: parent.ID, State: "running"}); err != nil {
@@ -207,6 +214,11 @@ func TestDelegationToSubagents(t *testing.T) {
 	turns, _ = q.ListTurns(ctx, parent.ID)
 	if m := turns[len(turns)-1].InputMessage; !strings.Contains(m, "cancelled") {
 		t.Fatalf("parent told %q", m)
+	}
+	// A later wake carries a one-sentence reminder instead of the full paragraph.
+	if m := turns[len(turns)-1].InputMessage; !strings.HasSuffix(m, "Checks and merge results follow, as before.") ||
+		strings.Contains(m, "The server checks each delegated run") || len(m) >= len(firstWake) {
+		t.Fatalf("second wake %q isn't shorter than the first %q", m, firstWake)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
 		t.Fatal(err)

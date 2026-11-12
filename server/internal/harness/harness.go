@@ -363,8 +363,9 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	b.WriteString("# Vesper run: " + ticket + "\n\n")
 	if delegated {
 		b.WriteString("You're a sub agent running headless for Vesper. A main agent delegated one task to you and is waiting. ")
-		b.WriteString("Don't call claim_ticket. Work in this checkout on the current branch, commit what you change, and call complete_run ")
-		b.WriteString("with a short summary when you're done (or blocked). If you need a person, call request_approval or await_human and end your turn. ")
+		b.WriteString("Work in this checkout on the current branch and commit what you change; the server merges it into the main agent's branch once checks pass. ")
+		b.WriteString("When you're done, call complete_run with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why. ")
+		b.WriteString("If you need a person, call request_approval or await_human and end your turn. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval. ")
 		b.WriteString("Your task brief is self-contained: call get_ticket only if it lacks context you need, and don't post plans or step updates.\n\n")
 	} else {
 		b.WriteString("You're running headless for Vesper. Use the `lazyagents` MCP tools to report progress: claim_ticket first (it returns the ticket, so skip get_ticket); ")
@@ -391,6 +392,8 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		// review; the ticket still runs the few tests over what it changed, so a
 		// break surfaces on the ticket that made it rather than at the end.
 		b.WriteString("## Checks\n\nThis ticket is part of an epic. The full suite and end-to-end (browser) tests run once, in the epic's final review, after its last ticket: don't run them here. Build and typecheck what you changed (e.g. `go build ./...` and `go vet` on the packages you touched, `npx tsc --noEmit` for TypeScript) and fix every error. Then run the narrowest tests that cover your change (the packages or test files you touched, plus any you added), without verbose flags, and fix what your change broke before you commit. If one of them fails on the epic branch without your change too, leave it and say so in complete_run. Show only the end of long output (`2>&1 | tail -n 40`). Say in complete_run which tests you ran and that the full suite runs in the epic review, and never wait for or poll GitHub PR checks. " + testServices + "\n\n")
+	} else if delegated {
+		b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. If your brief has a Tests command, that is the bar. Don't run the full suite: the main agent runs it once after merging, so never wait for or poll GitHub PR checks either. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. " + testServices + "\n\n")
 	} else {
 		b.WriteString("## Tests\n\nRun the narrowest tests that cover your change (one package or test), without verbose flags, and keep the test cache. Show only the end of long output (`2>&1 | tail -n 40`) and rerun a failing test alone for detail. Run the full suite once before finishing; that local run is enough, so never wait for or poll GitHub PR checks. " + testServices + "\n\n")
 	}
