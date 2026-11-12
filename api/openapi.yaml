@@ -6251,12 +6251,14 @@ components:
         h: { type: integer }
     DesignSummary:
       type: object
-      required: [id, title, chat_id, updated_at, pages, frames, pending_proposals]
+      required: [id, title, chat_id, updated_at, seq, pages, frames, pending_proposals, persona_edited]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         chat_id: { type: string, format: uuid }
         updated_at: { type: string, format: date-time }
+        seq: { type: integer, format: int32, description: "The current version, for its body (getDesignVersion)" }
+        persona_edited: { type: boolean, description: "A persona wrote at least one of its versions" }
         project_id: { type: string, format: uuid, nullable: true }
         pages: { type: integer }
         frames: { type: integer, description: "Top-level frames across its pages" }

@@ -19,11 +19,12 @@ WHERE l.canvas_id = $1 ORDER BY l.node_id, t.key;
 
 -- name: ListUserDesigns :many
 -- The person's designs with their current bodies, most recently changed first.
-SELECT cv.id, cv.title, cv.updated_at, c.id AS chat_id, v.body, s.project_id,
-  (SELECT count(*) FROM design_proposals p WHERE p.canvas_id = cv.id AND p.status = 'pending')::int AS pending_proposals
+SELECT cv.id, cv.title, cv.updated_at, c.id AS chat_id, v.seq, v.body, s.project_id,
+  (SELECT count(*) FROM design_proposals p WHERE p.canvas_id = cv.id AND p.status = 'pending')::int AS pending_proposals,
+  EXISTS (SELECT 1 FROM chat_canvas_versions a WHERE a.canvas_id = cv.id AND a.author_type = 'agent')::boolean AS persona_edited
 FROM chat_canvases cv
 JOIN chat_sessions c ON c.id = cv.session_id
-JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
+JOIN LATERAL (SELECT seq, body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
 LEFT JOIN design_settings s ON s.canvas_id = cv.id
 WHERE c.workspace_id = @workspace_id AND c.created_by = @user_id AND cv.kind = 'design' AND NOT c.hidden
   AND (sqlc.narg(project_id)::uuid IS NULL OR s.project_id = sqlc.narg(project_id)::uuid)

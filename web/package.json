@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "e2e": "playwright test",
     "e2e:stack": "bash e2e-stack/run.sh",
-    "test:unit": "node --experimental-strip-types --test lib/*.test.mjs"
+    "test:unit": "node --experimental-strip-types --test lib/*.test.mjs",
+    "gen:inter-metrics": "node --experimental-strip-types scripts/gen-inter-metrics.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.105.1",

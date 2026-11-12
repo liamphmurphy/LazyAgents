@@ -120,7 +120,8 @@ func TestDesignLifecycle(t *testing.T) {
 		t.Fatalf("list: %v", list)
 	}
 	first := list[0].(map[string]any)
-	if first["id"] != id || first["title"] != "Checkout flow" || first["pages"] != 1.0 || first["frames"] != 3.0 || first["pending_proposals"] != 0.0 {
+	if first["id"] != id || first["title"] != "Checkout flow" || first["pages"] != 1.0 || first["frames"] != 3.0 || first["pending_proposals"] != 0.0 ||
+		first["seq"] != 1.0 || first["persona_edited"] != false {
 		t.Fatalf("summary: %v", first)
 	}
 	if got := e.want("GET", "/designs/"+blank, nil, http.StatusOK); got["title"] != designs.UntitledTitle || got["settings"].(map[string]any)["direct_edit"] != false {
@@ -431,6 +432,9 @@ func TestDesignDirectEditAndPause(t *testing.T) {
 	}
 	if _, body := e.current(id); !strings.Contains(encode(t, body), `"Box 2"`) {
 		t.Fatal("the patch didn't apply")
+	}
+	if list := e.want("GET", "/designs", nil, http.StatusOK)["designs"].([]any); list[0].(map[string]any)["persona_edited"] != true || list[0].(map[string]any)["seq"] != 3.0 {
+		t.Fatalf("a persona's version: %v", list[0])
 	}
 	if _, err := patch(2); !isConflict(err) {
 		t.Fatalf("stale direct edit: %v", err)
