@@ -1,5 +1,6 @@
 "use client";
 
+import { useCompact } from "@/lib/viewport";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -249,6 +250,7 @@ export function EpicsScreen() {
   useEffect(() => {
     if (legacy) router.replace(`/epics/${encodeURIComponent(legacy)}`);
   }, [legacy, router]);
+  const compact = useCompact();
   const filters = parseEpicFilters(params);
   const setFilters = (patch: Partial<EpicFilters>) =>
     router.replace(ticketsHref("epics", new URLSearchParams(epicFilterQuery({ ...filters, ...patch }, project))), { scroll: false });
@@ -258,14 +260,15 @@ export function EpicsScreen() {
   const today = ymd(new Date());
   return (
     <>
-      <TopBar
+      {/* Compact: the layout bar is the header, with its own + button. */}
+      {!compact && <TopBar
         crumbs={projectCrumbs(current, "Tickets")}
         actions={
           <ButtonLink href={project ? `/tickets/new?project=${encodeURIComponent(project)}` : "/tickets/new"} variant="primary" icon="plus">
             New ticket
           </ButtonLink>
         }
-      />
+      />}
       <TicketsLayoutBar layout="epics" />
       <Content>
         <div className="space-y-6">

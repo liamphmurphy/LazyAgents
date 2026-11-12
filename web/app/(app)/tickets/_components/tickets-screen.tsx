@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { cx } from "@/lib/cx";
+import { useCompact } from "@/lib/viewport";
 import type { TicketStatus, TicketSummary } from "@/lib/api/client";
 import { useBulkEach, useBootstrap, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
 import {
@@ -29,8 +30,8 @@ import { SavedViewHeader, SavedViewTabs } from "@/components/domain/saved-views"
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { BulkBar, BulkResultPanel } from "./bulk-bar";
-import { COL, TicketRow, type Density } from "./ticket-row";
-import { TicketsLayoutBar } from "./layout-bar";
+import { COL, CompactTicketRow, TicketRow, type Density } from "./ticket-row";
+import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
 
 const VIEWS: Array<{ key: TicketView; label: string }> = [
   { key: "all", label: "All tickets" },
@@ -174,6 +175,7 @@ export function TicketsScreen() {
     setUrlQ(q);
     if (q !== pushedQ) setSearch(q);
   }
+  const compact = useCompact();
   const density = useSyncExternalStore(subscribeDensity, readDensity, () => "comfortable" as Density);
 
   const boot = useBootstrap();
@@ -306,95 +308,114 @@ export function TicketsScreen() {
   const filtered = !!(q || assignee || status || blockedOnly || unestimated || epic || ready);
   const allSelected = flat.length > 0 && selectedKeys.length === flat.length;
 
+  // The list's filters: in the bar beside the views when wide, one sideways-scrolling line of chips when compact.
+  const chipH = compact ? "h-[32px]" : "h-[26px]";
+  const filterControls = (
+    <>
+      <button type="button" aria-pressed={ready} className={cx(`${chipH} rounded-sm border border-border-strong px-2 text-xs hover:bg-hover`, ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
+      {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}
+      {status && <FilterChip label="Status" value={`${STATUS_NAME[status] ?? status} ×`} onClick={() => setParam("status", null)} title="Clear status filter" />}
+      {blockedOnly && <FilterChip label="Only" value="Blocked ×" onClick={() => setParam("blocked", null)} title="Clear blocked filter" />}
+      {unestimated && <FilterChip label="Only" value="Unestimated ×" onClick={() => setParam("unestimated", null)} title="Clear unestimated filter" />}
+      <label className={`flex ${chipH} items-center gap-1.5 rounded-sm border border-border-strong px-2 text-xs text-fg-tertiary focus-within:border-accent`}>
+        <Icon name="search" size={12} />
+        <span className="sr-only">Search tickets</span>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search"
+          className="w-28 bg-transparent text-fg-2 outline-none placeholder:text-fg-tertiary"
+        />
+      </label>
+      {boot.data && (
+        <AgentPicker label="Agent" agents={boot.data.agents} value={agentFilter?.id} onChange={(id) => setParam("assignee", boot.data.agents.find((a) => a.id === id)?.handle ?? null)}>
+          <button type="button" className={`inline-flex ${chipH} items-center overflow-hidden rounded-sm border border-border-strong text-xs hover:bg-hover`}>
+            <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Agent</span>
+            <span className="px-2 text-fg-2">{agentFilter?.name ?? "any"}</span>
+          </button>
+        </AgentPicker>
+      )}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            aria-label={`Group by ${GROUP_NAME[group]}`}
+            className={cx(`inline-flex ${chipH} items-center overflow-hidden rounded-sm border text-xs hover:bg-hover`, group === "status" ? "border-border-strong" : "border-accent/55")}
+          >
+            <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Group</span>
+            <span className="flex items-center gap-1 px-2 text-fg">
+              {GROUP_NAME[group]}
+              <Icon name="chev" size={12} className="text-fg-secondary" />
+            </span>
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[200px]")}>
+            <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-[11.5px] text-fg-tertiary">Group by</DropdownMenu.Label>
+            <DropdownMenu.RadioGroup value={group} onValueChange={(g) => setParam("group", g === "status" ? null : g)}>
+              {GROUPS.map((g) => (
+                <DropdownMenu.RadioItem key={g} value={g} className="flex h-[30px] cursor-default select-none items-center rounded-md px-2 outline-none data-[highlighted]:bg-hover">
+                  {GROUP_NAME[g]}
+                  <DropdownMenu.ItemIndicator className="ml-auto text-accent">
+                    <Icon name="check" size={14} strokeWidth={1.8} />
+                  </DropdownMenu.ItemIndicator>
+                </DropdownMenu.RadioItem>
+              ))}
+            </DropdownMenu.RadioGroup>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </>
+  );
+  const densitySwitch = (
+    <div role="radiogroup" aria-label="Density" className="inline-flex h-[26px] overflow-hidden rounded-sm border border-border-strong">
+      {(["comfortable", "compact"] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          role="radio"
+          aria-checked={density === d}
+          aria-label={d === "comfortable" ? "Comfortable rows" : "Compact rows"}
+          title={d === "comfortable" ? "Comfortable rows" : "Compact rows"}
+          onClick={() => setDensity(d)}
+          className={cx("grid w-[27px] place-items-center", d === "compact" && "border-l border-border-strong", density === d ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover")}
+        >
+          <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="1.3">
+            {d === "comfortable" ? <path d="M0 2h12M0 6h12M0 10h12" /> : <path d="M0 1.5h12M0 4.5h12M0 7.5h12M0 10.5h12" />}
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      <TopBar
+      {!compact && <TopBar
         crumbs={crumbs}
         actions={
           proj?.archived ? <ButtonLink href="/settings/projects" variant="outline">Manage project</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
         }
-      />
+      />}
       <TicketsLayoutBar layout="list" />
-      {proj?.archived && <div className="px-6 py-3"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
+      {proj?.archived && <div className="px-6 py-3 max-md:px-4"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
+      {compact ? (
+        <ChipScroller label="Filters">
           <Tabs label="Views" value={svId ? "" : view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
           <SavedViewTabs project={project} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" aria-pressed={ready} className={cx("h-[26px] rounded-sm border border-border-strong px-2 text-xs hover:bg-hover", ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
-          {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}
-          {status && <FilterChip label="Status" value={`${STATUS_NAME[status] ?? status} ×`} onClick={() => setParam("status", null)} title="Clear status filter" />}
-          {blockedOnly && <FilterChip label="Only" value="Blocked ×" onClick={() => setParam("blocked", null)} title="Clear blocked filter" />}
-          {unestimated && <FilterChip label="Only" value="Unestimated ×" onClick={() => setParam("unestimated", null)} title="Clear unestimated filter" />}
-          <label className="flex h-[26px] items-center gap-1.5 rounded-sm border border-border-strong px-2 text-xs text-fg-tertiary focus-within:border-accent">
-            <Icon name="search" size={12} />
-            <span className="sr-only">Search tickets</span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search"
-              className="w-28 bg-transparent text-fg-2 outline-none placeholder:text-fg-tertiary"
-            />
-          </label>
-          {boot.data && (
-            <AgentPicker label="Agent" agents={boot.data.agents} value={agentFilter?.id} onChange={(id) => setParam("assignee", boot.data.agents.find((a) => a.id === id)?.handle ?? null)}>
-              <button type="button" className="inline-flex h-[26px] items-center overflow-hidden rounded-sm border border-border-strong text-xs hover:bg-hover">
-                <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Agent</span>
-                <span className="px-2 text-fg-2">{agentFilter?.name ?? "any"}</span>
-              </button>
-            </AgentPicker>
-          )}
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                aria-label={`Group by ${GROUP_NAME[group]}`}
-                className={cx("inline-flex h-[26px] items-center overflow-hidden rounded-sm border text-xs hover:bg-hover", group === "status" ? "border-border-strong" : "border-accent/55")}
-              >
-                <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Group</span>
-                <span className="flex items-center gap-1 px-2 text-fg">
-                  {GROUP_NAME[group]}
-                  <Icon name="chev" size={12} className="text-fg-secondary" />
-                </span>
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[200px]")}>
-                <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-[11.5px] text-fg-tertiary">Group by</DropdownMenu.Label>
-                <DropdownMenu.RadioGroup value={group} onValueChange={(g) => setParam("group", g === "status" ? null : g)}>
-                  {GROUPS.map((g) => (
-                    <DropdownMenu.RadioItem key={g} value={g} className="flex h-[30px] cursor-default select-none items-center rounded-md px-2 outline-none data-[highlighted]:bg-hover">
-                      {GROUP_NAME[g]}
-                      <DropdownMenu.ItemIndicator className="ml-auto text-accent">
-                        <Icon name="check" size={14} strokeWidth={1.8} />
-                      </DropdownMenu.ItemIndicator>
-                    </DropdownMenu.RadioItem>
-                  ))}
-                </DropdownMenu.RadioGroup>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-          <div role="radiogroup" aria-label="Density" className="inline-flex h-[26px] overflow-hidden rounded-sm border border-border-strong">
-            {(["comfortable", "compact"] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                role="radio"
-                aria-checked={density === d}
-                aria-label={d === "comfortable" ? "Comfortable rows" : "Compact rows"}
-                title={d === "comfortable" ? "Comfortable rows" : "Compact rows"}
-                onClick={() => setDensity(d)}
-                className={cx("grid w-[27px] place-items-center", d === "compact" && "border-l border-border-strong", density === d ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover")}
-              >
-                <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="1.3">
-                  {d === "comfortable" ? <path d="M0 2h12M0 6h12M0 10h12" /> : <path d="M0 1.5h12M0 4.5h12M0 7.5h12M0 10.5h12" />}
-                </svg>
-              </button>
-            ))}
+          {filterControls}
+        </ChipScroller>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs label="Views" value={svId ? "" : view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
+            <SavedViewTabs project={project} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {filterControls}
+            {densitySwitch}
           </div>
         </div>
-      </div>
+      )}
 
       {savedView && <SavedViewHeader view={savedView} />}
 
@@ -416,6 +437,22 @@ export function TicketsScreen() {
         >
           {filtered ? "Try a different search or clear a filter." : "Tickets you create, or that agents open as follow-ups, will appear here."}
         </EmptyState>
+      ) : compact ? (
+        <div className="pb-8">
+          {groups.map((g) => (
+            <section key={`${g.by}:${g.id}`} aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}>
+              <h2 className="sticky top-0 z-10 flex h-9 items-center gap-2.5 border-b border-border-row bg-surface-sunken px-4 text-[13px]">
+                <GroupLabel g={g} />
+                <span className="font-mono text-xs text-fg-tertiary">{g.tickets.length}</span>
+                <span className="flex-1" />
+                {g.points > 0 && <span className="whitespace-nowrap text-[11.5px] text-fg-tertiary">{g.points} pts</span>}
+              </h2>
+              {g.tickets.map((t) => (
+                <CompactTicketRow key={t.id} t={t} />
+              ))}
+            </section>
+          ))}
+        </div>
       ) : (
         <div className="overflow-x-auto pb-32">
           <div className="min-w-[760px]">

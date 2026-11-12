@@ -42,6 +42,8 @@ export function useTicketSave(t: Ticket | undefined) {
   };
 }
 
+export type TicketSaver = ReturnType<typeof useTicketSave>;
+
 export function ConflictBanner({ what, reloading, onReapply, onKeep }: { what: string; reloading: boolean; onReapply: () => void; onKeep: () => void }) {
   return (
     <div role="alert">
