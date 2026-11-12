@@ -75,6 +75,7 @@ WITH base AS (
     AND ($4::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = $4)
     AND ($5::uuid IS NULL OR r.ticket_id = $5)
     AND ($6::uuid IS NULL OR cs.id = $6)
+    AND ($7::uuid IS NULL OR t.epic_id = $7)
 ),
 replies AS (
   SELECT m.run_id, m.created_at, coalesce(m.harness, b.harness) AS harness, coalesce(m.model, b.model) AS model,
@@ -116,6 +117,7 @@ type CostUnitsParams struct {
 	ProjectID   *uuid.UUID
 	TicketID    *uuid.UUID
 	ChatID      *uuid.UUID
+	EpicID      *uuid.UUID
 }
 
 type CostUnitsRow struct {
@@ -158,6 +160,7 @@ func (q *Queries) CostUnits(ctx context.Context, arg CostUnitsParams) ([]CostUni
 		arg.ProjectID,
 		arg.TicketID,
 		arg.ChatID,
+		arg.EpicID,
 	)
 	if err != nil {
 		return nil, err
