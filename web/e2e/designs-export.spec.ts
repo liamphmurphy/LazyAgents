@@ -68,7 +68,7 @@ async function editorShot(browser: Browser, baseURL: string, node: string, w: nu
 async function rasterPdf(pdf: Uint8Array): Promise<PNG[]> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const { createCanvas } = await import("@napi-rs/canvas");
-  const doc = await pdfjs.getDocument({ data: pdf, disableFontFace: true, isEvalSupported: false, verbosity: 0 }).promise;
+  const doc = await pdfjs.getDocument({ data: pdf, disableFontFace: true, verbosity: 0 }).promise;
   const out: PNG[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);

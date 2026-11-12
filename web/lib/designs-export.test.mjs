@@ -13,7 +13,7 @@ const load = {
 
 async function pdfPages(bytes) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data: bytes, disableFontFace: true, isEvalSupported: false, verbosity: 0 }).promise;
+  const doc = await pdfjs.getDocument({ data: bytes, disableFontFace: true, verbosity: 0 }).promise;
   const pages = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const p = await doc.getPage(i);
@@ -58,7 +58,7 @@ test("a PNG over the renderer's limit is refused before it's asked for", () => {
 });
 
 test("file names drop characters file systems refuse", () => {
-  assert.equal(fileName("Check/out: v2", "Pay?"), "Check out v2 – Pay");
+  assert.equal(fileName("Check/out: v2", "Pay?"), "Check out v2 - Pay");
   assert.equal(fileName("", ""), "Design");
 });
 

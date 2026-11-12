@@ -116,7 +116,7 @@ export function exportItems(design: Design, scope: ExportScope, at: { page?: str
 
 /** A file name without characters file systems refuse. */
 export function fileName(...parts: string[]): string {
-  const s = parts.filter(Boolean).join(" – ").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim();
+  const s = parts.filter(Boolean).join(" - ").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim();
   return s.slice(0, 120) || "Design";
 }
 
