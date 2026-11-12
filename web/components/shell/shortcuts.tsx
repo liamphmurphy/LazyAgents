@@ -29,7 +29,7 @@ export function isTyping(el: EventTarget | null) {
 export function shortcutBlocked(e: KeyboardEvent): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return true;
   if (e.target instanceof Element && e.target.closest('[role="menu"],[role="menubar"],[role="listbox"],[role="menuitem"],[role="menuitemradio"],[role="option"]')) return true;
-  return !!document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]');
+  return !!document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]:not([hidden])');
 }
 
 /** The `?` keyboard shortcut reference; opened by `?` (app-shell.tsx) or the palette's action. */
