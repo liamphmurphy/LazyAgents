@@ -129,6 +129,8 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"create_ticket":       map[string]any{"title": "Chat-created ticket"},
 		"create_epic":         map[string]any{"name": "Chat-created epic"},
 		"list_epics":          map[string]any{},
+		"list_tickets":        map[string]any{},
+		"list_projects":       map[string]any{},
 		"list_runs":           map[string]any{},
 		"search_repositories": map[string]any{},
 		"list_saved_links":    map[string]any{},

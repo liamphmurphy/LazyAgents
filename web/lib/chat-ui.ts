@@ -367,7 +367,10 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("wiki", "writing a wiki note");
     case "get_ticket":
     case "list_epics":
+    case "list_tickets":
       return status("ticket-lookup", "checking tickets");
+    case "list_projects":
+      return status("projects", "looking over your projects");
     case "get_epic":
       return status("ticket-lookup", "checking an epic");
     case "create_ticket":
@@ -672,6 +675,11 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return o.ticket ? `Reading ${clip(str(o.ticket))}` : general;
     case "list_epics":
       return o.project ? `Looking over ${clip(str(o.project))} epics` : general;
+    case "list_tickets": {
+      const statuses = Array.isArray(o.status) ? o.status.map(str) : [];
+      const which = [o.project ? str(o.project).toUpperCase() : "", statuses.length === 1 && statuses[0] !== "all" ? statuses[0].replace(/_/g, "-") : ""].filter(Boolean).join(" ");
+      return which ? `Looking over ${clip(which)} tickets` : general;
+    }
     case "update_ticket":
       return o.ticket ? `Updating ${clip(str(o.ticket))}` : general;
     case "comment_ticket":

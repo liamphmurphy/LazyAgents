@@ -18,12 +18,12 @@ import (
 // chatTools is the whole MCP surface of a chat run: project context, tracker actions and wiki notes
 // (write_note, which a chat's frozen wiki:write turns into suggestions, see runs.ChatSpec).
 // Everything else, including tools added later, is refused for chats.
-var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "get_epic", "update_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
+var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "get_epic", "update_epic", "list_epics", "list_tickets", "list_projects", "list_runs", "get_run", "reply_to_run",
 	"write_note", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 
 // asideTools is the MCP surface of an aside (a chat answering a question
 // about another chat's running reply): chatTools that only read.
-var asideTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "get_epic", "list_epics", "list_runs", "get_run",
+var asideTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "get_epic", "list_epics", "list_tickets", "list_projects", "list_runs", "get_run",
 	"search_memory", "read_memory", "search_chats", "read_chat", "search_repositories", "get_video_transcript", "list_saved_links", "canvas_read", "canvas_list", "list_workflows", "read_workflow"}
 
 // isAsideRun reports whether a chat run answers an aside. An unreadable spec
@@ -166,7 +166,7 @@ func (s *chatScope) targetProject(ctx context.Context, d Deps, ws uuid.UUID, key
 }
 
 const chatInstructions = `You are the person's Personal Assistant, chatting in %s (chat %s). Answer directly.
-Look things up with list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
+Look things up with list_tickets, list_projects, list_runs, get_run, get_ticket, list_epics, search_knowledge, read_page, read_artifact and get_backlinks; search first and open only what matters. Cite what you used with [[…]] links.
 You can read every project. Use create_ticket and create_epic when asked and return their identifiers: they go to the chat's default project unless you pass project, and with no default, ask the person which project. Change existing tickets with update_ticket and comment_ticket when asked, or to keep a ticket you're working on in this chat current. Never claim tickets, execute project work, or delegate.
 You keep a private memory of this person: find entries with search_memory and read_memory, save with save_memory (it updates near-duplicates), and tell the person whenever you save something. Never store credentials or tokens. Honour "forget that" with forget_memory, and save nothing when told "don't remember this". In a persona chat, about: "persona" reaches the persona's own memory (its identity and shared moments) instead.
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.

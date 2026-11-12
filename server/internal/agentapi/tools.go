@@ -976,6 +976,8 @@ var Tools = []Tool{
 	define("list_runs", "List ticket runs in every project, newest first: live runs by default, or finished/all. Filter by project, ticket or agent; open one with get_run.", listChatRuns),
 	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
+	define("list_tickets", "List tickets in every active project, most urgent first: the open ones unless you pass status. Filter by project, status, epic, assigned agent or words; open one with get_ticket.", listChatTickets),
+	define("list_projects", "List the projects you can read: key, name, repository, and which one is this chat's default.", listChatProjects),
 	define("update_ticket", "Edit an existing ticket from this chat: title, description, acceptance criteria, status, priority, estimate, epic, agent or mockup requirement, and link the pull request for work you did here (pr_url). Pass the revision from get_ticket. Only when the person asks, or to keep a ticket you're working on in this chat current.", updateChatTicket),
 	define("comment_ticket", "Comment on a ticket as yourself, linked back to this chat: findings, repro details, corrections. Only when the person asks, or to record what you learned working on it here.", commentChatTicket),
 	define("update_ticket_blockers", "Add or remove the tickets a ticket waits on: a started run of it queues until every blocker is Done. Returns what it's blocked by afterwards. Refused while the ticket has a live run, or when it would make a cycle.", updateTicketBlockers),
