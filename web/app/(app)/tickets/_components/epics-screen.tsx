@@ -18,6 +18,7 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { HealthPill, type EpicOverview } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { SmallPill } from "@/components/domain/labels";
+import { StackedBar } from "@/components/domain/data";
 import { cx } from "@/lib/cx";
 import { FilterMenu } from "@/components/domain/pickers";
 import { ticketsHref } from "@/lib/tickets-layout";
@@ -165,69 +166,54 @@ function Timeline({
   );
 }
 
-/** One row of the card: label, value and a bar. */
-function Meter({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between gap-3 text-xs">
-        <span className="text-fg-tertiary">{label}</span>
-        <span className="font-mono text-fg-secondary">{value}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-export function EpicCard({ epic: e, today }: { epic: EpicOverview; today: string }) {
-  const { epic } = e;
+/**
+ * One epic as a row in the chat look: health dot, name and objective, a
+ * progress bar (done, running, still open) with points, criteria, open
+ * tickets, owner and target. The name is a stretched link to the epic.
+ */
+export function EpicRow({ epic: e, today }: { epic: EpicOverview; today: string }) {
+  const { epic, counts } = e;
   const pct = Math.round(ratio(epic.points_done, epic.points_total) * 100);
   const overdue = isOverdue(e, today);
-  const segments = Math.min(epic.criteria_total, 12);
-  // More than 12 criteria collapse into a proportional bar.
-  const met = epic.criteria_total > 12 ? Math.round((epic.criteria_done / epic.criteria_total) * segments) : epic.criteria_done;
+  const running = counts.in_progress + counts.in_review;
+  const open = counts.todo + counts.backlog;
   return (
-    <article aria-label={epic.name} className="relative flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-surface p-[18px] hover:border-border-hover">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-fg-tertiary">{e.project.name}</span>
-        <span className="flex gap-1.5">
-          <SmallPill tone={epic.status === "done" ? "done" : "neutral"}>{epic.status === "done" ? "Done" : "Open"}</SmallPill>
+    <article aria-label={epic.name} className="group relative flex items-center gap-4 rounded-lg px-3 py-2.5 hover:bg-row-hover max-md:flex-wrap">
+      <span aria-hidden title={HEALTH_LABEL[epic.health]} className={cx("size-2 flex-none rounded-full", HEALTH_DOT[epic.health])} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-center gap-2">
+          {/* The stretched link makes the whole row open the epic. */}
+          <Link href={`/epics/${epic.id}`} className="truncate text-[13.5px] font-medium text-fg after:absolute after:inset-0 after:rounded-lg">
+            {epic.name}
+          </Link>
+          {epic.status === "done" && <SmallPill tone="done">Done</SmallPill>}
           <HealthPill health={epic.health} />
         </span>
-      </div>
-      <h3 className="type-heading">
-        {/* The stretched link makes the whole card open the epic. */}
-        <Link href={`/epics/${epic.id}`} className="after:absolute after:inset-0 after:rounded-xl hover:text-accent">
-          {epic.name}
-        </Link>
-      </h3>
-      <p className="line-clamp-2 min-h-10 text-[13px] text-fg-secondary">{e.objective || "No objective yet."}</p>
-      <Meter label="Points" value={epic.points_total ? `${epic.points_done} / ${epic.points_total} pts · ${pct}%` : "No estimates yet"}>
-        <div role="progressbar" aria-label={`Points for ${epic.name}`} aria-valuemin={0} aria-valuemax={epic.points_total || 1} aria-valuenow={epic.points_done}
-          className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-        </div>
-      </Meter>
-      <Meter label="Criteria" value={epic.criteria_total ? `${epic.criteria_done} / ${epic.criteria_total} met` : "None yet"}>
-        {epic.criteria_total ? (
-          <div role="progressbar" aria-label={`Criteria for ${epic.name}`} aria-valuemin={0} aria-valuemax={epic.criteria_total} aria-valuenow={epic.criteria_done} className="flex gap-1">
-            {Array.from({ length: segments }, (_, i) => (
-              <span key={i} className={cx("h-1.5 flex-1 rounded-full", i < met ? "bg-state-done" : "bg-surface-sunken")} />
-            ))}
-          </div>
-        ) : epic.status === "open" ? (
-          <p className="text-[11px] text-pill-human-fg">Add acceptance criteria before it can be marked done</p>
-        ) : null}
-      </Meter>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3 text-xs">
-        <span className="text-fg-secondary"><span className="font-mono text-fg">{epic.tickets_open}</span> open tickets</span>
-        <span className="flex items-center gap-2 text-fg-secondary">
-          {e.owner ? <><HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} src={e.owner.avatar_url} />{e.owner.name}</>
-            : <span className="text-fg-tertiary">No owner</span>}
+        <span className="truncate text-xs text-fg-tertiary">
+          {e.project.name} · {e.objective || "No objective yet."}
         </span>
-        <span className={overdue ? "text-pill-blocked-fg" : "text-fg-tertiary"}>
-          {e.target_date ? `${overdue ? "Overdue ·" : "Target"} ${dueDate(e.target_date)}` : "No target date"}
+      </span>
+      <span className="flex w-[220px] flex-none flex-col gap-1 max-md:w-full">
+        <span role="progressbar" aria-label={`Progress for ${epic.name}`} aria-valuemin={0} aria-valuemax={counts.total || 1} aria-valuenow={counts.done}>
+          <StackedBar segments={[
+            { value: counts.done, label: "done", color: "var(--state-done)" },
+            { value: running, label: "running", color: "var(--state-progress)" },
+            { value: open, label: "open", color: "var(--track)" },
+          ]} />
         </span>
-      </div>
+        <span className="flex justify-between gap-2 font-mono text-[11px] text-fg-tertiary">
+          <span>{epic.points_total ? `${epic.points_done} / ${epic.points_total} pts · ${pct}%` : "No estimates yet"}</span>
+          <span title="Epic acceptance criteria">{epic.criteria_total ? `${epic.criteria_done} / ${epic.criteria_total} met` : epic.status === "open" ? <span className="text-pill-human-fg">No criteria</span> : "None yet"}</span>
+        </span>
+      </span>
+      <span className="w-[96px] flex-none text-xs text-fg-secondary"><span className="font-mono text-fg">{epic.tickets_open}</span> open tickets</span>
+      <span className="flex w-[120px] flex-none items-center gap-2 truncate text-xs text-fg-secondary">
+        {e.owner ? <><HumanAvatar name={e.owner.name} initials={e.owner.initials} color={e.owner.avatar_color} src={e.owner.avatar_url} />{e.owner.name}</>
+          : <span className="text-fg-tertiary">No owner</span>}
+      </span>
+      <span className={cx("w-[120px] flex-none text-right text-xs max-md:text-left", overdue ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
+        {e.target_date ? `${overdue ? "Overdue ·" : "Target"} ${dueDate(e.target_date)}` : "No target date"}
+      </span>
     </article>
   );
 }
@@ -283,8 +269,8 @@ export function EpicsScreen() {
               {query.error.message}
             </Banner>
           ) : query.isLoading || legacy ? (
-            <div aria-busy="true" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
-              {[0, 1, 2].map((i) => <Skeleton key={i} className="h-60 rounded-xl" />)}
+            <div aria-busy="true" className="space-y-2">
+              {[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
             </div>
           ) : !inProject.length ? (
             <EmptyState icon="epics" title="No epics here yet">
@@ -321,9 +307,12 @@ export function EpicsScreen() {
                 </span>
               </div>
               {shown.length ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
-                  {shown.map((e) => <EpicCard key={e.epic.id} epic={e} today={today} />)}
-                </div>
+                <section aria-label={`Epics, ${shown.length}`}>
+                  <h2 className="flex h-8 items-center gap-2 px-3 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">
+                    Epics <span className="font-mono">{shown.length}</span>
+                  </h2>
+                  {shown.map((e) => <EpicRow key={e.epic.id} epic={e} today={today} />)}
+                </section>
               ) : (
                 <EmptyState icon="epics" title="No epics match"
                   actions={<Button onClick={() => setFilters({ status: "all", health: "any" })}>Clear filters</Button>}>
