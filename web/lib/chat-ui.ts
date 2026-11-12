@@ -416,6 +416,12 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("space", "setting up a space");
     case "create_scheduled_task":
       return status("schedule", "scheduling a task");
+    case "list_scheduled_tasks":
+      return status("schedule", "checking your scheduled tasks");
+    case "update_scheduled_task":
+      return status("schedule", "changing a scheduled task");
+    case "delete_scheduled_task":
+      return status("schedule", "removing a scheduled task");
     case "create_learning_module":
       return status("learning", "starting a learning module");
     case "submit_research_report":
@@ -694,6 +700,10 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Setting up", o.name);
     case "create_scheduled_task":
       return named("Scheduling", o.name);
+    case "update_scheduled_task":
+      return named("Changing", known(o.task_id));
+    case "delete_scheduled_task":
+      return named("Removing", known(o.task_id));
     case "create_learning_module":
       return named("Starting a module on", o.topic);
     case "get_run":
@@ -724,7 +734,7 @@ function resultJSON(output?: string): Record<string, unknown> | undefined {
   }
 }
 
-/** The names the turn has seen for canvases, workflows and runs, by id. */
+/** The names the turn has seen for canvases, workflows, runs and scheduled tasks, by id. */
 function knownNames(calls: ToolCall[]): Map<string, string> {
   const names = new Map<string, string>();
   const note = (id: unknown, name: unknown) => {
@@ -755,6 +765,9 @@ function knownNames(calls: ToolCall[]): Map<string, string> {
         break;
       case "list_runs":
         for (const r of records(out.runs)) note(r.id, r.ticket);
+        break;
+      case "list_scheduled_tasks":
+        for (const t of records(out.tasks)) note(t.task_id, t.name);
         break;
       case "get_run": {
         const run = out.run as Record<string, unknown> | undefined;

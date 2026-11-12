@@ -172,6 +172,9 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "list_saved_links", input: {} }, "saved-links"],
     [{ tool: "mcp__lazyagents__list_tickets", input: {} }, "ticket-lookup"],
     [{ tool: "list_projects", input: {} }, "projects"],
+    [{ tool: "list_scheduled_tasks", input: {} }, "schedule"],
+    [{ tool: "mcp__lazyagents__update_scheduled_task", input: {} }, "schedule"],
+    [{ tool: "delete_scheduled_task", input: {} }, "schedule"],
     [{ tool: "mcp__lazyagents__write_note", input: { body: "secret" } }, "wiki"],
     [{ tool: "reply_block", input: { kind: "chart" } }, "chart"],
     [{ tool: "reply_block", input: { kind: "mermaid" } }, "diagram"],
@@ -372,6 +375,8 @@ test("stepDetail names canvases, workflows, tickets, images, personas, runs and 
     [{ tool: "mcp__lazyagents__list_tickets", input: { project: "lazyagents", status: ["in_progress"] } }, "Looking over LAZYAGENTS in-progress tickets"],
     [{ tool: "mcp__lazyagents__list_tickets", input: { status: ["todo", "backlog"], q: "secret" } }, "Checking tickets"],
     [{ tool: "mcp__lazyagents__list_projects", input: {} }, "Looking over your projects"],
+    [{ tool: "mcp__lazyagents__list_scheduled_tasks", input: {} }, "Checking your scheduled tasks"],
+    [{ tool: "mcp__lazyagents__update_scheduled_task", input: { task_id: "t9", instructions: "secret" } }, "Changing a scheduled task"],
     [{ tool: "mcp__lazyagents__update_ticket", input: { ticket: "PAY-214", description: "secret" } }, "Updating PAY-214"],
     [{ tool: "mcp__lazyagents__comment_ticket", input: { ticket: "PAY-214", body: "secret" } }, "Commenting on PAY-214"],
     [{ tool: "mcp__lazyagents__get_video_transcript", input: { url: "https://youtu.be/x", from_seconds: 272 } }, "Watching from 4:32"],
@@ -391,6 +396,9 @@ test("tools that take an id use the name an earlier call in the turn gave it", (
   assert.equal(detail([listed, { tool: "read_workflow", input: { workflow_id: "w1" } }]), "Looking over “Maps”");
   const runs = { tool: "list_runs", input: {}, output: JSON.stringify({ runs: [{ id: "r1", ticket: "PAY-1" }] }) };
   assert.equal(detail([runs, { tool: "get_run", input: { id: "r1" } }]), "Checking PAY-1");
+  const tasks = { tool: "list_scheduled_tasks", input: {}, output: JSON.stringify({ tasks: [{ task_id: "t1", name: "Weekly check-in" }] }) };
+  assert.equal(detail([tasks, { tool: "update_scheduled_task", input: { task_id: "t1" } }]), "Changing “Weekly check-in”");
+  assert.equal(detail([tasks, { tool: "delete_scheduled_task", input: { task_id: "t1" } }]), "Removing “Weekly check-in”");
   const clipped = { tool: "canvas_read", input: { canvas_id: "c2" }, output: '{"body":"long and cut' };
   // No name to show, so the detail would only repeat the step's title.
   assert.equal(detail([clipped, { tool: "canvas_comment", input: { canvas_id: "c2" } }]), undefined);

@@ -19,12 +19,12 @@ import (
 // (write_note, which a chat's frozen wiki:write turns into suggestions, see runs.ChatSpec).
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "get_epic", "update_epic", "list_epics", "list_tickets", "list_projects", "list_runs", "get_run", "reply_to_run",
-	"write_note", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
+	"write_note", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "list_scheduled_tasks", "update_scheduled_task", "delete_scheduled_task", "create_learning_module"}
 
 // asideTools is the MCP surface of an aside (a chat answering a question
 // about another chat's running reply): chatTools that only read.
 var asideTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "get_epic", "list_epics", "list_tickets", "list_projects", "list_runs", "get_run",
-	"search_memory", "read_memory", "search_chats", "read_chat", "search_repositories", "get_video_transcript", "list_saved_links", "canvas_read", "canvas_list", "list_workflows", "read_workflow"}
+	"search_memory", "read_memory", "search_chats", "read_chat", "search_repositories", "get_video_transcript", "list_saved_links", "canvas_read", "canvas_list", "list_workflows", "read_workflow", "list_scheduled_tasks"}
 
 // isAsideRun reports whether a chat run answers an aside. An unreadable spec
 // counts as one, so the check fails closed.
@@ -172,7 +172,7 @@ You keep a private memory of this person: find entries with search_memory and re
 set_chat_title names the conversation on its first message. When the person shares a YouTube link, read it with get_video_transcript before reacting to the video.
 Tools from other MCP servers are the person's connectors. A write tool may pause until the person approves it. If a tool says it was denied, don't retry it. To add a connector, use propose_connector when you're allowed to; never ask for a token in chat.
 To call an API with the person's token or key, use http_request from vesper_secrets (list_secrets shows what you may use); you never see a value. If you need one they haven't added, use propose_secret when you're allowed to, and never ask for it in chat. If someone pastes a token into chat anyway, don't repeat it; suggest saving it in Customization › Secrets.
-When the person asks, set things up for them with create_space, create_scheduled_task and create_learning_module, then link what you made.`
+When the person asks, set things up for them with create_space, create_scheduled_task and create_learning_module, then link what you made. Change, pause or remove their scheduled tasks with list_scheduled_tasks, update_scheduled_task and delete_scheduled_task.`
 
 type NewEpicIn struct {
 	Project        string   `json:"project,omitempty" jsonschema:"Project key, e.g. PAY; default the chat's default project"`

@@ -178,3 +178,55 @@ func TestChatListsTicketsAndProjects(t *testing.T) {
 		t.Fatalf("list_projects = %d %v", code, out)
 	}
 }
+
+// A persona can fix what it scheduled: list, pause, move and delete the
+// person's tasks, keeping what the person set in the app.
+func TestChatManagesScheduledTasks(t *testing.T) {
+	c := newPersonaChat(t, "PAY")
+	code, out := c.call(t, "create_scheduled_task", map[string]any{"name": "Weekly check-in", "instructions": "Ask how the week went.", "frequency": "weekly", "weekdays": []int{1}, "at_time": "08:00", "timezone": "America/Los_Angeles"})
+	if code != 200 {
+		t.Fatalf("create_scheduled_task = %d %v", code, out)
+	}
+	id := fmt.Sprint(out["task_id"])
+	// The person caps it in the app; a persona's change must keep that.
+	task, err := c.q.GetScheduledTask(c.ctx, store.GetScheduledTaskParams{ID: uuid.MustParse(id), WorkspaceID: c.ws, UserID: c.user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.rs.UpdateScheduledTask(c.ctx, c.ws, c.user, task.ID, runs.ScheduledTaskInput{Revision: task.Revision, Name: task.Name, Kind: task.Kind, Instructions: task.Instructions, PersonaID: task.PersonaID, Project: "PAY",
+		Enabled: true, MaxMinutes: 30, MaxCostMicros: 2_000_000, Schedule: runs.Schedule{Frequency: "weekly", Weekdays: []int32{1}, MonthDay: 1, AtTime: "08:00", Timezone: "America/Los_Angeles"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out = c.call(t, "list_scheduled_tasks", map[string]any{})
+	tasks := list(out, "tasks")
+	if code != 200 || len(tasks) != 1 || tasks[0]["task_id"] != id || tasks[0]["at_time"] != "08:00" || tasks[0]["enabled"] != true || tasks[0]["project"] != "PAY" {
+		t.Fatalf("list_scheduled_tasks = %d %v", code, out)
+	}
+	rev := tasks[0]["revision"]
+
+	code, out = c.call(t, "update_scheduled_task", map[string]any{"task_id": id, "revision": rev, "enabled": false, "at_time": "07:30", "weekdays": []int{1, 4}})
+	if code != 200 {
+		t.Fatalf("update_scheduled_task = %d %v", code, out)
+	}
+	task, _ = c.q.GetScheduledTask(c.ctx, store.GetScheduledTaskParams{ID: task.ID, WorkspaceID: c.ws, UserID: c.user})
+	if task.Enabled || task.AtTime != "07:30" || len(task.Weekdays) != 2 || task.NextRunAt != nil || task.Name != "Weekly check-in" || task.MaxMinutes != 30 || task.MaxCostMicros != 2_000_000 || task.Instructions != "Ask how the week went." {
+		t.Fatalf("after update: %+v", task)
+	}
+	if code, out := c.call(t, "update_scheduled_task", map[string]any{"task_id": id, "revision": rev, "name": "Stale"}); code != 409 {
+		t.Fatalf("stale revision = %d %v", code, out)
+	}
+	if code, out := c.call(t, "update_scheduled_task", map[string]any{"task_id": id, "revision": task.Revision, "frequency": "hourly"}); code != 422 {
+		t.Fatalf("bad frequency = %d %v", code, out)
+	}
+
+	if code, out := c.call(t, "delete_scheduled_task", map[string]any{"task_id": id}); code != 200 || out["state"] != "deleted" {
+		t.Fatalf("delete_scheduled_task = %d %v", code, out)
+	}
+	if code, out := c.call(t, "delete_scheduled_task", map[string]any{"task_id": id}); code != 422 {
+		t.Fatalf("delete again = %d %v", code, out)
+	}
+	if code, out := c.call(t, "list_scheduled_tasks", map[string]any{}); code != 200 || len(list(out, "tasks")) != 0 {
+		t.Fatalf("after delete = %d %v", code, out)
+	}
+}
