@@ -197,7 +197,32 @@ func TestToolPolicyExplorerSubagent(t *testing.T) {
 	if d, err := svc.CheckTool(ctx, c, runs.ToolCheck{Tool: "Grep", Input: map[string]any{"pattern": "x"}}); err != nil || d.Decision != "allow" {
 		t.Fatalf("grep: %+v %v", d, err)
 	}
+	// With the option on, still only for a Claude Code lead with tools.
+	for _, opt := range []string{"readonly", agentdef.OptionNoTools} {
+		spec.HarnessOptions[opt] = "true"
+		setOption("true")
+		check("Agent", "explorer", "deny")
+		delete(spec.HarnessOptions, opt)
+	}
+	spec.Harness = agentdef.HarnessCodex
+	setOption("true")
+	check("Agent", "explorer", "deny")
+	spec.Harness = agentdef.HarnessClaudeCode
+	setOption("true")
+	exec := func(sql string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, sql, run.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec("UPDATE runs SET parent_run_id=$1 WHERE id=$1") // a delegated run
+	check("Agent", "explorer", "deny")
+	exec("UPDATE runs SET parent_run_id=NULL WHERE id=$1")
+	check("Agent", "explorer", "allow")
 	setOption("false")
+	check("Agent", "explorer", "deny")
+	setOption("true")
+	exec("UPDATE runs SET purpose='chat', ticket_id=NULL WHERE id=$1")
 	check("Agent", "explorer", "deny")
 }
 
