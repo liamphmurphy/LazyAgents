@@ -20,6 +20,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/canvas"
 	"github.com/liamphmurphy/vesper/server/internal/design"
 	"github.com/liamphmurphy/vesper/server/internal/designs"
+	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -176,6 +177,65 @@ func TestDesignLifecycle(t *testing.T) {
 	e.want("DELETE", "/designs/"+cp, nil, http.StatusNoContent)
 	if n, err := e.sweep(); err != nil || n != 1 {
 		t.Fatalf("swept %d (%v), want the released image", n, err)
+	}
+}
+
+// Deleting a chat-created design must not delete the conversation or siblings,
+// even in an app space. A general chat survives deletion of its last canvas too.
+func TestDesignDeletePreservesSharedChat(t *testing.T) {
+	for _, appSpace := range []bool{false, true} {
+		t.Run(fmt.Sprintf("appSpace=%v", appSpace), func(t *testing.T) {
+			e := newDesignsEnv(t)
+			ctx := t.Context()
+			var chat store.ChatSession
+			var first store.ChatCanvas
+			var err error
+			if appSpace {
+				first, chat, err = e.svc().Create(ctx, e.me.WorkspaceID, e.me.ID, "First", "", "")
+			} else {
+				chat, err = e.runs.StartChat(ctx, e.me.WorkspaceID, e.me.ID, runs.ChatInput{Title: "Longstanding conversation"})
+				if err == nil {
+					first, _, err = e.svc().CreateInChat(ctx, e.me.WorkspaceID, chat, "First", "", "", canvas.Actor{Type: "user", ID: e.me.ID})
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.pool.Exec(ctx, `INSERT INTO chat_messages (session_id, seq, role, body_md) VALUES ($1, 1, 'user', 'Keep this conversation')`, chat.ID); err != nil {
+				t.Fatal(err)
+			}
+			second, _, err := e.svc().CreateInChat(ctx, e.me.WorkspaceID, chat, "Second", "", "", canvas.Actor{Type: "user", ID: e.me.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.want("DELETE", "/designs/"+first.ID.String(), nil, http.StatusNoContent)
+			e.want("GET", "/designs/"+first.ID.String(), nil, http.StatusNotFound)
+			e.want("GET", "/designs/"+second.ID.String(), nil, http.StatusOK)
+			if n := e.count(`SELECT count(*) FROM chat_canvas_versions WHERE canvas_id = $1`, first.ID); n != 0 {
+				t.Fatalf("deleted design kept %d versions", n)
+			}
+			if n := e.count(`SELECT count(*) FROM chat_sessions WHERE id = $1`, chat.ID); n != 1 {
+				t.Fatal("shared conversation deleted")
+			}
+			if n := e.count(`SELECT count(*) FROM chat_messages WHERE session_id = $1 AND body_md = 'Keep this conversation'`, chat.ID); n != 1 {
+				t.Fatal("conversation message deleted")
+			}
+			if !appSpace {
+				e.want("DELETE", "/designs/"+second.ID.String(), nil, http.StatusNoContent)
+				if n := e.count(`SELECT count(*) FROM chat_sessions WHERE id = $1`, chat.ID); n != 1 {
+					t.Fatal("general chat deleted with its last design")
+				}
+			}
+		})
+	}
+}
+
+func TestDesignDeleteDedicatedChat(t *testing.T) {
+	e := newDesignsEnv(t)
+	id, chat := e.design(map[string]any{})
+	e.want("DELETE", "/designs/"+id, nil, http.StatusNoContent)
+	if n := e.count(`SELECT count(*) FROM chat_sessions WHERE id = $1`, chat); n != 0 {
+		t.Fatal("dedicated design chat survived")
 	}
 }
 

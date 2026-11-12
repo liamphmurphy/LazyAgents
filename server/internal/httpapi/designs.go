@@ -159,10 +159,7 @@ func (s *Server) DeleteDesign(ctx context.Context, req api.DeleteDesignRequestOb
 		return nil, err
 	}
 	u, _, ws := me(ctx)
-	// The chat exists only for the design, so deleting it deletes the canvas,
-	// versions, proposals, settings and asset rows; removing the asset rows
-	// queues their blobs for the shared sweep (slides.SweepBlobs).
-	if err := s.Runs.DeleteChat(ctx, ws, u.ID, cv.ChatID); err != nil {
+	if err := s.Runs.DeleteAppCanvas(ctx, ws, u.ID, cv.ChatID, cv.ID, designs.AppName); err != nil {
 		return nil, err
 	}
 	return api.DeleteDesign204Response{}, nil
