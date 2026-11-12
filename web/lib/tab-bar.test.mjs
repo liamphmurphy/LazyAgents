@@ -43,7 +43,8 @@ test("More lists every NAV_GROUPS item the bar has no tab for, in the sidebar's 
   const listed = moreSections().flatMap((g) => g.items.map((i) => i.href));
   const expected = NAV_GROUPS.flatMap((g) => g.items).map((i) => i.href).filter((h) => !tabbed.has(h));
   assert.deepEqual(listed, expected);
-  assert.deepEqual(moreSections().map((g) => g.label), ["Apps", "Tools", "You"]);
+  // Reports has no tab, so Work shows in More with it alone.
+  assert.deepEqual(moreSections().map((g) => g.label), ["Work", "Apps", "Tools", "You"]);
 });
 
 test("a new nav item shows up in More", () => {

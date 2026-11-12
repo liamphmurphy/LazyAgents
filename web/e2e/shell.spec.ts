@@ -71,7 +71,7 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   await expect(page.getByRole("link", { name: "Chats & personas" })).toHaveCount(0);
   const work = nav(page).getByRole("group", { name: "Work" });
   // Inbox left the menu: the Needs you pill under New chat opens the tray instead.
-  await expect(work.getByRole("link")).toHaveText([/^Runs/, "Tickets"]);
+  await expect(work.getByRole("link")).toHaveText([/^Runs/, "Tickets", "Reports"]);
   await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
   await expect(nav(page).getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
   await expect(nav(page).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
@@ -156,15 +156,17 @@ test("Runs lists live work and marks the nav item current", async ({ page }) => 
     tool_calls: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0, plan: [], scopes: [], approval_scopes: [],
   }];
   await page.route("**/api/v1/runs?*", (route) => route.fulfill({ json: { runs: listed, has_more: false } }));
+  await page.route("**/api/v1/runs/11111111-1111-4111-8111-111111111111?*", (route) => route.fulfill({ json: { run: listed[0], child_runs: [], turns: [], approvals: [], events: [] } }));
   await page.goto("/runs");
+  // /runs opens the first live run beside the list.
+  await expect(page).toHaveURL(/\/runs\/11111111-1111-4111-8111-111111111111$/);
   await expect(nav(page).locator('[aria-current="page"]')).toHaveText(/^Runs/);
-  await expect(page.getByRole("status").filter({ hasText: "1 running · 0 queued · 3 slots" })).toBeVisible();
-  const table = page.getByRole("table", { name: "Runs, newest first" });
-  await expect(table.getByRole("row")).toHaveCount(2);
-  await expect(table).toContainText("WEB-1");
-  await expect(table).toContainText("Build ticket modal");
-  await expect(table.getByRole("link", { name: "Builder" })).toHaveAttribute("href", "/runs/11111111-1111-4111-8111-111111111111");
-  await expect(page.getByText("1 run · newest first")).toBeVisible();
+  const list = page.getByRole("complementary", { name: "Runs" });
+  await expect(list.getByRole("status")).toContainText("1 busy · 0 queued · 3 slots");
+  const running = list.getByRole("region", { name: "Running" });
+  await expect(running.getByRole("listitem")).toHaveCount(1);
+  await expect(running).toContainText("WEB-1 · Builder");
+  await expect(running.getByRole("link", { name: /Build ticket modal/ })).toHaveAttribute("href", "/runs/11111111-1111-4111-8111-111111111111");
   expect(api.unhandled).toEqual([]);
 });
 

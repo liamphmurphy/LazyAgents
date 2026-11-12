@@ -28,7 +28,9 @@ const nextConfig: NextConfig = {
       // Board and Epics are layouts of Tickets; their filters (?project=, ?epic=) carry over.
       { source: "/board", destination: "/tickets?layout=board", permanent: false },
       { source: "/epics", destination: "/tickets?layout=epics", permanent: false },
-      { source: "/costs", destination: "/runs?tab=costs", permanent: false },
+      { source: "/costs", destination: "/reports?tab=costs", permanent: false },
+      // Costs and Highlights moved from the Runs tabs to Reports; the rest of the query carries over.
+      { source: "/runs", has: [{ type: "query", key: "tab", value: "(?<tab>costs|highlights)" }], destination: "/reports", permanent: false },
       // The Dashboard re-summed the Inbox, Runs and Tickets; what needs you is in the Inbox.
       { source: "/dashboard", destination: "/inbox", permanent: false },
       // Artifacts are Library's "From projects"; /artifacts/:id stays the document page.

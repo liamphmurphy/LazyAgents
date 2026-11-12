@@ -263,6 +263,7 @@ export async function installBoardApi(page: Page) {
     const menu = menuResponse(request.method(), path);
     if (menu) return json(menu);
     // Runs' header shows the last 7 days' spend.
+    if (path === "/inbox" && request.method() === "GET") return json({ items: [] });
     if (path === "/costs" && request.method() === "GET") {
       const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };
       return json({ total: none, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 }, days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [] } satisfies S["CostReport"]);

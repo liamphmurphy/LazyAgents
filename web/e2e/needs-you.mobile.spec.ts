@@ -18,5 +18,5 @@ test("the Needs you tab opens the tray", async ({ page }) => {
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   await tray.getByRole("link", { name: "Open all →" }).click();
-  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page).toHaveURL(/\/runs(\/[^#]+)?#needs-you$/);
 });
