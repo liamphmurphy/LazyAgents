@@ -21,8 +21,11 @@ import { applyStyle } from "@/lib/slides/styles";
 import { fit, flatten, groupElements, isGroup, mapDeep, removeDeep, scopeElements, ungroupElements, withFrame } from "@/lib/slides/group";
 import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
-import { TopBar } from "@/components/shell/topbar";
+import { EditorLayout, type DockTab, type EditorHeader } from "@/components/shell/editor-layout";
+import type { DockState } from "@/lib/editor-layout";
+import { useCompact } from "@/lib/viewport";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
+import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { DeckReview } from "./deck-review";
 import { ExportMenu } from "./export-menu";
 import { SlideCanvas } from "./slide-canvas";
@@ -96,8 +99,10 @@ function withText(e: Element, paragraphs: Paragraph[]): Element {
 }
 
 /**
- * A deck: the editor, its persona's chat beside it, and review of the
- * persona's changes (mockups 2/6, 3/6, 5/6, 6/6). Edits save themselves as
+ * A deck on the shared EditorLayout (mockup "Slides editor on the shared
+ * EditorLayout"): thumbnails on the left, the slide with its formatting
+ * toolbar, and a dock with the persona's chat and, while there are
+ * suggestions, their review. Edits save themselves as
  * new versions; concurrent changes to different slides merge, the same slide
  * asks the person.
  */
@@ -119,7 +124,6 @@ export function DeckScreen({ id }: { id: string }) {
   const reviewed = useMarkDocReviewed(id);
   const send = useSendChatMessage(chatId);
   const assetUrl = useCallback((a: string) => assetHref(id, a), [id]);
-  const [chatOpen, setChatOpen] = useState(true);
   // Custom colours used in this deck, newest first: editor state, kept per deck in this browser.
   const recentKey = `slides.recentColors.${id}`;
   const [recentColors, setRecentColors] = useState<string[]>([]);
@@ -741,202 +745,195 @@ export function DeckScreen({ id }: { id: string }) {
   // The built-in theme the deck uses, if its copy is unchanged.
   const themeKey = deck ? Object.entries(THEMES).find(([, t]) => t.name === deck.theme.name && same(t.colors, deck.theme.colors) && same(t.fonts, deck.theme.fonts))?.[0] : undefined;
 
-  return (
-    <div className="flex h-app flex-col">
-      <TopBar
-        crumbs={[{ label: "Apps" }, { label: "Slides", href: "/apps/slides" }, { label: title }]}
-        actions={
-          ref.data && (
-            <>
-              <span className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
-                <span aria-hidden className={cx("grid size-[18px] place-items-center rounded-full bg-accent-soft text-[10px] font-bold text-accent", live && "animate-pulse")}>{persona.slice(0, 1)}</span>
-                {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
-              </span>
-              {c && (
-                <span data-testid="deck-save-state" title={saveState.message} className={cx("text-[12px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
-                  {SAVE_LABEL[saveState.s]} · v{savedSeq || c.seq}
-                  {saveState.s === "error" && (
-                    <button type="button" className="ml-1.5 text-accent hover:underline" onClick={() => void flush().catch(() => undefined)}>
-                      Retry
-                    </button>
-                  )}
-                </span>
-              )}
-              <Button variant="primary" onClick={() => void present()} disabled={!deck} hint="⌘↵">
-                ▶ Present
-              </Button>
-              {deck && <ExportMenu title={title} current={flush} assetUrl={assetUrl} fontsReady={fonts} onPresent={() => void present()} />}
-              <Button variant="secondary" aria-pressed={chatOpen} onClick={() => setChatOpen((o) => !o)}>
-                ✦ {chatOpen ? "Hide chat" : `Chat with ${persona}`}
-              </Button>
-            </>
-          )
+  // ---- The dock: Review opens itself when a review starts; Chat is unread while hidden.
+  const compact = useCompact();
+  const [showReview, setShowReview] = useState(0);
+  const [reviewShown, setReviewShown] = useState(false);
+  if (reviewing !== reviewShown) {
+    setReviewShown(reviewing);
+    if (reviewing) setShowReview((n) => n + 1);
+  }
+  const [dock, setDock] = useState<DockState>();
+  const chatShowing = !dock || (dock.open && !dock.hidden && dock.tab === "chat");
+  const lastReply = chat?.last_message_at;
+  const [seenReply, setSeenReply] = useState<string>();
+  // The reply that was there on load, or that arrived while Chat showed, counts as read.
+  if (lastReply && seenReply !== lastReply && (chatShowing || seenReply === undefined)) setSeenReply(lastReply);
+  const unread = !chatShowing && !!lastReply && !!seenReply && lastReply !== seenReply && !live;
+  const look = personaLook(chat?.speaker ?? chat?.persona);
+  const changeCount = changedSlides?.size ?? 0;
+
+  const saveBad = saveState.s === "error" || saveState.s === "conflict";
+  const header: EditorHeader = {
+    back: { href: "/apps/slides", label: "Slides" },
+    title,
+    saveState: ref.data && c && (
+      <span data-testid="deck-save-state" title={saveState.message} className={cx("flex items-center gap-1.5", saveBad && "text-pill-blocked-fg")}>
+        <span aria-hidden className={cx("size-1.5 rounded-full", saveBad ? "bg-pill-blocked-fg" : saveState.s === "saved" ? "bg-state-done" : "bg-fg-tertiary")} />
+        {SAVE_LABEL[saveState.s]} · v{savedSeq || c.seq}
+        {saveState.s === "error" && (
+          <button type="button" className="text-accent hover:underline" onClick={() => void flush().catch(() => undefined)}>
+            Retry
+          </button>
+        )}
+      </span>
+    ),
+    presence: ref.data && (
+      <span className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
+        <PersonaAvatar persona={look} size={22} className={cx(live && "animate-pulse ring-2 ring-[#3FC1B0] motion-reduce:animate-none")} />
+        {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
+      </span>
+    ),
+    actions: ref.data
+      ? [
+          <Button key="present" variant="secondary" onClick={() => void present()} disabled={!deck} hint="⌘↵">
+            ▶ Present
+          </Button>,
+          deck ? <ExportMenu key="share" title={title} current={flush} assetUrl={assetUrl} fontsReady={fonts} /> : undefined,
+        ]
+      : undefined,
+  };
+
+  const thumbnails = deck && slide && (
+    <Thumbnails
+      deck={reviewing && headDeck ? headDeck : deck}
+      current={slide.id}
+      onSelect={(sid) => {
+        setSlideId(sid);
+        setSelected([]);
+        setEditing(undefined);
+        if (reviewing && changedSlides?.has(sid)) {
+          setShowReview((n) => n + 1);
+          requestAnimationFrame(() => document.querySelector(`[data-change-slide="${CSS.escape(sid)}"]`)?.scrollIntoView({ block: "nearest" }));
         }
-      />
-      {loadError ? (
-        <div className="mx-auto w-full max-w-[720px] p-6">
-          <Banner tone="blocked" title="Couldn’t open this deck" actions={<Button onClick={() => router.push("/apps/slides")}>Back to Slides</Button>}>
-            {loadError instanceof ApiError && loadError.status === 404 ? "It may have been deleted, or it belongs to someone else." : errorText(loadError)}
-          </Banner>
-        </div>
-      ) : !deck || !slide || !c ? (
-        <div aria-busy="true" className="flex min-h-0 flex-1 gap-4 p-4">
-          <div className="flex w-[140px] flex-col gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="aspect-video w-full" />)}</div>
-          <div className="flex flex-1 flex-col gap-3">
-            <Skeleton className="h-8 w-1/2" />
-            <Skeleton className="aspect-video w-full max-w-[900px]" />
-          </div>
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1">
-          {chatOpen && (
-            <aside aria-label={`Chat with ${persona}`} className="flex min-h-0 w-[360px] flex-none flex-col border-r border-border-subtle bg-sidebar max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[min(380px,100%)] max-lg:shadow-[var(--shadow-float)]">
-              <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/slides")} />
-            </aside>
-          )}
-          <div className="flex min-h-0 min-w-0 flex-1 max-md:flex-col-reverse">
-            <Thumbnails
-              deck={reviewing && headDeck ? headDeck : deck}
-              current={slide.id}
-              onSelect={(sid) => {
-                setSlideId(sid);
-                setSelected([]);
-                setEditing(undefined);
-                if (reviewing) document.querySelector(`[data-change-slide="${sid}"]`)?.scrollIntoView({ block: "nearest" });
-              }}
-              onMove={moveSlide}
-              onDuplicate={duplicateSlide}
-              onRemove={removeSlide}
-              onAdd={() => addSlide()}
-              onAddLayout={addSlide}
+      }}
+      onMove={moveSlide}
+      onDuplicate={duplicateSlide}
+      onRemove={removeSlide}
+      onAdd={() => addSlide()}
+      onAddLayout={addSlide}
+      assetUrl={assetUrl}
+      fontsReady={fonts}
+      overflowing={overflowingSlides}
+      changed={changedSlides}
+      persona={persona}
+      readOnly={readOnly}
+    />
+  );
+
+  const main = loadError ? (
+    <div className="mx-auto w-full max-w-[720px] p-6">
+      <Banner tone="blocked" title="Couldn’t open this deck" actions={<Button onClick={() => router.push("/apps/slides")}>Back to Slides</Button>}>
+        {loadError instanceof ApiError && loadError.status === 404 ? "It may have been deleted, or it belongs to someone else." : errorText(loadError)}
+      </Banner>
+    </div>
+  ) : !deck || !slide || !c ? (
+    <div aria-busy="true" className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <Skeleton className="h-8 w-1/2" />
+      <Skeleton className="aspect-video w-full max-w-[900px]" />
+    </div>
+  ) : (
+    <div className="flex min-h-0 min-w-0 flex-1 max-md:flex-col-reverse">
+      {compact && thumbnails}
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
+        <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} slide={slide} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
+        <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void onImage(f);
+        }} />
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6 max-sm:px-3" onKeyDown={onCanvasKey}>
+          <div className="mx-auto flex max-w-[1100px] flex-col gap-3">
+            {reviewing && (
+              <Banner tone="human" title={`${persona} suggested ${changeCount === 1 ? "1 change" : `${changeCount || "some"} changes`}`} actions={<Button variant="approve" onClick={() => setShowReview((n) => n + 1)}>Review</Button>}>
+                Editing is paused until you decide them in Review.
+              </Banner>
+            )}
+            {conflict && (
+              <Banner
+                tone="blocked"
+                title="This deck changed while you were editing"
+                actions={
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        conflicted.current = false;
+                        markSaved(conflict.seq, conflict.theirs);
+                        setDeck(conflict.theirs);
+                        resetHist();
+                        setDirty(false);
+                        setConflict(null);
+                        setSaveState({ s: "saved" });
+                      }}
+                    >
+                      Use the latest version
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        conflicted.current = false;
+                        setConflict(null);
+                        void flush().catch(() => undefined);
+                      }}
+                    >
+                      Keep mine
+                    </Button>
+                  </>
+                }
+              >
+                {persona} changed some of the same slides you did. Keep mine saves your version over theirs (theirs stays in the version history).
+              </Banner>
+            )}
+            {live && <Banner tone="human" title={`${persona} is editing…`}>The canvas is read-only until {persona} finishes; you’ll then review the changes.</Banner>}
+            {archived && <Banner tone="human" title="This deck’s chat is archived">Restore the chat to edit the deck.</Banner>}
+            {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
+            {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("text-[12px]", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
+            <SlideCanvas
+              deck={deck}
+              slide={slide}
               assetUrl={assetUrl}
               fontsReady={fonts}
-              overflowing={overflowingSlides}
-              changed={changedSlides}
-              persona={persona}
+              selected={selected}
+              onSelect={setSelected}
+              scope={scope}
+              onScope={setScope}
+              editing={editing}
+              onEdit={setEditing}
+              onFillImage={fillImage}
+              onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => (isGroup(e) ? withFrame(e, live[e.id].frame) : { ...e, ...live[e.id] })))}
+              onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
               readOnly={readOnly}
+              editorRef={editorRef}
+              overflow={overflowHere}
             />
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken">
-              <Toolbar theme={deck.theme} themeKey={themeKey} layout={slide.layout} slide={slide} selection={selection} editing={!!editing} disabled={readOnly} a={tools} />
-              <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label="Add an image to the slide" data-testid="slide-image-input" onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) void onImage(f);
-              }} />
-              {reviewing ? (
-                baseDeck && headDeck ? (
-                  <DeckReview
-                    key={`${base}-${c.seq}`}
-                    base={baseDeck}
-                    head={headDeck}
-                    persona={persona}
-                    assetUrl={assetUrl}
-                    fontsReady={fonts}
-                    busy={archived || reviewed.isPending || actions.save.isPending}
-                    error={reviewed.error || actions.save.error ? errorText(reviewed.error ?? actions.save.error) : undefined}
-                    onAcceptAll={() => reviewed.mutate(c.seq)}
-                    onResolve={(d, note) =>
-                      actions.save.mutate(
-                        { base_seq: c.seq, body: encodeDeck(d), note },
-                        { onSuccess: (v) => reviewed.mutate(v.seq) },
-                      )
-                    }
-                  />
-                ) : (
-                  <div aria-busy="true" className="p-6"><Skeleton className="h-[320px]" /></div>
-                )
-              ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6 max-sm:px-3" onKeyDown={onCanvasKey}>
-                  <div className="mx-auto flex max-w-[1100px] flex-col gap-3">
-                    {conflict && (
-                      <Banner
-                        tone="blocked"
-                        title="This deck changed while you were editing"
-                        actions={
-                          <>
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                conflicted.current = false;
-                                markSaved(conflict.seq, conflict.theirs);
-                                setDeck(conflict.theirs);
-                                resetHist();
-                                setDirty(false);
-                                setConflict(null);
-                                setSaveState({ s: "saved" });
-                              }}
-                            >
-                              Use the latest version
-                            </Button>
-                            <Button
-                              variant="primary"
-                              onClick={() => {
-                                conflicted.current = false;
-                                setConflict(null);
-                                void flush().catch(() => undefined);
-                              }}
-                            >
-                              Keep mine
-                            </Button>
-                          </>
-                        }
-                      >
-                        {persona} changed some of the same slides you did. Keep mine saves your version over theirs (theirs stays in the version history).
-                      </Banner>
-                    )}
-                    {live && <Banner tone="human" title={`${persona} is editing…`}>The canvas is read-only until {persona} finishes; you’ll then review the changes.</Banner>}
-                    {archived && <Banner tone="human" title="This deck’s chat is archived">Restore the chat to edit the deck.</Banner>}
-                    {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
-                    {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("text-[12px]", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
-                    <SlideCanvas
-                      deck={deck}
-                      slide={slide}
-                      assetUrl={assetUrl}
-                      fontsReady={fonts}
-                      selected={selected}
-                      onSelect={setSelected}
-                      scope={scope}
-                      onScope={setScope}
-                      editing={editing}
-                      onEdit={setEditing}
-                      onFillImage={fillImage}
-                      onFrames={(live) => update(mapElements(new Set(Object.keys(live)), (e) => (isGroup(e) ? withFrame(e, live[e.id].frame) : { ...e, ...live[e.id] })))}
-                      onText={(eid, paragraphs) => update(mapElement(eid, (e) => withText(e, paragraphs)))}
-                      readOnly={readOnly}
-                      editorRef={editorRef}
-                      overflow={overflowHere}
-                    />
-                    <label className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3">
-                      <span className="flex items-center justify-between text-[12px] font-medium text-fg-secondary">
-                        Speaker notes
-                        <span className="font-mono text-[11.5px] font-normal text-fg-tertiary">
-                          Slide {deck.slides.findIndex((s) => s.id === slide.id) + 1} of {deck.slides.length}
-                        </span>
-                      </span>
-                      <textarea
-                        className="min-h-[72px] resize-y bg-transparent text-[13.5px] text-fg-2 outline-none placeholder:text-fg-tertiary"
-                        placeholder="What to say on this slide"
-                        value={slide.notes ?? ""}
-                        readOnly={readOnly}
-                        maxLength={10000}
-                        onChange={(e) => {
-                          const notes = e.target.value;
-                          update(mapSlide(slide.id, (s) => ({ ...s, notes: notes || undefined })), `notes:${slide.id}`);
-                        }}
-                      />
-                    </label>
-                    <label className="flex items-center gap-2 text-[12.5px] text-fg-secondary">
-                      <input type="checkbox" checked={!!slide.hidden} disabled={readOnly} onChange={(e) => update(mapSlide(slide.id, (s) => ({ ...s, hidden: e.target.checked || undefined })))} />
-                      Skip this slide when presenting and exporting
-                    </label>
-                  </div>
-                </div>
-              )}
-            </main>
+            <label className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3">
+              <span className="flex items-center justify-between text-[12px] font-medium text-fg-secondary">
+                Speaker notes
+                <span className="font-mono text-[11.5px] font-normal text-fg-tertiary">
+                  Slide {deck.slides.findIndex((s) => s.id === slide.id) + 1} of {deck.slides.length}
+                </span>
+              </span>
+              <textarea
+                className="min-h-[72px] resize-y bg-transparent text-[13.5px] text-fg-2 outline-none placeholder:text-fg-tertiary"
+                placeholder="What to say on this slide"
+                value={slide.notes ?? ""}
+                readOnly={readOnly}
+                maxLength={10000}
+                onChange={(e) => {
+                  const notes = e.target.value;
+                  update(mapSlide(slide.id, (s) => ({ ...s, notes: notes || undefined })), `notes:${slide.id}`);
+                }}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-[12.5px] text-fg-secondary">
+              <input type="checkbox" checked={!!slide.hidden} disabled={readOnly} onChange={(e) => update(mapSlide(slide.id, (s) => ({ ...s, hidden: e.target.checked || undefined })))} />
+              Skip this slide when presenting and exporting
+            </label>
           </div>
         </div>
-      )}
-      {themeEdit && deck && slide && (
+      </main>
+      {themeEdit && (
         <ThemeEditor
           start={themeEdit.start}
           target={themeEdit.target}
@@ -968,5 +965,58 @@ export function DeckScreen({ id }: { id: string }) {
         />
       )}
     </div>
+  );
+
+  const dockTabs: DockTab[] = [
+    {
+      id: "chat",
+      label: "Chat",
+      icon: "msg",
+      avatar: <PersonaAvatar persona={look} size={16} />,
+      busy: live,
+      unread,
+      content: <div data-deck-chat className="flex min-h-0 flex-1 flex-col">{chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/slides")} />}</div>,
+    },
+  ];
+  if (reviewing && c)
+    dockTabs.push({
+      id: "review",
+      label: "Review",
+      icon: "check",
+      badge: changeCount ? <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{changeCount}</span> : undefined,
+      content:
+        baseDeck && headDeck ? (
+          <DeckReview
+            key={`${base}-${c.seq}`}
+            base={baseDeck}
+            head={headDeck}
+            persona={persona}
+            assetUrl={assetUrl}
+            fontsReady={fonts}
+            busy={archived || reviewed.isPending || actions.save.isPending}
+            error={reviewed.error || actions.save.error ? errorText(reviewed.error ?? actions.save.error) : undefined}
+            onAcceptAll={() => reviewed.mutate(c.seq)}
+            onResolve={(d, note) =>
+              actions.save.mutate(
+                { base_seq: c.seq, body: encodeDeck(d), note },
+                { onSuccess: (v) => reviewed.mutate(v.seq) },
+              )
+            }
+          />
+        ) : (
+          <div aria-busy="true" className="p-3"><Skeleton className="h-[320px]" /></div>
+        ),
+    });
+
+  return (
+    <EditorLayout
+      app="slides"
+      header={header}
+      show={{ tab: "review", n: showReview }}
+      onDockChange={setDock}
+      left={!compact && !loadError ? thumbnails || <div aria-busy="true" className="flex flex-col gap-3 p-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="aspect-video w-full" />)}</div> : undefined}
+      main={main}
+      dock={dockTabs}
+    />
   );
 }

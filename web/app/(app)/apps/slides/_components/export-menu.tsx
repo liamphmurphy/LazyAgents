@@ -20,8 +20,9 @@ type Format = "pdf" | "pptx";
  * Every way a deck leaves Vesper (mockup 5/6). `current` saves pending edits
  * first and returns the deck as saved, so an export never misses the last
  * change. Both formats are built in the browser and downloaded as files.
+ * It's the editor header's Share ▾; Present is its own header action.
  */
-export function ExportMenu({ title, current, assetUrl, fontsReady, onPresent }: { title: string; current: () => Promise<{ deck: Deck; seq: number }>; assetUrl: (id: string) => string; fontsReady: boolean; onPresent: () => void }) {
+export function ExportMenu({ title, current, assetUrl, fontsReady }: { title: string; current: () => Promise<{ deck: Deck; seq: number }>; assetUrl: (id: string) => string; fontsReady: boolean }) {
   const [notice, setNotice] = useState<Notice>();
   const [preflight, setPreflight] = useState<{ format: Format; deck: Deck; slides: { n: number; id: string; title: string }[] }>();
   const abort = useRef<AbortController | null>(null);
@@ -76,21 +77,18 @@ export function ExportMenu({ title, current, assetUrl, fontsReady, onPresent }: 
       )}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <Button variant="secondary" icon="download" disabled={notice?.tone === "busy"}>
-            Export
+          <Button variant="primary" disabled={notice?.tone === "busy"}>
+            Share <span aria-hidden>▾</span>
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={6} className={`${floatPanel} z-50 w-[270px]`}>
+            <DropdownMenu.Label className="px-2.5 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Export</DropdownMenu.Label>
             <DropdownMenu.Item className={item} onSelect={() => void start("pdf")()}>
               PDF (.pdf)<span className={detail}>Downloads one page per slide</span>
             </DropdownMenu.Item>
             <DropdownMenu.Item className={item} onSelect={() => void start("pptx")()}>
               PowerPoint (.pptx)<span className={detail}>Editable in PowerPoint, Keynote, Google Slides</span>
-            </DropdownMenu.Item>
-            <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
-            <DropdownMenu.Item className={item} onSelect={onPresent}>
-              Present<span className={detail}>Full screen, from the current slide</span>
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
