@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -179,11 +180,16 @@ func (c Contract) PathAllowed(file string) bool {
 	return false
 }
 
-// ChildPrompt is the first message of a delegated run.
-func ChildPrompt(ticket, parentHandle, task string, contract Contract) string {
+// ChildPrompt is the first message of a delegated run. canWrite is whether the
+// sub agent may change files (repo:write allowed).
+func ChildPrompt(ticket, parentHandle, task string, contract Contract, canWrite bool) string {
 	p := "@" + parentHandle + " delegated part of " + ticket + " to you. You work in your own git worktree on your own branch, cut from the main agent's; " +
-		"other sub agents may be working in parallel in theirs, so stay inside your task and do only what it says. " +
-		"AGENTS.md says how to commit and finish."
+		"other sub agents may be working in parallel in theirs, so stay inside your task and do only what it says. "
+	if canWrite {
+		p += "AGENTS.md says how to commit and finish."
+	} else {
+		p += "You can't change files in this run (repo:write is not allowed): don't try to write notes or fixes, report them with complete_run."
+	}
 	if contract.ContinueRunID != "" {
 		p += " This continues your earlier run on this ticket: same worktree and branch, so your earlier work is still here. The task below is the follow-up."
 	}
@@ -209,6 +215,8 @@ func ChildPrompt(ticket, parentHandle, task string, contract Contract) string {
 type Delegation struct {
 	Run   store.Run
 	Agent store.Agent
+	// ReadOnly: the sub agent can't change files (repo:write isn't allowed).
+	ReadOnly bool
 }
 
 // Delegate starts a sub agent's run under the caller's run and parks the
@@ -307,6 +315,10 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err != nil {
 			return err
 		}
+		canWrite := resolved.Mode("repo:write") == agentdef.Allowed
+		if !canWrite && len(contract.AllowedPaths) > 0 {
+			return apperr.Invalid("allowed_paths", "@%s can't change files (repo:write is %s), so allowed_paths has nothing to bound; drop it and ask for findings in its report", sub.Handle, resolved.Mode("repo:write"))
+		}
 		// The child inherits the ticket's epic context so an epic ticket's
 		// children also leave the full suite to the epic review.
 		if resolved.Repository, err = RepositoryFor(ctx, q, p, t); err != nil {
@@ -330,7 +342,7 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 				return err
 			}
 		}
-		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: child.ID, Trigger: "start", InputMessage: ChildPrompt(t.Key, c.Agent.Handle, task, contract)}); err != nil {
+		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: child.ID, Trigger: "start", InputMessage: ChildPrompt(t.Key, c.Agent.Handle, task, contract, canWrite)}); err != nil {
 			return err
 		}
 		if prev != nil && prev.Harness == child.Harness && prev.HarnessSessionID != nil {
@@ -375,7 +387,7 @@ func (s *Service) DelegateWithContract(ctx context.Context, c Caller, ticketKey,
 		if err := RecomputeAgentStatus(ctx, q, sub.ID); err != nil {
 			return err
 		}
-		out = Delegation{Run: child, Agent: sub}
+		out = Delegation{Run: child, Agent: sub, ReadOnly: !canWrite}
 		return nil
 	})
 	return out, err
@@ -469,12 +481,54 @@ func checkParallel(kids []store.Run, contract Contract) error {
 	return nil
 }
 
-// ListSubagents is who a main agent can delegate to.
-func (s *Service) ListSubagents(ctx context.Context, c Caller) ([]store.Agent, error) {
+// Subagent is a sub agent with its spec resolved for the caller's project, as
+// delegate would resolve it. Unavailable says why it couldn't be resolved.
+type Subagent struct {
+	Agent       store.Agent
+	Spec        agentdef.Resolved
+	Unavailable string
+}
+
+// CanWrite reports whether the sub agent may change files.
+func (a Subagent) CanWrite() bool { return a.Spec.Mode("repo:write") == agentdef.Allowed }
+
+// ListSubagents is who a main agent can delegate to, resolved for the project
+// of the caller's live run (no project when it has none).
+func (s *Service) ListSubagents(ctx context.Context, c Caller) ([]Subagent, error) {
 	if c.Agent.Kind == agents.KindSub {
 		return nil, apperr.Conflict("sub agents can't delegate")
 	}
-	return store.New(s.Pool).ListSubagents(ctx, c.Agent.WorkspaceID)
+	q := store.New(s.Pool)
+	ws := c.Agent.WorkspaceID
+	projectKey := ""
+	if _, t, err := s.Active(ctx, q, c, ""); err == nil && t.ProjectID != uuid.Nil {
+		if p, err := q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: ws}); err == nil {
+			projectKey = p.Key
+		}
+	}
+	rows, err := q.ListSubagents(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Subagent, len(rows))
+	for i, a := range rows {
+		out[i].Agent = a
+		if out[i].Spec, err = agents.ResolveRunnable(ctx, q, ws, a, projectKey); err != nil {
+			out[i].Unavailable = unavailableReason(err)
+		}
+	}
+	return out, nil
+}
+
+// unavailableReason is what the lead sees for a sub agent whose spec doesn't
+// resolve: domain errors verbatim, anything else generic.
+func unavailableReason(err error) string {
+	var ve *apperr.ValidationError
+	var ce *apperr.ConflictError
+	if errors.As(err, &ve) || errors.As(err, &ce) {
+		return err.Error()
+	}
+	return "its definition can't be resolved; ask a person to check it"
 }
 
 // WakeParent resumes a waiting parent once its last live delegated run has

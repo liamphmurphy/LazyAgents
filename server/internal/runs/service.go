@@ -75,6 +75,9 @@ type Service struct {
 	// Transcripts fetches a chat message's YouTube links ahead of its turn; nil
 	// leaves that to the chat's own tool call.
 	Transcripts *transcript.YouTube
+	// RolloverContextTokens mirrors the runner's setting (ROLLOVER_CONTEXT_TOKENS):
+	// a main agent at least this large continues in a fresh session. 0 is off.
+	RolloverContextTokens int64
 }
 
 type Caller = agents.Caller

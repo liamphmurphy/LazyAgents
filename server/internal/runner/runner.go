@@ -63,6 +63,10 @@ type Config struct {
 	HoldBackoff     time.Duration
 	// Playgrounds serves chats' playgrounds (Docker backend only).
 	Playgrounds PlaygroundConfig
+	// RolloverContextTokens continues a main agent whose context is at least
+	// this many tokens in a fresh session at a delegation wake (rollover.go).
+	// 0 never rolls over.
+	RolloverContextTokens int64
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -1301,6 +1305,28 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			return
 		}
 		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
+		if r.shouldRollOver(c) {
+			// Continue in a fresh session: everything the main agent needs next
+			// is in the run's state, git and the report, and its checkout was
+			// clean when its children started.
+			brief, err := r.rolloverPrompt(ctx, c, turn.Seq, prompt, env)
+			if err != nil {
+				log.Warn("rollover brief; resuming the session", "err", err)
+			} else if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
+				log.Warn("rollover: clear session; resuming it", "err", err)
+			} else {
+				r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_rollover", "reason": "delegation", "context_tokens": c.run.ContextTokens})
+				c.run.HarnessSessionID = nil
+				prompt = brief
+				// The fresh session's usage starts from zero.
+				switch c.spec.Harness {
+				case agentdef.HarnessCodex:
+					h = harness.Codex{Prices: r.Cfg.ModelPrices}
+				case agentdef.HarnessClaudeCode:
+					h = harness.ClaudeCode{}
+				}
+			}
+		}
 	}
 	if c.run.ParentRunID != nil && turn.Seq == 1 {
 		prompt += r.checkoutSection(ctx, c, env)
@@ -1395,7 +1421,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	inv, err := h.Invocation(harness.Workspace{
 		DependencyCacheDir: cacheDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv, ContainerSandbox: r.Backend.Name() == "docker",
-	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages})
+	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages, Lead: runs.LeadRun(c.run)})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
 		return

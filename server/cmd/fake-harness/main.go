@@ -59,10 +59,11 @@
 // FAKE_HARNESS_CHILD_REPORT is the report a delegated run that wrote its file
 // passes to complete_run.
 // FAKE_HARNESS_CONTEXT_TOKENS sets the prompt size each Claude assistant line's
-// usage reports (default 2000).
+// usage reports (default 2000). FAKE_HARNESS_PLAN="a|b" makes delegate_script's
+// first turn post that plan before delegating.
 //
-// Resumed turns (--resume) finish the run with complete_run, unless
-// FAKE_HARNESS_RESUME=idle.
+// Resumed turns (--resume, or a session rollover's brief) finish the run with
+// complete_run, unless FAKE_HARNESS_RESUME=idle.
 package main
 
 import (
@@ -769,7 +770,8 @@ func main() {
 		result(true, "You have hit your usage limit")
 		os.Exit(1)
 	}
-	if resume != "" {
+	// A delegation wake that rolled over to a fresh session is a resumed turn too.
+	if resume != "" || strings.HasPrefix(prompt, "Your earlier session was closed to keep context small") {
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
 				_ = os.WriteFile(".lazyagents/round2", nil, 0o600)
@@ -879,6 +881,9 @@ func main() {
 	if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 		if os.Getenv("FAKE_HARNESS_DIRTY") != "" {
 			_ = os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0o644)
+		}
+		if steps := os.Getenv("FAKE_HARNESS_PLAN"); steps != "" {
+			call("post_plan", map[string]any{"steps": strings.Split(steps, "|")})
 		}
 		delegateScript(call, "FAKE_HARNESS_DELEGATIONS")
 		if hold := os.Getenv("FAKE_HARNESS_PARENT_HOLD"); hold != "" {
