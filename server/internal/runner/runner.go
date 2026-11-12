@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"math"
 	"path"
 	"regexp"
 	"slices"
@@ -62,6 +63,10 @@ type Config struct {
 	HoldBackoff     time.Duration
 	// Playgrounds serves chats' playgrounds (Docker backend only).
 	Playgrounds PlaygroundConfig
+	// RolloverContextTokens continues a main agent whose context is at least
+	// this many tokens in a fresh session at a delegation wake (rollover.go).
+	// 0 never rolls over.
+	RolloverContextTokens int64
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -283,6 +288,7 @@ func (r *Runner) Tick(ctx context.Context) {
 	r.tickUsageChecks(ctx)
 	r.resumeHeld(ctx)
 	r.tickPlaygrounds(ctx)
+	r.tickChecks(ctx)
 	for r.slot() {
 		token, expires := uuid.New(), time.Now().Add(executionTTL)
 		claimCtx, cancel := context.WithTimeout(ctx, controlTimeout)
@@ -1071,9 +1077,43 @@ func lastLines(s string, n int) string {
 
 // ---------------------------------------------------------------- turns
 
+// PlanRolloverInput continues a run that ended its turn for a plan-step rollover.
+const PlanRolloverInput = "Continue with the plan."
+
 // IdleNudge resumes a turn that ended without the agent saying what's next.
 const IdleNudge = "You ended your turn without calling complete_run, await_human or request_approval. " +
 	"If the work is done, call complete_run. If you need a person, call await_human or request_approval. Otherwise, continue."
+
+// sessionBaseline finds the session's running usage totals in the latest of
+// turns before seq that recorded them, and reports whether one did.
+func sessionBaseline(turns []store.RunTurn, seq int32, harnessName, session string) (harness.Usage, bool) {
+	for i := len(turns) - 1; i >= 0; i-- {
+		if turns[i].Seq >= seq || len(turns[i].Usage) == 0 {
+			continue
+		}
+		var usage harness.Usage
+		if json.Unmarshal(turns[i].Usage, &usage) != nil {
+			continue
+		}
+		var saved map[string]json.RawMessage
+		_ = json.Unmarshal(turns[i].Usage, &saved)
+		if _, modern := saved["cache_reported_input_tokens"]; !modern && usage.SessionInputTokens > 0 {
+			usage.SessionCacheKnown = true // legacy Codex stored explicit cached counters
+		}
+		if usage.SessionID == session {
+			return usage, true
+		}
+		// Older Codex turns stored cumulative usage without a session marker.
+		if harnessName == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
+			return harness.Usage{SessionID: session, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens, SessionCacheKnown: true}, true
+		}
+		// Older Claude turns stored the session's total_cost_usd as the turn's cost.
+		if harnessName == agentdef.HarnessClaudeCode && usage.SessionID == "" && usage.CostSource == "harness" && usage.CostUSD > 0 {
+			return harness.Usage{SessionID: session, SessionCostUSD: usage.CostUSD}, true
+		}
+	}
+	return harness.Usage{}, false
+}
 
 func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	c, err := r.load(ctx, turn.RunID)
@@ -1134,6 +1174,14 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 	}
 
+	// A plan step asked this run to continue in a fresh session: drop the
+	// session before the usage baseline, so this turn is billed from zero.
+	// It's recorded once the prompt is built (takePlanStepRollover), so a
+	// turn that stops before then rolls over next time instead.
+	planRollover := c.run.RolloverRequested
+	if planRollover {
+		c.run.HarnessSessionID = nil
+	}
 	// Skip a harness another run already found exhausted instead of burning a failing turn on it.
 	handoff, err := r.selectHarness(ctx, &c, turn)
 	if err != nil {
@@ -1150,32 +1198,19 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				log.Error("load usage baseline", "err", err)
 				return
 			}
-			for i := len(turns) - 1; i >= 0; i-- {
-				if turns[i].Seq >= turn.Seq || len(turns[i].Usage) == 0 {
-					continue
-				}
-				var usage harness.Usage
-				if json.Unmarshal(turns[i].Usage, &usage) != nil {
-					continue
-				}
-				var saved map[string]json.RawMessage
-				_ = json.Unmarshal(turns[i].Usage, &saved)
-				if _, modern := saved["cache_reported_input_tokens"]; !modern && usage.SessionInputTokens > 0 {
-					usage.SessionCacheKnown = true // legacy Codex stored explicit cached counters
-				}
-				if usage.SessionID == *c.run.HarnessSessionID {
-					baseline = usage
-					break
-				}
-				// Older Codex turns stored cumulative usage without a session marker.
-				if c.spec.Harness == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
-					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens, SessionCacheKnown: true}
-					break
-				}
-				// Older Claude turns stored the session's total_cost_usd as the turn's cost.
-				if c.spec.Harness == agentdef.HarnessClaudeCode && usage.SessionID == "" && usage.CostSource == "harness" && usage.CostUSD > 0 {
-					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionCostUSD: usage.CostUSD}
-					break
+			var ok bool
+			baseline, ok = sessionBaseline(turns, turn.Seq, c.spec.Harness, *c.run.HarnessSessionID)
+			// A continued delegated run resumes the earlier run's session, whose
+			// running totals are in that run's turns.
+			var contract runs.Contract
+			if !ok && len(c.run.Contract) > 0 && json.Unmarshal(c.run.Contract, &contract) == nil && contract.ContinueRunID != "" {
+				if prev, err := uuid.Parse(contract.ContinueRunID); err == nil {
+					prevTurns, err := q.ListTurns(ctx, prev)
+					if err != nil {
+						log.Error("load usage baseline", "err", err)
+						return
+					}
+					baseline, _ = sessionBaseline(prevTurns, math.MaxInt32, c.spec.Harness, *c.run.HarnessSessionID)
 				}
 			}
 		}
@@ -1295,6 +1330,49 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			return
 		}
 		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
+		if planRollover && handoff == "" {
+			// The session is already gone: brief the fresh one like a delegation rollover.
+			if brief, err := r.rolloverPrompt(ctx, c, turn.Seq, prompt, env); err != nil {
+				log.Warn("rollover brief", "err", err)
+			} else {
+				prompt = brief
+			}
+		} else if r.shouldRollOver(c) {
+			// Continue in a fresh session: everything the main agent needs next
+			// is in the run's state, git and the report, and its checkout was
+			// clean when its children started.
+			brief, err := r.rolloverPrompt(ctx, c, turn.Seq, prompt, env)
+			if err != nil {
+				log.Warn("rollover brief; resuming the session", "err", err)
+			} else if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
+				log.Warn("rollover: clear session; resuming it", "err", err)
+			} else {
+				r.resetContextTokens(ctx, c)
+				r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_rollover", "reason": "delegation", "context_tokens": c.run.ContextTokens})
+				c.run.HarnessSessionID = nil
+				prompt = brief
+				// The fresh session's usage starts from zero.
+				switch c.spec.Harness {
+				case agentdef.HarnessCodex:
+					h = harness.Codex{Prices: r.Cfg.ModelPrices}
+				case agentdef.HarnessClaudeCode:
+					h = harness.ClaudeCode{}
+				}
+			}
+		}
+	}
+	if planRollover {
+		if handoff == "" && turn.Trigger != "delegation" {
+			if brief, err := r.planStepPrompt(ctx, c, prompt, env); err != nil {
+				log.Warn("rollover brief", "err", err)
+			} else {
+				prompt = brief
+			}
+		}
+		r.takePlanStepRollover(ctx, c)
+	}
+	if c.run.ParentRunID != nil && turn.Seq == 1 {
+		prompt += r.checkoutSection(ctx, c, env)
 	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
@@ -1386,7 +1464,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	}
 	inv, err := h.Invocation(harness.Workspace{
 		DependencyCacheDir: cacheDir, Dir: wsDir, MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv, ContainerSandbox: r.Backend.Name() == "docker",
-	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages})
+	}, harness.Turn{Spec: c.spec, Prompt: prompt, SessionID: session, Images: inputPaths, InlineImages: inputImages, Lead: runs.LeadRun(c.run)})
 	if err != nil {
 		r.end(ctx, c, "failed", err.Error(), runs.VerbRunFailed)
 		return
@@ -1577,11 +1655,48 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 // watch streams a turn's output into events, enforces pause/cancel and the
 // runtime guard, and returns what the parser learned.
 func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration) (harness.Result, []byte, int, error) {
-	return r.watchSession(ctx, c, proc, p, env, remaining, func(s string) {
+	write := func(wctx context.Context, n int64) {
+		qctx, cancel := context.WithTimeout(wctx, controlTimeout)
+		defer cancel()
+		if err := r.q().SetRunContextTokens(qctx, store.SetRunContextTokensParams{ID: c.run.ID, ContextTokens: n}); err != nil {
+			r.Log.Warn("record context tokens", "run", c.run.ID, "err", err)
+		}
+	}
+	cp := &contextParser{Parser: p, write: func(n int64) { write(ctx, n) }}
+	res, raw, code, err := r.watchSession(ctx, c, proc, cp, env, remaining, func(s string) {
 		qctx, cancel := context.WithTimeout(ctx, controlTimeout)
 		defer cancel()
 		_ = r.q().SetRunSession(qctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
 	})
+	// At turn end, the final value. A Claude turn that never reached a request
+	// (a rejected resume, an early crash) keeps the last known size; a Codex
+	// turn writes 0, since its context is unknown.
+	if n := res.Usage.ContextTokens; n > 0 || c.spec.Harness == agentdef.HarnessCodex {
+		write(context.WithoutCancel(ctx), n)
+	}
+	return res, raw, code, err
+}
+
+// contextWriteEvery bounds how often a streaming turn writes runs.context_tokens.
+const contextWriteEvery = 15 * time.Second
+
+// contextParser records the main agent's context size while a turn streams,
+// at most once every contextWriteEvery, so MCP handlers can read a recent
+// value mid-turn. Line is called from one goroutine only.
+type contextParser struct {
+	harness.Parser
+	write   func(int64)
+	last    int64
+	written time.Time
+}
+
+func (cp *contextParser) Line(b []byte) []harness.Event {
+	evs := cp.Parser.Line(b)
+	if n := cp.Parser.Result().Usage.ContextTokens; n > 0 && n != cp.last && time.Since(cp.written) >= contextWriteEvery {
+		cp.last, cp.written = n, time.Now()
+		cp.write(n)
+	}
+	return evs
 }
 
 // watchSession is watch with the choice of what to do when the harness reports
@@ -1780,6 +1895,14 @@ func (r *Runner) afterTurn(ctx context.Context, runID uuid.UUID, res harness.Res
 	// So does a workflow step; the engine checks that it did.
 	if c.run.Purpose == runs.PurposeWorkflow {
 		r.end(ctx, c, "completed", "Workflow step finished.", runs.VerbRunCompleted)
+		return
+	}
+	// It ended its turn because update_step asked it to: continue in a fresh
+	// session (takePlanStepRollover). That isn't an idle stop.
+	if c.run.RolloverRequested {
+		if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: runID, Trigger: "resume", InputMessage: PlanRolloverInput}); err != nil {
+			r.Log.Error("rollover turn", "run", runID, "err", err)
+		}
 		return
 	}
 	if c.run.IdleTurns < 1 {

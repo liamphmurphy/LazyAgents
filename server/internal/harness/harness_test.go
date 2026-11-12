@@ -583,10 +583,14 @@ func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 	s := spec()
 	s.Instructions = "Standing role routine: hand implementation to an implementer."
 	md := string(AgentsMD("", s, []string{".lazyagents/context/one.md"}, "PAY-214"))
-	for _, want := range []string{"Work directly", "optional", "skip whoami", "Read only the files relevant", "Your own diff review"} {
+	for _, want := range []string{"Work directly by default", "optional", "skip whoami", "Read only the files relevant", "Your own diff review",
+		"Pass a note with update_step(done) saying what the next step needs.", "If update_step tells you to end your turn for a fresh session, commit and end it."} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("missing %q", want)
 		}
+	}
+	if strings.Contains(md, "persistent session") {
+		t.Fatal("the session may be replaced; don't call it persistent")
 	}
 	s.ReviewRequired = true
 	md = string(AgentsMD("", s, nil, "PAY-214"))
@@ -638,6 +642,21 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	}
 	if strings.Contains(plain, "## Checks") {
 		t.Fatal("standalone ticket must keep the Tests section")
+	}
+
+	// A sub agent outside an epic runs only the narrowest tests: the main agent
+	// runs the full suite once after merging. Lifecycle rules are stated here once.
+	sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
+	for _, want := range []string{"## Tests", "Run the narrowest tests", "Tests command, that is the bar", "Don't run the full suite", "never wait for or poll GitHub PR checks",
+		"commit what you change", "outcome is the one-line headline, report carries the detail", "If you're blocked, call complete_run", "request_approval or await_human", "get_ticket only if"} {
+		if !strings.Contains(sub, want) {
+			t.Fatalf("delegated AGENTS.md missing %q:\n%s", want, sub)
+		}
+	}
+	for _, bad := range []string{"full suite once", "claim_ticket"} {
+		if strings.Contains(sub, bad) {
+			t.Fatalf("delegated AGENTS.md must not contain %q:\n%s", bad, sub)
+		}
 	}
 
 	// A sub agent of an epic ticket leaves the full suite too; one of the review runs it.

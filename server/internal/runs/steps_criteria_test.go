@@ -2,6 +2,7 @@ package runs_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -92,22 +93,22 @@ func TestPlanStepsAdvanceThemselves(t *testing.T) {
 	if got := f.states(t); !eq(got, []string{"current", "pending", "pending"}) {
 		t.Fatalf("fresh plan = %v", got)
 	}
-	if n, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done"); err != nil || n != 2 {
-		t.Fatalf("advance = %d %v", n, err)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done", ""); err != nil || r.Current != 2 {
+		t.Fatalf("advance = %d %v", r.Current, err)
 	}
 	if got := f.states(t); !eq(got, []string{"done", "current", "pending"}) {
 		t.Fatalf("after step 1 = %v", got)
 	}
 	// Finishing a step that isn't the current one leaves the current step alone.
-	if n, err := f.svc.UpdateStep(f.ctx, f.caller, "", 3, "done"); err != nil || n != 0 {
-		t.Fatalf("override = %d %v", n, err)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 3, "done", ""); err != nil || r.Current != 0 {
+		t.Fatalf("override = %d %v", r.Current, err)
 	}
 	if got := f.states(t); !eq(got, []string{"done", "current", "done"}) {
 		t.Fatalf("after step 3 = %v", got)
 	}
 	// Last step done: nothing left to promote.
-	if n, err := f.svc.UpdateStep(f.ctx, f.caller, "", 2, "done"); err != nil || n != 0 {
-		t.Fatalf("last step = %d %v", n, err)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 2, "done", ""); err != nil || r.Current != 0 {
+		t.Fatalf("last step = %d %v", r.Current, err)
 	}
 	if got := f.states(t); !eq(got, []string{"done", "done", "done"}) {
 		t.Fatalf("finished plan = %v", got)
@@ -163,5 +164,63 @@ func TestCheckCriteriaRequiresMockup(t *testing.T) {
 	}
 	if err := f.svc.CheckCriteria(f.ctx, f.caller, "", []int{1, 2}, false); err != nil {
 		t.Fatalf("unticking is allowed: %v", err)
+	}
+}
+
+func TestStepNoteAndRollover(t *testing.T) {
+	f := newStepFixture(t)
+	f.svc.RolloverContextTokens = 100000
+	if _, err := f.svc.PostPlan(f.ctx, f.caller, "", []string{"One", "Two", "Three", "Four"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done", strings.Repeat("é", runs.StepNoteLimit+1)); !isInvalid(err) {
+		t.Fatalf("over-long note: %v", err)
+	}
+	set := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := f.svc.Pool.Exec(f.ctx, sql, append([]any{f.run.ID}, args...)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	flag := func() bool {
+		t.Helper()
+		run, err := f.q.GetRun(f.ctx, store.GetRunParams{ID: f.run.ID, WorkspaceID: f.ws})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return run.RolloverRequested
+	}
+	// A delegated run never rolls over, however large.
+	var parent uuid.UUID
+	if err := f.svc.Pool.QueryRow(f.ctx, `INSERT INTO runs (workspace_id, ticket_id, agent_id, mode, state, resolved_spec, harness, model, purpose)
+		SELECT workspace_id, ticket_id, agent_id, mode, 'completed', resolved_spec, harness, model, purpose FROM runs WHERE id=$1 RETURNING id`, f.run.ID).Scan(&parent); err != nil {
+		t.Fatal(err)
+	}
+	set(`UPDATE runs SET mode='managed', context_tokens=180000, parent_run_id=$2 WHERE id=$1`, parent)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 1, "done", "  ledger.go holds it  "); err != nil || r.Rollover || r.Current != 2 || flag() {
+		t.Fatalf("delegated run: %+v %v", r, err)
+	}
+	plan, _ := f.q.ListPlan(f.ctx, f.run.ID)
+	if plan[0].Note == nil || *plan[0].Note != "ledger.go holds it" {
+		t.Fatalf("note %v", plan[0].Note)
+	}
+	// A lead below the setting doesn't.
+	set(`UPDATE runs SET context_tokens=50000, parent_run_id=NULL WHERE id=$1`)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 2, "done", ""); err != nil || r.Rollover || flag() {
+		t.Fatalf("small lead: %+v %v", r, err)
+	}
+	// A large lead does, with the size that triggered it.
+	set(`UPDATE runs SET context_tokens=100000 WHERE id=$1`)
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 3, "done", ""); err != nil || !r.Rollover || r.Current != 4 || r.ContextTokens != 100000 || !flag() {
+		t.Fatalf("large lead: %+v %v", r, err)
+	}
+	// With the setting off, nothing does.
+	set(`UPDATE runs SET rollover_requested=false WHERE id=$1`)
+	f.svc.RolloverContextTokens = 0
+	if _, err := f.svc.UpdateStep(f.ctx, f.caller, "", 3, "current", ""); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := f.svc.UpdateStep(f.ctx, f.caller, "", 3, "done", ""); err != nil || r.Rollover || flag() {
+		t.Fatalf("setting off: %+v %v", r, err)
 	}
 }

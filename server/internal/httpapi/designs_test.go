@@ -534,7 +534,7 @@ func TestDesignImageChecks(t *testing.T) {
 	e.want("GET", "/designs/"+id+"/assets/a_missing", nil, http.StatusNotFound)
 }
 
-// Migration 00108 rolls back from a database with designs in use: their
+// Migration 00113 rolls back from a database with designs in use: their
 // chats, spaces and canvases go, their images are queued for the sweep, and
 // it applies again.
 func TestDesignsMigrationRollsBackAndReapplies(t *testing.T) {
@@ -547,7 +547,7 @@ func TestDesignsMigrationRollsBackAndReapplies(t *testing.T) {
 
 	sqldb := stdlib.OpenDBFromPool(e.pool)
 	defer sqldb.Close()
-	if err := goose.DownToContext(ctx, sqldb, ".", 107); err != nil {
+	if err := goose.DownToContext(ctx, sqldb, ".", 112); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"design_assets", "design_settings", "design_proposals", "design_frame_links"} {

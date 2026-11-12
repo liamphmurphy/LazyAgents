@@ -61,7 +61,7 @@ func DesignFrameFiles(ctx context.Context, q *store.Queries, dr DesignRenderer, 
 			continue
 		}
 		if img, err := dr.Render(ctx, r.CanvasID, r.Body, r.NodeID, "", 1); err != nil {
-			fmt.Fprintf(&md, "> The frame couldn't be drawn (%s), so there's no PNG; work from the Inspect output below.\n\n", oneLine(err.Error()))
+			fmt.Fprintf(&md, "> The frame couldn't be drawn (%s), so there's no PNG; work from the Inspect output below.\n\n", oneLine(err.Error(), 200))
 		} else {
 			out = append(out, ContextFile{Path: base + ".png", Body: img.PNG})
 			fmt.Fprintf(&md, "Image: `%s.png` (%d×%d at 1×).\n\n", base, img.W, img.H)
@@ -75,7 +75,7 @@ func DesignFrameFiles(ctx context.Context, q *store.Queries, dr DesignRenderer, 
 		}
 		ins, err := dr.Inspect(ctx, r.Body, r.NodeID, "react")
 		if err != nil {
-			fmt.Fprintf(&md, "> Inspect output is unavailable (%s).\n", oneLine(err.Error()))
+			fmt.Fprintf(&md, "> Inspect output is unavailable (%s).\n", oneLine(err.Error(), 200))
 		} else {
 			writeInspect(&md, ins)
 		}
@@ -91,14 +91,6 @@ func slugPart(s string) string {
 	}
 	if s == "" {
 		s = "design"
-	}
-	return s
-}
-
-func oneLine(s string) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > 200 {
-		s = s[:200] + "…"
 	}
 	return s
 }

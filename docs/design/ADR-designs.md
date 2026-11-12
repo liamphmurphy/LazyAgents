@@ -258,7 +258,7 @@ Asset      { mime: "image/png"|"image/jpeg", w, h, alt? }    // bytes in the blo
   - the 1 GB Library quota;
   - the trigger-queued blob sweep.
   - A new `design_assets` table has the same shape as `deck_assets`. Its trigger queues released keys into the existing `deck_blob_sweep`. The sweep deletes a key only when neither table references it, and the `designs/` and `slides/` prefixes keep the two kinds' blobs apart.
-- **Migration `00108_designs.sql`** (number after the latest; a person applies it, because agents are denied `db:migrate`):
+- **Migration `00113_designs.sql`** (number after the latest; a person applies it, because agents are denied `db:migrate`):
   - `chat_canvases.kind` gains `'design'`; `chat_spaces.app` gains `'designs'`. Slides missed the second at first; this migration doesn't.
   - `design_settings(canvas_id PK → chat_canvases ON DELETE CASCADE, direct_edit bool NOT NULL DEFAULT false, persona_paused bool NOT NULL DEFAULT false, project_id NULL → projects)`. The switch lives outside the body, so toggling it isn't a version and no patch can change it.
   - `design_assets(canvas_id, id, workspace_id, user_id, blob_key, mime, width, height, size_bytes, created_at)`, with the sweep trigger.
@@ -458,7 +458,7 @@ At most 10 frames. A render failure becomes a note in the `.md` file and doesn't
   - `web/app/(app)/apps/designs/**`;
   - `web/app/internal/designs/*`;
   - `web/public/fonts/designs/*`;
-  - migration 00108.
+  - migration 00113.
 - **Docs and Slides regressions:** neither code path changes except the per-kind body cap. `web/e2e/docs-app.spec.ts` and the Slides specs must stay green (epic criterion 8).
 
 ## 5. Proof of concept (evidence)

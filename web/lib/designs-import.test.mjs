@@ -140,10 +140,10 @@ test("SVG it can't read is refused with the problem named", () => {
 
 test("SVG close-path followed by a number is rejected without blocking the worker", async () => {
   const { spawnSync } = await import("node:child_process");
-  const module = new URL("./designs/svgimport.ts", import.meta.url).href;
+  const svgModule = new URL("./designs/svgimport.ts", import.meta.url).href;
   const result = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", `
     import assert from 'node:assert/strict';
-    import { importSvg, SvgImportError } from ${JSON.stringify(module)};
+    import { importSvg, SvgImportError } from ${JSON.stringify(svgModule)};
     for (const command of ['Z', 'z']) {
       assert.throws(() => importSvg('<svg><path d="M0 0 L10 10 ' + command + ' 1"/></svg>', { ids: () => 'n_test' }),
         e => e instanceof SvgImportError && /needs a command before a number/.test(e.message));

@@ -467,6 +467,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     }
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
+    if (/^\/chats\/[^/]+\/followups$/.test(path) && method === "GET") return json({ followups: [] });
+    if (/^\/chats\/[^/]+\/asides$/.test(path) && method === "GET") return json({ asides: [] });
     if (path === "/persona-dock") return json({ personas: dock, harnesses: [] });
     if (path === "/inbox" && method === "GET") return json({ items: inbox });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });

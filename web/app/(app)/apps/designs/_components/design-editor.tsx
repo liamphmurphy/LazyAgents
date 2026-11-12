@@ -849,7 +849,9 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
             )}
             {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
             {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
-            <div role="toolbar" aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
+            {/* Tools centred, zoom on the right: on a narrow canvas the 1fr sides give way and the tools slide left of the zoom instead of under it. */}
+            <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+            <div role="toolbar" aria-label="Tools" className="pointer-events-auto col-start-2 flex items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
               {TOOLS.filter((t) => !beside || BESIDE_TOOLS.has(t.tool)).map((t) => (
                 <button
                   key={t.tool}
@@ -886,12 +888,13 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
               </button>
               )}
             </div>
-            <div className="absolute bottom-5 right-4 z-10 flex items-center gap-1 rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
+            <div className="pointer-events-auto col-start-3 mb-1 flex items-center gap-1 justify-self-end rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
               <button type="button" aria-label="Zoom out" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(0.8)}>−</button>
               <button type="button" aria-label="Zoom to fit (⇧1)" data-testid="design-zoom" className="min-w-[44px] rounded px-1 hover:bg-hover" onClick={zoomToFit}>
                 {Math.round((camera?.z ?? 1) * 100)}%
               </button>
               <button type="button" aria-label="Zoom in" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(1.25)}>+</button>
+            </div>
             </div>
             <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/*" className="hidden" aria-label="Add an image to the design" data-testid="design-image-input" onChange={(e) => {
               const f = e.target.files?.[0];
