@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -33,6 +35,9 @@ type playgroundEngine struct {
 	logs      map[string]string         // name → Docker's timestamped output
 	exitCode  map[string]int            // name → exited with this; absent: running
 	connected []string
+	// startsAfter holds a container at "created" until the one it names
+	// exists: a service that can only come up once another has started.
+	startsAfter map[string]string
 }
 
 func (f *playgroundEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +94,9 @@ func (f *playgroundEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if _, done := f.exitCode[name]; done {
 			status = "exited"
 		}
+		if other, ok := f.startsAfter[name]; ok && f.created[other] == nil {
+			status = "created"
+		}
 		fmt.Fprintf(w, `{"State":{"Status":%q,"ExitCode":%d}}`, status, f.exitCode[name])
 	case r.Method == http.MethodDelete || strings.HasSuffix(p, "/disconnect"):
 		w.WriteHeader(http.StatusNoContent)
@@ -104,7 +112,7 @@ func startPlaygroundEngine(t *testing.T) (*playgroundEngine, *Docker) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &playgroundEngine{created: map[string]map[string]any{}, ids: map[string]string{}, logs: map[string]string{}, exitCode: map[string]int{}}
+	f := &playgroundEngine{created: map[string]map[string]any{}, ids: map[string]string{}, logs: map[string]string{}, exitCode: map[string]int{}, startsAfter: map[string]string{}}
 	srv := &http.Server{Handler: f}
 	go func() { _ = srv.Serve(l) }()
 	t.Cleanup(func() { _ = srv.Close() })
@@ -304,5 +312,173 @@ func TestStartPlaygroundChecksABackgroundProcessStaysUp(t *testing.T) {
 	var perr *PlaygroundError
 	if !errors.As(err, &perr) || perr.Msg != "runner exited with code 2" || !strings.Contains(perr.Log, "DATABASE_URL is unset") {
 		t.Fatalf("StartPlayground = %v", err)
+	}
+}
+
+// Services start at once, alongside the tools install, so one that only
+// comes up once another has started doesn't wait out its timeout; setup
+// runs after all of them.
+func TestStartPlaygroundStartsServicesAndToolsTogether(t *testing.T) {
+	f, d := startPlaygroundEngine(t)
+	oldReady, oldPoll := ServiceReadyTimeout, servicePoll
+	ServiceReadyTimeout, servicePoll = 2*time.Second, 10*time.Millisecond
+	t.Cleanup(func() { ServiceReadyTimeout, servicePoll = oldReady, oldPoll })
+	id := uuid.New()
+	postgres, s3 := playgroundContainer(id, "postgres"), playgroundContainer(id, "s3")
+	f.startsAfter[postgres] = s3 // started one after the other, postgres never comes up
+	spec := playground.Spec{
+		Services:    []agentdef.Service{{Name: "postgres", Image: "postgres:17-alpine"}, {Name: "s3", Image: "chrislusf/seaweedfs:4.48"}},
+		NixPackages: []string{"nixpkgs#redis"},
+		Setup:       []string{"make migrate"},
+		Processes:   []playground.Process{{Name: "api", Command: "make serve", Port: 8000}},
+	}
+	if err := spec.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	d.dialPlayground = func(context.Context, string) (net.Conn, error) { // api listens
+		c, other := net.Pipe()
+		other.Close()
+		return c, nil
+	}
+	var steps []string
+	if _, err := d.StartPlayground(context.Background(), PlaygroundRun{ID: id, RunID: "run-1", Spec: spec}, func(s string) { steps = append(steps, s) }); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Starting postgres and s3, installing tools", "Running setup", "Starting api", "Waiting for api on :8000", "Loading api's first page"}; !slices.Equal(steps, want) {
+		t.Errorf("steps = %q, want %q", steps, want)
+	}
+	if _, ok := f.created[playgroundContainer(id, playgroundTools)]; !ok {
+		t.Error("the tools weren't installed")
+	}
+}
+
+// One service that fails stops the start with its own error, without
+// waiting for the others to be ready.
+func TestStartPlaygroundReportsTheServiceThatFailed(t *testing.T) {
+	f, d := startPlaygroundEngine(t)
+	oldReady, oldPoll := ServiceReadyTimeout, servicePoll
+	ServiceReadyTimeout, servicePoll = time.Minute, 10*time.Millisecond
+	t.Cleanup(func() { ServiceReadyTimeout, servicePoll = oldReady, oldPoll })
+	id := uuid.New()
+	postgres, s3 := playgroundContainer(id, "postgres"), playgroundContainer(id, "s3")
+	f.startsAfter[postgres] = "never" // would wait out the minute
+	f.exitCode[s3] = 1
+	f.logs[s3] = "2026-11-12T09:00:00Z s3: bad flag -ip.bind\n"
+	spec := playground.Spec{
+		Services:  []agentdef.Service{{Name: "postgres", Image: "postgres:17-alpine"}, {Name: "s3", Image: "chrislusf/seaweedfs:4.48"}},
+		Processes: []playground.Process{{Name: "api", Command: "go run .", Port: 8000}},
+	}
+	_ = spec.Validate()
+	began := time.Now()
+	_, err := d.StartPlayground(context.Background(), PlaygroundRun{ID: id, RunID: "run-1", Spec: spec}, func(string) {})
+	var perr *PlaygroundError
+	if !errors.As(err, &perr) || perr.Msg != "service s3 isn't ready" || !strings.Contains(perr.Log, "bad flag") {
+		t.Fatalf("StartPlayground = %v (%+v), want s3's failure", err, perr)
+	}
+	if took := time.Since(began); took > 10*time.Second {
+		t.Errorf("took %s: waited on postgres after s3 failed", took)
+	}
+	if _, started := f.created[playgroundContainer(id, playgroundSetup)]; started {
+		t.Error("setup ran though a service failed")
+	}
+}
+
+// The tools install is skipped when the profile already holds the same
+// packages, and runs again when they change or the profile is gone. It runs
+// under bash with a stand-in nix, as the tools container would run it.
+func TestNixInstallScriptSkipsPackagesAlreadyInstalled(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	installs := filepath.Join(root, "installs")
+	// nix profile install --profile PROFILE PKG...: records the call and
+	// makes the profile, as a real install would.
+	fake := "#!/bin/sh\necho \"$*\" >> " + installs + "\nmkdir -p \"$4\" && touch \"$4/manifest.json\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "nix"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(pkgs ...string) {
+		t.Helper()
+		script := strings.ReplaceAll(nixInstallScript(pkgs), workspacePath, root)
+		cmd := exec.Command("bash", "-c", script)
+		cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	count := func() int {
+		b, _ := os.ReadFile(installs)
+		return strings.Count(string(b), "\n")
+	}
+	run("nixpkgs#redis", "nixpkgs#jq")
+	run("nixpkgs#redis", "nixpkgs#jq")
+	if n := count(); n != 1 {
+		t.Fatalf("installed %d times for the same packages, want 1", n)
+	}
+	run("nixpkgs#redis")
+	if n := count(); n != 2 {
+		t.Fatalf("installed %d times after the packages changed, want 2", n)
+	}
+	if err := os.RemoveAll(filepath.Join(root, ".lazyagents/playground-profile")); err != nil {
+		t.Fatal(err)
+	}
+	run("nixpkgs#redis")
+	if n := count(); n != 3 {
+		t.Fatalf("installed %d times after the profile went, want 3", n)
+	}
+}
+
+// Once every process is up, the page at / is loaded once, through the
+// process that serves it, so a dev server builds it before the person asks.
+// A page that fails to load doesn't fail the start.
+func TestStartPlaygroundLoadsTheFirstPage(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{{"ok", http.StatusOK}, {"error page", http.StatusInternalServerError}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, d := startPlaygroundEngine(t)
+			var (
+				mu    sync.Mutex
+				paths []string
+			)
+			app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				paths = append(paths, r.Host+r.URL.Path)
+				mu.Unlock()
+				if r.URL.Path == "/" {
+					http.Redirect(w, r, "/signin", http.StatusFound)
+					return
+				}
+				w.WriteHeader(tc.status)
+			}))
+			t.Cleanup(app.Close)
+			d.dialPlayground = func(ctx context.Context, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "tcp", app.Listener.Addr().String())
+			}
+			id := uuid.New()
+			spec := playground.Spec{
+				Processes: []playground.Process{{Name: "api", Command: "go run .", Port: 8000}, {Name: "web", Command: "npm run dev", Port: 3000}},
+				Routes:    []playground.Route{{Path: "/api", Process: "api"}, {Path: "/", Process: "web"}},
+			}
+			if err := spec.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			var steps []string
+			if _, err := d.StartPlayground(context.Background(), PlaygroundRun{ID: id, RunID: "run-1", Spec: spec}, func(s string) { steps = append(steps, s) }); err != nil {
+				t.Fatal(err)
+			}
+			if last := steps[len(steps)-1]; last != "Loading web's first page" {
+				t.Errorf("last step %q, want the first page loading", last)
+			}
+			web := net.JoinHostPort(playgroundContainer(id, "web"), "3000")
+			mu.Lock()
+			defer mu.Unlock()
+			if want := []string{web + "/", web + "/signin"}; !slices.Equal(paths, want) {
+				t.Errorf("requested %q, want %q", paths, want)
+			}
+		})
 	}
 }

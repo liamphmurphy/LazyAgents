@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/playground"
 )
 
@@ -51,7 +53,10 @@ var (
 	// PlaygroundBackgroundGrace is how long a background process must keep
 	// running after start before the playground counts as up.
 	PlaygroundBackgroundGrace = 3 * time.Second
-	playgroundPoll            = 500 * time.Millisecond
+	// PlaygroundWarmUpTimeout bounds loading the first page once a process
+	// listens; one slower than this starts anyway.
+	PlaygroundWarmUpTimeout = 2 * time.Minute
+	playgroundPoll          = 500 * time.Millisecond
 )
 
 // PlaygroundRun is a playground as the backend starts it.
@@ -83,7 +88,21 @@ type PlaygroundBackend interface {
 	StackName() string
 	// PlaygroundNetwork is the network a turn joins to reach a playground.
 	PlaygroundNetwork(id uuid.UUID) string
+	// PullMissing pulls an image unless it's here already, and says whether
+	// it pulled.
+	PullMissing(ctx context.Context, image string) (bool, error)
 	playground.Backend
+}
+
+func (d *Docker) PullMissing(ctx context.Context, image string) (bool, error) {
+	_, err := d.do(ctx, "GET", "/images/"+url.PathEscape(image)+"/json", nil, "", nil)
+	if err == nil {
+		return false, nil
+	}
+	if !isStatus(err, 404) {
+		return false, err
+	}
+	return true, d.pull(ctx, image)
 }
 
 func (d *Docker) StackName() string { return d.stack() }
@@ -155,35 +174,23 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 	}
 
 	spec := pg.Spec
-	for _, s := range spec.Services {
-		step("Starting " + s.Name)
-		body := d.serviceBody(pg.RunID, network, s)
-		body["Labels"] = d.playgroundLabels(pg, s.Name)
-		id, err := d.createAndStart(ctx, playgroundContainer(pg.ID, s.Name), body, s.Image)
-		if err != nil {
-			return nil, &PlaygroundError{Msg: fmt.Sprintf("service %s didn't start: %v", s.Name, err), Log: d.logTail(id)}
-		}
-		if err := d.waitReady(ctx, id, s); err != nil {
-			return nil, &PlaygroundError{Msg: fmt.Sprintf("service %s isn't ready", s.Name), Log: err.Error()}
-		}
+	if len(spec.NixPackages) > 0 && d.nixMount() == nil {
+		return nil, &PlaygroundError{Msg: "the spec asks for Nix packages, but this runner has no Nix (RUNNER_NIX_VOLUME)"}
 	}
-
+	// Services don't depend on each other or on the tools, so they all start
+	// at once, alongside the tools install. Setup waits for all of them: it
+	// may migrate a database or call a tool.
+	var starts []func(context.Context) error
+	for _, s := range spec.Services {
+		starts = append(starts, func(ctx context.Context) error { return d.startPlaygroundService(ctx, pg, network, s) })
+	}
 	if len(spec.NixPackages) > 0 {
-		if d.nixMount() == nil {
-			return nil, &PlaygroundError{Msg: "the spec asks for Nix packages, but this runner has no Nix (RUNNER_NIX_VOLUME)"}
-		}
-		step("Installing tools")
-		script := "nix profile install --profile " + playgroundProfile + " " + strings.Join(quoteAll(spec.NixPackages), " ")
-		body, err := d.playgroundBody(pg, network, playgroundTools, script, "", nil)
-		if err != nil {
+		starts = append(starts, func(ctx context.Context) error { return d.installPlaygroundTools(ctx, pg, network) })
+	}
+	if len(starts) > 0 {
+		step(startingStep(spec))
+		if err := firstError(ctx, starts...); err != nil {
 			return nil, err
-		}
-		id, err := d.createAndStart(ctx, playgroundContainer(pg.ID, playgroundTools), body, "")
-		if err != nil {
-			return nil, fmt.Errorf("start the tools install: %w", err)
-		}
-		if err := d.waitExit(ctx, id, PlaygroundSetupTimeout); err != nil {
-			return nil, &PlaygroundError{Msg: "installing " + strings.Join(spec.NixPackages, ", ") + " " + err.Error(), Log: d.playgroundLogTail(id)}
 		}
 	}
 
@@ -240,7 +247,145 @@ func (d *Docker) StartPlayground(ctx context.Context, pg PlaygroundRun, step fun
 			return nil, &PlaygroundError{Msg: fmt.Sprintf("%s %v", p.Name, err), Log: d.playgroundLogTail(ids[p.Name])}
 		}
 	}
+	// A dev server (next dev, vite) listens at once but builds a page on its
+	// first request: load it here, so the wait shows as a step and the
+	// person's first page is quick.
+	if p, ok := spec.Route("/"); ok && !p.Background() {
+		step("Loading " + p.Name + "'s first page")
+		d.warmUp(ctx, addrs[p.Name])
+	}
 	return addrs, nil
+}
+
+// warmUp requests a process's root page once. Whatever it answers, even an
+// error, the playground is up: the person sees the same answer.
+func (d *Docker) warmUp(ctx context.Context, addr string) {
+	ctx, cancel := context.WithTimeout(ctx, PlaygroundWarmUpTimeout)
+	defer cancel()
+	dial := d.dialPlayground
+	if dial == nil {
+		dial = func(ctx context.Context, addr string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		}
+	}
+	client := &http.Client{
+		Transport: &http.Transport{DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) { return dial(ctx, addr) }},
+		// Follow a redirect within the app (to a sign-in page, say), which is
+		// built on its own request, but nowhere else.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Host != addr || len(via) >= 5 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+	defer client.CloseIdleConnections()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/", nil)
+	if err != nil {
+		return
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 8<<20))
+	res.Body.Close()
+}
+
+// startPlaygroundService starts a service and waits until it's ready.
+func (d *Docker) startPlaygroundService(ctx context.Context, pg PlaygroundRun, network string, s agentdef.Service) error {
+	body := d.serviceBody(pg.RunID, network, s)
+	body["Labels"] = d.playgroundLabels(pg, s.Name)
+	id, err := d.createAndStart(ctx, playgroundContainer(pg.ID, s.Name), body, s.Image)
+	if err != nil {
+		return &PlaygroundError{Msg: fmt.Sprintf("service %s didn't start: %v", s.Name, err), Log: d.logTail(id)}
+	}
+	if err := d.waitReady(ctx, id, s); err != nil {
+		return &PlaygroundError{Msg: fmt.Sprintf("service %s isn't ready", s.Name), Log: err.Error()}
+	}
+	return nil
+}
+
+// installPlaygroundTools installs the spec's Nix packages into the
+// workspace's playground profile.
+func (d *Docker) installPlaygroundTools(ctx context.Context, pg PlaygroundRun, network string) error {
+	pkgs := pg.Spec.NixPackages
+	body, err := d.playgroundBody(pg, network, playgroundTools, nixInstallScript(pkgs), "", nil)
+	if err != nil {
+		return err
+	}
+	id, err := d.createAndStart(ctx, playgroundContainer(pg.ID, playgroundTools), body, "")
+	if err != nil {
+		return fmt.Errorf("start the tools install: %w", err)
+	}
+	if err := d.waitExit(ctx, id, PlaygroundSetupTimeout); err != nil {
+		return &PlaygroundError{Msg: "installing " + strings.Join(pkgs, ", ") + " " + err.Error(), Log: d.playgroundLogTail(id)}
+	}
+	return nil
+}
+
+// nixInstallScript installs pkgs into the playground profile, unless the
+// last install there was of the same packages and the profile still holds
+// them: a restart would otherwise evaluate nixpkgs again for nothing. The
+// manifest check follows the profile into the store, so packages Nix has
+// since collected are installed again.
+func nixInstallScript(pkgs []string) string {
+	want := shellQuote(strings.Join(pkgs, " "))
+	stamp := shellQuote(playgroundProfile + ".packages")
+	profile := shellQuote(playgroundProfile)
+	return "if [ -e " + profile + "/manifest.json ] && [ \"$(cat " + stamp + " 2>/dev/null)\" = " + want + " ]; then\n" +
+		"  echo 'tools already installed'\n  exit 0\nfi\n" +
+		"nix profile install --profile " + profile + " " + strings.Join(quoteAll(pkgs), " ") +
+		" && printf '%s\\n' " + want + " > " + stamp + "\n"
+}
+
+// startingStep names what a playground starts before its setup.
+func startingStep(spec playground.Spec) string {
+	var names []string
+	for _, s := range spec.Services {
+		names = append(names, s.Name)
+	}
+	switch {
+	case len(names) > 0 && len(spec.NixPackages) > 0:
+		return "Starting " + joinAnd(names) + ", installing tools"
+	case len(names) > 0:
+		return "Starting " + joinAnd(names)
+	default:
+		return "Installing tools"
+	}
+}
+
+func joinAnd(items []string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
+}
+
+// firstError runs tasks at once and returns the first error any of them
+// returned, cancelling the rest as soon as one fails.
+func firstError(ctx context.Context, tasks ...func(context.Context) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		wg    sync.WaitGroup
+		once  sync.Once
+		first error
+	)
+	for _, task := range tasks {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := task(ctx); err != nil {
+				once.Do(func() {
+					first = err
+					cancel()
+				})
+			}
+		}()
+	}
+	wg.Wait()
+	return first
 }
 
 // stillRunning fails if a container exits within grace.

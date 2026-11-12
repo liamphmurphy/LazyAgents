@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"path"
@@ -92,6 +93,37 @@ func (r *Runner) ServePlaygrounds(ctx context.Context) {
 	if len(h.free) > 0 {
 		r.playgrounds = h
 		r.Log.Info("playgrounds served", "ports", h.free)
+		r.wg.Add(1)
+		go func() {
+			defer r.wg.Done()
+			r.pullPlaygroundImages(ctx, pb)
+		}()
+	}
+}
+
+// pullPlaygroundImages pulls, in the background, the service images recent
+// playgrounds used that aren't here (a new machine, or a pruned Docker), so
+// the next start doesn't wait on the download. One at a time: a start that
+// needs an image meanwhile shouldn't share the bandwidth with all of them.
+func (r *Runner) pullPlaygroundImages(ctx context.Context, pb PlaygroundBackend) {
+	images, err := r.q().RecentPlaygroundImages(ctx, pb.StackName())
+	if err != nil {
+		if ctx.Err() == nil {
+			r.Log.Warn("playgrounds: list recent images", "err", err)
+		}
+		return
+	}
+	for _, image := range images {
+		pulled, err := pb.PullMissing(ctx, image)
+		switch {
+		case ctx.Err() != nil:
+			return
+		case err != nil:
+			// Not fatal: a start pulls it again and reports why it can't.
+			r.Log.Warn("playgrounds: pull a recent image", "image", image, "err", err)
+		case pulled:
+			r.Log.Info("playgrounds: pulled a recent image", "image", image)
+		}
 	}
 }
 
@@ -225,12 +257,15 @@ func (r *Runner) runPlayground(ctx context.Context, pb PlaygroundBackend, pg sto
 		return
 	}
 	h.gateway.Stop(port)
+	timer := newStepTimer(r.Log.With("playground", pg.ID))
 	step := func(s string) {
+		timer.step(s)
 		if err := q.SetPlaygroundStep(ctx, store.SetPlaygroundStepParams{ID: pg.ID, RunnerID: &r.Cfg.ID, Step: s}); err != nil && ctx.Err() == nil {
 			r.Log.Warn("playgrounds: step", "playground", pg.ID, "err", err)
 		}
 	}
 	addrs, err := pb.StartPlayground(ctx, PlaygroundRun{ID: pg.ID, RunID: pg.RunID.String(), Spec: spec}, step)
+	timer.done(err)
 	if err != nil {
 		r.failPlayground(ctx, pb, pg, err)
 		return
@@ -454,6 +489,48 @@ func (r *Runner) stopRunPlaygrounds(ctx context.Context, runID uuid.UUID) {
 			r.stopPlayground(ctx, pb, pg.ID, "The chat went idle and its workspace was cleaned up")
 		}
 	}
+}
+
+// stepTimer logs how long each step of a playground's start took, and the
+// whole start, so a slow one shows where its time went. The row only keeps
+// the current step.
+type stepTimer struct {
+	log     *slog.Logger
+	now     func() time.Time
+	began   time.Time
+	current string
+	since   time.Time
+}
+
+func newStepTimer(log *slog.Logger) *stepTimer {
+	t := &stepTimer{log: log, now: time.Now}
+	t.began = t.now()
+	return t
+}
+
+func (t *stepTimer) step(name string) {
+	t.finishStep()
+	t.current, t.since = name, t.now()
+}
+
+func (t *stepTimer) finishStep() {
+	if t.current != "" {
+		t.log.Info("playground step", "step", t.current, "took", t.now().Sub(t.since).Round(time.Millisecond))
+	}
+	t.current = ""
+}
+
+// done ends the last step and logs the start as a whole; err is why it
+// failed, or nil.
+func (t *stepTimer) done(err error) {
+	failedAt := t.current
+	t.finishStep()
+	took := t.now().Sub(t.began).Round(time.Millisecond)
+	if err != nil {
+		t.log.Info("playground start failed", "at", failedAt, "took", took)
+		return
+	}
+	t.log.Info("playground started", "took", took)
 }
 
 func refOf[T any](v T) *T { return &v }
