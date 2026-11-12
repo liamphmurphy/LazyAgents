@@ -17,6 +17,9 @@ import (
 // errStillChecking is shown while no runner has answered yet.
 var errStillChecking = errors.New("Vesper is still checking which models your plan offers. Try again in a moment, and check that the runner is running.")
 
+// ErrStillChecking is errStillChecking for a Discover that reports a pending listing.
+var ErrStillChecking = errStillChecking
+
 // errListingUnavailable stands in for a database failure, which the person
 // can't act on.
 var errListingUnavailable = errors.New("Vesper couldn't check which models your plan offers.")
@@ -59,10 +62,22 @@ func (l *QueuedListings) timing() (wait, ttl, poll, backoff time.Duration, now f
 	return
 }
 
+type currentLoginKey struct{}
+
+// CurrentLoginOnly makes plan listings answer only with models listed for the
+// login stored now, never an earlier login's while it refreshes: Verify must
+// not pass a new login on the strength of the old one.
+func CurrentLoginOnly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, currentLoginKey{}, true)
+}
+
+func currentLoginOnly(ctx context.Context) bool { return ctx.Value(currentLoginKey{}) != nil }
+
 // Models matches Catalog.PlanModels. Its errors are public-safe. Without wait
 // it only queues the request and answers from what is cached.
 func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness string, wait bool) ([]Model, error) {
 	waitFor, ttl, poll, backoff, now := l.timing()
+	strict := currentLoginOnly(ctx)
 	q := store.New(l.Pool)
 	sv, err := q.SecretVersion(ctx, store.SecretVersionParams{WorkspaceID: ws, Name: KeySecret[harness]})
 	if err != nil {
@@ -82,6 +97,9 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 			return models, nil
 		}
 		if row.Status == "failed" && row.LoginVersion == sv && row.FinishedAt != nil && now().Sub(*row.FinishedAt) < backoff {
+			if strict {
+				return nil, failure(row.Error)
+			}
 			return listingFailure(row)
 		}
 	}
@@ -94,7 +112,7 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 	}
 	// Expired or older-login models are served at once while the runner
 	// refreshes them: only a login with nothing listed yet waits.
-	if models := listedModels(row); has && len(models) > 0 {
+	if models := listedModels(row); has && len(models) > 0 && (!strict || current(row, sv)) {
 		return models, nil
 	}
 	// A request nobody has answered for longer than a wait means the runner
@@ -110,6 +128,9 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 		expired := false
 		select {
 		case <-ctx.Done():
+			if strict && !(has && current(row, sv)) {
+				return nil, errStillChecking
+			}
 			return fallback(row, has)
 		case <-timeout.C:
 			expired = true // one last look: the answer may have landed between polls
@@ -121,10 +142,16 @@ func (l *QueuedListings) Models(ctx context.Context, ws uuid.UUID, harness strin
 			case r.Status == "done" && r.ModelsVersion != nil && *r.ModelsVersion == sv && len(listedModels(r)) > 0:
 				return listedModels(r), nil
 			case r.Status == "failed" && r.LoginVersion == sv:
+				if strict {
+					return nil, failure(r.Error)
+				}
 				return listingFailure(r)
 			}
 		}
 		if expired {
+			if strict && !(has && current(row, sv)) {
+				return nil, errStillChecking
+			}
 			return fallback(row, has)
 		}
 	}
@@ -162,4 +189,9 @@ func listedModels(row store.HarnessModelListing) []Model {
 		return nil
 	}
 	return models
+}
+
+// current reports whether row's models were listed for login version sv.
+func current(row store.HarnessModelListing, sv string) bool {
+	return row.ModelsVersion != nil && *row.ModelsVersion == sv
 }

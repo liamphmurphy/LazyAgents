@@ -478,3 +478,31 @@ func TestQueuedListingsStalePendingDoesNotWait(t *testing.T) {
 		t.Fatalf("waited %v on a request nobody answers", d)
 	}
 }
+
+// Verify (CurrentLoginOnly) never passes a new login on an older login's models.
+func TestQueuedListingsCurrentLoginOnly(t *testing.T) {
+	e := newListingEnv(t)
+	cc := agentdef.HarnessClaudeCode
+	e.setSecret(t, KeySecret[cc], testOAuth)
+	if err := e.q.RequestModelListing(e.ctx, store.RequestModelListingParams{WorkspaceID: e.ws, Harness: cc, LoginVersion: e.version(t)}); err != nil {
+		t.Fatal(err)
+	}
+	e.runner(t, []Model{{ID: "opus", Default: true}}, "")
+	e.setSecret(t, KeySecret[cc], testOAuth+"2")
+	strict := CurrentLoginOnly(e.ctx)
+	if got, err := e.quick().Models(strict, e.ws, cc, false); !errors.Is(err, errStillChecking) || got != nil {
+		t.Fatalf("without waiting: got %+v err %v", got, err)
+	}
+	if got, err := e.quick().Models(strict, e.ws, cc, true); !errors.Is(err, errStillChecking) || got != nil {
+		t.Fatalf("after waiting: got %+v err %v", got, err)
+	}
+	// A failed listing of the new login fails, despite the older models.
+	e.runner(t, nil, "Claude rejected the login")
+	if got, err := e.quick().Models(strict, e.ws, cc, true); err == nil || err.Error() != "Claude rejected the login" || got != nil {
+		t.Fatalf("failed login: got %+v err %v", got, err)
+	}
+	// Everyone else still gets the older models meanwhile.
+	if got, err := e.quick().Models(e.ctx, e.ws, cc, true); err != nil || len(got) != 1 {
+		t.Fatalf("lenient: got %+v err %v", got, err)
+	}
+}

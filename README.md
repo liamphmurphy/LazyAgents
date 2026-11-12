@@ -115,8 +115,9 @@ Open **[localhost:8080](http://localhost:8080)** and choose a username and
 password: the first browser to arrive sets up the install, and other devices
 sign in with them. Locked out? `make signin` prints a one-time sign-in link.
 The first boot creates an empty workspace and an Assistant with all persona
-permissions enabled. After sign-in, setup asks you to replace the placeholder
-name and primary email, then shows the connection checklist. You can also set
+permissions enabled. After sign-in, the Assistant's Welcome Wizard asks for
+your name and what you do, connects Claude Code or Codex, and drafts your first
+persona. Settings → Run setup again starts it over. You can also set
 `LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` in `.env` before first boot. The demo
 dataset is available only by opting in with `SEED=true`.
 

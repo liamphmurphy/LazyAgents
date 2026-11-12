@@ -93,7 +93,7 @@ const setOwnerPassword = `-- name: SetOwnerPassword :one
 UPDATE users
 SET login = $1, password_hash = $2, password_set_at = now(), claimed_at = coalesce(claimed_at, now())
 WHERE id = $3 AND password_set_at IS NULL AND (claimed_at IS NULL OR $4::bool)
-RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at
+RETURNING id, workspace_id, name, email, initials, role_title, avatar_color, password_hash, created_at, updated_at, avatar_key, avatar_content_type, extra_emails, login, password_set_at, claimed_at, onboarded_at
 `
 
 type SetOwnerPasswordParams struct {
@@ -131,6 +131,7 @@ func (q *Queries) SetOwnerPassword(ctx context.Context, arg SetOwnerPasswordPara
 		&i.Login,
 		&i.PasswordSetAt,
 		&i.ClaimedAt,
+		&i.OnboardedAt,
 	)
 	return i, err
 }

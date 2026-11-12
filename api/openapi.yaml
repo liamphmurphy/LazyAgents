@@ -384,6 +384,57 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
+  /me/onboarding/complete:
+    post:
+      operationId: completeOnboarding
+      summary: Mark the Welcome Wizard finished
+      description: Idempotent; running the wizard again from Settings keeps the first completion time.
+      tags: [workspace]
+      responses:
+        "200":
+          description: Your profile with onboarded_at set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
+  /harness/{harness}/verify:
+    parameters:
+      - { name: harness, in: path, required: true, schema: { $ref: "#/components/schemas/Harness" } }
+    post:
+      operationId: verifyHarness
+      summary: Store a harness credential and check that chats can list its models
+      description: |
+        With a credential, checks it and stores it as the harness's key secret
+        (harness:anthropic for claude-code, harness:openai for codex), replacing
+        any earlier one only when it works: an API key is checked before it is
+        stored; a plan login is stored, listed through a runner, and the earlier
+        value put back when the listing fails, or is still pending (a first
+        login stays while pending: verify again without a credential to follow
+        it). Only models listed
+        for the new login count. Without a credential, only checks what is
+        already configured (a stored key, or the host's CLI login when runs use
+        it). A credential is refused (422) when runs use the host's CLI
+        sign-ins (SecretList.harness_keys_required false), since it would
+        never be checked there. A subscription
+        is a Claude setup-token (sk-ant-oat…) or a Codex auth.json; an api_key
+        is an Anthropic (sk-ant-…) or OpenAI (sk-…) API key. The credential is
+        never echoed back. 409 when secrets are off (SECRETS_KEY unset) and a
+        credential was sent; 422 when it doesn't have the expected shape.
+      tags: [chats]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HarnessVerifyRequest" }
+      responses:
+        "200":
+          description: What discovery found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HarnessVerifyResult" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
   /users/{userId}/avatar:
     parameters:
       - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -5285,6 +5336,10 @@ components:
           type: array
           items: { type: string }
           description: "All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me)."
+        onboarded_at: { type: string, format: date-time, description: "When you finished the Welcome Wizard; absent until then. Only on your own profile." }
+        harness_connected:
+          type: boolean
+          description: "Whether chats have a harness to run on: a stored harness key (harness:anthropic or harness:openai) when runs need one, always true when they use the host's CLI logins. Only on your own profile."
     ProfilePatch:
       type: object
       minProperties: 1
@@ -6708,6 +6763,7 @@ components:
         secrets: { type: array, items: { $ref: "#/components/schemas/SecretInfo" } }
         key_configured: { type: boolean, description: SECRETS_KEY is set }
         sign_in_available: { type: boolean, description: "A Docker runner is online, so Claude, Codex and GitHub can be signed in from Settings" }
+        harness_keys_required: { type: boolean, description: "Runs authenticate with the stored harness keys (the Docker backend); false when they use the host's claude and codex sign-ins, so there is no key to paste" }
         known:
           type: array
           description: Well-known secret names and the scope each backs
@@ -8489,6 +8545,27 @@ components:
           items: { $ref: "#/components/schemas/ChatEffort" }
           description: Reasoning efforts the model offers, lowest first; empty when it has no effort control
         default_effort: { $ref: "#/components/schemas/ChatEffort" }
+    HarnessVerifyRequest:
+      type: object
+      required: [kind, credential]
+      properties:
+        kind: { type: string, enum: [subscription, api_key] }
+        credential: { type: string, minLength: 1, maxLength: 16384, description: "The setup-token, auth.json or API key; stored encrypted, never returned" }
+    HarnessVerifyResult:
+      type: object
+      required: [ok, models]
+      properties:
+        ok: { type: boolean, description: True when discovery returned at least one chat model }
+        models:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+        checking: { type: boolean, description: "A runner hasn't listed a plan login's models yet; verify again shortly" }
+        error: { type: string, description: Why it isn't usable; safe to show }
     ChatEffort:
       type: string
       enum: [low, medium, high, xhigh, max]

@@ -128,6 +128,37 @@ func (c Catalog) list(ctx context.Context, q *store.Queries, ws uuid.UUID, wait 
 	return out, nil
 }
 
+// Check runs discovery for one harness, waiting like ListWaiting. It is the
+// Welcome Wizard's "Verify": false for a harness chats don't support.
+func (c Catalog) Check(ctx context.Context, q *store.Queries, ws uuid.UUID, name string) (Harness, bool, error) {
+	if !slices.Contains(chatHarnesses, name) {
+		return Harness{}, false, nil
+	}
+	h, err := c.harness(CurrentLoginOnly(ctx), q, ws, name, true)
+	if err == nil {
+		rememberOffered(ws, []Harness{h})
+	}
+	return h, true, err
+}
+
+// CheckKey lists the models a candidate API key (not a plan login) would
+// offer, before anything stores it. The error is public-safe.
+func (c Catalog) CheckKey(ctx context.Context, name, key string) ([]Model, error) {
+	discover := c.Discover
+	if discover == nil {
+		discover = Discover
+	}
+	models, err := discover(ctx, name, key)
+	if err != nil {
+		return nil, errors.New("model discovery failed; check provider credentials and connectivity")
+	}
+	return models, nil
+}
+
+// PlanLogin reports whether a harness key value is a subscription login
+// (which only a runner can list) rather than an API key.
+func PlanLogin(harness, key string) bool { return subscriptionLogin(harness, key) }
+
 func (c Catalog) harness(ctx context.Context, q *store.Queries, ws uuid.UUID, name string, wait bool) (Harness, error) {
 	h := Harness{Harness: name, Label: labels[name], Available: true, Models: []Model{}}
 	if c.RequireKey {

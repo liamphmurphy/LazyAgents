@@ -1,5 +1,6 @@
 "use client";
 
+import { SetupProgress } from "@/components/domain/setup-progress";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
@@ -260,6 +261,7 @@ export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarPr
         <WorkGroup counts={counts} active={navActive} onNewSpace={newSpace} />
         <SidebarSpaces viewed={viewed} hideWhenEmpty />
         <ChatHistory id={viewed ?? undefined} viewed={viewed} />
+        <SetupProgress />
         <MenuFooter active={navActive} settingsNeedYou={settingsNeedYou} />
       </nav>
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />

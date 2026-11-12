@@ -296,6 +296,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark the Welcome Wizard finished
+         * @description Idempotent; running the wizard again from Settings keeps the first completion time.
+         */
+        post: operations["completeOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/harness/{harness}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: components["schemas"]["Harness"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Store a harness credential and check that chats can list its models
+         * @description With a credential, checks it and stores it as the harness's key secret
+         *     (harness:anthropic for claude-code, harness:openai for codex), replacing
+         *     any earlier one only when it works: an API key is checked before it is
+         *     stored; a plan login is stored, listed through a runner, and the earlier
+         *     value put back when the listing fails, or is still pending (a first
+         *     login stays while pending: verify again without a credential to follow
+         *     it). Only models listed
+         *     for the new login count. Without a credential, only checks what is
+         *     already configured (a stored key, or the host's CLI login when runs use
+         *     it). A credential is refused (422) when runs use the host's CLI
+         *     sign-ins (SecretList.harness_keys_required false), since it would
+         *     never be checked there. A subscription
+         *     is a Claude setup-token (sk-ant-oat…) or a Codex auth.json; an api_key
+         *     is an Anthropic (sk-ant-…) or OpenAI (sk-…) API key. The credential is
+         *     never echoed back. 409 when secrets are off (SECRETS_KEY unset) and a
+         *     credential was sent; 422 when it doesn't have the expected shape.
+         */
+        post: operations["verifyHarness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{userId}/avatar": {
         parameters: {
             query?: never;
@@ -4345,6 +4402,13 @@ export interface components {
             avatar_url?: string;
             /** @description All of the person's addresses, primary (email) first. Only on your own profile (GET /me and bootstrap me). */
             emails?: string[];
+            /**
+             * Format: date-time
+             * @description When you finished the Welcome Wizard; absent until then. Only on your own profile.
+             */
+            onboarded_at?: string;
+            /** @description Whether chats have a harness to run on: a stored harness key (harness:anthropic or harness:openai) when runs need one, always true when they use the host's CLI logins. Only on your own profile. */
+            harness_connected?: boolean;
         };
         ProfilePatch: {
             /** @description Display name; trimmed */
@@ -5878,6 +5942,8 @@ export interface components {
             key_configured: boolean;
             /** @description A Docker runner is online, so Claude, Codex and GitHub can be signed in from Settings */
             sign_in_available: boolean;
+            /** @description Runs authenticate with the stored harness keys (the Docker backend); false when they use the host's claude and codex sign-ins, so there is no key to paste */
+            harness_keys_required?: boolean;
             /** @description Well-known secret names and the scope each backs */
             known: {
                 name: string;
@@ -7880,6 +7946,24 @@ export interface components {
             efforts: components["schemas"]["ChatEffort"][];
             default_effort?: components["schemas"]["ChatEffort"];
         };
+        HarnessVerifyRequest: {
+            /** @enum {string} */
+            kind: "subscription" | "api_key";
+            /** @description The setup-token, auth.json or API key; stored encrypted, never returned */
+            credential: string;
+        };
+        HarnessVerifyResult: {
+            /** @description True when discovery returned at least one chat model */
+            ok: boolean;
+            models: {
+                id: string;
+                label: string;
+            }[];
+            /** @description A runner hasn't listed a plan login's models yet; verify again shortly */
+            checking?: boolean;
+            /** @description Why it isn't usable; safe to show */
+            error?: string;
+        };
         /**
          * @description Reasoning effort; absent means the harness's own default
          * @enum {string}
@@ -8939,6 +9023,56 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    completeOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your profile with onboarded_at set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    verifyHarness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: components["schemas"]["Harness"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HarnessVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description What discovery found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessVerifyResult"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

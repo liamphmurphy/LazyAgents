@@ -48,7 +48,10 @@ export function SettingsScreen() {
       <div>
         <h1 className="type-display">Settings</h1>
         <p className="mt-2 text-sm text-fg-secondary">Everything runs depend on. Each section says what breaks when something is missing.</p>
-        <Link href="/setup" className="mt-2 inline-block text-sm text-accent hover:underline">Open setup →</Link>
+        <span className="mt-2 flex gap-4 text-sm">
+          <Link href="/chat?new&setup" className="text-accent hover:underline">Run setup again →</Link>
+          <Link href="/setup" className="text-accent hover:underline">Open setup checklist →</Link>
+        </span>
       </div>
       <SetupChecklist className="max-w-[1020px]" />
       <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">

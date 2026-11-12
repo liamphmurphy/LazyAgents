@@ -1276,6 +1276,7 @@ type User struct {
 	Login             *string
 	PasswordSetAt     *time.Time
 	ClaimedAt         *time.Time
+	OnboardedAt       *time.Time
 }
 
 type UserSecret struct {

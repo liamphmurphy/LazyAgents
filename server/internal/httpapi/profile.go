@@ -71,16 +71,20 @@ func profileField(field, v string, required bool) (string, error) {
 
 func (s *Server) GetProfile(ctx context.Context, _ api.GetProfileRequestObject) (api.GetProfileResponseObject, error) {
 	u, _, _ := me(ctx)
-	return api.GetProfile200JSONResponse(toMe(u)), nil
+	out, err := s.toMe(ctx, u)
+	return api.GetProfile200JSONResponse(out), err
 }
 
-// toMe is the caller's own profile: the public fields plus every address,
-// which teammates don't see.
-func toMe(u store.User) api.User {
+// toMe is the caller's own profile: the public fields plus what teammates
+// don't see (every address, and where first-run setup stands).
+func (s *Server) toMe(ctx context.Context, u store.User) (api.User, error) {
 	out := toUser(u)
 	emails := auth.Emails(u)
 	out.Emails = &emails
-	return out
+	out.OnboardedAt = u.OnboardedAt
+	connected, err := s.harnessConnected(ctx, u.WorkspaceID)
+	out.HarnessConnected = &connected
+	return out, err
 }
 
 func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequestObject) (api.UpdateProfileResponseObject, error) {
@@ -116,7 +120,8 @@ func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequest
 	if err != nil {
 		return nil, err
 	}
-	return api.UpdateProfile200JSONResponse(toMe(out)), nil
+	p, err := s.toMe(ctx, out)
+	return api.UpdateProfile200JSONResponse(p), err
 }
 
 // setAvatar points the caller's row at key (or clears it) and returns the key
@@ -175,7 +180,8 @@ func (s *Server) UploadProfileAvatar(ctx context.Context, req api.UploadProfileA
 		return nil, err
 	}
 	s.deleteAvatarBlob(ctx, old)
-	return api.UploadProfileAvatar200JSONResponse(toMe(out)), nil
+	p, err := s.toMe(ctx, out)
+	return api.UploadProfileAvatar200JSONResponse(p), err
 }
 
 func (s *Server) DeleteProfileAvatar(ctx context.Context, _ api.DeleteProfileAvatarRequestObject) (api.DeleteProfileAvatarResponseObject, error) {
@@ -185,7 +191,8 @@ func (s *Server) DeleteProfileAvatar(ctx context.Context, _ api.DeleteProfileAva
 		return nil, err
 	}
 	s.deleteAvatarBlob(ctx, old)
-	return api.DeleteProfileAvatar200JSONResponse(toMe(out)), nil
+	p, err := s.toMe(ctx, out)
+	return api.DeleteProfileAvatar200JSONResponse(p), err
 }
 
 func (s *Server) GetUserAvatar(ctx context.Context, req api.GetUserAvatarRequestObject) (api.GetUserAvatarResponseObject, error) {
