@@ -120,7 +120,7 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at, context_tokens
 `
 
 type ClaimQueuedRunParams struct {
@@ -180,6 +180,7 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 		&i.WorkspaceHostPath,
 		&i.ExecutionToken,
 		&i.ExecutionExpiresAt,
+		&i.ContextTokens,
 	)
 	return i, err
 }
@@ -370,7 +371,7 @@ const holdRun = `-- name: HoldRun :one
 UPDATE runs SET state = 'waiting_for_quota', wait_reason = NULL, hold_until = $1,
   hold_reset_known = $2, hold_attempts = hold_attempts + 1,
   hold_started_at = coalesce(hold_started_at, now())
-WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at
+WHERE id = $3 RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at, context_tokens
 `
 
 type HoldRunParams struct {
@@ -428,6 +429,7 @@ func (q *Queries) HoldRun(ctx context.Context, arg HoldRunParams) (Run, error) {
 		&i.WorkspaceHostPath,
 		&i.ExecutionToken,
 		&i.ExecutionExpiresAt,
+		&i.ContextTokens,
 	)
 	return i, err
 }
@@ -544,7 +546,7 @@ func (q *Queries) LiveWorkRunsCount(ctx context.Context) (int32, error) {
 }
 
 const lockRunNoWait = `-- name: LockRunNoWait :one
-SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at FROM runs WHERE id = $1
+SELECT id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at, context_tokens FROM runs WHERE id = $1
 `
 
 // Plain read used by the runner (it locks inside its own transactions).
@@ -595,6 +597,7 @@ func (q *Queries) LockRunNoWait(ctx context.Context, id uuid.UUID) (Run, error) 
 		&i.WorkspaceHostPath,
 		&i.ExecutionToken,
 		&i.ExecutionExpiresAt,
+		&i.ContextTokens,
 	)
 	return i, err
 }
@@ -784,6 +787,28 @@ func (q *Queries) RunActiveSeconds(ctx context.Context, runID uuid.UUID) (RunAct
 	row := q.db.QueryRow(ctx, runActiveSeconds, runID)
 	var i RunActiveSecondsRow
 	err := row.Scan(&i.Turns, &i.Seconds)
+	return i, err
+}
+
+const runToolOutputBytes = `-- name: RunToolOutputBytes :one
+SELECT
+  coalesce(sum((usage->>'explore_output_bytes')::bigint), 0)::bigint AS explore_output_bytes,
+  coalesce(sum((usage->>'shell_output_bytes')::bigint), 0)::bigint AS shell_output_bytes,
+  coalesce(sum((usage->>'other_output_bytes')::bigint), 0)::bigint AS other_output_bytes
+FROM run_turns WHERE run_id = $1
+`
+
+type RunToolOutputBytesRow struct {
+	ExploreOutputBytes int64
+	ShellOutputBytes   int64
+	OtherOutputBytes   int64
+}
+
+// What filled a run's context: its turns' tool output bytes, by group.
+func (q *Queries) RunToolOutputBytes(ctx context.Context, runID uuid.UUID) (RunToolOutputBytesRow, error) {
+	row := q.db.QueryRow(ctx, runToolOutputBytes, runID)
+	var i RunToolOutputBytesRow
+	err := row.Scan(&i.ExploreOutputBytes, &i.ShellOutputBytes, &i.OtherOutputBytes)
 	return i, err
 }
 
@@ -1012,6 +1037,20 @@ type SetRunCheckpointErrorParams struct {
 
 func (q *Queries) SetRunCheckpointError(ctx context.Context, arg SetRunCheckpointErrorParams) error {
 	_, err := q.db.Exec(ctx, setRunCheckpointError, arg.Error, arg.ID)
+	return err
+}
+
+const setRunContextTokens = `-- name: SetRunContextTokens :exec
+UPDATE runs SET context_tokens = $2 WHERE id = $1
+`
+
+type SetRunContextTokensParams struct {
+	ID            uuid.UUID
+	ContextTokens int64
+}
+
+func (q *Queries) SetRunContextTokens(ctx context.Context, arg SetRunContextTokensParams) error {
+	_, err := q.db.Exec(ctx, setRunContextTokens, arg.ID, arg.ContextTokens)
 	return err
 }
 

@@ -56,6 +56,8 @@
 // for <file> before working (in chat mode, a reply to the prompt "held" does,
 // after saying it's working); FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
 // that lost the session. The log line also names the harness (claude or codex).
+// FAKE_HARNESS_CONTEXT_TOKENS sets the prompt size each Claude assistant line's
+// usage reports (default 2000).
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
 // FAKE_HARNESS_RESUME=idle.
@@ -99,9 +101,23 @@ var (
 func emit(v map[string]any) {
 	if !codex {
 		v["session_id"] = session
+		if m, ok := v["message"].(map[string]any); ok && v["type"] == "assistant" && m["usage"] == nil {
+			m["usage"] = contextUsage()
+		}
 	}
 	b, _ := json.Marshal(v)
 	fmt.Println(string(b))
+}
+
+// contextUsage is the usage of a Claude assistant line: a request whose
+// prompt is FAKE_HARNESS_CONTEXT_TOKENS (default 2000) tokens, mostly cached.
+func contextUsage() map[string]any {
+	n := int64(2000)
+	if v := os.Getenv("FAKE_HARNESS_CONTEXT_TOKENS"); v != "" {
+		fmt.Sscan(v, &n)
+	}
+	cached := n * 9 / 10
+	return map[string]any{"input_tokens": n - cached, "cache_read_input_tokens": cached, "cache_creation_input_tokens": 0, "output_tokens": 1}
 }
 
 func item(event string, it map[string]any) {

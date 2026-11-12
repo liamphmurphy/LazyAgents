@@ -995,7 +995,7 @@ var Tools = []Tool{
 	define("propose_persona", "Propose a new persona for the person (another voice of their assistant). Only when the person asks for one and your instructions allow it. Nothing is created until the person approves it in the chat; it starts with no coding or image permissions. If you can make images, give it a profile picture with avatar_prompt. Tell the person you proposed it.", proposePersona),
 	define("reply_to_run", "Pass the person's answer to a run this chat started that asked them something. Only after they've answered in this chat.", replyToRun),
 	define("list_runs", "List ticket runs in every project, newest first: live runs by default, or finished/all. Filter by project, ticket or agent; open one with get_run.", listChatRuns),
-	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost and the sub agent runs it delegated.", getChatRun),
+	define("get_run", "One ticket run, in any project: state, outcome, plan steps, cost, the sub agent runs it delegated, its latest context size in tokens and its tool output bytes by group (all 0 when the harness doesn't report them, as with Codex).", getChatRun),
 	define("list_epics", "List epics, in every project unless you name one.", listChatEpics),
 	define("list_tickets", "List tickets in every active project, most urgent first: the open ones unless you pass status. Filter by project, status, epic, assigned agent or words; open one with get_ticket.", listChatTickets),
 	define("list_projects", "List the projects you can read: key, name, repository, and which one is this chat's default.", listChatProjects),

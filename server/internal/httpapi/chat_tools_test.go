@@ -375,9 +375,21 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if ids := runIDs(map[string]any{"ticket": mobTicket}); !slices.Contains(ids, mobRun.ID.String()) {
 		t.Fatalf("other project's ticket runs = %v", ids)
 	}
+	// get_run reports the latest context size and what filled it, summed over turns.
+	if err := q.SetRunContextTokens(ctx, store.SetRunContextTokensParams{ID: payRun.ID, ContextTokens: 123456}); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{`{"explore_output_bytes": 100, "shell_output_bytes": 7}`, `{"explore_output_bytes": 20, "other_output_bytes": 3}`} {
+		if _, err := pool.Exec(ctx, `INSERT INTO run_turns (run_id, seq, trigger, usage) VALUES ($1, coalesce((SELECT max(seq) FROM run_turns WHERE run_id = $1), 0) + 1, 'start', $2)`, payRun.ID, u); err != nil {
+			t.Fatal(err)
+		}
+	}
 	code, got2 := call(token, "get_run", map[string]any{"id": payRun.ID.String()})
 	if code != 200 || got2["run"].(map[string]any)["ticket"] != "PAY-214" || len(got2["delegated_runs"].([]any)) != 1 {
 		t.Fatalf("get_run = %d %v", code, got2)
+	}
+	if got2["context_tokens"] != float64(123456) || got2["explore_output_bytes"] != float64(120) || got2["shell_output_bytes"] != float64(7) || got2["other_output_bytes"] != float64(3) {
+		t.Fatalf("get_run context = %v", got2)
 	}
 	if code, out := call(token, "get_run", map[string]any{"id": mobRun.ID.String()}); code != 200 {
 		t.Fatalf("get_run other project = %d %v", code, out)

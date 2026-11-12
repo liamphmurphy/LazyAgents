@@ -1069,6 +1069,7 @@ type Run struct {
 	WorkspaceHostPath   *string
 	ExecutionToken      *uuid.UUID
 	ExecutionExpiresAt  *time.Time
+	ContextTokens       int64
 }
 
 type RunEvent struct {
