@@ -297,7 +297,7 @@ test("Markdown the editor can't keep opens as source instead", async ({ page }) 
   await expect(page.getByTestId("doc-page")).toContainText("A claim.");
 });
 
-test("the dock collapses and reopens, with ⌘\\ and ⌘J, and the outline jumps to a heading", async ({ page }) => {
+test("the dock collapses and reopens, with ⌘\\, ⌘J and ⌘., and the outline jumps to a heading", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await install(page, "# Trip plan\n\nFly to **Lisbon** on Friday.\n\n## Days\n\n- Fri: Alfama\n\n## Bookings\n\n- Flights\n");
   await page.goto(`/apps/docs/${DOC}`);
