@@ -14,7 +14,7 @@ import { MonoChip } from "@/components/domain/labels";
 import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Kbd, TextArea } from "@/components/ui/primitives";
-import { isTyping } from "@/components/shell/shortcuts";
+import { shortcutBlocked } from "@/components/shell/shortcuts";
 
 /** The ActionBox carries this id; the Graph view focuses it from a pending gate. */
 export const ACTION_BOX_ID = "run-action-box";
@@ -108,8 +108,12 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
  * for more than one), or Deny… with an optional reason. With `keys`, A, ⇧A
  * and D decide from the keyboard while focus isn't in a field.
  */
-export function ApprovalBox({ run, approvals, keys, onDecided }: { run: Run; approvals: Schemas["Approval"][]; keys?: boolean; onDecided?: () => void }) {
+export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Run; approvals: Schemas["Approval"][]; keys?: boolean; onDecided?: () => void }) {
   const decide = useDecideRunApproval(run.id);
+  // Decided here but not yet gone from the refetched run: hidden, so a quick second A acts on the next one.
+  const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
+  const approvals = open.filter((a) => !decided.has(a.id));
+  const markDecided = (id: string) => setDecided((d) => new Set(d).add(id));
   const [note, setNote] = useState("");
   const [denying, setDenying] = useState(false);
   const [more, setMore] = useState(false);
@@ -124,6 +128,7 @@ export function ApprovalBox({ run, approvals, keys, onDecided }: { run: Run; app
     if (pending || !approval) return;
     decide.mutate({ id: approval.id, decision, note: decision === "deny" ? note.trim() || undefined : undefined }, {
       onSuccess: () => {
+        markDecided(approval.id);
         setNote("");
         setDenying(false);
         onDecided?.();
@@ -135,14 +140,18 @@ export function ApprovalBox({ run, approvals, keys, onDecided }: { run: Run; app
     if (pending || approvals.length < 2) return;
     if (!window.confirm(`Approve all ${approvals.length} requests from ${run.agent.name} for this run?`)) return;
     setBusy(true);
-    try {
-      for (const a of approvals) await decide.mutateAsync({ id: a.id, decision: "approve" });
-      onDecided?.();
-    } catch {
-      /* decide.error shows it. */
-    } finally {
-      setBusy(false);
+    let failed = false;
+    // Keep going past one that fails (say, decided elsewhere meanwhile); decide.error shows the last failure.
+    for (const a of approvals) {
+      try {
+        await decide.mutateAsync({ id: a.id, decision: "approve" });
+        markDecided(a.id);
+      } catch {
+        failed = true;
+      }
     }
+    setBusy(false);
+    if (!failed) onDecided?.();
   };
   const startDeny = () => {
     setDenying(true);
@@ -152,7 +161,7 @@ export function ApprovalBox({ run, approvals, keys, onDecided }: { run: Run; app
   useEffect(() => {
     if (!keys) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || document.querySelector('[role="dialog"]')) return;
+      if (shortcutBlocked(e)) return;
       const k = e.key.toLowerCase();
       if (k === "a" && e.shiftKey) void approveAll();
       else if (k === "a") go("approve");

@@ -188,6 +188,17 @@ test("D opens Deny… and A approves one request", async ({ page }) => {
   await page.goto(`/runs/${APPROVING}`);
   const card = page.getByRole("group", { name: "Needs attention" });
   await expect(card).toContainText("Run 0042 on staging");
+  // Letters typed in a filter menu (Radix typeahead) never reach the page's shortcuts.
+  await list(page).getByRole("button", { name: /^Agent:/ }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("a");
+  await page.keyboard.press("d");
+  await page.keyboard.press("j");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  expect(decided).toEqual([]);
+  await expect(card.getByRole("textbox", { name: /Reason for denying/ })).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}$`));
   await page.locator("body").click({ position: { x: 900, y: 5 } });
   await page.keyboard.press("d");
   const reason = card.getByRole("textbox", { name: /Reason for denying/ });

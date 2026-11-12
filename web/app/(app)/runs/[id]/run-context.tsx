@@ -75,7 +75,7 @@ function Fact({ k, children }: { k: string; children: ReactNode }) {
   );
 }
 
-function TicketSection({ ticketKey }: { ticketKey: string }) {
+function TicketSection({ ticketKey, run }: { ticketKey: string; run: RunDetail["run"] }) {
   const ticket = useTicket(ticketKey);
   const t = ticket.data;
   const epics = useEpicOverviews(!!t?.epic);
@@ -125,7 +125,7 @@ function TicketSection({ ticketKey }: { ticketKey: string }) {
           </ol>
         </Section>
       )}
-      <CodeSection branch={t?.branch} pr={t?.pr} />
+      <CodeSection branch={t?.branch || run.branch} pr={t?.pr} runPr={{ number: run.pr_number, url: run.pr_url }} />
     </>
   );
 }
@@ -170,7 +170,7 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
           <Icon name="sidebar" size={14} />
         </button>
       </div>
-      {run.purpose === "ticket" && run.ticket_key ? <TicketSection ticketKey={run.ticket_key} /> : <CodeSection branch={run.branch} runPr={{ number: run.pr_number, url: run.pr_url }} />}
+      {run.purpose === "ticket" && run.ticket_key ? <TicketSection ticketKey={run.ticket_key} run={run} /> : <CodeSection branch={run.branch} runPr={{ number: run.pr_number, url: run.pr_url }} />}
       <Section title="Run">
         <dl className="flex flex-col gap-1">
           <Fact k="Purpose">{PURPOSE_LABEL[run.purpose] ?? run.purpose}</Fact>

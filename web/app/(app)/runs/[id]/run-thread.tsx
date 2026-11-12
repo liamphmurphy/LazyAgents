@@ -24,7 +24,7 @@ import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Kbd, TextArea } from "@/components/ui/primitives";
 import { Banner } from "@/components/ui/primitives";
-import { isTyping } from "@/components/shell/shortcuts";
+import { shortcutBlocked } from "@/components/shell/shortcuts";
 import { ActionBox, useReply, waitsForReply } from "./run-panels";
 import { listQuery } from "../run-list";
 
@@ -226,7 +226,7 @@ function NextLine({ next, query }: { next: Schemas["InboxItem"]; query: string }
   const href = itemHref(next, query);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "j" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTyping(e.target) || document.querySelector('[role="dialog"]')) return;
+      if (e.key.toLowerCase() !== "j" || e.shiftKey || shortcutBlocked(e)) return;
       e.preventDefault();
       router.push(href);
     };

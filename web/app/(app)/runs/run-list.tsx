@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Kbd, Skeleton, TextInput } from "@/components/ui/primitives";
 import { useProjectScope } from "@/components/shell/project-scope";
-import { isTyping } from "@/components/shell/shortcuts";
+import { shortcutBlocked } from "@/components/shell/shortcuts";
 
 type Run = Schemas["Run"];
 type Item = Schemas["InboxItem"];
@@ -60,13 +60,14 @@ export function useRunList(search = "") {
     () => trayItems(inbox.data ?? []).needs.filter((i) => (!project || i.project === project) && (!agent || i.agent?.handle === agent)),
     [inbox.data, project, agent],
   );
-  const needsRuns = useMemo(() => new Set(needs.flatMap((i) => (i.run_id ? [i.run_id] : []))), [needs]);
+  const shownNeeds = useMemo(() => needs.filter((i) => matchesItem(i, search)), [needs, search]);
+  // Only runs whose Needs you row is shown leave the groups, so a search never hides a run from both.
+  const needsRuns = useMemo(() => new Set(shownNeeds.flatMap((i) => (i.run_id ? [i.run_id] : []))), [shownNeeds]);
   const runs = useMemo(
     () => [...(live.data?.runs ?? []), ...recent.flatMap((r) => r.data?.runs ?? [])],
     [live.data, recent],
   );
   const groups = useMemo(() => groupRuns(runs.filter((r) => matchesRun(r, search)), needsRuns, now), [runs, search, needsRuns, now]);
-  const shownNeeds = needs.filter((i) => matchesItem(i, search));
   const last = recent.at(-1);
   return {
     project,
@@ -235,7 +236,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
   // "/" focuses the search box.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || document.querySelector('[role="dialog"]')) return;
+      if (e.key !== "/" || shortcutBlocked(e)) return;
       e.preventDefault();
       searchRef.current?.focus();
     };
@@ -244,10 +245,12 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
   }, []);
 
   // The tray's "Open all" lands on /runs#needs-you: bring the group into view once it's there.
+  // Also on a path change: Open all from /runs/X goes to /runs, which opens a run with the hash kept.
   const hasNeeds = data.shownNeeds.length > 0;
+  const path = usePathname();
   useEffect(() => {
     if (hasNeeds && window.location.hash === "#needs-you") document.getElementById("needs-you")?.scrollIntoView({ block: "start" });
-  }, [hasNeeds]);
+  }, [hasNeeds, path]);
 
   const selectedNeeds = data.shownNeeds.find((i) => i.run_id === selected)?.id;
   const empty = !data.loading && !data.error && data.shownNeeds.length === 0 && data.groups.length === 0;

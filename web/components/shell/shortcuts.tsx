@@ -21,6 +21,17 @@ export function isTyping(el: EventTarget | null) {
   );
 }
 
+/**
+ * Whether a page's single-key shortcut must stand down: a modifier is held, focus
+ * is in a field, a dialog is open, or a menu or listbox is open (Radix menus
+ * typeahead on letters and let the key bubble to window).
+ */
+export function shortcutBlocked(e: KeyboardEvent): boolean {
+  if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return true;
+  if (e.target instanceof Element && e.target.closest('[role="menu"],[role="menubar"],[role="listbox"],[role="menuitem"],[role="menuitemradio"],[role="option"]')) return true;
+  return !!document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]');
+}
+
 /** The `?` keyboard shortcut reference; opened by `?` (app-shell.tsx) or the palette's action. */
 export function ShortcutsDialog() {
   const [open, setOpen] = useState(false);
