@@ -32,6 +32,18 @@ export const FALLBACK: Record<Mode, Record<string, string>> = {
   dark: { text: "#ECECF1", "text-secondary": "#9A9AAE", bg: "#0C0C10", surface: "#16161D", border: "#2A2A36" },
 };
 
+/** Diagram colours (sections, imported charts): the Dusk values, used when a design's token set lacks the token. */
+export const DIAGRAM_COLORS: Record<Mode, Record<string, string>> = {
+  dark: { surface: "#15141F", "surface-raised": "#1B1A27", "border-strong": "#2E2B3B", text: "#EEEDF3", "text-2": "#CBC9D6", "text-secondary": "#A4A1B3", accent: "#9B8CFF", "accent-soft": "#9B8CFF26" },
+  light: { surface: "#FFFFFF", "surface-raised": "#F6F5FA", "border-strong": "#DEDAEA", text: "#17151F", "text-2": "#3A3747", "text-secondary": "#55526A", accent: "#5B4BD6", "accent-soft": "#5B4BD61F" },
+};
+/** `$name` when the design's token set has that colour, else its hex for the design's mode, so new nodes always validate. */
+export function tokenOr(design: Pick<Design, "tokens_ref" | "token_sets" | "mode">, name: string): Color {
+  const set = design.tokens_ref ? design.token_sets[design.tokens_ref.set] : undefined;
+  if (set?.modes.dark[name]?.kind === "color") return `$${name}` as Color;
+  return (DIAGRAM_COLORS[design.mode]?.[name] ?? DIAGRAM_COLORS.dark[name] ?? "#808080") as Color;
+}
+
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export type Box = { x: number; y: number; w: number; h: number };

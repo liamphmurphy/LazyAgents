@@ -430,3 +430,55 @@ test("Present starts from a chosen frame, follows hotspots, and goes back, resta
   await expect(page).toHaveURL(new RegExp(`/apps/designs/${D1}$`));
   expect(errors).toEqual([]);
 });
+
+test("diagram tools: connect two nodes, add a sticky, and draw a section that takes them in", async ({ page }) => {
+  const shapeAt = (id: string, name: string, x: number) => ({ id, type: "shape", shape: "roundRect", name, x, y: 0, w: 140, h: 60, fill: "#E5E7EB" });
+  const body = { schema: 1, mode: "light", token_sets: {}, assets: {}, links: [], pages: [{ id: "p_diag", name: "Diagram", children: [shapeAt("n_a", "Start", 0), shapeAt("n_b", "End", 480)] }] };
+  const { latest } = await install(page, { [D1]: body });
+  await page.goto(`/apps/designs/${D1}`);
+  await expect(savedState(page)).toContainText("Saved · v1");
+  const layers = page.getByRole("tree", { name: "Layers" });
+  const centre = async (name: string, id: string) => {
+    await layers.getByRole("treeitem", { name }).locator("div").first().click();
+    const b = (await page.locator(`[data-selected="${id}"]`).boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2, b };
+  };
+  const a = await centre("Start", "n_a");
+  const b = await centre("End", "n_b");
+
+  // Connector: drag from Start to End.
+  await page.getByRole("button", { name: "Connector (C)" }).click();
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await expect(page.getByTestId("design-connect-preview")).toBeVisible();
+  await page.mouse.up();
+  await expect.poll(() => latest(D1).pages[0].children.find((n: { type: string }) => n.type === "connector")).toMatchObject({ from: { node: "n_a" }, to: { node: "n_b" } });
+
+  // Sticky: click below Start and type.
+  await page.getByRole("button", { name: "Sticky (S)" }).click();
+  await page.mouse.click(a.x, a.y + a.b.height * 4);
+  const sticky = page.getByTestId("design-sticky-editor");
+  await expect(sticky).toBeFocused();
+  await sticky.fill("Check the copy");
+  await page.keyboard.press("Escape");
+  await expect.poll(() => latest(D1).pages[0].children.find((n: { type: string }) => n.type === "sticky")?.text).toBe("Check the copy");
+
+  // Section: drawn around both shapes, it takes them (and their connector) in.
+  await page.getByRole("button", { name: "Section (⇧S)" }).click();
+  await page.mouse.move(a.b.x - 30, a.b.y - 60);
+  await page.mouse.down();
+  await page.mouse.move(b.b.x + b.b.width + 30, b.b.y + b.b.height + 30, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => (latest(D1).pages[0].children[0] as { type: string; children?: { id: string }[] }).children?.map((c) => c.id).slice(0, 2)).toEqual(["n_a", "n_b"]);
+  const section = latest(D1).pages[0].children[0] as { id: string; type: string; x: number; children: { id: string; type: string; x: number }[] };
+  expect(section.type).toBe("section");
+  expect(section.children.some((c) => c.type === "connector")).toBe(true);
+
+  // Moving the section moves its contents: children keep their place relative to it.
+  const startX = section.children.find((c) => c.id === "n_a")!.x;
+  await layers.getByRole("treeitem", { name: "Section" }).locator("div").first().click();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect.poll(() => (latest(D1).pages[0].children[0] as { x: number }).x).toBe(section.x + 10);
+  expect(node(latest(D1), "n_a")!.x).toBe(startX);
+});
