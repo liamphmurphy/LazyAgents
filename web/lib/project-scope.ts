@@ -10,6 +10,7 @@ export type ScopedProject = { key: string; name: string; color: string; archived
 /** required: the page needs one project (chooser otherwise). optional: no project means all projects. */
 export type ProjectMode = "required" | "optional";
 
+/** "inbox" is the Needs you badge (the pill and the compact tab), not every unread inbox item. */
 export type NavBadge = "inbox" | "runs" | "wiki" | "settings" | "scheduled";
 export type NavItem = { href: string; label: string; icon: IconName; badge?: NavBadge };
 export type NavGroup = { label: "Work" | "Apps" | "Tools" | "You"; items: NavItem[] };
@@ -21,9 +22,11 @@ export type NavGroup = { label: "Work" | "Apps" | "Tools" | "You"; items: NavIte
  * menu both read these.
  */
 export const WORK_ITEMS: NavItem[] = [
-  { href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
+  // No Inbox row: the Needs you pill above the menu opens the tray, and /inbox is its "Open all" page.
   { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
   { href: "/tickets", label: "Tickets", icon: "tickets" },
+  // Costs and Highlights (LAZYAGENTS-163), formerly the Runs tabs.
+  { href: "/reports", label: "Reports", icon: "dollar" },
 ];
 
 /** Apps: a full page of their own; Docs, Slides, Designs and Finance have an Ask drawer, each backed by one of the person's spaces. */

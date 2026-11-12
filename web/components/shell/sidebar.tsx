@@ -4,7 +4,6 @@ import { SetupProgress } from "@/components/domain/setup-progress";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
-import { usePulse } from "@/components/ui/motion";
 import { useBootstrap } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { useNavCounts } from "@/lib/use-nav-counts";
@@ -17,6 +16,7 @@ import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { AppsMenu } from "./apps-menu";
+import { NeedsYou } from "./needs-you";
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
@@ -38,16 +38,7 @@ function NavLink({ href, active, label, children }: { href: string; active: bool
 
 function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, number> }) {
   const n = kind ? counts[kind] : 0;
-  const inbox = usePulse<HTMLSpanElement>(n);
   if (!kind || n <= 0) return null;
-  if (kind === "inbox") {
-    return (
-      <span ref={inbox} className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-xs font-semibold text-approve-fg">
-        {n}
-        <span className="sr-only"> unread</span>
-      </span>
-    );
-  }
   if (kind === "runs") {
     return (
       <span className="flex items-center gap-[6px] text-xs text-fg-tertiary">
@@ -145,7 +136,7 @@ function FooterLinks({ active, settingsNeedYou, rail }: { active: (href: string)
   );
 }
 
-/** Work: what agents are doing for you (Inbox, Runs, Tickets), then the Apps row and its flyout. */
+/** Work: what agents are doing for you (Runs, Tickets; what needs you is the pill above), then the Apps row and its flyout. */
 function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, number>; active: (href: string) => boolean; onNewSpace: () => void }) {
   return (
     <div role="group" aria-label="Work" className="flex flex-col gap-px">
@@ -194,13 +185,14 @@ export function Sidebar() {
           >
             <Icon name="search" size={14} strokeWidth={1.6} />
           </button>
+          <NeedsYou variant="rail" count={counts.inbox} />
         </div>
         <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
           <div className="flex w-full flex-col gap-px">
             {WORK_ITEMS.map((n) => (
               <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
                 <Icon name={n.icon} />
-                {n.badge && counts[n.badge] > 0 && <span aria-hidden className={cx("absolute right-1 top-1 size-1.5 rounded-full", n.badge === "inbox" ? "bg-state-human" : "bg-accent")} />}
+                {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
               </NavLink>
             ))}
             <AppsMenu rail counts={counts} onNewSpace={newSpace} />
@@ -235,6 +227,7 @@ export function Sidebar() {
             <Icon name="search" size={15} strokeWidth={1.6} />
           </button>
         </div>
+        <NeedsYou variant="expanded" count={counts.inbox} />
       </div>
       {/* Work and Spaces on top, as in other chat apps; the history fills the rest and scrolls. */}
       <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-4">

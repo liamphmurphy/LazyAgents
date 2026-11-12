@@ -21,6 +21,17 @@ export function isTyping(el: EventTarget | null) {
   );
 }
 
+/**
+ * Whether a page's single-key shortcut must stand down: a modifier is held, focus
+ * is in a field, a dialog is open, or a menu or listbox is open (Radix menus
+ * typeahead on letters and let the key bubble to window).
+ */
+export function shortcutBlocked(e: KeyboardEvent): boolean {
+  if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return true;
+  if (e.target instanceof Element && e.target.closest('[role="menu"],[role="menubar"],[role="listbox"],[role="menuitem"],[role="menuitemradio"],[role="option"]')) return true;
+  return !!document.querySelector('[role="dialog"],[role="menu"],[role="listbox"]:not([hidden])');
+}
+
 /** The `?` keyboard shortcut reference; opened by `?` (app-shell.tsx) or the palette's action. */
 export function ShortcutsDialog() {
   const [open, setOpen] = useState(false);
@@ -45,8 +56,8 @@ export function ShortcutsDialog() {
           </div>
           <div className="overflow-y-auto px-6 pb-5">
             {SHORTCUTS.map((s) => (
-              <section key={s.section} aria-labelledby={`shortcuts-${s.section}`}>
-                <h3 id={`shortcuts-${s.section}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+              <section key={s.section} aria-labelledby={`shortcuts-${s.section.replaceAll(" ", "-")}`}>
+                <h3 id={`shortcuts-${s.section.replaceAll(" ", "-")}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
                   {s.section}
                 </h3>
                 <dl>

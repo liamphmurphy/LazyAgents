@@ -45,7 +45,7 @@ export async function installBoardApi(page: Page) {
   const me = { type: "user" as const, id: "user", name: "Liam" };
   // Mutable so specs can archive projects or bump the shell's live counts.
   const projects: S["Project"][] = [project, ops];
-  const counts: S["Bootstrap"]["counts"] = { inbox: 0, wiki_suggestions: 0, live_agents: 0 };
+  const counts: S["Bootstrap"]["counts"] = { inbox: 0, needs_you: 0, wiki_suggestions: 0, live_agents: 0 };
   const runner: S["RunnerStatus"] = { online: true, runners: [], slots: 3, busy: 0, live: 0, queued: 0, host_folder_workspaces: false };
   let newCriterionId = 0;
   const patches: Array<{ key: string; body: S["TicketPatch"] }> = [];
@@ -263,6 +263,7 @@ export async function installBoardApi(page: Page) {
     const menu = menuResponse(request.method(), path);
     if (menu) return json(menu);
     // Runs' header shows the last 7 days' spend.
+    if (path === "/inbox" && request.method() === "GET") return json({ items: [] });
     if (path === "/costs" && request.method() === "GET") {
       const none = { key: "", label: "", runs: 0, tokens: 0, cost_micros: 0, unpriced_runs: 0 };
       return json({ total: none, unpriced_runs: 0, estimated: { tickets: 0, points: 0, cost_micros: 0 }, days: [], agents: [], projects: [], models: [], purposes: [], top_tickets: [] } satisfies S["CostReport"]);

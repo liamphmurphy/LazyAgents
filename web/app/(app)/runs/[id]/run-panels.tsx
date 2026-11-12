@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useComment, useControlRunById, useDecideRunApproval } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -13,7 +13,8 @@ import { AgentAvatar } from "@/components/domain/avatars";
 import { MonoChip } from "@/components/domain/labels";
 import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Banner, TextArea, TextInput } from "@/components/ui/primitives";
+import { Banner, Kbd, TextArea } from "@/components/ui/primitives";
+import { shortcutBlocked } from "@/components/shell/shortcuts";
 
 /** The ActionBox carries this id; the Graph view focuses it from a pending gate. */
 export const ACTION_BOX_ID = "run-action-box";
@@ -28,7 +29,7 @@ export function confirmCancel(agent: string) {
 }
 
 /** Sends a reply to a run waiting on `human_reply`: a ticket comment mentioning the agent. */
-function useReply(run: Run, lastSeq: number) {
+export function useReply(run: Run, lastSeq: number) {
   const qc = useQueryClient();
   const comment = useComment(run.ticket_key);
   const [body, setBody] = useState("");
@@ -102,20 +103,81 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
   );
 }
 
-function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"] }) {
+/**
+ * The pending approval: Approve, Approve all … for this run (when the run asks
+ * for more than one), or Deny… with an optional reason. With `keys`, A, ⇧A
+ * and D decide from the keyboard while focus isn't in a field.
+ */
+export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Run; approvals: Schemas["Approval"][]; keys?: boolean; onDecided?: () => void }) {
   const decide = useDecideRunApproval(run.id);
+  // Decided here but not yet gone from the refetched run: hidden, so a quick second A acts on the next one.
+  const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
+  const approvals = open.filter((a) => !decided.has(a.id));
+  const markDecided = (id: string) => setDecided((d) => new Set(d).add(id));
   const [note, setNote] = useState("");
+  const [denying, setDenying] = useState(false);
   const [more, setMore] = useState(false);
-  const preview = approval.action_preview ?? "";
+  const [busy, setBusy] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const approval = approvals[0];
+  const preview = approval?.action_preview ?? "";
   const long = preview.length > 400 || preview.split("\n").length > 6;
   const shown = more || !long ? preview : preview.split("\n").slice(0, 6).join("\n").slice(0, 400);
+  const pending = decide.isPending || busy;
   const go = (decision: "approve" | "deny") => {
-    if (!decide.isPending) decide.mutate({ id: approval.id, decision, note: note.trim() || undefined });
+    if (pending || !approval) return;
+    decide.mutate({ id: approval.id, decision, note: decision === "deny" ? note.trim() || undefined : undefined }, {
+      onSuccess: () => {
+        markDecided(approval.id);
+        setNote("");
+        setDenying(false);
+        onDecided?.();
+      },
+    });
   };
+  /** No server call grants a scope for the rest of a run, so this approves every request the run has open now. */
+  const approveAll = async () => {
+    if (pending || approvals.length < 2) return;
+    if (!window.confirm(`Approve all ${approvals.length} requests from ${run.agent.name} for this run?`)) return;
+    setBusy(true);
+    let failed = false;
+    // Keep going past one that fails (say, decided elsewhere meanwhile); decide.error shows the last failure.
+    for (const a of approvals) {
+      try {
+        await decide.mutateAsync({ id: a.id, decision: "approve" });
+        markDecided(a.id);
+      } catch {
+        failed = true;
+      }
+    }
+    setBusy(false);
+    if (!failed) onDecided?.();
+  };
+  const startDeny = () => {
+    setDenying(true);
+    requestAnimationFrame(() => noteRef.current?.focus());
+  };
+  // Re-subscribed each render, so the keys always act on the current approval and note.
+  useEffect(() => {
+    if (!keys) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (shortcutBlocked(e)) return;
+      const k = e.key.toLowerCase();
+      if (k === "a" && e.shiftKey) void approveAll();
+      else if (k === "a") go("approve");
+      else if (k === "d" && !e.shiftKey) startDeny();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  if (!approval) return null;
   return (
     <>
       <p className="flex flex-wrap items-center gap-2 text-xs font-medium text-pill-human-fg">
         {run.agent.name} needs a decision <MonoChip>{approval.scope}</MonoChip>
+        {approvals.length > 1 && <span className="font-normal text-fg-tertiary">1 of {approvals.length}</span>}
       </p>
       <p className="text-[13.5px] font-medium text-fg">{approval.action_summary}</p>
       {approval.risk_summary && <p className="text-[13px] text-fg-secondary">{approval.risk_summary}</p>}
@@ -129,27 +191,59 @@ function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"
           )}
         </div>
       )}
-      <label className="sr-only" htmlFor="approval-note">Note (optional)</label>
-      <TextInput
-        id="approval-note"
-        value={note}
-        placeholder="Note (optional)"
-        onChange={(e) => setNote(e.target.value)}
-      />
+      {denying && (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            go("deny");
+          }}
+        >
+          <TextArea
+            ref={noteRef}
+            rows={2}
+            aria-label={`Reason for denying, sent to ${run.agent.name} (optional)`}
+            placeholder="Why not? (optional, sent to the agent)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                go("deny");
+              } else if (e.key === "Escape") {
+                setDenying(false);
+              }
+            }}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setDenying(false)}>Cancel</Button>
+            <Button type="submit" variant="outline" disabled={pending}>Deny</Button>
+          </div>
+        </form>
+      )}
       {decide.isError && (
         <Banner tone="blocked" title="Couldn't record the decision">
           {decide.error.message}
         </Banner>
       )}
-      <div className="flex items-center justify-end gap-3">
-        <span className="text-xs text-fg-tertiary pointer-coarse:hidden">
-          <kbd className="font-mono">⌘↵</kbd> to approve
-        </span>
-        <Button variant="outline" disabled={decide.isPending} onClick={() => go("deny")}>Deny</Button>
-        <Button variant="approve" disabled={decide.isPending} onClick={() => go("approve")}>
-          {decide.isPending ? "Saving…" : "Approve"}
-        </Button>
-      </div>
+      {!denying && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {keys && (
+            <span className="mr-auto flex items-center gap-2 text-xs text-fg-tertiary pointer-coarse:hidden">
+              <span><Kbd>A</Kbd> approve</span>
+              {approvals.length > 1 && <span><Kbd>⇧A</Kbd> all</span>}
+              <span><Kbd>D</Kbd> deny</span>
+            </span>
+          )}
+          <Button variant="outline" disabled={pending} onClick={startDeny}>Deny…</Button>
+          {approvals.length > 1 && (
+            <Button variant="approve-outline" disabled={pending} onClick={approveAll}>Approve all {approvals.length} for this run</Button>
+          )}
+          <Button variant="approve" disabled={pending} onClick={() => go("approve")}>
+            {pending ? "Saving…" : "Approve"}
+          </Button>
+        </div>
+      )}
     </>
   );
 }
@@ -158,7 +252,7 @@ function ApprovalBox({ run, approval }: { run: Run; approval: Schemas["Approval"
  * What the run waits for and how to unblock it, inline under the header. `compact` (the
  * compact run detail) shows it inside the log and leaves replies to the pinned ReplyComposer.
  */
-export function ActionBox({ d, compact }: { d: RunDetail; compact?: boolean }) {
+export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDetail; compact?: boolean; inThread?: boolean; keys?: boolean; onDecided?: () => void }) {
   const run = d.run;
   const control = useControlRunById(run.id);
   const cancel = (
@@ -172,7 +266,7 @@ export function ActionBox({ d, compact }: { d: RunDetail; compact?: boolean }) {
       Cancel run
     </Button>
   );
-  const pending = d.approvals.find((a) => a.state === "pending");
+  const pending = d.approvals.filter((a) => a.state === "pending");
   const liveChildren = d.child_runs.filter((c) => !RUN_ENDED.includes(c.state));
   let body: ReactNode = null;
   if (run.state === "queued") {
@@ -209,14 +303,14 @@ export function ActionBox({ d, compact }: { d: RunDetail; compact?: boolean }) {
   } else if (run.state === "waiting") {
     switch (run.wait_reason) {
       case "approval":
-        body = pending ? <ApprovalBox run={run} approval={pending} /> : <p className="text-[13px] text-fg-2">Waiting for an approval decision.</p>;
+        body = pending.length ? <ApprovalBox run={run} approvals={pending} keys={keys} onDecided={onDecided} /> : <p className="text-[13px] text-fg-2">Waiting for an approval decision.</p>;
         break;
       case "human_reply":
         if (run.purpose === "planning") {
           body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/plans"}>Open the plan</Link></p>;
         } else if (run.purpose === "chat") {
           body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/chat"}>Open chat</Link></p>;
-        } else if (!compact) {
+        } else if (!compact && !inThread) {
           body = <ReplyBox run={run} question={latestQuestion(d.events)} lastSeq={d.events.at(-1)?.seq ?? 0} />;
         }
         break;
@@ -261,7 +355,7 @@ export function ActionBox({ d, compact }: { d: RunDetail; compact?: boolean }) {
   }
   if (!body) return null;
   return (
-    <div className={compact ? "px-3 py-3" : "border-b border-border-subtle px-6 py-3"}>
+    <div className={compact ? "px-3 py-3" : inThread ? "py-2" : "border-b border-border-subtle px-6 py-3"}>
       <div id={ACTION_BOX_ID} tabIndex={-1} aria-label="Needs attention" role="group" className="flex flex-col gap-2 rounded-xl border border-state-human/40 bg-surface p-3.5">
         {body}
         {control.isError && (
@@ -417,7 +511,7 @@ function UsageCard({ d, grandchildren }: { d: RunDetail; grandchildren: (Run[] |
 
 export function RunRail({ d, grandchildren }: { d: RunDetail; grandchildren: (Run[] | undefined)[] }) {
   return (
-    <aside aria-label="Run summary" className="flex flex-col gap-3 border-t border-border-subtle px-4 py-4 lg:min-h-0 lg:w-[340px] lg:flex-none lg:overflow-y-auto lg:border-l lg:border-t-0">
+    <aside aria-label="Run summary" className="flex flex-col gap-3 border-t border-border-subtle px-4 py-4 xl:min-h-0 xl:w-[340px] xl:flex-none xl:overflow-y-auto xl:border-l xl:border-t-0">
       <PlanCard run={d.run} />
       <DelegatedTree d={d} grandchildren={grandchildren} />
       <UsageCard d={d} grandchildren={grandchildren} />
