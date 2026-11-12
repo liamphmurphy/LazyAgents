@@ -398,9 +398,24 @@ func (r *Runner) recheckReport(ctx context.Context, parent runCtx, kids []store.
 		_ = json.Unmarshal(child.Contract, &contract)
 		if k.RecheckRequested {
 			k.RecheckRequested, k.RecheckTurn = false, turn
-			k.RecheckSHA = r.gitOut(ctx, ws, "", "lazyagents-recheck-"+child.ID.String(), "git rev-parse HEAD", env)
-			k.RecheckExit, k.RecheckTail = r.runTimed(ctx, ws, "", "lazyagents-recheck-"+child.ID.String(), k.ReproCommand, env)
-			k.ReproFixed = k.RecheckExit != nil && *k.RecheckExit == 0 && k.RecheckSHA != ""
+			name := "lazyagents-recheck-" + child.ID.String()
+			k.RecheckSHA = r.gitOut(ctx, ws, "", name, "git rev-parse HEAD", env)
+			k.RecheckExit, k.RecheckTail, k.RecheckNote, k.ReproFixed = nil, "", "", false
+			// The result is recorded for RecheckSHA, so it must be what ran, and
+			// the reviewer's tests must be the ones it committed.
+			status, _, serr := r.execIn(ctx, ws, "", name, "git status --porcelain", env)
+			dirty := parseStatus(status)
+			switch {
+			case serr != nil || k.RecheckSHA == "":
+				k.RecheckNote = "Your checkout's git state couldn't be read, so the tests weren't run."
+			case len(dirty) > 0:
+				k.RecheckNote = "Your checkout has uncommitted changes (" + strings.Join(dirty, ", ") + "), so the tests weren't run. Commit them, then call recheck_review again."
+			case len(k.ChangedFiles) > 0 && k.HeadSHA != "" && r.gitOut(ctx, ws, "", name, "git diff --quiet "+shellQuote(k.HeadSHA)+" HEAD -- "+strings.Join(quoteAll(k.ChangedFiles), " ")+" && echo same", env) != "same":
+				k.RecheckNote = "The reviewer's test files differ from what it committed (`git diff " + k.HeadSHA + " HEAD -- " + strings.Join(k.ChangedFiles, " ") + "`), so a passing run wouldn't verify its findings. Restore them, or delegate a re-review."
+			default:
+				k.RecheckExit, k.RecheckTail = r.runTimed(ctx, ws, "", name, k.ReproCommand, env)
+				k.ReproFixed = k.RecheckExit != nil && *k.RecheckExit == 0
+			}
 			if raw, err := json.Marshal(k); err == nil {
 				if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: raw}); err != nil {
 					r.Log.Warn("store recheck", "run", child.ID, "err", err)

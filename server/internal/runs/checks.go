@@ -54,7 +54,10 @@ type Checks struct {
 	RecheckSHA       string `json:"recheck_sha,omitempty"`
 	RecheckExit      *int   `json:"recheck_exit,omitempty"`
 	RecheckTail      string `json:"recheck_tail,omitempty"`
-	ReproFixed       bool   `json:"repro_fixed,omitempty"`
+	// RecheckNote says why the command wasn't run (a dirty checkout, the
+	// reviewer's tests changed since it committed them).
+	RecheckNote string `json:"recheck_note,omitempty"`
+	ReproFixed  bool   `json:"repro_fixed,omitempty"`
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -81,6 +84,8 @@ func (k Checks) RecheckReport(runID string, coversAll bool) string {
 		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`, so the findings of review run %s are verified fixed; its changes_requested verdict no longer blocks Done.\n", k.ReproCommand, k.RecheckSHA, runID)
 	case k.ReproFixed:
 		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`. Review run %s didn't say its tests cover every blocking finding, so its changes_requested verdict still needs a re-review (continue_run_id) before Done.\n", k.ReproCommand, k.RecheckSHA, runID)
+	case k.RecheckNote != "":
+		b.WriteString("**NOT RUN**: " + k.RecheckNote + "\n")
 	case k.RecheckExit == nil:
 		fmt.Fprintf(&b, "**FAILED**: `%s` did not finish on your branch", k.ReproCommand)
 		if k.RecheckTail != "" {

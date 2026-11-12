@@ -66,7 +66,8 @@
 // set. FAKE_HARNESS_RECHECK=<path> makes a resumed delegate_script parent told
 // to call recheck_review write "fixed" to <path>, commit it and call it for its
 // first delegated run, then on the recheck's result try complete_run
-// status=done (falling back to in_review with "DONE REFUSED: <error>").
+// status=done (falling back to in_review with "DONE REFUSED: <error>");
+// FAKE_HARNESS_RECHECK_DIRTY=<path> leaves that file uncommitted first.
 //
 // Resumed turns (--resume, or a session rollover's brief) finish the run with
 // complete_run, unless FAKE_HARNESS_RESUME=idle.
@@ -797,6 +798,9 @@ func main() {
 				_ = os.WriteFile(f, []byte("fixed\n"), 0o644)
 				_ = exec.Command("git", "add", f).Run()
 				_ = exec.Command("git", "commit", "-q", "-m", "Fix "+f).Run()
+				if d := os.Getenv("FAKE_HARNESS_RECHECK_DIRTY"); d != "" {
+					_ = os.WriteFile(d, []byte("not committed\n"), 0o644)
+				}
 				raw, _ := os.ReadFile(".lazyagents/children")
 				ids := strings.Fields(string(raw))
 				out := call("recheck_review", map[string]any{"run_id": ids[0]})
