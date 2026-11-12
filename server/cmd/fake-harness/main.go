@@ -59,6 +59,8 @@
 // for <file> before working (in chat mode, a reply to the prompt "held" does,
 // after saying it's working); FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
 // that lost the session. The log line also names the harness (claude or codex).
+// FAKE_HARNESS_CHILD_REPORT is the report a delegated run that wrote its file
+// passes to complete_run.
 // FAKE_HARNESS_CONTEXT_TOKENS sets the prompt size each Claude assistant line's
 // usage reports (default 2000). FAKE_HARNESS_PLAN="a|b" makes delegate_script's
 // first turn post that plan before delegating.
@@ -753,7 +755,11 @@ func main() {
 				os.Exit(2)
 			}
 		}
-		call("complete_run", map[string]any{"outcome": "Wrote " + file})
+		done := map[string]any{"outcome": "Wrote " + file}
+		if rep := os.Getenv("FAKE_HARNESS_CHILD_REPORT"); rep != "" {
+			done["report"] = rep
+		}
+		call("complete_run", done)
 		if hold := os.Getenv("FAKE_HARNESS_LINGER"); hold != "" {
 			_ = os.WriteFile(hold+".started", nil, 0o644)
 			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {

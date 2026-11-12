@@ -109,7 +109,7 @@ func TestCompleteCannotUndoCancellation(t *testing.T) {
 	defer close(gate.release)
 	svc.Tracker = &tracker.Service{Pool: boardTracedPool(t, ctx, pool, gate)}
 	result := make(chan error, 1)
-	go func() { result <- svc.Complete(ctx, caller, ticket.Key, "finished", "todo", "") }()
+	go func() { result <- svc.Complete(ctx, caller, ticket.Key, "finished", "", "todo", "") }()
 	boardReached(t, ctx, gate.reached) // run committed; final ticket PATCH has not locked project
 	canceled := "canceled"
 	if _, err = (&tracker.Service{Pool: pool}).Update(ctx, u.WorkspaceID, tracker.UserActor(u.ID), ticket.Key, tracker.Patch{Status: &canceled}); err != nil {

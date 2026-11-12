@@ -65,6 +65,9 @@ UPDATE runs SET rollover_requested = $2 WHERE id = $1;
 -- name: SetRunContextTokens :exec
 UPDATE runs SET context_tokens = $2 WHERE id = $1;
 
+-- name: SetRunReport :exec
+UPDATE runs SET report = $2 WHERE id = $1;
+
 -- name: SetRunWorkspace :exec
 UPDATE runs SET workspace_volume = $2 WHERE id = $1;
 

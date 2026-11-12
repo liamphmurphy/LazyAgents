@@ -137,7 +137,7 @@ func childTask(input string, contract runs.Contract) string {
 	if !ok {
 		return strings.TrimSpace(input)
 	}
-	_, suffix, _ := strings.Cut(runs.ChildPrompt("", "", "", contract), heading)
+	_, suffix, _ := strings.Cut(runs.ChildPrompt("", "", "", contract, true), heading)
 	return strings.TrimSpace(strings.TrimSuffix(task, suffix))
 }
 

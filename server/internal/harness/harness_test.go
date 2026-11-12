@@ -648,7 +648,7 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	// runs the full suite once after merging. Lifecycle rules are stated here once.
 	sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
 	for _, want := range []string{"## Tests", "Run the narrowest tests", "Tests command, that is the bar", "Don't run the full suite", "never wait for or poll GitHub PR checks",
-		"commit what you change", "call complete_run with a short summary", "If you're blocked, call complete_run", "request_approval or await_human", "get_ticket only if"} {
+		"commit what you change", "outcome is the one-line headline, report carries the detail", "If you're blocked, call complete_run", "request_approval or await_human", "get_ticket only if"} {
 		if !strings.Contains(sub, want) {
 			t.Fatalf("delegated AGENTS.md missing %q:\n%s", want, sub)
 		}

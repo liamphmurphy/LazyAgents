@@ -656,6 +656,8 @@ func TestApprovedRepositoryAndBaseBranchAreFrozen(t *testing.T) {
 func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "delegate")
+	report := "## Findings\n\n- child.txt:1 written as asked"
+	t.Setenv("FAKE_HARNESS_CHILD_REPORT", report)
 	if _, err := (&agents.Service{Pool: e.pool}).Create(e.ctx, e.ws, e.me.ID, "scribe", agents.Identity{Name: "Scribe", Role: "Docs", Kind: agents.KindSub}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -672,6 +674,10 @@ func TestDelegatedRunWorksInWorktreeOfParentWorkspace(t *testing.T) {
 	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
 	if len(turns) != 2 || turns[1].Trigger != "delegation" {
 		t.Fatalf("parent turns %+v", turns)
+	}
+	// The child's report reaches the parent through the real MCP path.
+	if deref(kids[0].Report) != report || !strings.Contains(turns[1].InputMessage, "Wrote child.txt\n\n#### Report\n\n"+report) {
+		t.Fatalf("report %q; wake message:\n%s", deref(kids[0].Report), turns[1].InputMessage)
 	}
 	// The child worked in its own worktree and branch; its commit was merged into the parent's.
 	var ct runs.Contract
