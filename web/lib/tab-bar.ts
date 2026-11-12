@@ -6,11 +6,12 @@
 import type { IconName } from "@/components/ui/icon";
 import { NAV_GROUPS, isActive, type NavBadge, type NavGroup } from "./project-scope.ts";
 
-export type Tab = { key: "chat" | "inbox" | "runs" | "tickets" | "more"; href: string; label: string; icon: IconName; badge?: NavBadge };
+/** tray: the tab opens the Needs you tray instead of navigating; href is the page it stands for (Open all). */
+export type Tab = { key: "chat" | "needs" | "runs" | "tickets" | "more"; href: string; label: string; icon: IconName; badge?: NavBadge; tray?: boolean };
 
 export const TABS: Tab[] = [
   { key: "chat", href: "/chat", label: "Chat", icon: "msg" },
-  { key: "inbox", href: "/inbox", label: "Inbox", icon: "inbox", badge: "inbox" },
+  { key: "needs", href: "/inbox", label: "Needs you", icon: "inbox", badge: "inbox", tray: true },
   { key: "runs", href: "/runs", label: "Runs", icon: "play", badge: "runs" },
   { key: "tickets", href: "/tickets", label: "Tickets", icon: "tickets" },
   { key: "more", href: "/more", label: "More", icon: "dots" },
@@ -27,7 +28,7 @@ export function hidesTabBar(pathname: string): boolean {
   return /^\/(runs|tickets)\/[^/]+/.test(pathname);
 }
 
-const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
+const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "waiting", runs: "running" };
 
 /** A badge shown only as a dot or number has to reach screen readers through the link's name. */
 export function badgeLabel(label: string, badge: NavBadge | undefined, counts: Record<NavBadge, number>): string {

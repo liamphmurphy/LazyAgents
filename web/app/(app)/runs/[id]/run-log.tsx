@@ -11,11 +11,11 @@ import { useControlRunById, useDelegatedRunLogs, useRunLog } from "@/lib/api/hoo
 import { cx } from "@/lib/cx";
 import { absoluteTime, compact, duration } from "@/lib/format";
 import {
-  PURPOSE_LABEL, RUN_VIEW_STORAGE_KEY, argSummary, delegateChild, groupByTurn, isFailedRow, parseRunAnchor, pickRunView, rowEvent, rowsOf, str,
+  PURPOSE_LABEL, argSummary, delegateChild, groupByTurn, isFailedRow, parseRunAnchor, pickRunView, rowEvent, rowsOf, str,
   toolLink, toolName, triggerLine, turnAt, turnByEvent, turnStarts, workHref, type Row, type RunViewMode,
 } from "@/lib/run-view";
-import { Button, ButtonLink } from "@/components/ui/button";
-import { Segmented, Tabs, Toggle } from "@/components/ui/controls";
+import { Button } from "@/components/ui/button";
+import { Tabs, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
@@ -24,9 +24,10 @@ import { Flag, MonoChip, SmallPill } from "@/components/domain/labels";
 import { RunCostChip } from "@/components/domain/cost-chip";
 import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/run-status";
 import { TopBar, type Crumb } from "@/components/shell/topbar";
-import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
-import { CostValue, SimpleHeader, SimpleView } from "./run-simple";
+import { CostValue, RunThread } from "./run-thread";
+import { ContextButton, RunContext, useRunContextPanel } from "./run-context";
+import { RunFiles } from "./run-files";
 import { RunGraphView } from "./run-graph-view";
 import { CompactRunDetail } from "./run-compact";
 import { useCompact } from "@/lib/viewport";
@@ -349,14 +350,6 @@ function Header({ d }: { d: RunDetail }) {
   );
 }
 
-function readStoredView(): string | null {
-  try {
-    return window.localStorage.getItem(RUN_VIEW_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
   const children = useDelegatedRunLogs(d?.child_runs ?? []);
@@ -365,13 +358,12 @@ export function RunLogScreen({ id }: { id: string }) {
   const [tab, setTab] = useState("all");
   const [filter, setFilter] = useState("");
   const params = useSearchParams();
-  // The hash (a deep link to a turn or event) and the stored choice are read
-  // once on load; ?view= is read on every render, so the URL stays the truth.
-  const [nav, setNav] = useState(() => ({
-    hash: typeof window === "undefined" ? "" : window.location.hash,
-    stored: typeof window === "undefined" ? null : readStoredView(),
-  }));
-  const mode = pickRunView(params.get("view"), nav.hash, nav.stored);
+  // The hash (a deep link to a turn or event) is read once on load; ?view= is
+  // read on every render, so the URL stays the truth. The thread is the default:
+  // the Raw log (details), Graph and Files open from the Context panel.
+  const [nav, setNav] = useState(() => ({ hash: typeof window === "undefined" ? "" : window.location.hash }));
+  const mode = pickRunView(params.get("view"), nav.hash, null);
+  const [contextOpen, setContextOpen] = useRunContextPanel();
   const anchor = mode === "details" ? parseRunAnchor(nav.hash) : null;
   const [follow, setFollow] = useState(() => !anchor);
   const detailsScroll = useRef<number | null>(null);
@@ -421,19 +413,15 @@ export function RunLogScreen({ id }: { id: string }) {
     (anchor.kind === "turn" ? el?.closest("section") : el)?.scrollIntoView({ block: "start" });
   }, [anchor?.kind, anchor?.n, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Sets ?view= (no history entry) and remembers the choice. */
+  /** Sets ?view= (no history entry); the thread drops it. */
   const switchMode = (m: RunViewMode, hash = "") => {
-    try {
-      window.localStorage.setItem(RUN_VIEW_STORAGE_KEY, m);
-    } catch {
-      // Storage can be unavailable (private mode); the URL still carries the mode.
-    }
-    setNav({ hash, stored: m });
+    setNav({ hash });
     const q = new URLSearchParams(params.toString());
-    q.set("view", m);
-    router.replace(`/runs/${id}?${q}${hash}`, { scroll: false });
+    if (m === "simple") q.delete("view");
+    else q.set("view", m);
+    router.replace(`/runs/${id}${q.size ? `?${q}` : ""}${hash}`, { scroll: false });
   };
-  /** From Simple: open turn n in Details, scrolled into view, the others collapsed. */
+  /** From the thread: open turn n in the raw log, scrolled into view, the others collapsed. */
   const openTurn = (n: number) => {
     setFollow(false);
     setAllOpen(false);
@@ -474,7 +462,6 @@ export function RunLogScreen({ id }: { id: string }) {
   }
   const run = d.run;
   const live = !RUN_ENDED.includes(run.state);
-  const lastLog = [...d.turns].reverse().find((t) => t.has_log);
   const crumbs: Crumb[] = [
     ...(run.project_key ? [{ label: run.project_key, href: `/tickets?project=${encodeURIComponent(run.project_key)}`, mono: true }] : []),
     ...(run.purpose === "ticket" && run.ticket_key
@@ -520,24 +507,12 @@ export function RunLogScreen({ id }: { id: string }) {
   };
   if (compactView) return <CompactRunDetail d={d} log={logBody} scroller={scroller} onScroll={onLogScroll} control={control} />;
   return (
-    <div className="flex flex-col lg:h-dvh">
+    <div className="flex min-h-0 flex-1 flex-col">
       <TopBar
         crumbs={crumbs}
         actions={
           <>
-            {run.workspace_path && <WorkspaceFolderChip path={run.workspace_path} className="max-md:hidden" />}
-            <Segmented
-              label="Run view"
-              value={mode}
-              onChange={(m) => switchMode(m)}
-              options={[{ value: "simple", label: "Simple" }, { value: "details", label: "Details" }, { value: "graph", label: "Graph" }]}
-            />
-            {mode === "details" && <ButtonLink href={`/settings/runner?run_id=${run.id}`} variant="outline">Environment</ButtonLink>}
-            {mode === "details" && lastLog && (
-              <ButtonLink href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} prefetch={false} variant="outline" icon="download">
-                Raw log
-              </ButtonLink>
-            )}
+            {mode !== "simple" && <Button variant="ghost" icon="chev" className="[&_svg]:rotate-90" onClick={() => switchMode("simple")}>Back to thread</Button>}
             {live && run.mode === "managed" && (
               run.state === "paused" ? (
                 <Button variant="outline" icon="play" disabled={control.isPending} onClick={() => control.mutate("resume")}>
@@ -564,10 +539,10 @@ export function RunLogScreen({ id }: { id: string }) {
                 Cancel run
               </Button>
             )}
+            {!contextOpen && <ContextButton onOpen={() => setContextOpen(true)} />}
           </>
         }
       />
-      {mode === "details" ? <Header d={d} /> : <SimpleHeader d={d} />}
       {control.isError && (
         <div className="px-6 pt-3">
           <Banner tone="blocked" title={control.variables === "retry" ? "Couldn't retry the run" : "Couldn't change the run"}>
@@ -575,13 +550,18 @@ export function RunLogScreen({ id }: { id: string }) {
           </Banner>
         </div>
       )}
-      <ActionBox d={d} />
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {mode === "details" && <Header d={d} />}
+      {mode !== "simple" && <ActionBox d={d} />}
       {mode === "simple" ? (
-        <SimpleView d={d} ended={!live} onOpenTurn={openTurn} onDetails={() => switchMode("details")} />
+        <RunThread d={d} onOpenTurn={openTurn} />
       ) : mode === "graph" ? (
         <RunGraphView d={d} childDetails={childDetails} onOpenTurn={openTurn} onOpenEvent={openEvent} />
+      ) : mode === "files" ? (
+        <RunFiles d={d} childDetails={childDetails} />
       ) : (
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
         <section aria-label="Events" className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-5 py-2.5">
             <Tabs
@@ -623,7 +603,7 @@ export function RunLogScreen({ id }: { id: string }) {
             aria-label="Run log"
             tabIndex={0}
             onScroll={(e) => onLogScroll(e.currentTarget)}
-            className="min-h-0 flex-1 overflow-y-auto max-lg:max-h-[70dvh]"
+            className="min-h-0 flex-1 overflow-y-auto max-xl:max-h-[70dvh]"
           >
           {logBody}
           <p className="px-5 py-4 text-xs text-fg-tertiary">
@@ -634,6 +614,9 @@ export function RunLogScreen({ id }: { id: string }) {
         <RunRail d={d} grandchildren={grandchildren} />
       </div>
       )}
+      </div>
+      {contextOpen && <RunContext d={d} mode={mode} setMode={(m) => switchMode(m)} onClose={() => setContextOpen(false)} />}
+      </div>
       {mode === "details" && !follow && (
         <Button
           variant="secondary"

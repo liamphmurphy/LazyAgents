@@ -65,31 +65,27 @@ async function installRuns(page: Page) {
   return { replies };
 }
 
-test("live runs come first as cards, above the runs finished today", async ({ page }) => {
+test("the run list is the whole screen: live runs first, then finished runs by day", async ({ page }) => {
   await installRuns(page);
   await page.goto("/runs");
-  const live = page.getByRole("region", { name: "Live runs" });
-  const cards = live.getByRole("listitem");
-  await expect(cards).toHaveCount(2);
-  const first = cards.first();
-  await expect(first).toContainText("Quill");
+  // /runs stays the list on compact (no run opened beside it).
+  await expect(page).toHaveURL(/\/runs$/);
+  const list = page.getByRole("complementary", { name: "Runs" });
+  const running = list.getByRole("region", { name: "Running" });
+  await expect(running.getByRole("listitem")).toHaveCount(2);
+  const first = running.getByRole("listitem").first();
   await expect(first).toContainText("Payout retries");
-  await expect(first).toContainText("WEB-7");
+  await expect(first).toContainText("Step 2 of 4 · Ask about the retry cap");
   await expect(first).toContainText("Needs you");
-  await expect(first).toContainText("Step 2 of 4");
-  await expect(first).toContainText("Ask about the retry cap");
-  await expect(first.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
 
-  const today = page.getByRole("region", { name: "Finished today" });
+  const today = list.getByRole("region", { name: "Earlier today" });
   await expect(today.getByRole("listitem")).toHaveCount(2);
   await expect(today.getByRole("listitem").first()).toContainText("Webhook signatures");
   await expect(today.getByRole("listitem").first()).toContainText("Failed");
-  await expect(today.getByRole("listitem").nth(1)).toContainText("Done");
-  await expect(today).not.toContainText("Long ago");
-  const [l, t] = [await live.boundingBox(), await today.boundingBox()];
+  await expect(list).toContainText("Long ago");
+  const [l, t] = [await running.boundingBox(), await today.boundingBox()];
   expect(l!.y).toBeLessThan(t!.y);
-  // The desktop table isn't used here.
-  await expect(page.getByRole("table")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Run thread" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/runs-mobile.png" });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

@@ -20,6 +20,20 @@ modal edit to Done, and the epic gate refusing closure until all final criteria
 are checked. It then verifies the saved ticket and epic through REST. This flow
 does not invoke a model.
 
+`needs-you.spec.ts` covers the sidebar's Needs you tray (LAZYAGENTS-162): an
+agent's run on the real `/mcp` endpoint (an unmanaged session) asks for a
+`deploy:staging` approval twice and then asks a question with `await_human`.
+The open page's badge goes up live; the person denies (with a reason) and
+approves from the tray, and answers with its inline reply. Each time the run is
+back to `running` and the agent reads the decision or the reply through
+`wait_for_approval` / `await_signal`.
+
+`run-composer.spec.ts` covers the run thread (LAZYAGENTS-163) the same way: the
+person approves the agent's request with A in `/runs/{id}` and answers its
+`await_human` question from the composer; the agent reads the approval and the
+reply. An unmanaged session's question comes from its Needs you item, since
+`await_human` logs no run event.
+
 `slides-outline.spec.ts` covers the Slides New deck chooser: a deck started
 from a starter deck in a chosen theme, and Draft from outline, where the fake
 (`FAKE_HARNESS_MODE=chat-read`, set for the whole stack) reads the deck and

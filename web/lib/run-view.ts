@@ -235,8 +235,8 @@ export const PURPOSE_LABEL: Record<string, string> = { ticket: "Ticket run", pla
 
 // ------------------------------------------------------------- view mode
 
-/** Run page modes. "graph" joins this list with the Graph view ticket. */
-export const RUN_VIEW_MODES = ["simple", "details", "graph"] as const;
+/** Run page modes: "simple" is the run thread; details (the raw log), graph and files open from the Context panel. */
+export const RUN_VIEW_MODES = ["simple", "details", "graph", "files"] as const;
 export type RunViewMode = (typeof RUN_VIEW_MODES)[number];
 export const RUN_VIEW_STORAGE_KEY = "lazyagents.runs.view";
 
@@ -273,7 +273,8 @@ export type FeedItem =
   | { kind: "step"; turn: number; at: string; step: number; state: string }
   | { kind: "delegation"; turn: number; at: string; call: Ev; agent: string; task: string }
   | { kind: "error"; turn: number; at: string; text: string }
-  | { kind: "gate"; turn: number; at: string; gate: "approval" | "reply" | "mockup"; text: string };
+  | { kind: "gate"; turn: number; at: string; gate: "approval" | "reply" | "mockup"; text: string }
+  | { kind: "message"; turn: number; at: string; text: string };
 
 const firstLine = (s: string) => s.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 
@@ -293,7 +294,11 @@ function failText(r: ToolRow): string {
  * notable events in order: finished plan steps, delegations, errors and human
  * gates. Errors and gates are never folded. Setup (turn 0) has no turn line.
  */
-export function condenseFeed<E extends Ev>(events: E[], fallback: (turn: number) => string = (n) => `Turn ${n}`): FeedItem[] {
+export function condenseFeed<E extends Ev>(
+  events: E[],
+  fallback: (turn: number) => string = (n) => `Turn ${n}`,
+  opts: { messages?: boolean } = {},
+): FeedItem[] {
   const turnOf = turnByEvent(events);
   const out: FeedItem[] = [];
   const lines = new Map<number, Extract<FeedItem, { kind: "turn" }>>();
@@ -331,8 +336,10 @@ export function condenseFeed<E extends Ev>(events: E[], fallback: (turn: number)
       out.push({ kind: "error", turn, at: e.at, text: firstLine(str(p.message)) || "Error" });
     } else if (e.type === "message" && p.kind === "step" && ["done", "failed", "needs_human"].includes(str(p.state))) {
       out.push({ kind: "step", turn, at: e.at, step: Number(p.step), state: str(p.state) });
-    } else if (e.type === "message" && !p.kind && l && !l.text) {
-      l.text = firstLine(str(p.text));
+    } else if (e.type === "message" && !p.kind) {
+      // The run thread (opts.messages) shows every agent message in full, at chat size.
+      if (opts.messages && str(p.text).trim()) out.push({ kind: "message", turn, at: e.at, text: str(p.text).trim() });
+      if (l && !l.text) l.text = firstLine(str(p.text));
     }
   }
   for (const l of lines.values()) if (!l.text) l.text = fallback(l.turn);
