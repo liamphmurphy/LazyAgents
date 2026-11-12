@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { themeScript } from "@/lib/appearance-script";
@@ -19,6 +19,19 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Vesper",
   description: "Issue tracking for autonomous coding agents",
+};
+
+// viewportFit "cover" lets the page draw under the notch and home indicator;
+// fixed bars pad themselves with the pt-safe/pb-safe utilities (DESIGN.md §2).
+// themeColor is the --bg token for each scheme (DESIGN.md §2 Surfaces).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FCFBFE" },
+    { media: "(prefers-color-scheme: dark)", color: "#0C0B12" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
