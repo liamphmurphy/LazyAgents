@@ -87,7 +87,10 @@ export function dependencies(ops: DesignOp[]): number[][] {
 const closure = (start: number, next: (i: number) => number[]): Set<number> => {
   const seen = new Set<number>();
   const go = (i: number) => {
-    for (const k of next(i)) if (!seen.has(k)) (seen.add(k), go(k));
+    for (const k of next(i)) if (!seen.has(k)) {
+        seen.add(k);
+        go(k);
+      }
   };
   go(start);
   return seen;
@@ -153,7 +156,11 @@ export function applyOp(d: Design, op: DesignOp): Design | undefined {
       if (!pageOf(d, id)) return undefined;
       return mapPage(d, id, (p) => {
         const next: Record<string, unknown> = { ...p };
-        for (const k of ["name", "background"]) if (k in op) (op[k] === null ? delete next[k] : (next[k] = op[k]));
+        for (const k of ["name", "background"]) {
+          if (!(k in op)) continue;
+          if (op[k] === null) delete next[k];
+          else next[k] = op[k];
+        }
         return next as unknown as Page;
       });
     case "remove_page":
@@ -167,7 +174,10 @@ export function applyOp(d: Design, op: DesignOp): Design | undefined {
       if (!fields || !find(d, id)) return undefined;
       return mapNode(d, id, (n) => {
         const next: Record<string, unknown> = { ...n };
-        for (const [k, v] of Object.entries(fields)) (v === null ? delete next[k] : (next[k] = v));
+        for (const [k, v] of Object.entries(fields)) {
+          if (v === null) delete next[k];
+          else next[k] = v;
+        }
         return next as unknown as DesignNode;
       });
     }
