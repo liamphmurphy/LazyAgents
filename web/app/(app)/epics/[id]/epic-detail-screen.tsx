@@ -24,6 +24,7 @@ import { DocTypeTag, Pill } from "@/components/domain/labels";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { ticketsHref } from "@/lib/tickets-layout";
+import { ContextButton, ContextPanel, ContextSection, useContextPanel } from "@/components/shell/context-panel";
 
 type TicketSummary = Schemas["TicketSummary"];
 
@@ -37,14 +38,20 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
         { label: e.epic.name },
       ]
     : [{ label: "Epics", href: ticketsHref("epics") }];
+  const [contextOpen, setContextOpen] = useContextPanel(CONTEXT_KEY);
   return (
     <>
       <TopBar
         crumbs={crumbs}
         actions={e && (
-          <ButtonLink variant="outline" icon="board" href={boardHref(e)}>View on board</ButtonLink>
+          <>
+            <ButtonLink variant="outline" icon="board" href={boardHref(e)}>View on board</ButtonLink>
+            {!contextOpen && <ContextButton onOpen={() => setContextOpen(true)} />}
+          </>
         )}
       />
+      <div className="flex min-h-0 flex-1">
+      <div className="min-w-0 flex-1">
       <Content>
         {query.isError ? (
           <Banner tone="blocked" title="Couldn’t load the epic" actions={<Button onClick={() => query.refetch()}>Retry</Button>}>
@@ -63,9 +70,15 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
           <EpicDetail epic={e} />
         )}
       </Content>
+      </div>
+      {e && contextOpen && <EpicContext epic={e} onClose={() => setContextOpen(false)} />}
+      </div>
     </>
   );
 }
+
+/** Open (the default) or closed, remembered per browser, like the run page's. */
+const CONTEXT_KEY = "lazyagents.epics.context";
 
 const boardHref = (e: EpicOverview) => ticketsHref("board", { project: e.project.key, epic: e.epic.id });
 
@@ -125,39 +138,35 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
 
       <StartReady key={e.epic.id} epic={e} />
 
-      {/* LAZYAGENTS-163's Context panel isn't merged yet: criteria and specs live in collapsible sections here. */}
-      <details open className="group rounded-xl border border-border-subtle">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-medium">
-          <Icon name="chev" size={12} className="-rotate-90 text-fg-tertiary transition-transform group-open:rotate-0" />
-          Acceptance criteria and done gate
-          <span className="font-mono text-xs text-fg-tertiary">{e.epic.criteria_done}/{e.epic.criteria_total}</span>
-        </summary>
-        <div className="border-t border-border-subtle p-4">
-          <Completion projectKey={e.project.key} epicId={e.epic.id} />
-        </div>
-      </details>
-      <details className="group rounded-xl border border-border-subtle">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-medium">
-          <Icon name="chev" size={12} className="-rotate-90 text-fg-tertiary transition-transform group-open:rotate-0" />
-          Specs and details
-          {e.source && <span className="truncate text-xs font-normal text-fg-tertiary">{e.source.title}</span>}
-        </summary>
-        <div className="space-y-6 border-t border-border-subtle p-4">
-          <Details epic={e} />
-          <section aria-label="Points burn-up" className="space-y-2">
-            <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">Points burn-up</h3>
-            {tickets.isError ? (
-              <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
-            ) : tickets.isPending ? (
-              <Skeleton className="h-48" />
-            ) : (
-              <BurnUpChart data={burnUp(tickets.data, { start: e.start_date, today })} />
-            )}
-          </section>
-        </div>
-      </details>
       </>}
     </article>
+  );
+}
+
+/**
+ * The epic's Context panel, the same one the run page has: acceptance
+ * criteria with the done gate, then specs and details with the burn-up.
+ */
+function EpicContext({ epic: e, onClose }: { epic: EpicOverview; onClose: () => void }) {
+  const tickets = useTickets({ epic: e.epic.id, view: "all" });
+  return (
+    <ContextPanel onClose={onClose}>
+      <ContextSection title="Acceptance criteria" aside={`${e.epic.criteria_done}/${e.epic.criteria_total}`}>
+        <Completion projectKey={e.project.key} epicId={e.epic.id} />
+      </ContextSection>
+      <ContextSection title="Specs and details">
+        <Details epic={e} />
+      </ContextSection>
+      <ContextSection title="Points burn-up">
+        {tickets.isError ? (
+          <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
+        ) : tickets.isPending ? (
+          <Skeleton className="h-32" />
+        ) : (
+          <BurnUpChart data={burnUp(tickets.data, { start: e.start_date, today: ymd(new Date()) })} />
+        )}
+      </ContextSection>
+    </ContextPanel>
   );
 }
 
@@ -269,7 +278,7 @@ function Completion({ projectKey, epicId }: { projectKey: string; epicId: string
   const board = useBoard(projectKey, { epic: epicId, include_canceled: false });
   return (
     <section aria-label="Epic completion">
-      {board.data?.epic ? <EpicCompletion summary={board.data.epic} />
+      {board.data?.epic ? <EpicCompletion summary={board.data.epic} stacked />
         : board.isError ? <p role="alert" className="text-xs">Couldn&apos;t load acceptance criteria: {board.error.message} <button type="button" className="underline" onClick={() => void board.refetch()}>Retry</button></p>
         : <p role="status" className="text-xs text-fg-tertiary">Loading acceptance criteria…</p>}
     </section>
