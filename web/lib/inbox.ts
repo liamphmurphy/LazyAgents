@@ -117,17 +117,19 @@ type TrayItem = Item & { needs_you: boolean };
 
 const RANK = new Map(GROUPS.flatMap((g, i) => g.kinds.map((k) => [k, i] as const)));
 
+/** A kind's urgency: its group's place in the Inbox, unknown kinds last. */
+export const kindRank = (k: string) => RANK.get(k) ?? GROUPS.length;
+
 /**
  * Needs you: open items the server marks needs_you, in the Inbox's urgency
  * order and longest wait first. Updates: the rest, newest first, read or not
  * (the tab is a feed), with `unread` for the tab's dot.
  */
 export function trayItems<T extends TrayItem>(items: readonly T[], updatesLimit = 30) {
-  const rank = (k: string) => RANK.get(k) ?? GROUPS.length;
   const age = (i: T) => Date.parse(i.created_at);
   const needs = items
     .filter((i) => i.needs_you && isOpen(i))
-    .sort((a, b) => rank(a.kind) - rank(b.kind) || age(a) - age(b) || a.id.localeCompare(b.id));
+    .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || age(a) - age(b) || a.id.localeCompare(b.id));
   const updates = items
     .filter((i) => !i.needs_you)
     .sort((a, b) => age(b) - age(a) || a.id.localeCompare(b.id))

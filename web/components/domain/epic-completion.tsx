@@ -24,7 +24,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : "Request faile
  * editor. Everything renders from `summary` (the board's epic section), so
  * SSE `epic.updated` refetches keep every tab in sync; writes only refetch.
  */
-export function EpicCompletion({ summary }: { summary: BoardEpic }) {
+/** `stacked` puts the criteria under the done gate, for narrow places like the Context panel. */
+export function EpicCompletion({ summary, stacked }: { summary: BoardEpic; stacked?: boolean }) {
   const { epic, criteria, done_blockers: blockers } = summary;
   const status = useUpdateEpic(epic.id);
   const mutations = useEpicCriterionMutations(epic.id);
@@ -46,7 +47,7 @@ export function EpicCompletion({ summary }: { summary: BoardEpic }) {
   const gated = blockers.open_tickets.length > 0 || blockers.unchecked_criteria.length > 0;
   const ready = !closed && criteria.length > 0 && !gated;
   return (
-    <div className="grid gap-5 md:grid-cols-2">
+    <div className={stacked ? "grid gap-5" : "grid gap-5 md:grid-cols-2"}>
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-fg-secondary">Status: <span ref={statusRef} className="inline-block font-medium text-fg">{STATUS_LABEL[epic.status]}</span></span>

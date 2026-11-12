@@ -224,8 +224,8 @@ test("row checkbox focus permits list shortcuts while search keeps typing", asyn
 test("tickets waiting on the person are grouped first with an Open action", async ({ page }) => {
   const api = await installBoardApi(page);
   api.inbox.push(
-    { id: "approval:ap-1", kind: "approval", title: "Other epic work", summary: "Push to main", href: "/tickets/WEB-4", project: "WEB", ticket_key: "WEB-4", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, run_id: "run-4" },
-    { id: "review:t-5", kind: "review", title: "Review board", summary: "Ready for your review", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false },
+    { id: "approval:ap-1", kind: "approval", title: "Other epic work", summary: "Push to main", href: "/tickets/WEB-4", project: "WEB", ticket_key: "WEB-4", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: true, run_id: "run-4" },
+    { id: "review:t-5", kind: "review", title: "Review board", summary: "Ready for your review", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: false },
   );
   await page.goto("/tickets?project=WEB");
   const sections = page.locator("main section[aria-label]");
@@ -234,7 +234,7 @@ test("tickets waiting on the person are grouped first with an Open action", asyn
   await expect(needs.locator("[data-ticket-row]")).toHaveAttribute("data-ticket-row", "WEB-4");
   await expect(row(page, "WEB-4")).toContainText("Wants approval: Push to main");
   await expect(needs.getByRole("link", { name: "Open what WEB-4 needs" })).toHaveAttribute("href", "/tickets/WEB-4");
-  // A review isn't a run waiting on the person; the rest follow in status buckets.
+  // An item the server doesn't mark needs_you stays out; the rest follow in status buckets.
   await expect(page.getByRole("region", { name: "In progress, 1" })).toContainText("WEB-5");
   await expect(page.getByRole("region", { name: "Ready, 1" })).toBeVisible();
   // The board shows the same state on the card.

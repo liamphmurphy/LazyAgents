@@ -60,12 +60,17 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await expect(progress).toContainText("0 need you");
   await expect(progress).toContainText("2 open");
   await expect(progress).toContainText("$0.00 spent so far");
-  // Specs, details and the burn-up sit in a collapsible section until the Context panel lands.
-  await page.getByText("Specs and details").click();
-  await expect(page.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
-  await expect(page.getByText("Requires mockup", { exact: true })).toBeVisible();
+  // Criteria with the done gate, specs, details and the burn-up live in the Context panel, not the page body.
+  const context = page.getByRole("complementary", { name: "Context" });
+  await expect(context.getByRole("region", { name: "Acceptance criteria", exact: true })).toBeVisible();
+  await expect(context.getByRole("region", { name: "Specs and details" })).toBeVisible();
+  await expect(context.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
+  await expect(context.getByText("Requires mockup", { exact: true })).toBeVisible();
+  await expect(page.locator("article details")).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("epic-context.png"), fullPage: true });
+  await expect(page.locator("article").getByRole("region", { name: "Epic completion" })).toHaveCount(0);
 
-  const panel = page.getByRole("region", { name: "Epic completion" });
+  const panel = context.getByRole("region", { name: "Epic completion" });
   const criteria = panel.getByRole("region", { name: "Final acceptance criteria" });
   await expect(criteria.getByRole("listitem").first()).toContainText("Checked by Builder");
   await criteria.getByLabel("Criterion 2 met").check();
@@ -93,9 +98,25 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   expect(api.unhandled).toEqual([]);
 });
 
+test("the epic page's Context panel stays closed across reloads, like the run page's", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/epics/epic-1");
+  const context = page.getByRole("complementary", { name: "Context" });
+  await expect(context.getByRole("region", { name: "Epic completion" })).toBeVisible();
+  await context.getByRole("button", { name: "Hide context" }).click();
+  await expect(context).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Kanban board" })).toBeVisible();
+  await expect(context).toHaveCount(0);
+  await page.getByRole("button", { name: "Context", exact: true }).click();
+  await expect(context.getByRole("region", { name: "Epic completion" })).toBeVisible();
+  await page.reload();
+  await expect(context.getByRole("region", { name: "Epic completion" })).toBeVisible();
+});
+
 test("the epic page's Needs you banner approves inline and Start ready skips blocked tickets", async ({ page }) => {
   const api = await installBoardApi(page);
-  api.inbox.push({ id: "approval:ap-5", kind: "approval", title: "Review board", summary: "Merge the PR", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, run_id: "run-5" });
+  api.inbox.push({ id: "approval:ap-5", kind: "approval", title: "Review board", summary: "Merge the PR", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, needs_you: true, run_id: "run-5" });
   await page.goto("/epics/epic-1");
   const banner = page.getByRole("region", { name: "Needs you" });
   await expect(banner).toContainText("WEB-5");
