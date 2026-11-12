@@ -67,3 +67,12 @@ export function useSaveDocToLibrary(id: string) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
+
+/** Publishes the document as it is now as a wiki page agents can read; `replace` overwrites a page that exists (a 409 otherwise). */
+export function usePromoteDocToWiki(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (replace: boolean) => unwrap(api.POST("/docs/{canvasId}/wiki", { params: { path: { canvasId: id } }, body: { replace } })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["wiki"] }),
+  });
+}
