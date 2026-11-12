@@ -67,7 +67,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   canvas: "Working on a canvas",
   "design-view": "Looking at a design",
   "canvas-comment": "Commenting on a canvas",
-  design: "Working on a design",
+  design: "Designing a flow",
   playground: "Spinning up a playground",
   runs: "Checking on runs",
   workflow: "Working on a workflow",
@@ -367,8 +367,26 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   ),
   canvas: canvasScene(),
   "canvas-comment": canvasScene(true),
-  // Placeholders: the real design scene comes with the persona design tools' scene work.
-  design: canvasScene(),
+  // A frame sketches itself, its button is wired to the next frame, that frame fills in, then a sparkle.
+  design: (
+    <>
+      <rect className="scene-paper" x="26" y="4" width="32" height="48" rx="4" />
+      <path className="scene-line-accent scene-dash scene-story scene-dz-sketch" strokeWidth="1.5" pathLength={1} d="M30 4H54a4 4 0 0 1 4 4V48a4 4 0 0 1-4 4H30a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" />
+      <path className="scene-line scene-story scene-dz-a0" d="M32 12H46" />
+      <path className="scene-line scene-story scene-dz-a1" strokeWidth="1.5" opacity="0.6" d="M32 19H52M32 25H48" />
+      <rect className="scene-accent scene-story scene-dz-btn" x="32" y="40" width="20" height="7" rx="2" />
+      <path className="scene-line-accent scene-dash scene-story scene-dz-wire" strokeWidth="1.6" pathLength={1} d="M52 43.5C68 43.5 68 20 83 20" />
+      <path className="scene-accent scene-story scene-dz-head" d="M81 16.5l4 3.5-4 3.5z" />
+      <rect className="scene-paper scene-story scene-dz-frame" x="86" y="4" width="32" height="48" rx="4" stroke="var(--accent)" strokeWidth="1.5" />
+      <path className="scene-line-accent scene-story scene-dz-b0" d="M92 12H106" />
+      <path className="scene-line scene-story scene-dz-b1" strokeWidth="1.5" opacity="0.6" d="M92 19H112M92 25H104" />
+      <rect className="scene-accent scene-story scene-dz-b2" x="92" y="40" width="20" height="7" rx="2" />
+      <path className="scene-warm scene-story scene-dz-spark" d={sparkle(122, 12, 6)} />
+      <g className="scene-story scene-dz-cur">
+        <path fill="var(--text)" d="M104 36v9l2.6-2.4 3.6-.2z" />
+      </g>
+    </>
+  ),
   runs: (
     <>
       {[
@@ -825,8 +843,8 @@ const SCENE_OF: Record<SplitKind, Exclude<ChatStatusKind, SplitKind>> = {
   "web-page": "web",
   "image-view": "image",
   "memory-save": "memory",
-  // Until the Designs scene lands (ADR-designs §3.9), design reads share the canvas one.
-  "design-view": "canvas",
+  // Design reads share the design scene, like image-view (ADR-designs §3.9).
+  "design-view": "design",
 };
 
 const sceneOf = (kind: ChatStatusKind) => (kind in SCENE_OF ? SCENE_OF[kind as SplitKind] : (kind as Exclude<ChatStatusKind, SplitKind>));

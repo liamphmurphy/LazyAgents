@@ -970,6 +970,7 @@ var Tools = []Tool{
 	define("design_comments", "List the comment threads on a design, each anchored to a node (with an optional x, y inside its box), with replies.", designComments),
 	define("design_comment", "Comment on a node of a design to flag something for the person, without changing it.", designComment),
 	define("design_reply", "Answer a comment thread on a design. Set addressed once you have made the change it asked for.", designReply),
+	define("design_create", "Start a design (a flow, diagram or wireframe) beside this chat when the person asks for one: it opens next to the conversation and you work on it with the design_* tools. Returns its canvas_id; then design_outline it and design_patch in the frames. Starters: blank, mobile-flow, web-flow, diagram, wireframe.", designCreate),
 	define("canvas_list", "List this chat's canvases and their current versions.", canvasList),
 	define("design_flows", "A design's prototype: its frames and the links between them (hotspot, trigger, transition) as JSON, plus a Mermaid flowchart LR of the flow. Links whose target frame was removed are listed as broken_links.", designFlows),
 	define("design_components", "A design's main components ({id, name, page, instances}). Place one with the instantiate op and change per-instance text, fill or visibility with set_overrides; editing the main changes every instance.", designComponents),

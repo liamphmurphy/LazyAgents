@@ -346,7 +346,7 @@ function DesignCard({ d }: { d: DesignSummary }) {
           <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
           <Dialog.Content className="motion-dialog fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100%-32px))] -translate-x-1/2 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none">
             <Dialog.Title className="type-heading">Delete “{d.title}”?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-[13px] text-fg-secondary">The design, its versions, suggestions, images and chat are deleted. This can’t be undone.</Dialog.Description>
+            <Dialog.Description className="mt-2 text-[13px] text-fg-secondary">The design, its versions, suggestions and images are deleted. A shared chat is kept; a chat dedicated to this design is deleted. This can’t be undone.</Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
               <Dialog.Close asChild>
                 <Button variant="ghost">Cancel</Button>

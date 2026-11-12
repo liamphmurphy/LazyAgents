@@ -282,3 +282,11 @@ test("B1: a reflow on one side isn't an edit of the siblings it moved", () => {
   assert.equal(find(r.design, "n_b").node.fill, "#FF0000");
   assert.equal(find(r.design, "n_b").node.y, find(theirs, "n_b").node.y);
 });
+
+test("the chat's Design card counts frames, links, stickies and names the page", async () => {
+  const { designCounts } = await import("./designs/home.ts");
+  const { design } = normalize(read("../../docs/design/fixtures/acceptance-design.json"));
+  assert.equal(designCounts(design), "4 frames · 3 links · 3 pages");
+  const one = { ...design, pages: [{ ...design.pages[0], children: [...design.pages[0].children, { id: "n_note", type: "sticky", x: 0, y: 0, w: 120, h: 80, text: "Open" }] }], links: design.links.slice(0, 1) };
+  assert.equal(designCounts(one), "4 frames · 1 link · 1 sticky · Flows");
+});

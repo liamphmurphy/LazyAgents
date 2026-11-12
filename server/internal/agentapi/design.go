@@ -344,6 +344,31 @@ func designReply(ctx context.Context, d Deps, c agents.Caller, in DesignReplyIn)
 	return map[string]any{"reply_id": r.ID, "addressed": in.Addressed}, nil
 }
 
+type DesignCreateIn struct {
+	Title   string `json:"title" jsonschema:"What the design is, e.g. Onboarding flow (at most 200 characters)"`
+	Project string `json:"project,omitempty" jsonschema:"Key of the project the design belongs to; the chat's project when omitted"`
+	Starter string `json:"starter,omitempty" jsonschema:"blank (default), mobile-flow, web-flow, diagram or wireframe"`
+}
+
+// designCreate is design_create (ADR-designs §3.9): a new design in this
+// chat, which the person sees open beside the conversation.
+func designCreate(ctx context.Context, d Deps, c agents.Caller, in DesignCreateIn) (any, error) {
+	s, err := canvasScope(ctx, d, c, "design_create")
+	if err != nil {
+		return nil, err
+	}
+	chat, err := d.Q.GetChatSession(ctx, store.GetChatSessionParams{ID: s.ChatID, WorkspaceID: c.Agent.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	svc := designs.Service{Pool: d.Runs.Pool}
+	cv, v, err := svc.CreateInChat(ctx, c.Agent.WorkspaceID, chat, in.Title, in.Starter, in.Project, canvas.Actor{Type: "agent", ID: c.Agent.ID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"canvas_id": cv.ID, "title": cv.Title, "version": v.Seq, "url": "/apps/designs/" + cv.ID.String()}, nil
+}
+
 type DesignImportIn struct {
 	CanvasID    uuid.UUID `json:"canvas_id"`
 	BaseVersion int32     `json:"base_version,omitempty" jsonschema:"The design version you last read; refused if the design has moved on. The current version when omitted"`

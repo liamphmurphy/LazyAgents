@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { chipFromTarget, type Chip } from "@/lib/chat-context";
+import { CREATE_KINDS, type CreateKind } from "@/lib/chat-commands";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SuggestionList } from "@/components/domain/link-editor";
@@ -64,7 +65,12 @@ export function SentChips({ chips }: { chips: Chip[] }) {
 }
 
 /** "Add context": the same suggestions as [[ in the composer, in a popover. */
-export function AddContext({ onPick, onClosed, disabled, compact }: { onPick: (t: LinkTarget) => void; onClosed?: () => void; disabled?: boolean; compact?: boolean }) {
+/** The + menu's "Create with {persona}" section: a Doc, Slides or a Design made with the chat's persona. */
+export type CreateWith = { persona: string; onCreate: (kind: CreateKind) => void };
+
+const CREATE_ICON: Record<CreateKind, "edit" | "slides" | "designs"> = { doc: "edit", slides: "slides", design: "designs" };
+
+export function AddContext({ onPick, onClosed, disabled, compact, create }: { onPick: (t: LinkTarget) => void; onClosed?: () => void; disabled?: boolean; compact?: boolean; create?: CreateWith }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -140,6 +146,29 @@ export function AddContext({ onPick, onClosed, disabled, compact }: { onPick: (t
           ) : suggest.data && items.length === 0 ? (
             <p className="px-2 py-1 text-xs text-fg-tertiary">No matches.</p>
           ) : null}
+          {create && (
+            <div role="group" aria-label={`Create with ${create.persona}`} data-testid="create-with" className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
+              <p className="px-2 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Create with {create.persona}</p>
+              <div className="flex gap-0.5">
+                {CREATE_KINDS.filter((k) => !k.hint).map((k) => (
+                  <button key={k.kind} type="button" onClick={() => { setOpen(false); create.onCreate(k.kind); }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-hover hover:text-fg">
+                    <Icon name={CREATE_ICON[k.kind]} size={14} />
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+              {CREATE_KINDS.filter((k) => k.hint).map((k) => (
+                <button key={k.kind} type="button" onClick={() => { setOpen(false); create.onCreate(k.kind); }} className="flex items-center gap-2.5 rounded-md bg-accent/15 px-2 py-1.5 text-left hover:bg-accent/25">
+                  <Icon name={CREATE_ICON[k.kind]} size={16} className="flex-none text-accent" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-[13px] font-semibold text-fg">{k.label}</span>
+                    <span className="text-[11.5px] text-fg-secondary">{k.hint}</span>
+                  </span>
+                  {k.command && <span className="flex-none text-[11px] text-fg-tertiary">{k.command}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

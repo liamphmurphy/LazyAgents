@@ -17,6 +17,7 @@ import { adoptVersion, type Change } from "@/lib/designs/review";
 import { designAssetHref, useDesignFonts } from "@/lib/designs/render";
 import { DesignError, normalize, type Design, type DesignNode, type ImageNode } from "@/lib/designs/schema";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
@@ -52,6 +53,8 @@ const TOOLS: { tool: Tool | "image"; label: string; key: string; glyph: string }
   { tool: "section", label: "Section", key: "⇧S", glyph: "⌗" },
   { tool: "connector", label: "Connector", key: "C", glyph: "→" },
 ];
+/** The beside-chat panel's cut-down toolbar (docs/design/designs-from-chat.svg). */
+const BESIDE_TOOLS = new Set<Tool | "image">(["select", "frame", "rect", "line", "text"]);
 const TOOL_KEYS: Record<string, Tool> = { v: "select", h: "hand", f: "frame", a: "frame", r: "rect", o: "ellipse", l: "line", p: "pen", t: "text", s: "sticky", c: "connector" };
 
 async function prepareImage(file: File): Promise<Blob> {
@@ -112,7 +115,7 @@ function useLaidPage(design: Design | undefined, pageId: string | undefined): { 
  * after a quiet moment; a version from elsewhere merges per node, and
  * overlapping changes ask the person.
  */
-export function DesignEditor({ id }: { id: string }) {
+export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: () => void } }) {
   const router = useRouter();
   const search = useSearchParams();
   const ref = useDesign(id);
@@ -479,9 +482,12 @@ export function DesignEditor({ id }: { id: string }) {
   };
 
   // ---- Keyboard.
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
+      // Beside a chat, keys are the design's only while focus is in the panel (or nowhere).
+      if (beside && t !== document.body && !root.current?.contains(t)) return;
       if (t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
       // The chat rail takes its own keys.
       if (t.closest?.("[data-design-chat]")) return;
@@ -657,7 +663,21 @@ export function DesignEditor({ id }: { id: string }) {
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-dvh")}>
+      {beside ? (
+        <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
+          <Icon name="designs" size={16} className="flex-none text-accent" />
+          <h2 className="min-w-0 truncate text-[14px] font-semibold text-fg">{title}</h2>
+          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}</span>
+          <span className="flex-1" />
+          {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-[9px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
+          {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-[11.5px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
+          <Button variant="secondary" onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`))}>Open in Designs</Button>
+          <button type="button" aria-label="Close the design" onClick={beside.onClose} className="grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      ) : (
       <TopBar
         crumbs={[{ label: "Apps" }, { label: "Designs", href: "/apps/designs" }, { label: title }]}
         actions={
@@ -702,6 +722,7 @@ export function DesignEditor({ id }: { id: string }) {
           )
         }
       />
+      )}
       {fetchError || loadError ? (
         <div className="mx-auto w-full max-w-[720px] p-6">
           <Banner tone="blocked" title="Couldn’t open this design" actions={<Button onClick={() => router.push("/apps/designs")}>Back to Designs</Button>}>
@@ -716,11 +737,12 @@ export function DesignEditor({ id }: { id: string }) {
         </div>
       ) : (
         <div className="relative flex min-h-0 flex-1">
-          {chatOpen && (
+          {chatOpen && !beside && (
             <aside data-design-chat aria-label={`Chat with ${persona}`} className="flex min-h-0 w-[320px] flex-none flex-col border-r border-border-subtle bg-sidebar max-xl:absolute max-xl:inset-y-0 max-xl:left-0 max-xl:z-30 max-xl:shadow-[var(--shadow-float)]">
               {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/designs")} />}
             </aside>
           )}
+          {!beside && (
           <nav aria-label="Pages and layers" className="flex min-h-0 w-[232px] flex-none flex-col border-r border-border-subtle bg-surface max-md:hidden">
             <LayersPanel
               design={shown}
@@ -736,6 +758,7 @@ export function DesignEditor({ id }: { id: string }) {
               readOnly={readOnly}
             />
           </nav>
+          )}
           <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="absolute inset-x-3 top-3 z-10 flex flex-col gap-2">
               {conflict && (
@@ -795,7 +818,7 @@ export function DesignEditor({ id }: { id: string }) {
                 </div>
               )}
               {!reviewing && !!proposals?.length && (
-                <Banner tone="human" title={`${persona} suggested changes`} actions={<Button variant="approve" onClick={() => setReviewing(true)}>Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}</Button>}>
+                <Banner tone="human" title={`${persona} suggested changes`} actions={<Button variant="approve" onClick={() => (beside ? void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`)) : setReviewing(true))}>Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}</Button>}>
                   {proposals[0].summary || `${proposals[0].ops.length} changes`} · nothing changes until you accept.
                 </Banner>
               )}
@@ -827,7 +850,7 @@ export function DesignEditor({ id }: { id: string }) {
             {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
             {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
             <div role="toolbar" aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
-              {TOOLS.map((t) => (
+              {TOOLS.filter((t) => !beside || BESIDE_TOOLS.has(t.tool)).map((t) => (
                 <button
                   key={t.tool}
                   type="button"
@@ -842,12 +865,26 @@ export function DesignEditor({ id }: { id: string }) {
                 </button>
               ))}
               <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+              {beside ? (
+                <button
+                  type="button"
+                  aria-pressed={paused}
+                  data-testid="design-pause"
+                  disabled={settings.isPending || !ref.data}
+                  title={paused ? `Let ${persona} change this design again` : `Stop ${persona}’s changes to this design from applying or being suggested`}
+                  className={cx("flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium hover:bg-hover disabled:opacity-50", paused ? "text-accent" : "text-fg-secondary")}
+                  onClick={() => settings.mutate({ persona_paused: !paused })}
+                >
+                  {paused ? "Resume" : "Pause"}
+                </button>
+              ) : (
               <button type="button" className="flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-accent hover:bg-hover" onClick={() => {
                 setChatOpen(true);
                 requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-design-chat] textarea")?.focus());
               }}>
                 ✦ Ask
               </button>
+              )}
             </div>
             <div className="absolute bottom-5 right-4 z-10 flex items-center gap-1 rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
               <button type="button" aria-label="Zoom out" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(0.8)}>−</button>
@@ -862,7 +899,7 @@ export function DesignEditor({ id }: { id: string }) {
               if (f) void onImage(f);
             }} />
           </main>
-          {reviewing && review ? (
+          {beside ? null : reviewing && review ? (
             <aside aria-label="Review" className="flex min-h-0 w-[320px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
               <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} />
             </aside>
