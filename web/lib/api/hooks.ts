@@ -1317,11 +1317,27 @@ export function useAskChat() {
   });
 }
 
+/**
+ * Context a screen adds to every message sent in a chat it hosts (the design
+ * editor's selection and viewport), asked for at send time so it is current.
+ */
+const chatRefProviders = new Map<string, () => Schemas["ChatContextRef"][] | undefined>();
+export function provideChatRefs(chatId: string, provider: () => Schemas["ChatContextRef"][] | undefined): () => void {
+  chatRefProviders.set(chatId, provider);
+  return () => {
+    if (chatRefProviders.get(chatId) === provider) chatRefProviders.delete(chatId);
+  };
+}
+
 export function useSendChatMessage(id: string) {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: (body: Schemas["NewChatMessage"]) =>
-      unwrap(api.POST("/chats/{id}/messages", { params: { path: { id } }, body })),
+    mutationFn: (body: Schemas["NewChatMessage"]) => {
+      const extra = chatRefProviders.get(id)?.() ?? [];
+      // A ref the caller attached for the same canvas wins.
+      const refs = [...(body.context_refs ?? []), ...extra.filter((r) => !(body.context_refs ?? []).some((x) => x.kind === r.kind && x.id === r.id))];
+      return unwrap(api.POST("/chats/{id}/messages", { params: { path: { id } }, body: refs.length ? { ...body, context_refs: refs } : body }));
+    },
     onSettled: done,
   });
 }

@@ -127,3 +127,21 @@ test("an older or identical version changes nothing but the base", () => {
   assert.equal(same.doc.saved.seq, 4);
   assert.equal(same.doc.draft, s.draft);
 });
+
+// ---- presence ----
+
+import { nodesOf, presenceOf } from "./designs/presence.ts";
+
+test("presence follows the persona's design calls on this canvas while its turn runs", () => {
+  const calls = [
+    { key: 1, tool: "mcp__lazyagents__design_read", input: { canvas_id: "c1", node_ids: ["n_a", "n_b"] }, done: true },
+    { key: 2, tool: "mcp__lazyagents__design_patch", input: { canvas_id: "c1", ops: [{ op: "set_node", id: "n_c" }, { op: "add_node", parent: "n_a", node: { id: "n_d" } }] }, done: false },
+    { key: 3, tool: "mcp__lazyagents__design_patch", input: { canvas_id: "other", ops: [{ op: "remove_node", id: "n_z" }] }, done: false },
+  ];
+  assert.deepEqual(presenceOf(calls, "c1", true), { busy: true, tool: "design_patch", nodes: ["n_c", "n_a", "n_d"] });
+  assert.equal(presenceOf(calls, "c1", false), undefined);
+  assert.equal(presenceOf(calls, "nope", true), undefined);
+  const list = [...calls.slice(0, 1), { key: 4, tool: "design_list", input: { canvas_id: "c1" }, done: true }];
+  assert.deepEqual(presenceOf(list, "c1", true), { busy: false, tool: "design_list", nodes: ["n_a", "n_b"] });
+  assert.deepEqual(nodesOf({ node_id: "n_q" }), ["n_q"]);
+});

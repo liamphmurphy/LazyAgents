@@ -17,6 +17,7 @@ export const designKeys = {
   list: ["canvases", "designs"] as const,
   one: (id: string) => ["canvases", "designs", id] as const,
   // A version never changes, so it's cached for good.
+  proposals: (id: string) => ["canvases", "designs", id, "proposals"] as const,
   version: (id: string, seq: number) => ["design-versions", id, seq] as const,
 };
 
@@ -97,4 +98,36 @@ export async function uploadDesignAsset(canvasId: string, file: Blob): Promise<S
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((body as { message?: string }).message ?? `Upload failed (${r.status})`);
   return body as Schemas["DeckAsset"];
+}
+
+export type DesignProposal = Schemas["DesignProposal"];
+export type DesignSettings = Schemas["DesignSettings"];
+
+/** The persona suggestions waiting for a review, oldest first. */
+export function useDesignProposals(id: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: designKeys.proposals(id),
+    queryFn: () => unwrap(api.GET("/designs/{canvasId}/proposals", { params: { path: { canvasId: id }, query: { status: "pending" } } })),
+    select: (d) => [...d.proposals].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+  });
+}
+
+/** Resolves a suggestion: one decision per op. Accepted ops become one version on the current head. */
+export function useResolveProposal(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { proposalId: string; decisions: { i: number; state: "accepted" | "rejected"; reason?: string }[] }) =>
+      unwrap(api.POST("/designs/{canvasId}/proposals/{proposalId}/resolve", { params: { path: { canvasId: id, proposalId: v.proposalId } }, body: { decisions: v.decisions } })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["canvases"] }),
+  });
+}
+
+/** "Let personas edit directly" and Pause. */
+export function useDesignSettings(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { direct_edit?: boolean; persona_paused?: boolean }) => unwrap(api.PATCH("/designs/{canvasId}/settings", { params: { path: { canvasId: id } }, body })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["canvases"] }),
+  });
 }
