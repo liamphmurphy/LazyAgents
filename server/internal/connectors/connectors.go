@@ -4,6 +4,7 @@
 package connectors
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -422,5 +423,25 @@ func (s *Service) Call(ctx context.Context, c store.Connector, tool string, args
 		return nil, fmt.Errorf("couldn't reach %s", c.Name)
 	}
 	defer sess.Close()
+	if usesParamHeaders(c, tool) {
+		// The SDK sends the Mcp-Param-<name> headers a server checks only for
+		// tools this session has listed; a fresh session has listed none.
+		for t, err := range sess.Tools(ctx, nil) {
+			if err != nil || t.Name == tool {
+				break
+			}
+		}
+	}
 	return sess.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+}
+
+// usesParamHeaders reports whether the stored schema of tool marks any
+// parameter with x-mcp-header (SEP-2243), so a call must send it as a header.
+func usesParamHeaders(c store.Connector, tool string) bool {
+	for _, t := range Tools(c) {
+		if t.Name == tool {
+			return bytes.Contains(t.InputSchema, []byte(`"x-mcp-header"`))
+		}
+	}
+	return false
 }
