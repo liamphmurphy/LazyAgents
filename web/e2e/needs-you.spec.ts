@@ -174,6 +174,12 @@ test("the tray opens from Chat, Tickets, Runs and an App page, on the rail too",
     await page.keyboard.press("Escape");
     await expect(tray(page)).toHaveCount(0);
   }
+  // Enter opens the selected item's page and closes the tray.
+  await pill(page).click();
+  await expect(selected(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/tickets\/WEB-1$/);
+  await expect(tray(page)).toHaveCount(0);
 });
 
 test("the shortcuts sheet lists the tray keys", async ({ page }) => {
