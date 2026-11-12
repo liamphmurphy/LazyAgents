@@ -167,6 +167,8 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 * Radii: tags 4px, nav/small buttons 6px, buttons and inputs 7px, inner cards 10px, cards 12px, featured cards 14px.
 * Controls: buttons 30px tall, filter chips and segmented items 26px, list rows 44px, group headers 38px, top bar 52px, sidebar 232px.
 * Content max width is 1180px (dashboard, epics, agents). Ticket descriptions max out at 780px.
+* Safe areas: the viewport uses `viewport-fit=cover`, so on phones the page draws under the notch and home indicator. Anything fixed to a screen edge (tab bar, sheets, pinned action bars) pads itself with the safe-area utilities in `globals.css`: `pt-safe`, `pb-safe`, `pl-safe`, `pr-safe`, `px-safe`, `py-safe` and `p-safe`, each set to `env(safe-area-inset-*)`. Add them alongside the bar's own padding, e.g. a wrapper with `pb-safe` around a 52px bar, rather than folding them into its height. The insets are 0 on desktop, so nothing moves there.
+* Theme color: `<meta name="theme-color">` is the `--bg` token per scheme (`#0C0B12` dark, `#FCFBFE` light), set from the `viewport` export in `app/layout.tsx`.
 
 ---
 
