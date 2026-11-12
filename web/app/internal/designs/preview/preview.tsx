@@ -11,6 +11,8 @@ export function Preview() {
   const [input, setInput] = useState<Input>();
   const [fonts, setFonts] = useState(false);
   useEffect(() => {
+    // window.__preview only exists in the browser; reading it during render would mismatch the server HTML.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInput((window as unknown as { __preview?: Input }).__preview);
     loadDesignFonts().then(() => setFonts(true));
   }, []);

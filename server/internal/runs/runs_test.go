@@ -99,13 +99,13 @@ func TestRunLifecycle(t *testing.T) {
 	if _, err := svc.PostPlan(ctx, atlas, "", []string{"Create partitions", "Backfill", "Apply to staging"}); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = svc.UpdateStep(ctx, atlas, "", 1, "current")
-	_, _ = svc.UpdateStep(ctx, atlas, "", 2, "current")
+	_, _ = svc.UpdateStep(ctx, atlas, "", 1, "current", "")
+	_, _ = svc.UpdateStep(ctx, atlas, "", 2, "current", "")
 	plan, _ := q.ListPlan(ctx, run.ID)
 	if plan[0].State != "pending" || plan[1].State != "current" {
 		t.Fatalf("plan states = %s %s", plan[0].State, plan[1].State)
 	}
-	if _, err := svc.UpdateStep(ctx, atlas, "", 9, "done"); !isInvalid(err) {
+	if _, err := svc.UpdateStep(ctx, atlas, "", 9, "done", ""); !isInvalid(err) {
 		t.Fatal("unknown step accepted")
 	}
 	if err := svc.LogEvent(ctx, atlas, "", "test_run", map[string]any{"passed": 312.0, "failed": 0.0, "duration_s": 252.0}); err != nil {
@@ -224,7 +224,7 @@ func TestRunLifecycle(t *testing.T) {
 	}
 	// Rejection leaves the lead running so it can implement or delegate the gaps.
 	for _, status := range []string{"", "in_review", "done"} {
-		if err := svc.Complete(ctx, atlas, "", "Partial implementation", status, ""); !isConflict(err) {
+		if err := svc.Complete(ctx, atlas, "", "Partial implementation", "", status, ""); !isConflict(err) {
 			t.Fatalf("completion with unchecked criteria (%q): %v", status, err)
 		}
 	}
@@ -249,7 +249,7 @@ func TestRunLifecycle(t *testing.T) {
 	if _, err := svc.CreateReport(ctx, atlas, "", "Staging migration report", "# Staging migration report\n\nApplied in 140ms.\n"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", "", ""); err != nil {
+	if err := svc.Complete(ctx, atlas, "", "Migration applied to staging; PR #491 ready", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	tk, _ = tracker.Get(ctx, q, ws, "PAY-214")

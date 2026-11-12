@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -93,7 +94,7 @@ func TestDelegationToSubagents(t *testing.T) {
 	if _, err := svc.Delegate(ctx, main, "", "quill", "do it"); !isInvalid(err) {
 		t.Fatalf("delegated to a main agent: %v", err)
 	}
-	if subs, err := svc.ListSubagents(ctx, main); err != nil || len(subs) != 1 || subs[0].Handle != "scribe" {
+	if subs, err := svc.ListSubagents(ctx, main); err != nil || len(subs) != 1 || subs[0].Agent.Handle != "scribe" || !subs[0].CanWrite() {
 		t.Fatalf("subagents = %v, %v", subs, err)
 	}
 
@@ -130,7 +131,14 @@ func TestDelegationToSubagents(t *testing.T) {
 
 	// Finishing reports to the parent and leaves the ticket where it was.
 	before, _ := tracker.Get(ctx, q, ws, st)
-	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", "", ""); err != nil {
+	if err := svc.Complete(ctx, sub, "", "too long", strings.Repeat("é", 9000), "", ""); !isInvalid(err) || !strings.Contains(err.Error(), "report") {
+		t.Fatalf("9,000-rune report: %v", err)
+	}
+	if err := svc.Complete(ctx, main, "", "not delegated", "a report", "todo", ""); !isInvalid(err) || !strings.Contains(err.Error(), "only a delegated run") {
+		t.Fatalf("report from the main agent: %v", err)
+	}
+	report := strings.Repeat("x", runs.MaxReportRunes-40) + "\n- docs/migrations.md:12 FINDING"
+	if err := svc.Complete(ctx, sub, "", "Wrote docs/migrations.md", "  "+report+"\n", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := tracker.Get(ctx, q, ws, st)
@@ -142,10 +150,16 @@ func TestDelegationToSubagents(t *testing.T) {
 	if c.State != "completed" || p.State != "running" {
 		t.Fatalf("child %s, parent %s", c.State, p.State)
 	}
+	if deref(c.Report) != report {
+		t.Fatalf("stored report = %.80q", deref(c.Report))
+	}
 	turns, _ := q.ListTurns(ctx, parent.ID)
 	last := turns[len(turns)-1]
 	if last.Trigger != "delegation" || !strings.Contains(last.InputMessage, "Wrote docs/migrations.md") || !strings.Contains(last.InputMessage, "@scribe") {
 		t.Fatalf("parent turn = %+v", last)
+	}
+	if !strings.Contains(last.InputMessage, "Wrote docs/migrations.md\n\n#### Report\n\n"+report) {
+		t.Fatalf("wake message lacks the report:\n%.300s", last.InputMessage)
 	}
 
 	// Direct work is the default; an explicit policy still requires review.
@@ -157,7 +171,7 @@ func TestDelegationToSubagents(t *testing.T) {
 	}
 	parent, _ = q.GetRun(ctx, store.GetRunParams{ID: parent.ID, WorkspaceID: ws})
 	// Done needs a reviewer's all clear: none yet, then a rejection, then approval.
-	if err := svc.Complete(ctx, main, "", "all good", "done", ""); !isConflict(err) {
+	if err := svc.Complete(ctx, main, "", "all good", "", "done", ""); !isConflict(err) {
 		t.Fatalf("done without a verdict: %v", err)
 	}
 	if err := runs.ReviewClear(ctx, q, parent); !isConflict(err) {
@@ -185,9 +199,16 @@ func TestDelegationToSubagents(t *testing.T) {
 		t.Fatalf("clear after approval: %v", err)
 	}
 
-	// The runner has consumed the previous report before another delegation.
+	// The runner has consumed (and checked) the previous report before another delegation.
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE runs SET checks='{"passed":true,"reported_turn":2}' WHERE id=$1`, child.ID); err != nil {
+		t.Fatal(err)
+	}
+	firstWake := last.InputMessage
+	if !strings.Contains(firstWake, "The server checks each delegated run") {
+		t.Fatalf("first wake lacks the full guidance: %q", firstWake)
 	}
 	// A failed child tells the parent; cancelling a parent takes its child down.
 	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: parent.ID, State: "running"}); err != nil {
@@ -207,6 +228,11 @@ func TestDelegationToSubagents(t *testing.T) {
 	turns, _ = q.ListTurns(ctx, parent.ID)
 	if m := turns[len(turns)-1].InputMessage; !strings.Contains(m, "cancelled") {
 		t.Fatalf("parent told %q", m)
+	}
+	// A later wake carries a one-sentence reminder instead of the full paragraph.
+	if m := turns[len(turns)-1].InputMessage; !strings.HasSuffix(m, "Checks and merge results follow, as before.") ||
+		strings.Contains(m, "The server checks each delegated run") || len(m) >= len(firstWake) {
+		t.Fatalf("second wake %q isn't shorter than the first %q", m, firstWake)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
 		t.Fatal(err)
@@ -247,5 +273,67 @@ func TestDelegationToSubagents(t *testing.T) {
 	}
 	if _, err := svc.SetRunControl(ctx, ws, me.ID, parent.ID, "retry"); !isConflict(err) {
 		t.Fatalf("second retry while one is live: %v", err)
+	}
+}
+
+// A sub agent that can't write is refused allowed_paths, is told it's read-only
+// in its first prompt, and the lead learns it from the delegation.
+func TestDelegateToReadOnlySubagent(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	ws := me.WorkspaceID
+	svc := &runs.Service{Pool: pool, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool}, Poll: 20 * time.Millisecond}
+	spec := agents.DefaultSpec()
+	spec.Scopes["repo:write"] = agentdef.Denied
+	if _, err := (&agents.Service{Pool: pool}).Create(ctx, ws, me.ID, "critic", agents.Identity{Name: "Critic", Role: "Review", Kind: agents.KindSub}, &spec); err != nil {
+		t.Fatal(err)
+	}
+	runsOut, err := svc.Dispatch(ctx, ws, me.ID, []string{"PAY-214"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := runsOut[0]
+	vol := parent.ID.String()
+	if err := q.SetRunWorkspace(ctx, store.SetRunWorkspaceParams{ID: parent.ID, WorkspaceVolume: &vol}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: parent.ID, State: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	atlas, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: "atlas"})
+	e := time.Now().Add(time.Hour)
+	tok, _, err := agents.IssueToken(ctx, q, atlas.ID, "run", "", &parent.ID, nil, &e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	main, err := agents.ResolveToken(ctx, q, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subs, err := svc.ListSubagents(ctx, main)
+	if err != nil || len(subs) != 1 || subs[0].CanWrite() || subs[0].Unavailable != "" {
+		t.Fatalf("subagents = %+v, %v", subs, err)
+	}
+
+	_, err = svc.DelegateWithContract(ctx, main, "", "critic", "Review the diff", runs.Contract{AllowedPaths: []string{"docs/review.md"}})
+	if !isInvalid(err) || !strings.Contains(err.Error(), "@critic can't change files (repo:write is denied)") {
+		t.Fatalf("allowed_paths to a read-only sub agent: %v", err)
+	}
+	d, err := svc.Delegate(ctx, main, "", "critic", "Review the diff")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.ReadOnly {
+		t.Fatalf("delegation not marked read-only: %+v", d)
+	}
+	turns, _ := q.ListTurns(ctx, d.Run.ID)
+	if len(turns) != 1 || !strings.Contains(turns[0].InputMessage, "You can't change files in this run (repo:write is not allowed)") {
+		t.Fatalf("child turns = %+v", turns)
 	}
 }

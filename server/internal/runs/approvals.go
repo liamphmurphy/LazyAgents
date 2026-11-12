@@ -408,6 +408,10 @@ func (s *Service) SetRunControl(ctx context.Context, ws, userID, runID uuid.UUID
 			if run.State != "running" && run.State != "waiting" {
 				return apperr.Conflict("only a running or waiting run can be paused")
 			}
+			if run.State == "waiting" && deref(run.WaitReason) == "checks" {
+				// It already called complete_run; pausing would lose that.
+				return apperr.Conflict("the server is checking this delegated run's result; it finishes on its own (cancel it to stop it)")
+			}
 			wait := "pause"
 			if out, err = q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "paused", WaitReason: &wait}); err != nil {
 				return err

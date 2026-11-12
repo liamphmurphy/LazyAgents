@@ -25,7 +25,7 @@ func (s *Server) ListDelegationEfficiency(ctx context.Context, _ api.ListDelegat
 		}
 		e := api.DelegationEfficiency{
 			AgentId: r.AgentID, Handle: a.Handle, Name: a.Name,
-			Delegations: int(r.Delegations), Checked: int(r.Checked), FirstPass: int(r.FirstPass), RepairLoops: int(r.RepairLoops),
+			Delegations: int(r.Delegations), Checked: int(r.Checked), FirstPass: int(r.FirstPass), RepairLoops: int(r.RepairLoops), Bounces: int(r.Bounces),
 			ChildCostUsdMicros: r.ChildCostUsdMicros, ParentCostUsdMicros: r.ParentCostUsdMicros,
 			TotalCostUsdMicros: r.ChildCostUsdMicros + r.ParentCostUsdMicros,
 			AvgSetupSeconds:    r.AvgSetupSeconds, AvgHarnessSeconds: r.AvgHarnessSeconds, AvgChecksSeconds: r.AvgChecksSeconds,

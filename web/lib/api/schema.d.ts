@@ -6491,10 +6491,10 @@ export interface components {
             session_id?: string;
             dispatched_by?: components["schemas"]["UserRef"];
             /**
-             * @description delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup
+             * @description delegation: waiting for a sub agent the run delegated to; checks: a delegated run that finished, waiting for the server to check its result; mockup_review: waiting for a person to review a UI mockup
              * @enum {string}
              */
-            wait_reason?: "approval" | "human_reply" | "pause" | "delegation" | "mockup_review";
+            wait_reason?: "approval" | "human_reply" | "pause" | "delegation" | "mockup_review" | "checks";
             /**
              * Format: uuid
              * @description Set on a run a main agent delegated to a sub agent; it works in the parent's checkout
@@ -7087,7 +7087,7 @@ export interface components {
             delegations: number;
             /** @description Delegated runs the runner checked (older runs were never checked) */
             checked: number;
-            /** @description Runs whose result passed the runner's checks and needed no repeat delegation to the same agent */
+            /** @description Runs whose result passed the runner's checks on the first attempt (the server never sent a check failure back) and needed no repeat delegation to the same agent */
             first_pass: number;
             /**
              * Format: double
@@ -7096,6 +7096,8 @@ export interface components {
             first_pass_rate: number;
             /** @description Runs followed by another delegation to the same agent under the same parent run */
             repair_loops: number;
+            /** @description Times the server sent a mechanical check failure back to the sub agent before waking the main agent, summed over its runs */
+            bounces: number;
             /** Format: int64 */
             child_cost_usd_micros: number;
             /**

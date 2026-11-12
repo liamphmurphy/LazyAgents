@@ -86,6 +86,9 @@ SELECT * FROM plan_steps WHERE run_id = $1 ORDER BY position;
 -- name: SetStepState :execrows
 UPDATE plan_steps SET state = $3 WHERE run_id = $1 AND position = $2;
 
+-- name: SetStepNote :exec
+UPDATE plan_steps SET note = $3 WHERE run_id = $1 AND position = $2;
+
 -- name: ClearCurrentStep :exec
 UPDATE plan_steps SET state = 'pending' WHERE run_id = $1 AND state = 'current' AND position <> $2;
 
@@ -182,7 +185,8 @@ WHERE id = $1;
 
 -- name: DelegationEfficiency :many
 -- Per sub agent: what delegating to it costs and how often its first attempt
--- passes the runner's checks. A repair loop is a later delegation to the same
+-- passes the runner's checks. A first pass also needs zero bounces (the server
+-- never sent a check failure back to the sub agent). A repair loop is a later delegation to the same
 -- agent under the same parent run.
 -- checked counts delegations the runner checked (checks is not null; older runs
 -- were never checked); first-pass rate is first_pass / checked.
@@ -199,8 +203,9 @@ WITH kids AS (
 SELECT k.agent_id,
   count(*)::bigint AS delegations,
   count(*) FILTER (WHERE k.checks IS NOT NULL)::bigint AS checked,
-  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND k.repaired_by IS NULL)::bigint AS first_pass,
+  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND coalesce((k.checks->>'bounces')::int, 0) = 0 AND k.repaired_by IS NULL)::bigint AS first_pass,
   count(*) FILTER (WHERE k.repaired_by IS NOT NULL)::bigint AS repair_loops,
+  coalesce(sum(coalesce((k.checks->>'bounces')::int, 0)), 0)::bigint AS bounces,
   coalesce(sum(k.cost_usd_micros), 0)::bigint AS child_cost_usd_micros,
   floor(coalesce(sum(p.cost_usd_micros::float8 / k.siblings), 0))::bigint AS parent_cost_usd_micros,
   coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds,
@@ -263,3 +268,6 @@ LIMIT 51 OFFSET sqlc.arg(skip)::int;
 SELECT * FROM chat_sessions
 WHERE current_run_id = sqlc.arg(run_id) OR id IN (SELECT session_id FROM chat_messages WHERE run_id = sqlc.arg(run_id))
 LIMIT 1;
+
+-- name: RunParentID :one
+SELECT parent_run_id FROM runs WHERE id = $1;

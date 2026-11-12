@@ -35,7 +35,7 @@ func TestDirectWorkCanFinishWithoutDelegatedReview(t *testing.T) {
 	if len(criteria) == 0 {
 		t.Fatal("fixture must have acceptance criteria")
 	}
-	if err := svc.Complete(ctx, caller, "PAY-214", "not verified", "done", ""); err == nil {
+	if err := svc.Complete(ctx, caller, "PAY-214", "not verified", "", "done", ""); err == nil {
 		t.Fatal("unchecked criteria were bypassed")
 	}
 	for i := range criteria {
@@ -43,7 +43,7 @@ func TestDirectWorkCanFinishWithoutDelegatedReview(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := svc.Complete(ctx, caller, "PAY-214", "Diff reviewed and criteria verified", "done", ""); err != nil {
+	if err := svc.Complete(ctx, caller, "PAY-214", "Diff reviewed and criteria verified", "", "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	tk, err := tracker.Get(ctx, q, me.WorkspaceID, "PAY-214")
