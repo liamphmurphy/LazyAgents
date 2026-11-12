@@ -18,21 +18,51 @@ const t = (key, over = {}) => ({
   id: key, key, project_key: "LA", title: key, status: "todo", priority: "none", labels: [],
   criteria_total: 0, criteria_done: 0, unmet_dependencies: 0, updated_at: "2026-11-12T12:00:00Z", ...over,
 });
-const item = (id, kind, ticket_key, over = {}) => ({ id, kind, ticket_key, resolved: false, summary: "", href: "/x", created_at: "2026-11-12T10:00:00Z", ...over });
+const item = (id, kind, ticket_key, over = {}) => ({ id, kind, ticket_key, resolved: false, read: false, needs_you: true, summary: "", href: "/x", created_at: "2026-11-12T10:00:00Z", ...over });
 
-test("needsYouByTicket keeps open approval, question and blocked items, most urgent per ticket", () => {
+test("needsYouByTicket keeps open items the server marks needs_you, most urgent per ticket", () => {
   const m = needsYouByTicket([
     item("question:r1", "question", "LA-1", { summary: "Which DB?" }),
     item("approval:a1", "approval", "LA-1", { summary: "Run migration" }),
     item("approval:a2", "approval", "LA-2", { resolved: true }),
-    item("review:t3", "review", "LA-3"),
     item("blocked:r4", "blocked", "LA-4"),
     item("planning:p", "planning", ""),
+    // Actionable kinds beyond approvals, questions and blocked runs.
+    item("review:t3", "review", "LA-3", { summary: "PR #12" }),
+    item("dispatch:t5", "dispatch", "LA-5"),
+    // A mention the server promotes to needs you (it asks a question), and one it doesn't.
+    item("mention:c6", "mention", "LA-6", { summary: "Can you check the copy?" }),
+    item("mention:c7", "mention", "LA-7", { needs_you: false }),
+    // Marked done in the tray, so not waiting any more.
+    item("review:t8", "review", "LA-8", { read: true }),
   ]);
-  assert.deepEqual([...m.keys()].sort(), ["LA-1", "LA-4"]);
+  assert.deepEqual([...m.keys()].sort(), ["LA-1", "LA-3", "LA-4", "LA-5", "LA-6"]);
   assert.equal(m.get("LA-1").kind, "approval");
+  assert.equal(m.get("LA-3").kind, "review");
+  assert.equal(m.get("LA-5").kind, "dispatch");
+  assert.equal(m.get("LA-6").kind, "mention");
   assert.equal(approvalId(m.get("LA-1")), "a1");
   assert.equal(approvalId(m.get("LA-4")), undefined);
+});
+
+test("needsYouByTicket ranks by the Inbox's urgency order, then the longest wait", () => {
+  const m = needsYouByTicket([
+    item("mention:c1", "mention", "LA-1", { created_at: "2026-11-12T08:00:00Z" }),
+    item("review:t1", "review", "LA-1", { created_at: "2026-11-12T11:00:00Z" }),
+    item("question:r2", "question", "LA-2", { created_at: "2026-11-12T11:00:00Z" }),
+    item("question:r3", "question", "LA-2", { created_at: "2026-11-12T09:00:00Z" }),
+  ]);
+  assert.equal(m.get("LA-1").id, "review:t1");
+  assert.equal(m.get("LA-2").id, "question:r3");
+});
+
+test("stateText gives every needs-you kind a state text", () => {
+  for (const kind of ["approval", "question", "blocked", "stalled", "mockup", "planning", "review", "dispatch", "mention", "suggestion", "workflow_gate", "scheduled", "connector_approval", "secret_approval", "secret_expiring", "merged"]) {
+    const s = stateText(t("A"), { kind, summary: "" });
+    assert.equal(s.tone, "human");
+    assert.ok(s.text && s.text !== "Needs you", kind);
+  }
+  assert.equal(stateText(t("A"), { kind: "review", summary: "PR #12" }).text, "Review requested: PR #12");
 });
 
 test("stateText: needs you is amber, then blocked, then status", () => {

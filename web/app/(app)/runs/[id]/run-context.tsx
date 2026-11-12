@@ -6,7 +6,7 @@
 // "More columns" had), and buttons to the Raw log, Graph and Files views.
 
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useEpicOverviews, useTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -14,6 +14,7 @@ import { absoluteTime, ago, compact, duration } from "@/lib/format";
 import { runnerSlot } from "@/lib/run-list";
 import { PURPOSE_LABEL, type RunViewMode } from "@/lib/run-view";
 import { Button } from "@/components/ui/button";
+import { ContextPanel, ContextSection as Section, useContextPanel } from "@/components/shell/context-panel";
 import { Icon } from "@/components/ui/icon";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { CostValue } from "./run-thread";
@@ -22,49 +23,8 @@ type RunDetail = Schemas["RunDetail"];
 
 /** Open (the default) or closed, remembered per browser. */
 const CONTEXT_KEY = "lazyagents.runs.context";
-const CONTEXT_CHANGED = "lazyagents:runs-context";
 
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(CONTEXT_CHANGED, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CONTEXT_CHANGED, onChange);
-  };
-}
-function read() {
-  try {
-    return window.localStorage.getItem(CONTEXT_KEY) !== "closed";
-  } catch {
-    return true;
-  }
-}
-
-export function useContextPanel(): [boolean, (open: boolean) => void] {
-  const open = useSyncExternalStore(subscribe, read, () => true);
-  const set = (next: boolean) => {
-    try {
-      if (next) window.localStorage.removeItem(CONTEXT_KEY);
-      else window.localStorage.setItem(CONTEXT_KEY, "closed");
-    } catch {
-      /* Not remembered. */
-    }
-    window.dispatchEvent(new Event(CONTEXT_CHANGED));
-  };
-  return [open, set];
-}
-
-function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="flex flex-col gap-2 border-b border-border-subtle px-4 py-3.5 last:border-b-0">
-      <h2 className="flex items-center justify-between text-xs font-medium text-fg-tertiary">
-        {title}
-        {aside && <span className="font-mono">{aside}</span>}
-      </h2>
-      {children}
-    </section>
-  );
-}
+export const useRunContextPanel = () => useContextPanel(CONTEXT_KEY);
 
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
@@ -163,13 +123,7 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
     </Button>
   );
   return (
-    <aside aria-label="Context" className="flex w-[320px] flex-none flex-col overflow-y-auto border-l border-border-subtle bg-sidebar/40 max-lg:w-[280px]">
-      <div className="flex items-center justify-between px-4 pb-1 pt-3">
-        <span className="text-[13px] font-semibold">Context</span>
-        <button type="button" onClick={onClose} aria-label="Hide context" title="Hide context" className="grid size-7 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
-          <Icon name="sidebar" size={14} />
-        </button>
-      </div>
+    <ContextPanel onClose={onClose}>
       {run.purpose === "ticket" && run.ticket_key ? <TicketSection ticketKey={run.ticket_key} run={run} /> : <CodeSection branch={run.branch} runPr={{ number: run.pr_number, url: run.pr_url }} />}
       <Section title="Run">
         <dl className="flex flex-col gap-1">
@@ -197,11 +151,8 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
           {lastLog && <a href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} className="text-accent hover:underline">Download raw log</a>}
         </div>
       </Section>
-    </aside>
+    </ContextPanel>
   );
 }
 
-/** Shown in the top bar when the panel is closed. */
-export function ContextButton({ onOpen }: { onOpen: () => void }) {
-  return <Button variant="outline" icon="sidebar" onClick={onOpen}>Context</Button>;
-}
+export { ContextButton } from "@/components/shell/context-panel";
