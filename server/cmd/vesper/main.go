@@ -4,6 +4,8 @@
 //	vesper migrate      run migrations and exit
 //	vesper runner       execute dispatched runs in hardened containers
 //	vesper healthcheck  exit 0 if the local API reports healthy (for container probes)
+//	vesper export       write every table and stored object to one archive (-o FILE)
+//	vesper import       load such an archive into this instance ([--replace] FILE)
 //	vesper sign-in-link print a one-time link that signs a browser in (-code: just the code)
 package main
 
@@ -70,10 +72,14 @@ func main() {
 		err = runRunner(ctx, log)
 	case "healthcheck":
 		err = healthcheck(ctx)
+	case "export":
+		err = exportData(ctx, log, os.Args[2:])
+	case "import":
+		err = importData(ctx, log, os.Args[2:])
 	case "sign-in-link":
 		err = printSignInLink(ctx, len(os.Args) > 2 && os.Args[2] == "-code")
 	default:
-		err = fmt.Errorf("unknown command %q (want serve|migrate|runner|healthcheck|sign-in-link)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve|migrate|runner|healthcheck|export|import|sign-in-link)", cmd)
 	}
 	if err != nil {
 		log.Error("exit", "err", err)

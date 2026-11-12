@@ -137,3 +137,53 @@ func (s *Store) Ping(ctx context.Context) error {
 	_, err := s.client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	return err
 }
+
+// Info is one stored object as a listing reports it.
+type Info struct {
+	Key  string
+	Size int64
+}
+
+// ListBuckets returns the name of every bucket the credential can see.
+func (s *Store) ListBuckets(ctx context.Context) ([]string, error) {
+	out, err := s.client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return nil, fmt.Errorf("blob: list buckets: %w", err)
+	}
+	names := make([]string, 0, len(out.Buckets))
+	for _, b := range out.Buckets {
+		names = append(names, aws.ToString(b.Name))
+	}
+	return names, nil
+}
+
+// List calls fn for every object in a bucket, page by page, and stops at the
+// first error fn returns.
+func (s *Store) List(ctx context.Context, bucket string, fn func(Info) error) error {
+	pages := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: &bucket})
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+		if err != nil {
+			var nsb *types.NoSuchBucket
+			if errors.As(err, &nsb) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("blob: list %s: %w", bucket, err)
+		}
+		for _, o := range page.Contents {
+			if err := fn(Info{Key: aws.ToString(o.Key), Size: aws.ToInt64(o.Size)}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EnsureBucket creates one bucket if it doesn't exist. Unlike EnsureBuckets it
+// doesn't retry: the caller already has a working connection.
+func (s *Store) EnsureBucket(ctx context.Context, bucket string) error {
+	if err := s.ensure(ctx, bucket); err != nil {
+		return fmt.Errorf("blob: bucket %q: %w", bucket, err)
+	}
+	return nil
+}
