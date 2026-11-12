@@ -531,6 +531,9 @@ func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.R
 		}
 		switch k.State {
 		case "completed":
+			if r := strings.TrimSpace(deref(k.Report)); r != "" {
+				o += "\n\n#### Report\n\n" + r
+			}
 			return handle + " finished the delegated task.\n\n" + o
 		case "cancelled":
 			return handle + "'s delegated run was cancelled: " + o
@@ -595,7 +598,7 @@ func truncate(s string, n int) string {
 
 // completeChild ends a delegated run: no ticket status change, and the parent
 // is resumed with the summary.
-func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, verdict string) error {
+func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, report, verdict string) error {
 	return s.tx(ctx, func(q *store.Queries) error {
 		run, t, err := s.running(ctx, q, c, key)
 		if err != nil {
@@ -608,6 +611,15 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, ver
 		if err != nil {
 			return err
 		}
+		// Always written, so a continued run doesn't keep its previous report.
+		var rep *string
+		if report != "" {
+			rep = &report
+		}
+		if err := q.SetRunReport(ctx, store.SetRunReportParams{ID: run.ID, Report: rep}); err != nil {
+			return err
+		}
+		done.Report = rep
 		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
 			return err
 		}

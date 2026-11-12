@@ -45,6 +45,7 @@ type chatRun struct {
 	State      string     `json:"state"`
 	WaitReason string     `json:"wait_reason,omitempty"`
 	Outcome    string     `json:"outcome,omitempty"`
+	Report     string     `json:"report,omitempty"` // delegated runs, in get_run only
 	Harness    string     `json:"harness"`
 	Model      string     `json:"model"`
 	ParentRun  *uuid.UUID `json:"parent_run_id,omitempty"`
@@ -211,6 +212,7 @@ func getChatRun(ctx context.Context, d Deps, c agents.Caller, in GetRunIn) (any,
 		if err != nil {
 			return nil, err
 		}
+		cr.Report = strOr(k.Report)
 		children = append(children, cr)
 	}
 	filled, err := d.Q.RunToolOutputBytes(ctx, r.ID)

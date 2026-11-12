@@ -364,7 +364,7 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 	if delegated {
 		b.WriteString("You're a sub agent running headless for Vesper. A main agent delegated one task to you and is waiting. ")
 		b.WriteString("Work in this checkout on the current branch and commit what you change; the server merges it into the main agent's branch once checks pass. ")
-		b.WriteString("When you're done, call complete_run with a short summary of what you did and anything the main agent must check. If you're blocked, call complete_run and say why. ")
+		b.WriteString("When you're done, finish with complete_run: outcome is the one-line headline, report carries the detail the main agent needs (findings with file:line, what you changed and why, open questions). If you're blocked, call complete_run and say why. ")
 		b.WriteString("If you need a person, call request_approval or await_human and end your turn. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval. ")
 		b.WriteString("Your task brief is self-contained: call get_ticket only if it lacks context you need, and don't post plans or step updates.\n\n")
 	} else {

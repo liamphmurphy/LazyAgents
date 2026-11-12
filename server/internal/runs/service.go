@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -774,9 +775,12 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 	return nil
 }
 
+// MaxReportRunes caps a delegated run's complete_run report.
+const MaxReportRunes = 8000
+
 // Complete ends the run and moves the ticket (default: In Review). Done needs
 // configured independent-review approval; existing review rejections always block Done.
-func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, verdict string) error {
+func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, report, status, verdict string) error {
 	if status == "" {
 		status = "in_review"
 	}
@@ -787,6 +791,10 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 		return apperr.Invalid("verdict", "must be approved or changes_requested")
 	}
 	outcome = strings.TrimSpace(outcome)
+	report = strings.TrimSpace(report)
+	if n := utf8.RuneCountInString(report); n > MaxReportRunes {
+		return apperr.Invalid("report", "is %d characters; keep it to %d", n, MaxReportRunes)
+	}
 	if c.RunID != nil {
 		// A delegated run reports back to its parent instead of moving the ticket.
 		var delegated bool
@@ -798,8 +806,11 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, status, 
 			return err
 		}
 		if delegated {
-			return s.completeChild(ctx, c, key, outcome, verdict)
+			return s.completeChild(ctx, c, key, outcome, report, verdict)
 		}
+	}
+	if report != "" {
+		return apperr.Invalid("report", "only a delegated run sends a report")
 	}
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {

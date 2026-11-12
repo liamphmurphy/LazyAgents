@@ -1070,6 +1070,7 @@ type Run struct {
 	ExecutionToken      *uuid.UUID
 	ExecutionExpiresAt  *time.Time
 	ContextTokens       int64
+	Report              *string
 }
 
 type RunEvent struct {
