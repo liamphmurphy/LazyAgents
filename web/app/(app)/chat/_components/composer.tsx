@@ -8,6 +8,7 @@ import { insertMention, mentionQuery, mentionSuggestions } from "@/lib/persona-u
 import { cx } from "@/lib/cx";
 import type { ComposerOption, ComposerOptionId } from "@/lib/composer-options";
 import { LinkEditor } from "@/components/domain/link-editor";
+import { LiveRunStrip } from "@/components/shell/live-run-strip";
 import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-chips";
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
 import { ComposerHints, composerFrameFor, composerInput, SendButton, type SendTone } from "./reply-tools";
@@ -167,6 +168,7 @@ export function Composer({
 
   return (
     <>
+      <LiveRunStrip />
       {commandError && (
         <p role="alert" data-testid="command-error" className="text-[12.5px] text-pill-blocked-fg">
           {commandError}
