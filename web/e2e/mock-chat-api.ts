@@ -700,6 +700,19 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
       chats.unshift(c);
       messages.set(c.id, []);
+      // `message` is posted as the first message, which starts a turn (the workflow editor's build chat).
+      const first = b.message as { body?: string } | undefined;
+      if (first?.body) {
+        if (!c.title) c.title = first.body.slice(0, 40);
+        posted.push({ chat: c.id, body: first });
+        add(c, "user", first.body);
+        prompts.set(c.id, first.body);
+        c.state = "running";
+        c.current_run_id = uuid();
+        touch(c);
+        timers.set(c.id, setTimeout(() => finishTurn(c, first.body!), delay));
+        void emit(c);
+      }
       return json(ref(c), 201);
     }
 
