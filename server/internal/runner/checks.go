@@ -516,19 +516,21 @@ func (r *Runner) tickChecks(ctx context.Context) {
 // failing checks. The parent's branch only changes when it reports and merges.
 func (r *Runner) checkCompleted(ctx context.Context, child store.Run) {
 	log := r.Log.With("run", child.ID)
-	parent, err := r.load(ctx, *child.ParentRunID)
+	env, err := r.parentEnv(ctx, child)
 	if err != nil {
-		log.Warn("load parent for checks; retrying", "err", err)
-		return
-	}
-	plan, err := PlanSecrets(ctx, r.q(), parent.run.WorkspaceID, &parent.project.ID, parent.spec)
-	if err != nil {
-		log.Warn("secrets for checks; retrying", "err", err)
-		return
-	}
-	env, err := SecretEnv(ctx, r.Secrets, parent.run.WorkspaceID, &parent.project.ID, plan)
-	if err != nil {
-		log.Warn("secrets for checks; retrying", "err", err)
+		// Don't retry forever: complete it unchecked, and the parent's report
+		// checks it when it wakes, as for a run with nothing checked early.
+		log.Warn("can't check a delegated run at completion; leaving it to the report", "err", err)
+		if err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+			q := store.New(tx)
+			if err := verifyExecution(ctx, q, child.ID); err != nil {
+				return err
+			}
+			_, err := runs.FinishCheckedChild(ctx, q, child.ID, nil)
+			return err
+		}); err != nil && ctx.Err() == nil {
+			log.Error("complete unchecked delegated run", "err", err)
+		}
 		return
 	}
 	var contract runs.Contract
@@ -542,15 +544,16 @@ func (r *Runner) checkCompleted(ctx context.Context, child store.Run) {
 		return // the lease was lost or the runner is stopping: checked again later
 	}
 	r.addTiming(child.ID, 0, 0, time.Since(start))
-	bounce := k.Bounceable() && contract.Bounces < runs.MaxCheckBounces
-	r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checked", "passed": k.Passed, "ran": k.Ran, "bounced": bounce, "bounces": contract.Bounces})
+	bounce := k.Bounceable(contract.Verdict != "") && contract.Bounces < runs.MaxCheckBounces
+	settled := false
 	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
 		if err := verifyExecution(ctx, q, child.ID); err != nil {
 			return err
 		}
 		if bounce {
-			_, err := runs.BounceChild(ctx, q, child.ID, k.BounceMessage(contract.Bounces+1, runs.MaxCheckBounces))
+			ok, err := runs.BounceChild(ctx, q, child.ID, k.BounceMessage(contract.Bounces+1, runs.MaxCheckBounces))
+			settled = ok
 			return err
 		}
 		var raw []byte
@@ -559,10 +562,31 @@ func (r *Runner) checkCompleted(ctx context.Context, child store.Run) {
 				return err
 			}
 		}
-		_, err := runs.FinishCheckedChild(ctx, q, child.ID, raw)
+		ok, err := runs.FinishCheckedChild(ctx, q, child.ID, raw)
+		settled = ok
 		return err
 	})
-	if err != nil && ctx.Err() == nil {
-		log.Error("settle delegated run checks", "err", err)
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Error("settle delegated run checks; retrying", "err", err)
+		}
+		return
 	}
+	if settled {
+		r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checked", "passed": k.Passed, "ran": k.Ran, "bounced": bounce, "bounces": contract.Bounces})
+	}
+}
+
+// parentEnv is the secrets env of a delegated run's parent, which its checks
+// run with (as delegationReport's do).
+func (r *Runner) parentEnv(ctx context.Context, child store.Run) (map[string]string, error) {
+	parent, err := r.load(ctx, *child.ParentRunID)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := PlanSecrets(ctx, r.q(), parent.run.WorkspaceID, &parent.project.ID, parent.spec)
+	if err != nil {
+		return nil, err
+	}
+	return SecretEnv(ctx, r.Secrets, parent.run.WorkspaceID, &parent.project.ID, plan)
 }

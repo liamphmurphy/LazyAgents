@@ -792,8 +792,12 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, rep
 				return err
 			}
 		}
-		// Recorded on the contract the runner checks the result against.
-		contract.ReproCommand, contract.ReproCoversAll = repro.Command, repro.CoversAll
+		// Recorded on the contract the runner checks the result against. A
+		// reviewer sent back for uncommitted files keeps its earlier repro when
+		// it doesn't repeat it.
+		if repro.Command != "" {
+			contract.ReproCommand, contract.ReproCoversAll = repro.Command, repro.CoversAll
+		}
 		park := !contract.Empty() && contract.Bounces < MaxCheckBounces
 		if park {
 			contract.Verdict = verdict
@@ -860,8 +864,11 @@ func finishChild(ctx context.Context, q *store.Queries, run store.Run, t store.T
 }
 
 // lockCheckingChild locks a delegated run waiting on its checks, after its
-// parent (the order CancelChildren and WakeParent take them in). ok is false
-// when it no longer waits on checks, e.g. its parent was cancelled meanwhile.
+// parent: the order CancelChildren takes them in, the likeliest race (a parent
+// cancelled during the checks). A path that locks the child first (a person
+// cancelling the child) can deadlock with it; Postgres aborts one side, and
+// the runner retries its checks on a later tick. ok is false when it no longer
+// waits on checks, e.g. its parent was cancelled meanwhile.
 func lockCheckingChild(ctx context.Context, q *store.Queries, childID uuid.UUID) (store.Run, bool, error) {
 	parentID, err := q.RunParentID(ctx, childID)
 	if err != nil {
@@ -925,6 +932,10 @@ func BounceChild(ctx context.Context, q *store.Queries, childID uuid.UUID, input
 		return false, err
 	}
 	if err := q.SetIdleTurns(ctx, store.SetIdleTurnsParams{ID: run.ID, IdleTurns: 0}); err != nil {
+		return false, err
+	}
+	// A turn a crashed runner requeued would otherwise run first.
+	if err := q.DropPendingTurns(ctx, run.ID); err != nil {
 		return false, err
 	}
 	if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "resume", InputMessage: input}); err != nil {

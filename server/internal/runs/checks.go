@@ -65,16 +65,17 @@ type Checks struct {
 
 // Bounceable reports whether failed checks are mechanical, so the sub agent
 // can fix them in its own session: uncommitted files, files outside the
-// allowed paths, or a failing test command. A reviewer's run (ReproCommand) is
+// allowed paths, or a failing test command. A reviewer's or QA's run (one that
+// reported a verdict or a ReproCommand) judges code it doesn't own and may be
 // expected to leave failing tests, so only its files count.
-func (k Checks) Bounceable() bool {
+func (k Checks) Bounceable(reviewer bool) bool {
 	if !k.Ran || k.Passed || k.Error != "" || k.ChildState != "completed" {
 		return false
 	}
 	if len(k.Uncommitted) > 0 || len(k.OutOfBounds) > 0 {
 		return true
 	}
-	return k.ReproCommand == "" && k.TestCommand != "" && (k.TestExit == nil || *k.TestExit != 0)
+	return !reviewer && k.ReproCommand == "" && k.TestCommand != "" && (k.TestExit == nil || *k.TestExit != 0)
 }
 
 // BounceMessage is the turn that sends failed checks back to the sub agent;

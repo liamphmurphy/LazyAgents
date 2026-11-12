@@ -165,8 +165,11 @@ func TestChecksBounceable(t *testing.T) {
 			k.ReproCommand, k.ReproExit, k.Uncommitted = "go test -run Bug", &one, []string{"bug_test.go"}
 			return k
 		}, true},
+		// A reviewer or QA (a verdict) doesn't own the code its test command tests.
+		"verdict: failing tests":    {func() runs.Checks { k := base(); k.TestCommand, k.TestExit = "go test", &one; return k }, false},
+		"verdict: uncommitted file": {func() runs.Checks { k := base(); k.Uncommitted = []string{"notes.md"}; return k }, true},
 	} {
-		if got := tc.k().Bounceable(); got != tc.want {
+		if got := tc.k().Bounceable(strings.HasPrefix(name, "verdict: ")); got != tc.want {
 			t.Errorf("%s: Bounceable = %v, want %v", name, got, tc.want)
 		}
 	}
