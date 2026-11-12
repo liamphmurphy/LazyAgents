@@ -76,8 +76,8 @@ export function ReviewBar({ review, persona, mode, onMode, onDone, busy, onClose
     <div role="region" aria-label="Review" className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-border-float bg-surface-raised px-3 py-2 text-[12.5px] shadow-[var(--shadow-float)]">
       <div role="group" aria-label="View" className="flex rounded-lg border border-border-subtle bg-surface p-0.5">
         {(["before", "after", "diff"] as const).map((m) => (
-          <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)} className={cx("rounded-md px-2.5 py-1 capitalize", mode === m ? "bg-selected font-semibold text-fg" : "text-fg-secondary hover:bg-hover")}>
-            {m}
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)} className={cx("rounded-md px-2.5 py-1", mode === m ? "bg-selected font-semibold text-fg" : "text-fg-secondary hover:bg-hover")}>
+            {m[0].toUpperCase() + m.slice(1)}
           </button>
         ))}
       </div>

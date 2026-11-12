@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 const API = process.env.E2E_STACK_API_URL;
 const ON = process.env.E2E_FAKE_HARNESS_MODE === "design-review" && !!API;
 
-type Node = { id: string; type: string; name?: string; x: number; opacity?: number; fill?: string; children?: Node[] };
+type Node = { id: string; type: string; name?: string; paragraphs?: { runs: { text: string }[] }[]; x: number; opacity?: number; fill?: string; children?: Node[] };
 type Body = { pages: { children: Node[] }[] };
 const walk = (n: Node, f: (n: Node) => void) => (f(n), n.children?.forEach((c) => walk(c, f)));
 const nodes = (b: Body) => {
@@ -51,11 +51,16 @@ test.describe("@design-review", () => {
       await chatBox.press("Enter");
     };
     const chat = page.locator("[data-design-chat]");
-    const layer = (n: Node) => page.getByRole("treeitem", { name: n.name ?? "", exact: true }).first();
+    // The layers panel names a layer by its name, or a text by its content.
+    const label = (n: Node) => n.name || n.paragraphs?.map((p) => p.runs.map((r) => r.text).join("")).join("\n").slice(0, 40) || n.type;
+    const frameItem = page.getByRole("treeitem", { name: label(frame), exact: true }).first();
+    const layer = (n: Node) => frameItem.getByRole("treeitem", { name: label(n), exact: true }).first();
     const pick = async (n: Node) => {
       await layer(n).click({ position: { x: 70, y: 8 } });
       await expect(layer(n)).toHaveAttribute("aria-selected", "true");
     };
+
+    await frameItem.getByRole("button", { name: "Expand" }).first().click();
 
     // 1. The persona's patch waits as a suggestion; the design is untouched.
     await say("Tidy the Start screen");
@@ -65,8 +70,9 @@ test.describe("@design-review", () => {
     expect((await get(`/designs/${id}`)).seq).toBe(first.seq);
     expect((await get(`/designs/${id}`)).pending_proposals).toBe(1);
 
-    // 2. An unsaved edit of mine (nudge a layer) is in flight while I review.
-    await pick(kept);
+    // 2. An unsaved edit of mine (nudge the frame) is in flight while I review.
+    await frameItem.click({ position: { x: 70, y: 8 } });
+    await expect(frameItem).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("Shift+ArrowRight");
     await open.click();
     const panel = page.getByTestId("review-panel");
@@ -78,12 +84,12 @@ test.describe("@design-review", () => {
     }
     await expect(panel.getByTestId("review-change-1")).toContainText("Promo code");
 
-    // Before / After / Diff toggles the preview; After shows the new field on the canvas.
-    const canvasText = page.getByTestId("design-canvas");
+    // Before / After / Diff toggles the preview; After lists the new field among the layers.
+    const promo = frameItem.getByRole("treeitem", { name: "Promo code", exact: true });
     await page.getByRole("button", { name: "After", exact: true }).click();
-    await expect(canvasText.getByText("Promo code")).toBeVisible();
+    await expect(promo).toBeVisible();
     await page.getByRole("button", { name: "Before", exact: true }).click();
-    await expect(canvasText.getByText("Promo code")).toHaveCount(0);
+    await expect(promo).toHaveCount(0);
     await page.getByRole("button", { name: "Diff", exact: true }).click();
 
     // 3. Accept one, reject one with a reason, accept the rest.
@@ -109,17 +115,20 @@ test.describe("@design-review", () => {
     const after = nodes((await head(id)).body);
     expect(after.find((n) => n.id === button.id)?.fill).toBe("#2F6BFF");
     expect(after.some((n) => n.id === dropped.id)).toBe(true);
-    expect(after.find((n) => n.id === kept.id)?.x).toBe(kept.x + 10);
+    expect(after.find((n) => n.id === frame.id)?.x).toBe(frame.x + 10);
     await expect(page.getByTestId("review-panel")).toHaveCount(0);
     await expect(page.getByTestId("design-save-state")).toContainText("Saved");
 
     // 5. The persona hears the reason; the notice isn't a canvas card.
     await expect(chat.getByTestId("system-message").filter({ hasText: "Review of your design suggestion" })).toBeVisible({ timeout: 30_000 });
+    // ...and reaches the persona with my next message.
+    await say("Thanks, what next?");
     await expect(chat.getByText(/Noted:.*Keep the placeholder copy/)).toBeVisible({ timeout: 120_000 });
 
     // 6. Direct edit on: a patch applies at once as one undoable step, and the selection rides along.
     const direct = page.getByRole("switch", { name: "Let personas edit directly" });
-    await direct.check();
+    await direct.click();
+    await expect(direct).toBeChecked();
     await expect.poll(async () => (await get(`/designs/${id}`)).settings.direct_edit).toBe(true);
     const seqBefore = (await head(id)).seq;
     await pick(kept);
