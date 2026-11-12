@@ -7,6 +7,9 @@ import { renderAsync } from "@resvg/resvg-js";
 import { makeLayout, type Box, type LaidPage } from "./layout.ts";
 import { DesignError, normalize, type Design, type DesignNode, type Page } from "./schema.ts";
 import { toSvg } from "./svg.ts";
+import { newId } from "./edit.ts";
+import { importFlowchart, MermaidError } from "./mermaid.ts";
+import { importSvg, SvgImportError } from "./svgimport.ts";
 
 export const MAX_EDGE = 4096;
 export const MAX_CONCURRENT = 4;
@@ -248,6 +251,64 @@ export async function handleLayout(req: Request): Promise<Response> {
     const b = await readBody(req);
     const pageId = optId(b.page, "p_", "page");
     return json(200, layoutBoxes(normalize(b.body as string).design, pageId));
+  } catch (e) {
+    return fail(e);
+  } finally {
+    slot?.release();
+  }
+}
+
+/** Where an import goes when no position is given: right of what's on the page. */
+export const IMPORT_GAP = 160;
+
+/**
+ * design_import (ADR-designs §3.9): Mermaid or SVG text becomes one node
+ * (a section or a group) for `page`, at (x, y) or right of the page's
+ * content. The result is checked against the schema with the node in place,
+ * so the Go API can apply it (or propose it) as an add_node op as is. Text it
+ * can't import is refused with a message naming the problem; nothing changes.
+ */
+export async function importNode(req: Obj, ids: () => string = () => newId("n")): Promise<{ node: DesignNode; warnings: string[] }> {
+  const pageId = optId(req.page, "p_", "page");
+  if (!pageId) throw new WorkerError(400, "page: give the page to import into");
+  const hasM = typeof req.mermaid === "string", hasS = typeof req.svg === "string";
+  if (hasM === hasS) throw new WorkerError(400, "give mermaid or svg text, not both or neither");
+  for (const k of ["x", "y"] as const) if (req[k] !== undefined && !(typeof req[k] === "number" && Number.isFinite(req[k]) && Math.abs(req[k] as number) <= 1e6)) throw new WorkerError(400, `${k}: must be a number`);
+  const design = normalize(req.body as string).design;
+  const page = design.pages.find((p) => p.id === pageId);
+  if (!page) throw new WorkerError(400, `page: ${pageId} isn't in the design`);
+  let x = req.x as number | undefined, y = req.y as number | undefined;
+  if (x === undefined || y === undefined) {
+    const box = makeLayout(design).layoutPage(page).box;
+    x ??= box.w || box.h ? Math.round(box.x + box.w + IMPORT_GAP) : 0;
+    y ??= box.w || box.h ? Math.round(box.y) : 0;
+  }
+  let out: { node: DesignNode; warnings: string[] };
+  try {
+    if (hasM) {
+      const r = await importFlowchart(req.mermaid as string, { design, ids, x, y });
+      out = { node: r.section, warnings: r.warnings };
+    } else out = importSvg(req.svg as string, { ids, x, y });
+  } catch (e) {
+    if (e instanceof MermaidError) throw new WorkerError(400, `mermaid: ${e.message}`);
+    if (e instanceof SvgImportError) throw new WorkerError(400, `svg: ${e.message}`);
+    throw e;
+  }
+  try {
+    normalize({ ...design, pages: design.pages.map((p) => (p.id === pageId ? { ...p, children: [...p.children, out.node] } : p)) });
+  } catch (e) {
+    if (e instanceof DesignError) throw new WorkerError(400, `the import doesn't fit this design: ${e.message}`);
+    throw e;
+  }
+  return out;
+}
+
+export async function handleImport(req: Request): Promise<Response> {
+  if (!authorized(req)) return unauthorized();
+  let slot: Slot | undefined;
+  try {
+    slot = takeSlot();
+    return json(200, await importNode(await readBody(req)));
   } catch (e) {
     return fail(e);
   } finally {
