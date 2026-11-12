@@ -148,7 +148,11 @@ func writeInspect(b *strings.Builder, ins map[string]any) {
 		b.WriteString("\n")
 	}
 	if code, ok := ins["code"].(string); ok {
-		b.WriteString("## React (Tailwind)\n\n```tsx\n" + code + "```\n")
+		fence := "```"
+		for strings.Contains(code, fence) {
+			fence += "`"
+		}
+		b.WriteString("## React (Tailwind)\n\n" + fence + "tsx\n" + code + fence + "\n")
 	}
 }
 

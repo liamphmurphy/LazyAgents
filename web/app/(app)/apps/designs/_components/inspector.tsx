@@ -432,7 +432,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
           </div>
         </Section>
       )}
-      <SendToTicket node={n} readOnly={readOnly} onEdit={onEdit} />
+      <SendToTicket key={n.id} node={n} readOnly={readOnly} onEdit={onEdit} />
     </div>
   );
 }

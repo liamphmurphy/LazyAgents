@@ -138,7 +138,7 @@ test("inspect writes Tailwind with the app's colour names, and React with compon
 
   const react = inspect(d, "n_pay", "react").code;
   assert.ok(react.startsWith("export function Payment({ assets }: { assets: Record<string, string> }) {"), react);
-  assert.ok(react.includes('<ButtonPrimary label="Pay $84.00" className="self-stretch" />'));
+  assert.ok(react.includes('<ButtonPrimary label={"Pay $84.00"} className="self-stretch" />'), react);
   assert.ok(react.includes('src={assets.a_landscape} alt="Card artwork" />'));
   assert.ok(react.includes('export function ButtonPrimary({ label = "Button", className = "" }) {'));
   assert.ok(react.includes("bg-accent rounded-[10px] ${className}`}>"));
@@ -151,4 +151,27 @@ test("inspect writes Tailwind with the app's colour names, and React with compon
   assert.equal(lr.tokens.find((t) => t.name === "bg-panel").value, (DUSK.modes.light["bg-panel"] ?? DUSK.modes.dark["bg-panel"]).value);
   assert.throws(() => inspect(d, "n_nope", "css"), /isn't in the design/);
   assert.throws(() => inspect(d, "n_pay", "swift"), /target/);
+});
+
+test("React output stays valid for awkward override text, hidden layers and an inspected instance", () => {
+  let d = setOverride(acceptance(), "n_pay_btn", "n_btn_label", { text: 'Say "hi"\nnow' });
+  d = setOverride(d, "n_cart_btn", "n_btn_label", { visible: false });
+  const pay = inspect(d, "n_pay", "react").code;
+  assert.ok(pay.includes('<ButtonPrimary label={"Say \\"hi\\"\\nnow"} className="self-stretch" />'), pay);
+
+  const cart = inspect(d, "n_cart", "react").code;
+  assert.ok(cart.includes("<ButtonPrimary label={\"Checkout\"} showLabel={false} className=\"self-stretch\" />"), cart);
+  assert.ok(cart.includes('export function ButtonPrimary({ label = "Button", showLabel = true, className = "" }) {'), cart);
+  assert.ok(cart.includes("{showLabel && ("), cart);
+
+  const inst = inspect(d, "n_pay_btn", "react").code;
+  assert.equal(inst.match(/export function ButtonPrimary\(/g).length, 1, inst);
+  assert.ok(!/return \(\s*<ButtonPrimary/.test(inst), "the component doesn't render itself");
+  assert.ok(inst.includes('// <ButtonPrimary label={"Say \\"hi\\"\\nnow"}'), inst);
+});
+
+test("CSS comments can't be closed by run text", () => {
+  const d = mapNode(acceptance(), "n_pay_note", (n) => ({ ...n, paragraphs: [{ runs: [n.paragraphs[0].runs[0], { ...n.paragraphs[0].runs[1], text: "a */ b" }] }] }));
+  const css = inspect(d, "n_pay", "css").code;
+  assert.ok(!css.includes("a */ b"), css);
 });

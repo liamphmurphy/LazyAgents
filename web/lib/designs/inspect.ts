@@ -46,7 +46,7 @@ type Spec = {
   /** Text content as paragraphs of runs, each with the decls that differ from the node's. */
   text?: { runs: { text: string; decls: Decl[] }[] }[];
   /** For React: an instance renders as <Component prop="…" />. */
-  instance?: { component: string; props: Record<string, string>; hidden: string[] };
+  instance?: { id: string; component: string; overrides: Record<string, { text?: string; visible?: boolean }> };
   img?: { asset: string; alt: string };
   note?: string;
 };
@@ -231,15 +231,9 @@ export function inspect(design: Design, nodeId: string, target: InspectTarget): 
     }
     if (instanceOf) {
       const main = findNode(design, instanceOf.component);
-      const props: Record<string, string> = {};
-      const hidden: string[] = [];
-      for (const [cid, o] of Object.entries(instanceOf.overrides ?? {})) {
-        const c = main && findNode(main, cid);
-        if (!c) continue;
-        if (o.text !== undefined) props[camel(c.name ?? "text")] = o.text;
-        if (o.visible === false) hidden.push(camel(c.name ?? c.type));
-      }
-      spec.instance = { component: pascal(main?.name ?? "Component"), props, hidden };
+      const overrides: Record<string, { text?: string; visible?: boolean }> = {};
+      for (const [cid, o] of Object.entries(instanceOf.overrides ?? {})) if (o.text !== undefined || o.visible === false) overrides[cid] = { text: o.text, visible: o.visible };
+      spec.instance = { id: instanceOf.component, component: main?.name ?? "Component", overrides };
     }
     for (const c of childrenOf(e)) {
       const s = build(c, e, m);
@@ -250,17 +244,20 @@ export function inspect(design: Design, nodeId: string, target: InspectTarget): 
   const root = build(node, undefined, mode)!;
 
   // Components used inside, written once after the code (React only).
+  // Keyed by component id; nested instances inside a main are collected too.
   const comps = new Map<string, Spec>();
   if (target === "react") {
     const collect = (s: Spec) => {
       for (const c of s.children) collect(c);
-      if (s.instance) {
-        const n = findNode(design, s.id) as InstanceNode | undefined;
-        const main = n && findNode(design, n.component);
-        if (main && !comps.has(s.instance.component)) {
+      if (s.instance && !comps.has(s.instance.id)) {
+        const main = findNode(design, s.instance.id);
+        if (main) {
           count = 0;
           const ms = build(main, undefined, mode);
-          if (ms) comps.set(s.instance.component, ms);
+          if (ms) {
+            comps.set(s.instance.id, ms);
+            collect(ms);
+          }
         }
       }
     };
@@ -305,13 +302,14 @@ function toCss(root: Spec): string {
     used.add(c);
     return c;
   };
-  const rule = (sel: string, decls: Decl[], note?: string) => {
-    if (!decls.length && !note) return;
+  const rule = (sel: string, decls: Decl[], raw?: string) => {
+    if (!decls.length && !raw) return;
+    const note = raw?.replace(/\*\//g, "* /");
     out.push(`.${sel} {${note ? `\n  /* ${note} */` : ""}${decls.map((d) => `\n  ${d.p}: ${d.v};`).join("")}\n}`);
   };
   const walk = (s: Spec, prefix?: string) => {
     const c = cls(s, prefix);
-    rule(c, s.decls, s.instance ? `instance of ${s.instance.component}${s.note ? "; " + s.note : ""}` : s.note);
+    rule(c, s.decls, s.instance ? `instance of ${pascal(s.instance.component)}${s.note ? "; " + s.note : ""}` : s.note);
     s.text?.forEach((p, pi) => p.runs.forEach((r, ri) => r.decls.length && rule(`${c} .run-${pi + 1}-${ri + 1}`, r.decls, `"${r.text.trim().slice(0, 30)}"`)));
     for (const k of s.children) walk(k, prefix ?? c);
   };
@@ -411,41 +409,105 @@ function element(s: Spec, depth: number, react: boolean, inner: (s: Spec, depth:
 
 function toHtml(s: Spec, depth: number): string {
   const pad = "  ".repeat(depth);
-  const head = s.instance ? `${pad}<!-- ${s.instance.component} -->\n` : "";
+  const head = s.instance ? `${pad}<!-- ${pascal(s.instance.component)} -->\n` : "";
   return head + element(s, depth, false, toHtml);
 }
 
 // ---------- React ----------
 
+const RESERVED = new Set("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await assets className key ref children".split(" "));
+
+/** A valid, unused JS identifier from a layer name. */
+function ident(name: string, used: Set<string>): string {
+  let p = camel(name);
+  if (/^[0-9]/.test(p) || RESERVED.has(p)) p = `${p}Text`.replace(/^([0-9])/, "t$1");
+  let out = p;
+  for (let i = 2; used.has(out); i++) out = `${p}${i}`;
+  used.add(out);
+  return out;
+}
+
+type CompInfo = { name: string; spec: Spec; text: Map<string, string>; show: Map<string, string>; defaults: Map<string, string> };
+
 function toReact(root: Spec, comps: Map<string, Spec>): string {
   const usesAssets = (s: Spec): boolean => !!s.img || s.children.some(usesAssets);
+  const walk = (s: Spec, f: (s: Spec) => void) => {
+    f(s);
+    s.children.forEach((c) => walk(c, f));
+  };
+  // Every instance's hidden layers become show props on its component.
+  const hiddenIds = new Map<string, Set<string>>();
+  const noteHidden = (s: Spec) =>
+    walk(s, (x) => {
+      if (!x.instance) return;
+      for (const [cid, o] of Object.entries(x.instance.overrides)) if (o.visible === false) hiddenIds.set(x.instance.id, (hiddenIds.get(x.instance.id) ?? new Set()).add(cid));
+    });
+  noteHidden(root);
+  comps.forEach(noteHidden);
+  // Component names, props per text layer (defaulting to the main's text) and show props.
+  const names = new Set<string>();
+  const info = new Map<string, CompInfo>();
+  for (const [cid, spec] of comps) {
+    let name = pascal(spec.name);
+    for (let i = 2; names.has(name); i++) name = `${pascal(spec.name)}${i}`;
+    names.add(name);
+    const used = new Set<string>();
+    const text = new Map<string, string>();
+    const show = new Map<string, string>();
+    const defaults = new Map<string, string>();
+    walk(spec, (x) => {
+      if (x === spec) return;
+      if (x.type === "text" && x.text) {
+        text.set(x.id, ident(x.name, used));
+        defaults.set(x.id, x.text.map((p) => p.runs.map((r) => r.text).join("")).join("\n"));
+      }
+      if (hiddenIds.get(cid)?.has(x.id)) show.set(x.id, ident(`show ${x.name}`, used));
+    });
+    info.set(cid, { name, spec, text, show, defaults });
+  }
+  const PH = "\u0000";
   const jsx = (s: Spec, depth: number): string => {
-    if (s.instance && depth > 0) {
+    if (s.instance) {
       const pad = "  ".repeat(depth);
-      const props = [...Object.entries(s.instance.props).map(([k, v]) => `${k}=${JSON.stringify(v)}`), ...s.instance.hidden.map((h) => `${h}={false}`)];
+      const c = info.get(s.instance.id);
+      const props: string[] = [];
+      for (const [id, o] of Object.entries(s.instance.overrides)) {
+        const t = c?.text.get(id);
+        if (o.text !== undefined && t) props.push(`${t}={${JSON.stringify(o.text)}}`);
+        const v = c?.show.get(id);
+        if (o.visible === false && v) props.push(`${v}={false}`);
+      }
       const layout = tailwind(s.decls.filter((d) => ["flex", "align-self", "position", "left", "top", "width"].includes(d.p))).join(" ");
       if (layout) props.push(`className="${layout}"`);
-      return `${pad}<${s.instance.component}${props.length ? " " + props.join(" ") : ""} />`;
+      return `${pad}<${c?.name ?? pascal(s.instance.component)}${props.length ? " " + props.join(" ") : ""} />`;
     }
     return element(s, depth, true, jsx);
   };
-  const name = pascal(root.instance?.component ?? root.name);
   const parts: string[] = [];
-  parts.push(`export function ${name}(${usesAssets(root) ? "{ assets }: { assets: Record<string, string> }" : ""}) {\n  return (\n${jsx(root, 2)}\n  );\n}`);
-  for (const [cname, spec] of comps) {
-    // Text descendants become props, defaulting to the main's text; hideable ones become booleans.
-    const props: string[] = [];
-    const withProps = (s: Spec): Spec => {
-      const out = { ...s, children: s.children.map(withProps) };
-      if (s.type === "text" && s.text) {
-        const p = camel(s.name);
-        props.push(`${p} = ${JSON.stringify(s.text.map((x) => x.runs.map((r) => r.text).join("")).join("\n"))}`);
-        out.text = [{ runs: [{ text: `\u0000${p}\u0000`, decls: [] }] }];
-      }
-      return out;
+  if (!root.instance) parts.push(`export function ${pascal(root.name)}(${usesAssets(root) ? "{ assets }: { assets: Record<string, string> }" : ""}) {\n  return (\n${jsx(root, 2)}\n  );\n}`);
+  for (const c of info.values()) {
+    // Text layers read their prop; hideable layers render only when shown.
+    const render = (s: Spec, depth: number): string => {
+      const p = c.text.get(s.id);
+      const own: Spec = p && s.text ? { ...s, text: [{ runs: [{ text: `${PH}${p}${PH}`, decls: [] }] }] } : s;
+      const inner = s.instance ? jsx(own, depth) : element(own, depth, true, render);
+      const v = c.show.get(s.id);
+      if (!v) return inner;
+      const pad = "  ".repeat(depth);
+      return `${pad}{${v} && (\n${inner.split("\n").map((l) => "  " + l).join("\n")}\n${pad})}`;
     };
-    const body = jsx(withProps(spec), 2).replace(/\u0000([A-Za-z0-9]+)\u0000/g, "{$1}");
-    parts.push(`export function ${cname}({ ${[...props, "className = \"\""].join(", ")} }) {\n  return (\n${body.replace(/className="([^"]*)"/, 'className={`$1 ${className}`}')}\n  );\n}`);
+    const rendered = element(c.spec, 2, true, render);
+    const props = [
+      ...[...c.text].map(([id, p]) => `${p} = ${JSON.stringify(c.defaults.get(id))}`),
+      ...[...c.show.values()].map((v) => `${v} = true`),
+      'className = ""',
+    ];
+    const code = rendered.replace(new RegExp(`${PH}([A-Za-z0-9_$]+)${PH}`, "g"), "{$1}").replace(/className="([^"]*)"/, "className={`$1 ${className}`}");
+    parts.push(`export function ${c.name}({ ${props.join(", ")} }) {\n  return (\n${code}\n  );\n}`);
+  }
+  if (root.instance) {
+    const usage = jsx(root, 0);
+    parts.push(`// This instance:\n// ${usage.trim()}`);
   }
   return parts.join("\n\n") + "\n";
 }

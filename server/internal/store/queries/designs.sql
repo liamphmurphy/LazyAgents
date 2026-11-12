@@ -106,9 +106,10 @@ WHERE canvas_id = ANY(@ids::uuid[]) AND status = 'pending' GROUP BY canvas_id;
 -- to any ticket of the epic, with their design's current body. Most recently
 -- changed designs first; at most 10 frames reach a run.
 SELECT l.canvas_id, l.node_id, cv.title, v.body
-FROM (SELECT DISTINCT fl.canvas_id, fl.node_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
+FROM (SELECT DISTINCT fl.canvas_id, fl.node_id, t.workspace_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
       WHERE t.id = @ticket_id OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND t.epic_id = sqlc.narg(epic_id)::uuid)) l
 JOIN chat_canvases cv ON cv.id = l.canvas_id AND cv.kind = 'design'
+JOIN chat_sessions c ON c.id = cv.session_id AND c.workspace_id = l.workspace_id
 JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
 ORDER BY cv.updated_at DESC, l.node_id
 LIMIT 10;

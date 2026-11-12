@@ -405,9 +405,10 @@ func (q *Queries) ListDesignProposals(ctx context.Context, arg ListDesignProposa
 
 const listTicketDesignFrames = `-- name: ListTicketDesignFrames :many
 SELECT l.canvas_id, l.node_id, cv.title, v.body
-FROM (SELECT DISTINCT fl.canvas_id, fl.node_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
+FROM (SELECT DISTINCT fl.canvas_id, fl.node_id, t.workspace_id FROM design_frame_links fl JOIN tickets t ON t.id = fl.ticket_id
       WHERE t.id = $1 OR ($2::uuid IS NOT NULL AND t.epic_id = $2::uuid)) l
 JOIN chat_canvases cv ON cv.id = l.canvas_id AND cv.kind = 'design'
+JOIN chat_sessions c ON c.id = cv.session_id AND c.workspace_id = l.workspace_id
 JOIN LATERAL (SELECT body FROM chat_canvas_versions WHERE canvas_id = cv.id ORDER BY seq DESC LIMIT 1) v ON true
 ORDER BY cv.updated_at DESC, l.node_id
 LIMIT 10
