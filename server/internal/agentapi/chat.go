@@ -15,10 +15,11 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// chatTools is the whole MCP surface of a chat run: project context and tracker actions.
+// chatTools is the whole MCP surface of a chat run: project context, tracker actions and wiki notes
+// (write_note, which a chat's frozen wiki:write turns into suggestions, see runs.ChatSpec).
 // Everything else, including tools added later, is refused for chats.
 var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "get_epic", "update_epic", "list_epics", "list_runs", "get_run", "reply_to_run",
-	"search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
+	"write_note", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module"}
 
 // asideTools is the MCP surface of an aside (a chat answering a question
 // about another chat's running reply): chatTools that only read.

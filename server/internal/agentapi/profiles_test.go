@@ -51,7 +51,7 @@ func TestBoardToolsLeadOnly(t *testing.T) {
 // either one of these or readable in an aside, so a new chat tool has to be
 // classified before an aside can be given it.
 var asideRefused = []string{"create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "update_epic", "reply_to_run",
-	"save_memory", "update_memory", "forget_memory", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video",
+	"write_note", "save_memory", "update_memory", "forget_memory", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video",
 	"start_playground", "playground_status", "stop_playground", "set_playground_openapi", "propose_persona", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv",
 	"submit_research_report", "canvas_create", "canvas_patch", "canvas_comment", "canvas_reply", "propose_workflow_edit", "propose_connector", "propose_secret",
 	"create_space", "create_scheduled_task", "create_learning_module"}

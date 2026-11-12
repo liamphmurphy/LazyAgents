@@ -136,7 +136,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":      map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi"}
+	needArgs := []string{"use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "write_note", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "create_space", "create_scheduled_task", "create_learning_module", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
@@ -170,6 +170,16 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	}
 	if seen != len(allowed)+len(needArgs) {
 		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed)+len(needArgs))
+	}
+
+	// A chat's wiki notes are suggestions for the person to accept or reject,
+	// never published; another agent's memory stays off limits.
+	code, wn := call(token, "write_note", map[string]any{"path": "Payments/Chat runbook " + word, "body": "Found in chat"})
+	if code != 200 || wn["state"] != "suggested" {
+		t.Fatalf("chat write_note = %d %v, want a suggestion", code, wn)
+	}
+	if code, out := call(token, "write_note", map[string]any{"path": "agents/someone-else/x", "body": "x"}); code != 422 {
+		t.Fatalf("write_note into another agent's memory = %d %v", code, out)
 	}
 
 	// Writes use the chat project, without needing an execution ticket.
