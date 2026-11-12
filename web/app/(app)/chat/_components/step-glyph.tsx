@@ -215,6 +215,12 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       <circle className="glyph-a glyph-blink glyph-live" cx="12" cy="4" r="0.9" fill="currentColor" />
     </>
   ),
+  design: (
+    <>
+      <rect className="glyph-s" x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4 10.5c1.5-4 3-4 4-1.5s2.5 2.5 4-3" />
+    </>
+  ),
   "canvas-comment": (
     <>
       <path className="glyph-s" d="M2 3.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H7l-3 3v-3h-.5A1.5 1.5 0 0 1 2 9.5z" />

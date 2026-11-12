@@ -4744,6 +4744,31 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /designs/{canvasId}/render:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: node, in: query, schema: { type: string, pattern: "^n_[a-z0-9_]{1,40}$" }, description: Render this node }
+      - { name: page, in: query, schema: { type: string, pattern: "^p_[a-z0-9_]{1,40}$" }, description: "Render this page; the first page when neither node nor page is given" }
+      - { name: scale, in: query, schema: { type: number, minimum: 1, maximum: 3, default: 1 } }
+    get:
+      operationId: renderDesign
+      summary: A PNG of a design's node or page, drawn by the design worker (owner only)
+      tags: [designs]
+      responses:
+        "200":
+          description: The PNG, with its size in design pixels
+          headers:
+            X-Design-Width: { schema: { type: integer } }
+            X-Design-Height: { schema: { type: integer } }
+            X-Content-Type-Options: { schema: { type: string, enum: [nosniff] } }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /designs/{canvasId}/assets/{assetId}:
     parameters:
       - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -6529,6 +6554,7 @@ components:
         prefix: { type: string }
         suffix: { type: string }
         vid: { type: string }
+        node: { type: string, description: "Design: the node id (n_…) the comment is on" }
         tag: { type: string }
         label: { type: string }
         point: { $ref: "#/components/schemas/ChatCanvasPoint" }
@@ -6563,6 +6589,7 @@ components:
         start: { type: integer }
         end: { type: integer }
         vid: { type: string }
+        node: { type: string, pattern: "^n_[a-z0-9_]{1,40}$", description: "Design: the node (n_…) to anchor on; with point, where in its box (fractions 0 to 1)" }
         point: { $ref: "#/components/schemas/ChatCanvasPoint" }
     ChatCanvasSummary:
       type: object
@@ -8074,6 +8101,26 @@ components:
         id: { type: string, format: uuid, description: "Artifact, wiki page or canvas id" }
         key: { type: string, description: Ticket key, e.g. PAY-214 }
         anchor: { type: string, description: Section anchor when kind is section }
+        selection: { $ref: "#/components/schemas/ChatDesignSelection" }
+    ChatDesignSelection:
+      type: object
+      required: [page, nodes, viewport]
+      description: What the person had selected in a design when they sent the message. Only on a canvas ref that points at a design (422 otherwise). The assistant is told the design, page, viewport and the selected nodes, and that "this" means them.
+      properties:
+        page: { type: string, pattern: "^p_[a-z0-9_]{1,40}$" }
+        nodes:
+          type: array
+          maxItems: 100
+          items: { type: string, pattern: "^n_[a-z0-9_]{1,40}$" }
+        viewport:
+          type: object
+          required: [x, y, w, h, zoom]
+          properties:
+            x: { type: number }
+            y: { type: number }
+            w: { type: number, minimum: 0 }
+            h: { type: number, minimum: 0 }
+            zoom: { type: number, exclusiveMinimum: 0 }
     ChatCitation:
       type: object
       required: [target]

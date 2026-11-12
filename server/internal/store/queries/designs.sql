@@ -88,3 +88,15 @@ SELECT * FROM design_proposals WHERE id = @id AND canvas_id = @canvas_id FOR UPD
 -- name: ResolveDesignProposal :one
 UPDATE design_proposals SET status = 'resolved', decisions = @decisions, result_seq = sqlc.narg(result_seq), resolved_at = now()
 WHERE id = @id RETURNING *;
+
+-- name: DesignFeedbackBetween :many
+-- The review feedback notices (system messages that carry a canvas ref) posted
+-- after one user message and before another, for the later one's turn.
+SELECT * FROM chat_messages
+WHERE session_id = @session_id AND role = 'system' AND seq > @after_seq AND seq < @before_seq
+  AND context_refs @> '[{"kind": "canvas"}]'::jsonb
+ORDER BY seq;
+
+-- name: CountDesignProposalsByCanvas :many
+SELECT canvas_id, count(*)::int AS pending FROM design_proposals
+WHERE canvas_id = ANY(@ids::uuid[]) AND status = 'pending' GROUP BY canvas_id;

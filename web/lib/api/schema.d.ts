@@ -3930,6 +3930,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/designs/{canvasId}/render": {
+        parameters: {
+            query?: {
+                /** @description Render this node */
+                node?: string;
+                /** @description Render this page; the first page when neither node nor page is given */
+                page?: string;
+                scale?: number;
+            };
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        /** A PNG of a design's node or page, drawn by the design worker (owner only) */
+        get: operations["renderDesign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/designs/{canvasId}/assets/{assetId}": {
         parameters: {
             query?: never;
@@ -5623,6 +5648,8 @@ export interface components {
             prefix?: string;
             suffix?: string;
             vid?: string;
+            /** @description Design: the node id (n_…) the comment is on */
+            node?: string;
             tag?: string;
             label?: string;
             point?: components["schemas"]["ChatCanvasPoint"];
@@ -5662,6 +5689,8 @@ export interface components {
             start?: number;
             end?: number;
             vid?: string;
+            /** @description Design: the node (n_…) to anchor on; with point, where in its box (fractions 0 to 1) */
+            node?: string;
             point?: components["schemas"]["ChatCanvasPoint"];
         };
         ChatCanvasSummary: {
@@ -7280,6 +7309,19 @@ export interface components {
             key?: string;
             /** @description Section anchor when kind is section */
             anchor?: string;
+            selection?: components["schemas"]["ChatDesignSelection"];
+        };
+        /** @description What the person had selected in a design when they sent the message. Only on a canvas ref that points at a design (422 otherwise). The assistant is told the design, page, viewport and the selected nodes, and that "this" means them. */
+        ChatDesignSelection: {
+            page: string;
+            nodes: string[];
+            viewport: {
+                x: number;
+                y: number;
+                w: number;
+                h: number;
+                zoom: number;
+            };
         };
         /** @description Something the assistant read while answering (from read_artifact / read_page / get_ticket) */
         ChatCitation: {
@@ -15338,6 +15380,41 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    renderDesign: {
+        parameters: {
+            query?: {
+                /** @description Render this node */
+                node?: string;
+                /** @description Render this page; the first page when neither node nor page is given */
+                page?: string;
+                scale?: number;
+            };
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PNG, with its size in design pixels */
+            200: {
+                headers: {
+                    "X-Design-Width"?: number;
+                    "X-Design-Height"?: number;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

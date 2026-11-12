@@ -21,7 +21,9 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-func (s *Server) designs() *designs.Service { return &designs.Service{Pool: s.Pool, Runs: s.Runs} }
+func (s *Server) designs() *designs.Service {
+	return &designs.Service{Pool: s.Pool, Runs: s.Runs, Worker: s.DesignWorker, Blobs: s.Blobs, Bucket: s.ArtifactBucket}
+}
 
 // myDesign is one of the caller's canvases, and only if it's a design: 404
 // for anyone else's and for other kinds.
@@ -353,4 +355,47 @@ func (s *Server) GetDesignAsset(ctx context.Context, req api.GetDesignAssetReque
 		return nil, err
 	}
 	return avatarResponse{body: obj.Body, contentType: a.Mime, length: obj.ContentLength, cache: "private, max-age=31536000, immutable"}, nil
+}
+
+// RenderDesign draws a node or page of the design's current version as a PNG
+// through the design worker. Worker trouble is a 503 with a message, never a
+// broken image.
+func (s *Server) RenderDesign(ctx context.Context, req api.RenderDesignRequestObject) (api.RenderDesignResponseObject, error) {
+	cv, err := s.myDesign(ctx, req.CanvasId)
+	if err != nil {
+		return nil, err
+	}
+	node, page := deref(req.Params.Node), deref(req.Params.Page)
+	if node != "" && page != "" {
+		return nil, apperr.Invalid("page", "give node or page, not both")
+	}
+	scale := 1.0
+	if req.Params.Scale != nil {
+		if scale = float64(*req.Params.Scale); scale < 1 || scale > 3 {
+			return nil, apperr.Invalid("scale", "use 1 to 3")
+		}
+	}
+	cur, err := s.Q.LatestChatCanvasVersion(ctx, cv.ID)
+	if err != nil {
+		return nil, err
+	}
+	if node != "" && !design.HasNode(cur.Body, node) {
+		return nil, apperr.Invalid("node", "no node %s in this design", node)
+	}
+	if page != "" && !design.HasPage(cur.Body, page) {
+		return nil, apperr.Invalid("page", "no page %s in this design", page)
+	}
+	r, err := s.designs().Render(ctx, cv.ID, cur.Body, node, page, scale)
+	var rejected *designs.RejectedError
+	switch {
+	case errors.As(err, &rejected):
+		return api.RenderDesign422JSONResponse(api.Error{Code: api.Invalid, Message: rejected.Message}), nil
+	case errors.Is(err, designs.ErrUnavailable):
+		return api.RenderDesign503JSONResponse(api.Error{Code: api.Internal, Message: "The design renderer isn't available right now. Try again in a moment."}), nil
+	case err != nil:
+		return nil, err
+	}
+	nosniff := "nosniff"
+	return api.RenderDesign200ImagepngResponse{Body: bytes.NewReader(r.PNG), ContentLength: int64(len(r.PNG)),
+		Headers: api.RenderDesign200ResponseHeaders{XContentTypeOptions: &nosniff, XDesignWidth: &r.W, XDesignHeight: &r.H}}, nil
 }

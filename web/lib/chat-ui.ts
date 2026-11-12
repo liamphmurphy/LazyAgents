@@ -263,8 +263,9 @@ export type ChatStatusKind =
   | "image"
   | "image-view"
   | "canvas"
-  | "design-view"
   | "canvas-comment"
+  | "design"
+  | "design-view"
   | "playground"
   | "runs"
   | "workflow"
@@ -475,6 +476,20 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("canvas-comment", "commenting on a canvas");
     case "design_flows":
       return status("design-view", "tracing a design's flow");
+    case "design_list":
+      return status("design-view", "looking through your designs");
+    case "design_outline":
+    case "design_read":
+      return status("design-view", "looking at a design");
+    case "design_render":
+      return status("design-view", "rendering a design");
+    case "design_comments":
+      return status("design-view", "reading comments on a design");
+    case "design_patch":
+      return status("design", "suggesting design changes");
+    case "design_comment":
+    case "design_reply":
+      return status("design", "commenting on a design");
     case "start_playground":
       return status("playground", "spinning up a playground");
     case "playground_status":

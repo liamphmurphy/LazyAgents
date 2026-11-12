@@ -184,7 +184,11 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
       {!mine && videos?.length ? <VideoRendererNotes videos={videos} /> : null}
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
-      {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
+      {mine && <SentChips chips={(m.context_refs ?? []).map((r) => {
+        const chip = chipFromRef(r, names);
+        // A design's selection rides along with every message sent from the editor.
+        return r.kind === "canvas" && r.selection ? { ...chip, label: r.selection.nodes.length ? `Design · ${r.selection.nodes.length} selected` : "Design" } : chip;
+      })} />}
       {mine && editable && !editing && (
         <div className={REVEAL}>
           <Button variant="ghost" icon="edit" onClick={() => { setDraft(m.body_md); setEditing(true); }}>Edit</Button>
