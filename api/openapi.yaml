@@ -8191,7 +8191,7 @@ components:
         section: { type: string, description: Section anchor, when only one section was read }
     ChatSession:
       type: object
-      required: [id, title, agent, harness, model, state, archived, revision, message_count, created_at, updated_at]
+      required: [id, title, agent, harness, model, state, archived, revision, message_count, unread, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         project: { type: string, description: "Key of the attached project; absent when none is attached" }
@@ -8224,6 +8224,7 @@ components:
         parent_chat_id: { type: string, format: uuid, description: "Set on an aside: the chat whose running reply it answers a question about" }
         revision: { type: integer }
         message_count: { type: integer }
+        unread: { type: integer, description: "Assistant replies newer than the person's read position (POST /chats/{id}/read)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         last_message_at: { type: string, format: date-time }
