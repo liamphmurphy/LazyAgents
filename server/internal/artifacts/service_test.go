@@ -279,3 +279,32 @@ func TestAttachToTicketsRecordsActivity(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// A chat has no project to file under, so what it saves (reports, notes,
+// mockups, designs) needs none; the types that are project documents still do.
+func TestProjectOptionalByType(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	svg := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>`
+	for _, typ := range []string{"report", "mockup", "design"} {
+		body := "Body."
+		if typ == "mockup" {
+			body = svg
+		}
+		a, err := f.svc.Create(ctx, f.ws, f.maya, artifacts.NewArtifact{Type: typ, Title: "Loose " + typ, Content: artifacts.Content{BodyMD: &body}})
+		if err != nil {
+			t.Fatalf("%s without a project: %v", typ, err)
+		}
+		if a.ProjectID != nil {
+			t.Errorf("%s got project %v", typ, a.ProjectID)
+		}
+	}
+	for _, typ := range []string{"prd", "spec", "adr"} {
+		body := "Body."
+		_, err := f.svc.Create(ctx, f.ws, f.maya, artifacts.NewArtifact{Type: typ, Title: "Loose " + typ, Content: artifacts.Content{BodyMD: &body}})
+		var ve *apperr.ValidationError
+		if !errors.As(err, &ve) || ve.Field != "project_key" {
+			t.Errorf("%s without a project: err = %v, want a project_key error", typ, err)
+		}
+	}
+}

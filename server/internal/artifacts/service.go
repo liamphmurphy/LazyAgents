@@ -74,7 +74,7 @@ type Content struct {
 }
 
 type NewArtifact struct {
-	ProjectKey   string // required except for notes and reports
+	ProjectKey   string // required for PRDs, specs and ADRs; optional for the rest (a chat has no project to file under)
 	Path         string // notes only: "Payments/Ledger/Rollback runbook"
 	Type         string
 	Title        string
@@ -374,7 +374,7 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 		label = "v1"
 	}
 	var projectID *uuid.UUID
-	if in.ProjectKey != "" || (in.Type != "note" && in.Type != "report") {
+	if in.ProjectKey != "" || !projectOptional[in.Type] {
 		p, err := q.LockProjectByKey(ctx, store.LockProjectByKeyParams{WorkspaceID: ws, Key: in.ProjectKey})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return a, apperr.Invalid("project_key", "unknown project")
@@ -607,6 +607,11 @@ func RecordRead(ctx context.Context, q *store.Queries, a store.Artifact, agentID
 		VersionID: *a.CurrentVersionID, SectionID: section, AgentID: agentID, RunID: runID, ReadAt: at,
 	})
 }
+
+// projectOptional are the types that can live outside any project: what a
+// chat saves, since a chat is above projects. The project documents (PRD,
+// spec, ADR) stay required.
+var projectOptional = map[string]bool{"note": true, "report": true, "mockup": true, "design": true}
 
 // DisplayID is the human ID for numbered types: ADR-012.
 func DisplayID(typ string, number *int32) *string {

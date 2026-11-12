@@ -118,7 +118,8 @@ func (s *Server) RestoreChatCanvas(ctx context.Context, req api.RestoreChatCanva
 	return api.RestoreChatCanvas201JSONResponse(toCanvasVersion(v)), nil
 }
 
-// PromoteChatCanvas copies the current version into the project: mockups as
+// PromoteChatCanvas copies the current version into the chat's project, or
+// outside any project when it has none: mockups as
 // mockup artifacts, documents as design documents.
 func (s *Server) PromoteChatCanvas(ctx context.Context, req api.PromoteChatCanvasRequestObject) (api.PromoteChatCanvasResponseObject, error) {
 	c, err := s.ownChat(ctx, req.Id)
@@ -139,19 +140,22 @@ func (s *Server) PromoteChatCanvas(ctx context.Context, req api.PromoteChatCanva
 	if err != nil {
 		return nil, err
 	}
-	if c.ProjectID == nil {
-		return nil, apperr.Conflict("set a default project on this chat to save a canvas as an artifact")
-	}
-	p, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: *c.ProjectID, WorkspaceID: c.WorkspaceID})
-	if err != nil {
-		return nil, err
+	// A chat's default project, if it has one; without it the artifact is
+	// saved outside any project, like a report.
+	var projectKey string
+	if c.ProjectID != nil {
+		p, err := s.Q.GetProject(ctx, store.GetProjectParams{ID: *c.ProjectID, WorkspaceID: c.WorkspaceID})
+		if err != nil {
+			return nil, err
+		}
+		projectKey = p.Key
 	}
 	u, _, ws := me(ctx)
 	typ := "design"
 	if cv.Kind == canvas.KindSVG {
 		typ = "mockup"
 	}
-	a, err := s.Artifacts.Create(ctx, ws, artifacts.Actor{Type: "user", ID: u.ID}, artifacts.NewArtifact{ProjectKey: p.Key, Type: typ, Title: cv.Title, Content: artifacts.Content{BodyMD: &v.Body}})
+	a, err := s.Artifacts.Create(ctx, ws, artifacts.Actor{Type: "user", ID: u.ID}, artifacts.NewArtifact{ProjectKey: projectKey, Type: typ, Title: cv.Title, Content: artifacts.Content{BodyMD: &v.Body}})
 	if err != nil {
 		return nil, err
 	}
