@@ -194,7 +194,11 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 
 **Top bar:** breadcrumb on the left (tertiary separators, current item in `--text` 500). Actions on the right go secondary buttons first and the primary button last.
 
-**Responsive:** the shell is a wrapping flex row. Below ~800px the sidebar stacks above the content. Tables and the ticket list sit in `overflow-x: auto` containers with a min-width (620–920px). Multi-column grids use `repeat(auto-fit/auto-fill, minmax(…))`.
+**Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the sidebar beside the content.
+
+*Compact shell (below 768px).* The content runs full width, with no sidebar or icon rail. A bottom tab bar (`components/shell/tab-bar.tsx`, rules in `lib/tab-bar.ts`) is fixed to the bottom edge on `--sidebar`, above a `--border-subtle` top rule. Its tabs are Chat, Inbox, Runs, Tickets and More. Each tab is at least 44px tall: an 18px icon in a 48×28 pill, with an 11px label under it. The current tab's pill fills with `--selected` and its label turns `--text`. Inactive tabs are `--text-tertiary`. Inbox shows the unread count as an amber (`--state-human`) badge, and Runs shows a green (`--state-done`) dot while runs are live. Both read `useNavCounts()`, as the sidebar does, and the counts reach screen readers through the link name ("Inbox 3 unread"). The bar is 56px tall plus the bottom safe-area inset (`pb-safe`), and it publishes that height as `--tab-bar-h`, which is 0 when there is no bar. The shell pads its content by `--tab-bar-h`. Screens sized to the viewport use `h-app` (100dvh less the bar) instead of `h-dvh`, and the activity orb stays above the bar. Detail screens (a run, a ticket, the ticket composer) hide the bar and take the whole screen. Pages the bar has no tab for (apps, tools, Customization, Settings) are listed under More (`/more`), and More stays current while one of them is open.
+
+Tables and the ticket list sit in `overflow-x: auto` containers with a min-width (620–920px). Multi-column grids use `repeat(auto-fit/auto-fill, minmax(…))`.
 
 ---
 

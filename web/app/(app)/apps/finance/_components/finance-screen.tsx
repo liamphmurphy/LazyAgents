@@ -68,7 +68,7 @@ export function FinanceScreen() {
   const reviewLeft = data ? Math.max(0, data.review_count - data.review.filter((r) => leaving.has(r.id)).length) : 0;
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar
         crumbs={[{ label: "Apps" }, { label: "Finance" }]}
         actions={
