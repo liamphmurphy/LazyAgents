@@ -227,5 +227,6 @@ export function epicProgress(tickets: readonly Pick<TicketSummary, "key" | "stat
  */
 export function startReady<T extends Pick<TicketSummary, "key" | "status" | "unmet_dependencies">>(tickets: readonly T[], live: ReadonlySet<string>) {
   const open = tickets.filter((t) => t.status !== "done" && t.status !== "canceled" && !live.has(t.key));
-  return { ready: open.filter((t) => t.unmet_dependencies === 0), blocked: open.filter((t) => t.unmet_dependencies > 0) };
+  const blocked = (t: T) => (t.unmet_dependencies ?? 0) > 0;
+  return { ready: open.filter((t) => !blocked(t)), blocked: open.filter(blocked) };
 }
