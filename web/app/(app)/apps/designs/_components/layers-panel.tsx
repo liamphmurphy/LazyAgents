@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cx } from "@/lib/cx";
 import { ancestors, kids, labelOf, mapNode, mapPage, newId } from "@/lib/designs/edit";
 import type { Design, DesignNode, Page } from "@/lib/designs/schema";
+import { hoverVisible } from "@/lib/reveal";
 
 const GLYPH: Record<string, string> = { frame: "#", component: "◇", instance: "◇", group: "▢", section: "⌗", shape: "▭", path: "∿", text: "T", image: "▣", sticky: "▤", connector: "→" };
 
@@ -97,7 +98,7 @@ export function LayersPanel({ design, page, onPage, selected, onSelect, onEdit, 
               <button
                 type="button"
                 aria-label={n.locked ? `Unlock ${labelOf(n)}` : `Lock ${labelOf(n)}`}
-                className={cx("grid size-5 place-items-center rounded text-[10px] text-fg-tertiary hover:text-fg", !n.locked && "invisible group-hover:visible")}
+                className={cx("grid size-5 place-items-center rounded text-[10px] text-fg-tertiary hover:text-fg", !n.locked && hoverVisible())}
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit((d) => mapNode(d, n.id, (x) => (x.type === "connector" ? x : ({ ...x, locked: x.locked ? undefined : true } as DesignNode))));
@@ -108,7 +109,7 @@ export function LayersPanel({ design, page, onPage, selected, onSelect, onEdit, 
               <button
                 type="button"
                 aria-label={n.visible === false ? `Show ${labelOf(n)}` : `Hide ${labelOf(n)}`}
-                className={cx("grid size-5 place-items-center rounded text-[11px] text-fg-tertiary hover:text-fg", n.visible !== false && "invisible group-hover:visible")}
+                className={cx("grid size-5 place-items-center rounded text-[11px] text-fg-tertiary hover:text-fg", n.visible !== false && hoverVisible())}
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit((d) => mapNode(d, n.id, (x) => ({ ...x, visible: x.visible === false ? undefined : false }) as DesignNode));
@@ -163,7 +164,7 @@ export function LayersPanel({ design, page, onPage, selected, onSelect, onEdit, 
               </button>
             )}
             {!readOnly && design.pages.length > 1 && renaming !== pg.id && (
-              <button type="button" aria-label={`Delete page ${pg.name}`} className="invisible absolute right-1 top-1 grid size-5 place-items-center rounded text-[11px] text-fg-tertiary hover:bg-hover hover:text-fg group-hover:visible" onClick={() => removePage(pg.id)}>
+              <button type="button" aria-label={`Delete page ${pg.name}`} className={cx("absolute right-1 top-1 grid size-5 place-items-center rounded text-[11px] text-fg-tertiary hover:bg-hover hover:text-fg", hoverVisible())} onClick={() => removePage(pg.id)}>
                 ×
               </button>
             )}

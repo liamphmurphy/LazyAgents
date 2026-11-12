@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { Flag, LabelChip } from "@/components/domain/labels";
+import { hoverReveal } from "@/lib/reveal";
 
 export type Density = "comfortable" | "compact";
 
@@ -103,7 +104,7 @@ export function TicketRow({
         aria-label={`Select ${t.key}`}
         className={cx(
           "relative z-10 size-3.5 flex-none accent-[var(--accent)]",
-          selected || focused ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
+          selected || focused ? "opacity-100" : cx(hoverReveal(), "focus-visible:opacity-100"),
         )}
       />
       <PriorityGlyph priority={t.priority} />

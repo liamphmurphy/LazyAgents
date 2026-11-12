@@ -7,6 +7,7 @@ import { cx } from "@/lib/cx";
 import { absoluteTime, ago } from "@/lib/format";
 import { IconButton } from "@/components/ui/button";
 import { ActorAvatar } from "./timeline";
+import { hoverReveal } from "@/lib/reveal";
 
 /** Who last checked each criterion and when, from criterion_checked events (oldest first). */
 export function checkedBy(events: ActivityEvent[] | undefined) {
@@ -57,7 +58,7 @@ export function Criteria({ t, events }: { t: Ticket; events?: ActivityEvent[] })
               label={`Remove criterion: ${c.text}`}
               size={24}
               onClick={() => remove.mutate(c.id)}
-              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+              className={cx(hoverReveal(), "focus-visible:opacity-100")}
             />
           </li>
         ))}

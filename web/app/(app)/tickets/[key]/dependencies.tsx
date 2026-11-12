@@ -8,6 +8,8 @@ import { Button, IconButton } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/primitives";
 import { StatusGlyph } from "@/components/domain/glyphs";
 import { STATUS_NAME } from "@/components/domain/meta";
+import { cx } from "@/lib/cx";
+import { hoverReveal } from "@/lib/reveal";
 
 type Dep = Schemas["TicketDependency"];
 const KEY = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
@@ -136,7 +138,7 @@ function DepList({
               label={`Remove ${d.key} from ${title}`}
               disabled={disabled}
               onClick={() => onRemove(d.key)}
-              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+              className={cx(hoverReveal(), "focus-visible:opacity-100")}
             />
           </li>
         ))}

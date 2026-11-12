@@ -11,6 +11,7 @@ import { SUGGESTED_VIEWS, describeQuery, savedViewHref, viewQuery } from "@/lib/
 import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "./pickers";
+import { hoverReveal } from "@/lib/reveal";
 
 const VIEW_NAME: Record<string, string> = { all: "All tickets", active: "Active", backlog: "Backlog", agent_owned: "Agent-owned", needs_human: "Needs human" };
 export const describeView = (query: string) => describeQuery(query, { view: (v) => VIEW_NAME[v] ?? v });
@@ -242,7 +243,7 @@ export function SavedViewTabs({ project }: { project?: string }) {
               <span className="truncate">{v.name}</span>
             </Link>
             <SavedViewMenu view={v} onRename={() => setRenaming(v.id)} onSaveAs={() => setSaving(v.query)}>
-              <IconButton icon="dots" label={`${v.name} view actions`} size={22} className="opacity-0 focus-visible:opacity-100 group-hover/view:opacity-100 data-[state=open]:opacity-100" />
+              <IconButton icon="dots" label={`${v.name} view actions`} size={22} className={cx(hoverReveal("view"), "focus-visible:opacity-100 data-[state=open]:opacity-100")} />
             </SavedViewMenu>
           </div>
         ),

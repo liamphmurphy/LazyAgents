@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/primitives";
 import { AgentAvatar } from "@/components/domain/avatars";
 import { STATUS_LABEL, type TicketStatus } from "@/components/domain/glyphs";
 import { SmallPill, type PillTone } from "@/components/domain/labels";
+import { hoverShow } from "@/lib/reveal";
 
 export function PanelSection({ title, count, action, children, icon }: { title: string; count?: number; action?: ReactNode; children: ReactNode; icon?: "graph" }) {
   return (
@@ -272,7 +273,7 @@ export function History({ page }: { page: Artifact }) {
                 next && (
                   <Link
                     href={compareHref(path, v.label, next.label)}
-                    className="flex-none rounded-[5px] bg-pill-human-bg px-1.5 text-[11px] text-pill-human-fg opacity-80 hover:underline group-hover:opacity-100 focus-visible:opacity-100"
+                    className={cx("flex-none rounded-[5px] bg-pill-human-bg px-1.5 text-[11px] text-pill-human-fg opacity-80 hover:underline focus-visible:opacity-100", hoverShow())}
                     aria-label={`Diff ${v.label} to ${next.label}`}
                   >
                     Diff → {next.label}

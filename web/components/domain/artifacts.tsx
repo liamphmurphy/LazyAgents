@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { DocTypeTag } from "./labels";
 import { ReviewChip } from "./mockup";
 import { floatPanel } from "./pickers";
+import { hoverReveal } from "@/lib/reveal";
 
 /** "ADR-012 · Postgres declarative partitioning" for numbered types. */
 export function artifactTitle(a: { title: string; display_id?: string }) {
@@ -67,7 +68,7 @@ export function DocCard({ doc, assignee, onRemove }: { doc: DocCardData; assigne
           type="button"
           aria-label={`Remove ${doc.title} from this ticket`}
           onClick={onRemove}
-          className="absolute right-1.5 top-1.5 z-10 grid size-6 place-items-center rounded-sm bg-surface text-fg-tertiary opacity-0 hover:bg-hover hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
+          className={cx("absolute right-1.5 top-1.5 z-10 grid size-6 place-items-center rounded-sm bg-surface text-fg-tertiary hover:bg-hover hover:text-fg focus-visible:opacity-100", hoverReveal())}
         >
           <Icon name="x" size={12} />
         </button>
