@@ -82,6 +82,10 @@ func TestReproAndRecheckReview(t *testing.T) {
 	if err := svc.CompleteWithRepro(ctx, sub, "", "Found a bug", "details", "", runs.VerdictChangesRequested, runs.Repro{Command: " go test -run TestBug ", CoversAll: true}); err != nil {
 		t.Fatal(err)
 	}
+	if r, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws}); r.State != "waiting" || deref(r.WaitReason) != "checks" {
+		t.Fatalf("review run %s/%s, want waiting on checks", r.State, deref(r.WaitReason))
+	}
+	passChecks(t, pool, d.Run.ID)
 	child, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws})
 	var ct runs.Contract
 	if err := json.Unmarshal(child.Contract, &ct); err != nil || ct.ReproCommand != "go test -run TestBug" || !ct.ReproCoversAll || len(ct.AllowedPaths) != 1 {

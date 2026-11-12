@@ -285,6 +285,7 @@ func (r *Runner) Tick(ctx context.Context) {
 	r.tickUsageChecks(ctx)
 	r.resumeHeld(ctx)
 	r.tickPlaygrounds(ctx)
+	r.tickChecks(ctx)
 	for r.slot() {
 		token, expires := uuid.New(), time.Now().Add(executionTTL)
 		claimCtx, cancel := context.WithTimeout(ctx, controlTimeout)

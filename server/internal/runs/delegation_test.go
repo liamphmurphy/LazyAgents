@@ -203,7 +203,7 @@ func TestDelegationToSubagents(t *testing.T) {
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status='done' WHERE run_id=$1", parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE runs SET checks='{"passed":true}' WHERE id=$1`, child.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE runs SET checks='{"passed":true,"reported_turn":2}' WHERE id=$1`, child.ID); err != nil {
 		t.Fatal(err)
 	}
 	firstWake := last.InputMessage

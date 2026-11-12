@@ -58,6 +58,31 @@ type Checks struct {
 	// reviewer's tests changed since it committed them).
 	RecheckNote string `json:"recheck_note,omitempty"`
 	ReproFixed  bool   `json:"repro_fixed,omitempty"`
+	// Bounces is how many times the server sent a mechanical check failure
+	// back to the sub agent before these checks (the contract's Bounces).
+	Bounces int `json:"bounces,omitempty"`
+}
+
+// Bounceable reports whether failed checks are mechanical, so the sub agent
+// can fix them in its own session: uncommitted files, files outside the
+// allowed paths, or a failing test command. A reviewer's run (ReproCommand) is
+// expected to leave failing tests, so only its files count.
+func (k Checks) Bounceable() bool {
+	if !k.Ran || k.Passed || k.Error != "" || k.ChildState != "completed" {
+		return false
+	}
+	if len(k.Uncommitted) > 0 || len(k.OutOfBounds) > 0 {
+		return true
+	}
+	return k.ReproCommand == "" && k.TestCommand != "" && (k.TestExit == nil || *k.TestExit != 0)
+}
+
+// BounceMessage is the turn that sends failed checks back to the sub agent;
+// bounce counts this one (1 for the first), max is MaxCheckBounces.
+func (k Checks) BounceMessage(bounce, max int) string {
+	k.Branch, k.MergeNote, k.Bounces = "", "", 0 // nothing was merged; that part is for the main agent
+	return "The server checked your work against the delegation's contract before reporting to the main agent, and sent it back:\n\n" +
+		k.Report() + fmt.Sprintf("\nFix this and call complete_run again. Retry %d of %d.", bounce, max)
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -165,6 +190,13 @@ func (k Checks) Report() string {
 			fmt.Fprintf(&b, "\nThe reviewer's failing tests are merged into your branch. `%s` fails now (exit %d):\n```\n%s\n```\nMake it pass, then call recheck_review.\n", k.ReproCommand, *k.ReproExit, k.ReproTail)
 		default:
 			fmt.Fprintf(&b, "\nThe reviewer's repro `%s` fails (exit %d), but its tests weren't merged (see below).\n", k.ReproCommand, *k.ReproExit)
+		}
+	}
+	if k.Bounces > 0 {
+		if k.Passed {
+			fmt.Fprintf(&b, "\nPassed on attempt %d after the server sent the check failure back.\n", k.Bounces+1)
+		} else {
+			fmt.Fprintf(&b, "\nStill failing on attempt %d: the server sent the check failure back %d time(s) already.\n", k.Bounces+1, k.Bounces)
 		}
 	}
 	if k.Passed {

@@ -71,6 +71,9 @@
 // first delegated run, then on the recheck's result try complete_run
 // status=done (falling back to in_review with "DONE REFUSED: <error>");
 // FAKE_HARNESS_RECHECK_DIRTY=<path> leaves that file uncommitted first.
+// FAKE_HARNESS_CHILD_UNCOMMITTED leaves a delegated run's file uncommitted. A
+// delegated run whose checks the server sent back commits whatever is left
+// uncommitted and calls complete_run again.
 //
 // Resumed turns (--resume, or a session rollover's brief) finish the run with
 // complete_run, unless FAKE_HARNESS_RESUME=idle.
@@ -717,6 +720,20 @@ func main() {
 		result(false, "Still looking around.")
 		return
 	}
+	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.HasPrefix(prompt, "The server checked your work") {
+		// The server sent a delegated run's failed checks back: commit what's
+		// left uncommitted and report again.
+		_ = exec.Command("git", "add", "-A", "--", ".", ":(exclude).lazyagents").Run()
+		if exec.Command("git", "diff", "--cached", "--quiet").Run() != nil {
+			if out, err := exec.Command("git", "commit", "-q", "-m", "Fix what the checks found").CombinedOutput(); err != nil {
+				result(true, "git commit: "+string(out))
+				os.Exit(2)
+			}
+		}
+		call("complete_run", map[string]any{"outcome": "Fixed what the checks found"})
+		result(false, "Done.")
+		return
+	}
 	if strings.HasPrefix(os.Getenv("FAKE_HARNESS_MODE"), "delegate") && strings.Contains(prompt, "delegated part of") {
 		// A delegated run: no claim; work in its worktree, commit, and report back.
 		if resume != "" && os.Getenv("FAKE_HARNESS_REJECT_RESUME") != "" {
@@ -757,6 +774,9 @@ func main() {
 			os.Exit(2)
 		}
 		for _, args := range [][]string{{"add", file}, {"commit", "-q", "-m", "Add " + file}} {
+			if os.Getenv("FAKE_HARNESS_CHILD_UNCOMMITTED") != "" {
+				break
+			}
 			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 				result(true, "git "+args[0]+": "+string(out))
 				os.Exit(2)

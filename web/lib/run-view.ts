@@ -346,6 +346,7 @@ const WAIT_NOW: Record<string, string> = {
   human_reply: "Waiting for your reply",
   mockup_review: "Waiting for a person to review a mockup",
   delegation: "Waiting for sub agents to finish",
+  checks: "Waiting for the server to check its result",
 };
 
 /**

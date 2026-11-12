@@ -14,3 +14,7 @@ func (r *Runner) HandoffPrompt(ctx context.Context, runID uuid.UUID, previousHar
 	}
 	return r.handoffPrompt(ctx, c, previousHarness, previousModel, why)
 }
+
+// TickChecks runs only the checks of delegated runs that called complete_run,
+// without claiming the turns they wake.
+func (r *Runner) TickChecks(ctx context.Context) { r.tickChecks(ctx) }

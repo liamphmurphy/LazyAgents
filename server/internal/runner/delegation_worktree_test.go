@@ -671,6 +671,9 @@ func TestDelegationReportReplaysStoredChecks(t *testing.T) {
 	})
 	releaseFile(t, hold)
 	e.runner.Wait()
+	// Both children wait on their checks; checking them wakes the parent.
+	e.runner.TickChecks(e.ctx)
+	e.runner.Wait()
 	parent := e.run("PAY-214")
 	kids := e.children(parent)
 	turns, _ := e.q.ListTurns(e.ctx, parent.ID)

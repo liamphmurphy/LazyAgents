@@ -133,3 +133,41 @@ func TestChecksRepro(t *testing.T) {
 		t.Fatalf("normalize kept repro fields: %+v %v", c, err)
 	}
 }
+
+func TestChecksBounceable(t *testing.T) {
+	one, zero := 1, 0
+	base := func() runs.Checks { return runs.Checks{Ran: true, ChildState: "completed"} }
+	for name, tc := range map[string]struct {
+		k    func() runs.Checks
+		want bool
+	}{
+		"uncommitted":     {func() runs.Checks { k := base(); k.Uncommitted = []string{"a.go"}; return k }, true},
+		"out of bounds":   {func() runs.Checks { k := base(); k.OutOfBounds = []string{"x/a.go"}; return k }, true},
+		"failing tests":   {func() runs.Checks { k := base(); k.TestCommand, k.TestExit = "go test", &one; return k }, true},
+		"tests timed out": {func() runs.Checks { k := base(); k.TestCommand = "go test"; return k }, true},
+		"passing":         {func() runs.Checks { k := base(); k.Passed = true; return k }, false},
+		"checks broken": {func() runs.Checks {
+			k := base()
+			k.Error = "git status failed"
+			k.TestCommand, k.TestExit = "go test", &one
+			return k
+		}, false},
+		"not run": {func() runs.Checks { return runs.Checks{ChildState: "completed", Uncommitted: []string{"a.go"}} }, false},
+		// A reviewer's committed failing tests are expected to fail.
+		"reviewer's failing tests": {func() runs.Checks {
+			k := base()
+			k.ReproCommand, k.ReproExit, k.TestCommand, k.TestExit = "go test -run Bug", &one, "go test", &one
+			return k
+		}, false},
+		"reviewer's repro already passes": {func() runs.Checks { k := base(); k.ReproCommand, k.ReproExit = "go test -run Bug", &zero; return k }, false},
+		"reviewer's uncommitted tests": {func() runs.Checks {
+			k := base()
+			k.ReproCommand, k.ReproExit, k.Uncommitted = "go test -run Bug", &one, []string{"bug_test.go"}
+			return k
+		}, true},
+	} {
+		if got := tc.k().Bounceable(); got != tc.want {
+			t.Errorf("%s: Bounceable = %v, want %v", name, got, tc.want)
+		}
+	}
+}
