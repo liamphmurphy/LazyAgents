@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cx } from "@/lib/cx";
-import { find, removeNodes, insertNodes, mapNodes, newFrame, newShape, newText, pathFrom, reparent, resizeIn, withPlainText, plainText, inAutoLayout, PRESETS } from "@/lib/designs/edit";
-import { dropTarget, hitPath, inMarquee, pick } from "@/lib/designs/hit";
-import type { Box, LaidPage } from "@/lib/designs/layout";
+import { connectNodes, find, newId, removeNodes, insertNodes, mapNodes, newFrame, newSection, newShape, newSticky, newText, pathFrom, reparent, resizeIn, withPlainText, plainText, inAutoLayout, wrapInSection, PRESETS, STICKY_SIZE } from "@/lib/designs/edit";
+import { connectTarget, dropTarget, hitPath, inMarquee, pick } from "@/lib/designs/hit";
+import { STICKY_COLORS, STICKY_INSET, STICKY_TEXT, type Box, type LaidPage } from "@/lib/designs/layout";
 import { FAMILY } from "@/lib/designs/measure";
 import { LaidPageSvg } from "@/lib/designs/render";
 import { screens } from "@/lib/designs/prototype";
-import type { Design, DesignNode, Page, TextNode } from "@/lib/designs/schema";
+import type { Design, DesignNode, Page, StickyNode, TextNode } from "@/lib/designs/schema";
 
-export type Tool = "select" | "hand" | "frame" | "rect" | "ellipse" | "line" | "pen" | "text";
+export type Tool = "select" | "hand" | "frame" | "rect" | "ellipse" | "line" | "pen" | "text" | "sticky" | "section" | "connector";
 /** screen = world × z + (x, y). */
 export type Camera = { x: number; y: number; z: number };
 export const MIN_ZOOM = 0.02;
@@ -39,7 +39,8 @@ type Drag =
   | { kind: "move"; wx: number; wy: number; start: Map<string, { x: number; y: number }>; key: string; moved: boolean }
   | { kind: "resize"; id: string; handle: Handle; wx: number; wy: number; box: Box; origin: { x: number; y: number }; key: string }
   | { kind: "marquee"; wx: number; wy: number; x: number; y: number; additive: boolean; base: string[] }
-  | { kind: "create"; tool: "frame" | "rect" | "ellipse" | "line"; wx: number; wy: number; x: number; y: number };
+  | { kind: "create"; tool: "frame" | "rect" | "ellipse" | "line" | "section"; wx: number; wy: number; x: number; y: number }
+  | { kind: "connect"; from: string; wx: number; wy: number; x: number; y: number; over?: string };
 
 export type CanvasProps = {
   design: Design;
@@ -201,6 +202,18 @@ export function DesignCanvas(p: CanvasProps) {
       p.onTool("select");
       return;
     }
+    if (tool === "sticky") {
+      const s = newSticky(Math.round(wx - STICKY_SIZE / 2), Math.round(wy - STICKY_SIZE / 2));
+      place(s, wx, wy);
+      p.onEditing(s.id);
+      p.onTool("select");
+      return;
+    }
+    if (tool === "connector") {
+      const from = connectTarget(hitPath(page, laid.boxes, wx, wy, 2 / camera.z));
+      if (from) setDrag({ kind: "connect", from: from.id, wx, wy, x: wx, y: wy });
+      return;
+    }
     if (tool !== "select") {
       setDrag({ kind: "create", tool, wx, wy, x: wx, y: wy });
       return;
@@ -274,6 +287,9 @@ export function DesignCanvas(p: CanvasProps) {
       if (h.includes("s")) y1 = Math.max(y0 + 1, b.y + b.h + dy);
       const box = { x: Math.round(x0 - drag.origin.x), y: Math.round(y0 - drag.origin.y), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
       p.onEdit((d) => resizeIn(d, drag.id, box), drag.key);
+    } else if (drag.kind === "connect") {
+      const over = connectTarget(hitPath(page, laid.boxes, wx, wy, 2 / camera.z));
+      setDrag({ ...drag, x: wx, y: wy, over: over && over.id !== drag.from ? over.id : undefined });
     } else {
       setDrag({ ...drag, x: wx, y: wy });
       if (drag.kind === "marquee") {
@@ -302,6 +318,30 @@ export function DesignCanvas(p: CanvasProps) {
           cur.onEdit((des) => reparent(des, id, to, b, tb ? { x: tb.x, y: tb.y } : { x: 0, y: 0 }), d.key);
         }
       }
+    }
+    if (d.kind === "connect") {
+      const [wx, wy] = toWorld(e.clientX, e.clientY);
+      const to = connectTarget(hitPath(page, laid.boxes, wx, wy, 2 / camera.z));
+      if (to && to.id !== d.from && connectNodes(design, d.from, to.id)) {
+        const id = newId("n");
+        p.onEdit((des) => connectNodes(des, d.from, to.id, { id })?.design ?? des);
+        p.onSelect([id]);
+      }
+      p.onTool("select");
+      return;
+    }
+    if (d.kind === "create" && d.tool === "section") {
+      const [wx, wy] = toWorld(e.clientX, e.clientY);
+      const click = Math.max(Math.abs(wx - d.wx), Math.abs(wy - d.wy)) * camera.z < 4;
+      const b = click
+        ? { x: Math.round(d.wx), y: Math.round(d.wy), w: 640, h: 400 }
+        : { x: Math.round(Math.min(d.wx, wx)), y: Math.round(Math.min(d.wy, wy)), w: Math.round(Math.abs(wx - d.wx)), h: Math.round(Math.abs(wy - d.wy)) };
+      const s = newSection(design, b);
+      // Drawn over nodes, it takes them in, so moving it moves them.
+      p.onEdit((des) => wrapInSection(des, page.id, s));
+      p.onSelect([s.id]);
+      p.onTool("select");
+      return;
     }
     if (d.kind === "create") {
       const [wx, wy] = toWorld(e.clientX, e.clientY);
@@ -333,7 +373,7 @@ export function DesignCanvas(p: CanvasProps) {
     const path = hitPath(page, laid.boxes, wx, wy, 2 / camera.z);
     const deepest = path.at(-1);
     const target = pick(path, selected, "deeper");
-    if (!readOnly && deepest?.type === "text" && (target?.id === deepest.id || selected.includes(deepest.id))) {
+    if (!readOnly && (deepest?.type === "text" || deepest?.type === "sticky") && (target?.id === deepest.id || selected.includes(deepest.id))) {
       p.onSelect([deepest.id]);
       p.onEditing(deepest.id);
     } else if (target) p.onSelect([target.id]);
@@ -348,6 +388,7 @@ export function DesignCanvas(p: CanvasProps) {
   const preview = drag?.kind === "create" ? toScreen({ x: Math.min(drag.wx, drag.x), y: Math.min(drag.wy, drag.y), w: Math.abs(drag.x - drag.wx), h: Math.abs(drag.y - drag.wy) }) : undefined;
   const marquee = drag?.kind === "marquee" ? toScreen({ x: Math.min(drag.wx, drag.x), y: Math.min(drag.wy, drag.y), w: Math.abs(drag.x - drag.wx), h: Math.abs(drag.y - drag.wy) }) : undefined;
   const hoverBox = hover && !selected.includes(hover) && !drag ? laid.boxes.get(hover) : undefined;
+  const connecting = drag?.kind === "connect" ? { from: laid.boxes.get(drag.from), over: drag.over ? laid.boxes.get(drag.over) : undefined, at: toScreen({ x: drag.x, y: drag.y, w: 0, h: 0 }) } : undefined;
 
   return (
     <div
@@ -425,7 +466,28 @@ export function DesignCanvas(p: CanvasProps) {
             ))}
           </>
         )}
+        {connecting?.from && (() => {
+          const f = toScreen(connecting.from);
+          const o = connecting.over && toScreen(connecting.over);
+          return (
+            <g data-testid="design-connect-preview">
+              <rect x={f.x} y={f.y} width={f.w} height={f.h} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} />
+              {o && <rect x={o.x} y={o.y} width={o.w} height={o.h} fill="var(--color-accent)" fillOpacity={0.08} stroke="var(--color-accent)" strokeWidth={1.5} />}
+              <path d={`M${f.x + f.w / 2} ${f.y + f.h / 2}L${connecting.at.x} ${connecting.at.y}`} stroke="var(--color-accent)" strokeWidth={1.5} strokeDasharray="4 3" fill="none" />
+            </g>
+          );
+        })()}
       </svg>
+      {editingNode?.type === "sticky" && editingBox && (
+        <StickyEditor
+          key={editingNode.id}
+          node={editingNode}
+          box={toScreen(editingBox)}
+          zoom={camera.z}
+          onChange={(text, session) => p.onEdit((d) => mapNodes(d, new Set([editingNode.id]), (x) => (x.type === "sticky" ? { ...x, text } : x)), `sticky:${session}`)}
+          onDone={() => p.onEditing(undefined)}
+        />
+      )}
       {editingNode?.type === "text" && editingBox && (
         <TextEditor
           key={editingNode.id}
@@ -550,6 +612,49 @@ function TextEditor({ node, box, zoom, onChange, onDone }: { node: TextNode; box
         textAlign: node.paragraphs[0]?.align === "justify" ? "left" : (node.paragraphs[0]?.align ?? "left"),
         fontKerning: "none",
         whiteSpace: node.sizing?.w === "hug" ? "pre" : "pre-wrap",
+      }}
+    />
+  );
+}
+
+/** Editing a sticky's text in place, on the sticky's own colour; done on blur, Escape or ⌘↵. */
+function StickyEditor({ node, box, zoom, onChange, onDone }: { node: StickyNode; box: Box; zoom: number; onChange: (text: string, session: string) => void; onDone: () => void }) {
+  const [value, setValue] = useState(node.text);
+  const [session] = useState(() => `${node.id}:${Date.now()}`);
+  return (
+    <textarea
+      autoFocus
+      aria-label="Sticky text"
+      data-testid="design-sticky-editor"
+      value={value}
+      onChange={(e) => {
+        setValue(e.target.value);
+        onChange(e.target.value, session);
+      }}
+      onBlur={onDone}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Escape" || (e.key === "Enter" && (e.metaKey || e.ctrlKey))) {
+          e.preventDefault();
+          onDone();
+        }
+      }}
+      spellCheck={false}
+      className="absolute resize-none overflow-hidden rounded border-0 outline outline-1 outline-accent"
+      style={{
+        left: box.x,
+        top: box.y,
+        width: box.w,
+        height: box.h,
+        padding: STICKY_INSET * zoom,
+        background: STICKY_COLORS[node.color ?? "yellow"],
+        color: STICKY_TEXT,
+        fontFamily: `"${FAMILY}", Inter, sans-serif`,
+        fontSize: 14 * zoom,
+        fontWeight: 500,
+        lineHeight: 1.2,
+        fontKerning: "none",
       }}
     />
   );

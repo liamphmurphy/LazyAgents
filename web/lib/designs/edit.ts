@@ -2,8 +2,8 @@
 // duplicate, group, reorder, resize (with constraints) and new nodes. Pure
 // and structurally shared, so unchanged pages and nodes keep their identity
 // (the canvas re-renders only what changed). Ids follow ADR-designs §3.1.
-import { constrain, settle } from "./layout.ts";
-import type { Design, DesignNode, FrameNode, Page, Paragraph, PathNode, ShapeNode, TextNode } from "./schema.ts";
+import { constrain, settle, tokenOr } from "./layout.ts";
+import type { ConnectorNode, Design, DesignNode, FrameNode, Page, Paragraph, PathNode, SectionNode, ShapeNode, StickyNode, TextNode } from "./schema.ts";
 
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 /** A fresh opaque id: prefix plus 10 random base32 characters. */
@@ -323,6 +323,60 @@ export const newText = (x: number, y: number, text = "", size = 16): TextNode =>
   id: newId("n"), type: "text", name: "Text", x, y, w: 1, h: size * 1.2, sizing: { w: "hug", h: "hug" },
   paragraphs: [{ runs: [{ text, size }] }],
 });
+
+export const STICKY_SIZE = 200;
+export const newSticky = (x: number, y: number, text = "", author?: string): StickyNode => ({
+  id: newId("n"), type: "sticky", x, y, w: STICKY_SIZE, h: STICKY_SIZE, text, ...(author ? { author } : {}),
+});
+export const newSection = (d: Design, b: Box, name = "Section"): SectionNode => ({ id: newId("n"), type: "section", name, ...b, fill: tokenOr(d, "surface-raised"), children: [] });
+
+/**
+ * Draws a section over part of a page: the page's top-level nodes wholly
+ * inside the box move into it (relative to it), so moving the section later
+ * moves them along. Page connectors whose ends both move in go with them.
+ */
+export function wrapInSection(d: Design, pageId: string, section: SectionNode): Design {
+  const page = d.pages.find((p) => p.id === pageId);
+  if (!page) return d;
+  const inside = (n: DesignNode) =>
+    n.type !== "connector" && n.x >= section.x && n.y >= section.y && n.x + n.w <= section.x + section.w && n.y + n.h <= section.y + section.h && !n.locked;
+  const moved = new Set(page.children.filter(inside).map((n) => n.id));
+  const takes = (n: DesignNode) => (n.type === "connector" ? moved.has(n.from.node) && moved.has(n.to.node) : moved.has(n.id));
+  const shift = ([x, y]: [number, number]): [number, number] => [r2(x - section.x), r2(y - section.y)];
+  const children = page.children
+    .filter(takes)
+    .map((n) => (n.type === "connector" ? (n.points ? { ...n, points: n.points.map(shift) } : n) : ({ ...n, x: r2(n.x - section.x), y: r2(n.y - section.y) } as DesignNode)));
+  const rest = page.children.filter((n) => !takes(n));
+  // The section goes under everything else it was drawn over, at the bottom of the page's paint order.
+  return mapPage(d, pageId, (p) => ({ ...p, children: [{ ...section, children }, ...rest] }));
+}
+
+/**
+ * Connects two nodes on the same page with a connector in their lowest common
+ * container that isn't a group (ADR §3.1). Undefined when it can't: the same
+ * node, a connector, or different pages.
+ */
+export function connectNodes(d: Design, from: string, to: string, extra: Partial<ConnectorNode> = {}): { design: Design; id: string } | undefined {
+  if (from === to) return undefined;
+  const a = find(d, from), b = find(d, to);
+  if (!a || !b || a.page.id !== b.page.id || a.node.type === "connector" || b.node.type === "connector") return undefined;
+  const up = (id: string) => ancestors(d, id).map((n) => n.id);
+  const bUp = new Set(up(to));
+  let container: string = a.page.id;
+  for (const id of up(from)) {
+    if (!bUp.has(id)) continue;
+    container = id;
+    break;
+  }
+  // Never inside a group: go up to the group's nearest non-group ancestor.
+  for (;;) {
+    const f = container === a.page.id ? undefined : find(d, container);
+    if (!f || f.node.type !== "group") break;
+    container = f.parent?.id ?? a.page.id;
+  }
+  const c: ConnectorNode = { id: newId("n"), type: "connector", from: { node: from }, to: { node: to }, ...extra };
+  return { design: insertNodes(d, container, [c]), id: c.id };
+}
 
 /** A path node from points in page coordinates (the pen and line tools); closed joins the ends. */
 export function pathFrom(points: [number, number][], closed: boolean, name = "Path"): PathNode | undefined {

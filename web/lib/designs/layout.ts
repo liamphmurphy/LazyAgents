@@ -9,11 +9,13 @@
 // resized away from their main, groups, sections, shapes (every Slides
 // preset) with text, vector paths, text in Inter (the Slides text model:
 // greedy wrap, bullets, justify, highlight, underline, strike), images (crop,
-// cover/contain/fill, rounded clip), stickies, connectors, rotation, opacity,
+// cover/contain/fill, rounded clip), stickies, connectors (routed around
+// their siblings, route.ts), rotation, opacity,
 // tokens per mode.
 import { type Seg, isPreset, shapeGeometry, svgPath } from "../slides/geometry.ts";
 import type { ShapeKind } from "../slides/schema.ts";
 import { face, measure } from "./measure.ts";
+import { connectorPath, type Outline } from "./route.ts";
 import type { AutoLayout, Color, ConnectorNode, Constraints, Design, DesignNode, Mode, Paint, Page, Paragraph, Run } from "./schema.ts";
 
 export const SHAPE_INSET = 8;
@@ -22,7 +24,6 @@ export const LINE = 1.2;
 export const BULLET_INDENT = 20;
 export const STICKY_COLORS = { yellow: "#FDE68A", pink: "#FBCFE8", green: "#BBF7D0", blue: "#BFDBFE", violet: "#DDD6FE", grey: "#E5E7EB" } as const;
 export const STICKY_TEXT = "#1A1206";
-const STUB = 20;
 const ARROW = 10;
 
 /** Colours used when a design has no token set, or names a token its set lacks. */
@@ -30,6 +31,18 @@ export const FALLBACK: Record<Mode, Record<string, string>> = {
   light: { text: "#16161D", "text-secondary": "#5E5E6E", bg: "#FFFFFF", surface: "#FFFFFF", border: "#D9D9E3" },
   dark: { text: "#ECECF1", "text-secondary": "#9A9AAE", bg: "#0C0C10", surface: "#16161D", border: "#2A2A36" },
 };
+
+/** Diagram colours (sections, imported charts): the Dusk values, used when a design's token set lacks the token. */
+export const DIAGRAM_COLORS: Record<Mode, Record<string, string>> = {
+  dark: { surface: "#15141F", "surface-raised": "#1B1A27", "border-strong": "#2E2B3B", text: "#EEEDF3", "text-2": "#CBC9D6", "text-secondary": "#A4A1B3", accent: "#9B8CFF", "accent-soft": "#9B8CFF26" },
+  light: { surface: "#FFFFFF", "surface-raised": "#F6F5FA", "border-strong": "#DEDAEA", text: "#17151F", "text-2": "#3A3747", "text-secondary": "#55526A", accent: "#5B4BD6", "accent-soft": "#5B4BD61F" },
+};
+/** `$name` when the design's token set has that colour, else its hex for the design's mode, so new nodes always validate. */
+export function tokenOr(design: Pick<Design, "tokens_ref" | "token_sets" | "mode">, name: string): Color {
+  const set = design.tokens_ref ? design.token_sets[design.tokens_ref.set] : undefined;
+  if (set?.modes.dark[name]?.kind === "color") return `$${name}` as Color;
+  return (DIAGRAM_COLORS[design.mode]?.[name] ?? DIAGRAM_COLORS.dark[name] ?? "#808080") as Color;
+}
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -423,54 +436,45 @@ export function makeLayout(design: Design) {
         draw(c, box.x + c.x, box.y + c.y, w, h, mode, ops);
       }
     }
-    for (const c of connectors) drawConnector(c, mode, ops, "fill" in n && typeof n.fill === "string" ? color(n.fill, mode) : undefined, box);
+    for (const c of connectors) drawConnector(c, mode, ops, "fill" in n && typeof n.fill === "string" ? color(n.fill, mode) : undefined, childrenOf(n), box);
   }
 
-  // ---------- connectors (ticket 7 adds obstacle avoidance) ----------
+  // ---------- connectors (routing in route.ts) ----------
 
-  type Anchor = "top" | "right" | "bottom" | "left";
-  const DIRS: Record<Anchor, [number, number]> = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
-  const anchorPoint = (b: Box, a: Anchor): [number, number] =>
-    ({ top: [b.x + b.w / 2, b.y], bottom: [b.x + b.w / 2, b.y + b.h], left: [b.x, b.y + b.h / 2], right: [b.x + b.w, b.y + b.h / 2] })[a] as [number, number];
-  const autoAnchor = (from: Box, to: Box): Anchor => {
-    const dx = to.x + to.w / 2 - (from.x + from.w / 2);
-    const dy = to.y + to.h / 2 - (from.y + from.h / 2);
-    return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
-  };
-  function route(fb: Box, fa: Anchor, tb: Box, ta: Anchor, straight: boolean): [number, number][] {
-    const p0 = anchorPoint(fb, fa), p3 = anchorPoint(tb, ta);
-    if (straight) return [p0, p3];
-    const [fdx, fdy] = DIRS[fa], [tdx, tdy] = DIRS[ta];
-    const p1: [number, number] = [p0[0] + fdx * STUB, p0[1] + fdy * STUB];
-    const p2: [number, number] = [p3[0] + tdx * STUB, p3[1] + tdy * STUB];
-    const pts: [number, number][] = [p0, p1];
-    const fh = fdx !== 0, th = tdx !== 0;
-    if (fh && th) pts.push([(p1[0] + p2[0]) / 2, p1[1]], [(p1[0] + p2[0]) / 2, p2[1]]);
-    else if (!fh && !th) {
-      const ymid = fdy === tdy ? (fdy > 0 ? Math.max(p1[1], p2[1]) : Math.min(p1[1], p2[1])) : (p1[1] + p2[1]) / 2;
-      pts.push([p1[0], ymid], [p2[0], ymid]);
-    } else if (fh) pts.push([p2[0], p1[1]]);
-    else pts.push([p1[0], p2[1]]);
-    pts.push(p2, p3);
-    const out: [number, number][] = [];
-    for (const p of pts) {
-      const last = out.at(-1);
-      if (last && last[0] === p[0] && last[1] === p[1]) continue;
-      if (out.length >= 2) {
-        const [a, b] = [out.at(-2)!, out.at(-1)!];
-        if ((a[0] === b[0] && b[0] === p[0]) || (a[1] === b[1] && b[1] === p[1])) out.pop();
+  /**
+   * What a connector in `list` (its container's children) routes around: every
+   * drawn sibling except its ends, looking inside the siblings that hold an end
+   * (a subgraph section) so the nodes next to the end are avoided too.
+   */
+  function obstaclesIn(list: DesignNode[], ends: Set<string>, out: Box[] = []): Box[] {
+    for (const n of list) {
+      if (n.type === "connector" || n.visible === false || ends.has(n.id)) continue;
+      if (holdsAny(n, ends)) obstaclesIn(childrenOf(n), ends, out);
+      else {
+        const b = boxes.get(n.id);
+        if (b) out.push(b);
       }
-      out.push(p);
     }
     return out;
   }
-  function drawConnector(c: ConnectorNode, mode: Mode, ops: Op[], bg: string | undefined, origin: Box | { x: number; y: number } = { x: 0, y: 0 }) {
+  const holdsAny = (n: DesignNode, ids: Set<string>): boolean => childrenOf(n).some((c) => ids.has(c.id) || holdsAny(c, ids));
+  const outlineOf = (id: string): Outline => {
+    const n = index.get(id);
+    return n?.type === "shape" && (n.shape === "diamond" || n.shape === "ellipse") ? n.shape : "box";
+  };
+
+  function drawConnector(c: ConnectorNode, mode: Mode, ops: Op[], bg: string | undefined, siblings: DesignNode[], origin: Box | { x: number; y: number } = { x: 0, y: 0 }) {
     if (c.visible === false) return;
     const fb = boxes.get(c.from.node), tb = boxes.get(c.to.node);
     if (!fb || !tb) return;
-    const fa = !c.from.anchor || c.from.anchor === "auto" ? autoAnchor(fb, tb) : c.from.anchor;
-    const ta = !c.to.anchor || c.to.anchor === "auto" ? autoAnchor(tb, fb) : c.to.anchor;
-    const pts = c.points ? c.points.map(([x, y]) => [origin.x + x, origin.y + y] as [number, number]) : route(fb, fa, tb, ta, c.route === "straight");
+    const pts = connectorPath(
+      { from: fb, to: tb, fromAnchor: c.from.anchor, toAnchor: c.to.anchor, fromOutline: outlineOf(c.from.node), toOutline: outlineOf(c.to.node) },
+      {
+        straight: c.route === "straight",
+        points: c.points?.map(([x, y]) => [origin.x + x, origin.y + y] as [number, number]),
+        obstacles: obstaclesIn(siblings, new Set([c.from.node, c.to.node])),
+      },
+    );
     if (pts.length < 2) return;
     const stroke = color(c.stroke ?? "$text-secondary", mode)!;
     const sw = c.stroke_width ?? 1.5;
@@ -547,7 +551,7 @@ export function makeLayout(design: Design) {
       y1 = Math.max(y1, b.y + b.h);
     }
     const connectors: Op[] = [];
-    for (const c of conns) drawConnector(c, design.mode, connectors, color(page.background, design.mode));
+    for (const c of conns) drawConnector(c, design.mode, connectors, color(page.background, design.mode), page.children);
     const box = Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : { x: 0, y: 0, w: 0, h: 0 };
     return { nodes, connectors, box, background: color(page.background, design.mode), boxes: new Map(boxes), local: new Map(local), overflow: new Set(overflow) };
   }

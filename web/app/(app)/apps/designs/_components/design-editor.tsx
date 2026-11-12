@@ -49,10 +49,13 @@ const TOOLS: { tool: Tool | "image"; label: string; key: string; glyph: string }
   { tool: "pen", label: "Pen", key: "P", glyph: "✒" },
   { tool: "text", label: "Text", key: "T", glyph: "T" },
   { tool: "image", label: "Image", key: "⇧⌘K", glyph: "▣" },
+  { tool: "sticky", label: "Sticky", key: "S", glyph: "▤" },
+  { tool: "section", label: "Section", key: "⇧S", glyph: "⌗" },
+  { tool: "connector", label: "Connector", key: "C", glyph: "→" },
 ];
 /** The beside-chat panel's cut-down toolbar (docs/design/designs-from-chat.svg). */
 const BESIDE_TOOLS = new Set<Tool | "image">(["select", "frame", "rect", "line", "text"]);
-const TOOL_KEYS: Record<string, Tool> = { v: "select", h: "hand", f: "frame", a: "frame", r: "rect", o: "ellipse", l: "line", p: "pen", t: "text" };
+const TOOL_KEYS: Record<string, Tool> = { v: "select", h: "hand", f: "frame", a: "frame", r: "rect", o: "ellipse", l: "line", p: "pen", t: "text", s: "sticky", c: "connector" };
 
 async function prepareImage(file: File): Promise<Blob> {
   const bmp = await createImageBitmap(file).catch(() => {
@@ -531,6 +534,9 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       } else if (e.shiftKey && k === "a" && !mod) {
         e.preventDefault();
         if (!readOnly) toggleAutoLayout();
+      } else if (e.shiftKey && k === "s" && !mod) {
+        e.preventDefault();
+        if (!readOnly) setTool("section");
       } else if (e.key === "Escape") {
         if (tool !== "select") setTool("select");
         else if (selected.length) {
@@ -544,7 +550,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       } else if (e.key === "Enter" && selected.length === 1 && design) {
         e.preventDefault();
         const n = find(design, selected[0])?.node;
-        if (n?.type === "text" && !readOnly) setEditing(n.id);
+        if ((n?.type === "text" || n?.type === "sticky") && !readOnly) setEditing(n.id);
         else if (n && "children" in n && n.children.length) setSelected(n.children.filter((c) => c.type !== "connector").map((c) => c.id));
       } else if (e.key.startsWith("Arrow") && !mod && !readOnly && selected.length) {
         e.preventDefault();

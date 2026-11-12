@@ -368,3 +368,81 @@ func designCreate(ctx context.Context, d Deps, c agents.Caller, in DesignCreateI
 	}
 	return map[string]any{"canvas_id": cv.ID, "title": cv.Title, "version": v.Seq, "url": "/apps/designs/" + cv.ID.String()}, nil
 }
+
+type DesignImportIn struct {
+	CanvasID    uuid.UUID `json:"canvas_id"`
+	BaseVersion int32     `json:"base_version,omitempty" jsonschema:"The design version you last read; refused if the design has moved on. The current version when omitted"`
+	Page        string    `json:"page" jsonschema:"The page (p_…) to import into"`
+	X           *float64  `json:"x,omitempty" jsonschema:"Where the import's top-left goes on the page; with y. Right of the page's content when omitted"`
+	Y           *float64  `json:"y,omitempty" jsonschema:"With x"`
+	Mermaid     string    `json:"mermaid,omitempty" jsonschema:"A Mermaid flowchart (flowchart or graph TD/LR/…): it becomes a section of shapes and routed connectors, laid out automatically"`
+	SVG         string    `json:"svg,omitempty" jsonschema:"SVG markup: its rects, circles, ellipses, lines, polylines, polygons, paths and text become a group of design nodes"`
+	Why         string    `json:"why,omitempty" jsonschema:"What the import is for, in a few words; the person reads it when they review"`
+}
+
+// designImport is design_import (ADR-designs §3.9): the worker turns the text
+// into one node, which goes through the same route as design_patch (one
+// add_node op), so it's a suggestion unless direct edit is on. Text the
+// worker can't import is refused with the problem named, and nothing changes.
+func designImport(ctx context.Context, d Deps, c agents.Caller, in DesignImportIn) (any, error) {
+	s, cv, v, err := designTarget(ctx, d, c, "design_import", in.CanvasID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireDesigns(d); err != nil {
+		return nil, err
+	}
+	field, kind := "mermaid", "Mermaid flowchart"
+	req := designs.ImportRequest{Body: v.Body, Page: in.Page, X: in.X, Y: in.Y}
+	switch {
+	case in.Mermaid != "" && in.SVG != "":
+		return nil, apperr.Invalid("mermaid", "give mermaid or svg, not both")
+	case in.Mermaid != "":
+		req.Mermaid = &in.Mermaid
+	case in.SVG != "":
+		req.SVG = &in.SVG
+		field, kind = "svg", "SVG"
+	default:
+		return nil, apperr.Invalid("mermaid", "give the mermaid or svg text to import")
+	}
+	if (in.X == nil) != (in.Y == nil) {
+		return nil, apperr.Invalid("x", "give both x and y, or neither")
+	}
+	if in.Page == "" || !design.HasPage(v.Body, in.Page) {
+		return nil, apperr.Invalid("page", "no page %q in this design; design_outline lists the pages", in.Page)
+	}
+	base := in.BaseVersion
+	if base == 0 {
+		base = v.Seq
+	} else if base != v.Seq {
+		return nil, apperr.Conflict("this design is at version %d, not %d; read it again and redo the import", v.Seq, base)
+	}
+	imp, err := d.Designs.Import(ctx, req)
+	var rejected *designs.RejectedError
+	switch {
+	case errors.As(err, &rejected):
+		return nil, apperr.Invalid(field, "%s", rejected.Message)
+	case errors.Is(err, designs.ErrUnavailable):
+		return nil, apperr.Conflict("the design worker isn't reachable right now, so nothing was imported; try again shortly")
+	case err != nil:
+		return nil, err
+	}
+	why := in.Why
+	if why == "" {
+		why = "Import a " + kind
+	}
+	name, _ := imp.Node["name"].(string)
+	summary := "Import " + kind
+	if name != "" && name != "Imported flowchart" && name != "Imported SVG" {
+		summary += ": " + name
+	}
+	op := design.Op{"op": "add_node", "parent": in.Page, "node": imp.Node, "why": why}
+	out, err := propose(ctx, d, c, s, cv.ID, base, summary, []design.Op{op})
+	if err != nil {
+		return nil, err
+	}
+	m := out.(map[string]any)
+	m["node_id"] = imp.Node["id"]
+	m["warnings"] = append([]string{}, imp.Warnings...)
+	return m, nil
+}
