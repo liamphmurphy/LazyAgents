@@ -221,15 +221,35 @@ function Chip({ chip, onOpen, onGone }: { chip: ChipData; onOpen: (c: ChipData) 
 
 // ---- The orb
 
+/**
+ * The persona dock and the chat on screen, which it marks read: opening a chat reads it, and so
+ * does a reply arriving while it's on screen. The orb uses it, and so does the compact shell without it.
+ */
+function useViewedChat() {
+  const pathname = usePathname();
+  const dock = usePersonaDock();
+  const visible = useSyncExternalStore(subscribeVisible, () => document.visibilityState === "visible", () => false);
+  const viewed = visible ? viewedChatId(pathname) : null;
+  const unreadViewed = dock.data?.personas.flatMap((e) => e.chats).find((c) => c.id === viewed && c.unread > 0);
+  const { mutate } = useMarkChatRead();
+  const seq = unreadViewed?.last_seq;
+  useEffect(() => {
+    if (viewed && seq) mutate({ id: viewed, seq });
+  }, [viewed, seq, mutate]);
+  return { dock, viewed };
+}
+
+/** Marks the chat on screen read where the orb doesn't render (the compact shell). */
+export function ViewedChatReader() {
+  useViewedChat();
+  return null;
+}
+
 /** Which personas and harnesses are working, what's left of each plan, and who finished, on every screen. */
 export function ActivityOrb() {
   const router = useRouter();
-  const pathname = usePathname();
-  const dock = usePersonaDock();
-  const mark = useMarkChatRead();
+  const { dock, viewed } = useViewedChat();
   const bottom = useOrbBottom();
-  const visible = useSyncExternalStore(subscribeVisible, () => document.visibilityState === "visible", () => false);
-  const viewed = visible ? viewedChatId(pathname) : null;
   const entries = dockEntries<Chat, Entry>(dock.data?.personas ?? [], viewed);
   const harnesses: HarnessActivity[] = dock.data?.harnesses ?? [];
 
@@ -242,14 +262,6 @@ export function ActivityOrb() {
   const openRef = useRef(false);
   const [chips, setChips] = useState<ChipData[]>([]);
   const [live, setLive] = useState("");
-
-  // Opening a chat reads it, and so does a reply arriving while it's on screen.
-  const unreadViewed = dock.data?.personas.flatMap((e) => e.chats).find((c) => c.id === viewed && c.unread > 0);
-  const { mutate } = mark;
-  const seq = unreadViewed?.last_seq;
-  useEffect(() => {
-    if (viewed && seq) mutate({ id: viewed, seq });
-  }, [viewed, seq, mutate]);
 
   // ---- Sprout: the orb's circle stretches left into a pill, then up into the card.
   const frames = useCallback((r: number): Keyframe[] => {
