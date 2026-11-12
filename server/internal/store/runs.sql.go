@@ -843,8 +843,9 @@ WITH kids AS (
 SELECT k.agent_id,
   count(*)::bigint AS delegations,
   count(*) FILTER (WHERE k.checks IS NOT NULL)::bigint AS checked,
-  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND k.repaired_by IS NULL)::bigint AS first_pass,
+  count(*) FILTER (WHERE k.checks->>'passed' = 'true' AND coalesce((k.checks->>'bounces')::int, 0) = 0 AND k.repaired_by IS NULL)::bigint AS first_pass,
   count(*) FILTER (WHERE k.repaired_by IS NOT NULL)::bigint AS repair_loops,
+  coalesce(sum(coalesce((k.checks->>'bounces')::int, 0)), 0)::bigint AS bounces,
   coalesce(sum(k.cost_usd_micros), 0)::bigint AS child_cost_usd_micros,
   floor(coalesce(sum(p.cost_usd_micros::float8 / k.siblings), 0))::bigint AS parent_cost_usd_micros,
   coalesce(sum(extract(epoch FROM (k.ended_at - k.started_at))), 0)::float8 AS child_seconds,
@@ -860,6 +861,7 @@ type DelegationEfficiencyRow struct {
 	Checked             int64
 	FirstPass           int64
 	RepairLoops         int64
+	Bounces             int64
 	ChildCostUsdMicros  int64
 	ParentCostUsdMicros int64
 	ChildSeconds        float64
@@ -869,7 +871,8 @@ type DelegationEfficiencyRow struct {
 }
 
 // Per sub agent: what delegating to it costs and how often its first attempt
-// passes the runner's checks. A repair loop is a later delegation to the same
+// passes the runner's checks. A first pass also needs zero bounces (the server
+// never sent a check failure back to the sub agent). A repair loop is a later delegation to the same
 // agent under the same parent run.
 // checked counts delegations the runner checked (checks is not null; older runs
 // were never checked); first-pass rate is first_pass / checked.
@@ -892,6 +895,7 @@ func (q *Queries) DelegationEfficiency(ctx context.Context, workspaceID uuid.UUI
 			&i.Checked,
 			&i.FirstPass,
 			&i.RepairLoops,
+			&i.Bounces,
 			&i.ChildCostUsdMicros,
 			&i.ParentCostUsdMicros,
 			&i.ChildSeconds,
@@ -1660,6 +1664,17 @@ UPDATE approval_requests SET executed_at = NULL WHERE id = $1 AND result IS NULL
 func (q *Queries) ReleaseApprovalExecution(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, releaseApprovalExecution, id)
 	return err
+}
+
+const runParentID = `-- name: RunParentID :one
+SELECT parent_run_id FROM runs WHERE id = $1
+`
+
+func (q *Queries) RunParentID(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, runParentID, id)
+	var parent_run_id *uuid.UUID
+	err := row.Scan(&parent_run_id)
+	return parent_run_id, err
 }
 
 const runVerdict = `-- name: RunVerdict :one

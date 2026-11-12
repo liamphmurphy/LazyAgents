@@ -13,7 +13,7 @@ export const RUN_STATE: Record<string, { tone: PillTone; label: string }> = {
   failed: { tone: "blocked", label: "Failed" },
   cancelled: { tone: "neutral", label: "Cancelled" },
 };
-export const WAIT_LABEL: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agents", mockup_review: "mockup review" };
+export const WAIT_LABEL: Record<string, string> = { approval: "approval", human_reply: "reply", pause: "paused", delegation: "sub agents", mockup_review: "mockup review", checks: "checks" };
 export const RUN_ENDED = ["completed", "failed", "cancelled"];
 
 /** State as text plus tone, with the wait reason for waiting runs. */

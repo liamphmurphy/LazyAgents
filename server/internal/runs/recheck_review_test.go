@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -82,8 +83,38 @@ func TestReproAndRecheckReview(t *testing.T) {
 	if err := svc.CompleteWithRepro(ctx, sub, "", "Found a bug", "details", "", runs.VerdictChangesRequested, runs.Repro{Command: " go test -run TestBug ", CoversAll: true}); err != nil {
 		t.Fatal(err)
 	}
-	child, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws})
+	if r, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws}); r.State != "waiting" || deref(r.WaitReason) != "checks" {
+		t.Fatalf("review run %s/%s, want waiting on checks", r.State, deref(r.WaitReason))
+	}
+	// Pausing would lose the completion it's waiting to report.
+	if _, err := svc.SetRunControl(ctx, ws, me.ID, d.Run.ID, "pause"); !isConflict(err) || !strings.Contains(err.Error(), "checking") {
+		t.Fatalf("paused a run waiting on checks: %v", err)
+	}
+	if err := svc.Complete(ctx, sub, "", "again", "", "", ""); !isConflict(err) || !strings.Contains(err.Error(), "already called complete_run") {
+		t.Fatalf("tool call while waiting on checks: %v", err)
+	}
 	var ct runs.Contract
+	// Sent back (say for an uncommitted file), it reports again without
+	// repeating its repro: the repro is kept, so its failing tests stay expected.
+	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		ok, err := runs.BounceChild(ctx, store.New(tx), d.Run.ID, "fix it")
+		if err == nil && !ok {
+			t.Fatal("bounce refused")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Complete(ctx, sub, "", "Found a bug", "details", "", runs.VerdictChangesRequested); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws}); r.State != "waiting" || deref(r.WaitReason) != "checks" ||
+		json.Unmarshal(r.Contract, &ct) != nil || ct.ReproCommand != "go test -run TestBug" || ct.Bounces != 1 || ct.Verdict != runs.VerdictChangesRequested {
+		t.Fatalf("bounced review %s/%s contract %s", r.State, deref(r.WaitReason), r.Contract)
+	}
+	passChecks(t, pool, d.Run.ID)
+	child, _ := q.GetRun(ctx, store.GetRunParams{ID: d.Run.ID, WorkspaceID: ws})
+	ct = runs.Contract{}
 	if err := json.Unmarshal(child.Contract, &ct); err != nil || ct.ReproCommand != "go test -run TestBug" || !ct.ReproCoversAll || len(ct.AllowedPaths) != 1 {
 		t.Fatalf("contract %s %v", child.Contract, err)
 	}

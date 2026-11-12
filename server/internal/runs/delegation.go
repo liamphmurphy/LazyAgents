@@ -37,7 +37,10 @@ const (
 	MaxDelegations = 8
 	// MaxParallelDelegations bounds the delegated runs of one parent that are live at once.
 	MaxParallelDelegations = 3
-	maxTaskRunes           = 20000
+	// MaxCheckBounces bounds the times one delegated run's mechanical check
+	// failure is sent back to it before the main agent is woken with it.
+	MaxCheckBounces = 2
+	maxTaskRunes    = 20000
 )
 
 // Contract is what a main agent asks of a sub agent beyond the task text. The
@@ -75,6 +78,12 @@ type Contract struct {
 	// every blocking finding has one. Only completeChild sets them.
 	ReproCommand   string `json:"repro_command,omitempty"`
 	ReproCoversAll bool   `json:"repro_covers_all,omitempty"`
+	// Bounces counts the times the server sent a mechanical check failure back
+	// to the sub agent in this run (at most MaxCheckBounces). Verdict is the
+	// review verdict of the complete_run still waiting on its checks. Only
+	// completeChild and the runner set them.
+	Bounces int    `json:"bounces,omitempty"`
+	Verdict string `json:"verdict,omitempty"`
 }
 
 const (
@@ -125,6 +134,7 @@ func (c Contract) Normalize() (Contract, error) {
 	c.BaseSHA, c.BaseUncommitted, c.Branch, c.Worktree, c.ResumeSession = "", nil, "", "", false
 	c.PrevHeadSHA, c.Diverged = "", false
 	c.ReproCommand, c.ReproCoversAll = "", false
+	c.Bounces, c.Verdict = 0, ""
 	return c, nil
 }
 
@@ -463,7 +473,7 @@ func continuedRun(contract Contract, kids []store.Run, parent store.Run, sub sto
 	case !slices.Contains(Terminal, prev.State):
 		return nil, apperr.Invalid("continue_run_id", "that run is still in progress; wait for it to finish")
 	}
-	if len(prev.Checks) == 0 {
+	if !reported(*prev) {
 		return nil, apperr.Invalid("continue_run_id", "that run hasn't been checked and merged yet; wait for your delegation report")
 	}
 	var pc Contract
@@ -584,7 +594,7 @@ func WakeParent(ctx context.Context, q *store.Queries, child store.Run, state, o
 	return resume(ctx, q, parent, "delegation", msg)
 }
 
-// delegationWakeMessage includes every terminal child not yet checked by the runner.
+// delegationWakeMessage includes every terminal child not yet reported to the parent.
 func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.Run) (string, bool, error) {
 	kids, err := q.ChildRuns(ctx, &parent.ID)
 	if err != nil {
@@ -596,7 +606,7 @@ func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.R
 		if !slices.Contains(Terminal, k.State) {
 			return "", false, nil
 		}
-		if len(k.Checks) == 0 {
+		if !reported(k) {
 			ended = append(ended, k)
 		} else {
 			first = false
@@ -763,8 +773,10 @@ func truncate(s string, n int) string {
 	return string(r[:n]) + "…"
 }
 
-// completeChild ends a delegated run: no ticket status change, and the parent
-// is resumed with the summary.
+// completeChild ends a delegated run: no ticket status change. A run whose
+// contract has something to check, and that may still be sent back, waits on
+// "checks" for the runner (FinishCheckedChild, BounceChild); any other run
+// completes and its parent is resumed with the summary.
 func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, report, verdict string, repro Repro) error {
 	return s.tx(ctx, func(q *store.Queries) error {
 		run, t, err := s.running(ctx, q, c, key)
@@ -774,26 +786,30 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, rep
 		if run.ParentRunID == nil {
 			return fmt.Errorf("not a delegated run")
 		}
-		if repro.Command != "" {
-			// Recorded on the contract the runner checks the result against.
-			var contract Contract
-			if len(run.Contract) > 0 {
-				if err := json.Unmarshal(run.Contract, &contract); err != nil {
-					return err
-				}
+		var contract Contract
+		if len(run.Contract) > 0 {
+			if err := json.Unmarshal(run.Contract, &contract); err != nil {
+				return err
 			}
+		}
+		// Recorded on the contract the runner checks the result against. A
+		// reviewer sent back for uncommitted files keeps its earlier repro when
+		// it doesn't repeat it.
+		if repro.Command != "" {
 			contract.ReproCommand, contract.ReproCoversAll = repro.Command, repro.CoversAll
+		}
+		park := !contract.Empty() && contract.Bounces < MaxCheckBounces
+		if park {
+			contract.Verdict = verdict
+		}
+		if len(run.Contract) > 0 || repro.Command != "" {
 			raw, err := json.Marshal(contract)
 			if err != nil {
 				return err
 			}
-			if _, err := q.SetRunContract(ctx, store.SetRunContractParams{ID: run.ID, Contract: raw}); err != nil {
+			if run, err = q.SetRunContract(ctx, store.SetRunContractParams{ID: run.ID, Contract: raw}); err != nil {
 				return err
 			}
-		}
-		done, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome})
-		if err != nil {
-			return err
 		}
 		// Always written, so a continued run doesn't keep its previous report.
 		var rep *string
@@ -803,26 +819,136 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, rep
 		if err := q.SetRunReport(ctx, store.SetRunReportParams{ID: run.ID, Report: rep}); err != nil {
 			return err
 		}
-		done.Report = rep
 		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
 			return err
 		}
 		if err := q.ExpireRunApprovals(ctx, run.ID); err != nil {
 			return err
 		}
-		life := map[string]any{"state": "completed", "outcome": outcome}
-		if verdict != "" {
-			life["verdict"] = verdict
+		if park {
+			// The outcome is kept on the run until the checks decide.
+			wait := "checks"
+			if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait, Outcome: &outcome}); err != nil {
+				return err
+			}
+			if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "waiting", "reason": "checks", "outcome": outcome, "attempt": contract.Bounces + 1}); err != nil {
+				return err
+			}
+			return RecomputeAgentStatus(ctx, q, c.Agent.ID)
 		}
-		if err := event(ctx, q, run.ID, "lifecycle", life); err != nil {
-			return err
-		}
-		if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, agentActor(c), VerbRunCompleted, map[string]any{"run_id": run.ID, "outcome": outcome, "delegated": true, "verdict": verdict}, nil); err != nil {
-			return err
-		}
-		if err := RecomputeAgentStatus(ctx, q, c.Agent.ID); err != nil {
-			return err
-		}
-		return WakeParent(ctx, q, done, "completed", outcome)
+		return finishChild(ctx, q, run, t, agentActor(c), outcome, verdict)
 	})
+}
+
+// finishChild completes a delegated run and wakes its parent once its last
+// live delegated run has ended.
+func finishChild(ctx context.Context, q *store.Queries, run store.Run, t store.Ticket, actor tracker.Actor, outcome, verdict string) error {
+	done, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome})
+	if err != nil {
+		return err
+	}
+	life := map[string]any{"state": "completed", "outcome": outcome}
+	if verdict != "" {
+		life["verdict"] = verdict
+	}
+	if err := event(ctx, q, run.ID, "lifecycle", life); err != nil {
+		return err
+	}
+	if err := tracker.Record(ctx, q, run.WorkspaceID, t.ID, t.EpicID, actor, VerbRunCompleted, map[string]any{"run_id": run.ID, "outcome": outcome, "delegated": true, "verdict": verdict}, nil); err != nil {
+		return err
+	}
+	if err := RecomputeAgentStatus(ctx, q, run.AgentID); err != nil {
+		return err
+	}
+	return WakeParent(ctx, q, done, "completed", outcome)
+}
+
+// lockCheckingChild locks a delegated run waiting on its checks, after its
+// parent: the order CancelChildren takes them in, the likeliest race (a parent
+// cancelled during the checks). A path that locks the child first (a person
+// cancelling the child) can deadlock with it; Postgres aborts one side, and
+// the runner retries its checks on a later tick. ok is false when it no longer
+// waits on checks, e.g. its parent was cancelled meanwhile.
+func lockCheckingChild(ctx context.Context, q *store.Queries, childID uuid.UUID) (store.Run, bool, error) {
+	parentID, err := q.RunParentID(ctx, childID)
+	if err != nil {
+		return store.Run{}, false, err
+	}
+	if parentID != nil {
+		if _, err := q.LockRun(ctx, *parentID); err != nil {
+			return store.Run{}, false, err
+		}
+	}
+	run, err := q.LockRun(ctx, childID)
+	if err != nil {
+		return run, false, err
+	}
+	return run, run.State == "waiting" && deref(run.WaitReason) == "checks" && run.ParentRunID != nil && run.TicketID != nil, nil
+}
+
+// FinishCheckedChild completes a delegated run that waited on its checks with
+// the outcome and verdict it reported, stores checks (unless nil) and wakes its
+// parent. It reports false, changing nothing, when the run no longer waits.
+func FinishCheckedChild(ctx context.Context, q *store.Queries, childID uuid.UUID, checks []byte) (bool, error) {
+	run, ok, err := lockCheckingChild(ctx, q, childID)
+	if err != nil || !ok {
+		return false, err
+	}
+	if checks != nil {
+		if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: run.ID, Checks: checks}); err != nil {
+			return false, err
+		}
+	}
+	t, err := q.GetTicketByID(ctx, *run.TicketID)
+	if err != nil {
+		return false, err
+	}
+	var contract Contract
+	_ = json.Unmarshal(run.Contract, &contract)
+	return true, finishChild(ctx, q, run, t, tracker.AgentActor(run.AgentID), deref(run.Outcome), contract.Verdict)
+}
+
+// BounceChild sends a mechanical check failure back to a delegated run that
+// waited on its checks: one more bounce on its contract, and a turn in the
+// same harness session with input. It reports false, changing nothing, when
+// the run no longer waits.
+func BounceChild(ctx context.Context, q *store.Queries, childID uuid.UUID, input string) (bool, error) {
+	run, ok, err := lockCheckingChild(ctx, q, childID)
+	if err != nil || !ok {
+		return false, err
+	}
+	var contract Contract
+	_ = json.Unmarshal(run.Contract, &contract)
+	contract.Bounces++
+	contract.Verdict = ""
+	raw, err := json.Marshal(contract)
+	if err != nil {
+		return false, err
+	}
+	if _, err := q.SetRunContract(ctx, store.SetRunContractParams{ID: run.ID, Contract: raw}); err != nil {
+		return false, err
+	}
+	if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "running"}); err != nil {
+		return false, err
+	}
+	if err := q.SetIdleTurns(ctx, store.SetIdleTurnsParams{ID: run.ID, IdleTurns: 0}); err != nil {
+		return false, err
+	}
+	// A turn a crashed runner requeued would otherwise run first.
+	if err := q.DropPendingTurns(ctx, run.ID); err != nil {
+		return false, err
+	}
+	if _, err := q.StartTurn(ctx, store.StartTurnParams{RunID: run.ID, Trigger: "resume", InputMessage: input}); err != nil {
+		return false, err
+	}
+	if err := event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "running", "reason": "checks_bounced", "bounce": contract.Bounces}); err != nil {
+		return false, err
+	}
+	return true, RecomputeAgentStatus(ctx, q, run.AgentID)
+}
+
+// reported says the runner has reported a delegated run's checks to its parent.
+func reported(k store.Run) bool {
+	var c Checks
+	return len(k.Checks) > 0 && json.Unmarshal(k.Checks, &c) == nil && c.ReportedTurn != 0
 }

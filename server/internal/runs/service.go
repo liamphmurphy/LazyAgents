@@ -389,6 +389,9 @@ func (s *Service) running(ctx context.Context, q *store.Queries, c Caller, key s
 	case "running":
 		return run, t, nil
 	case "waiting":
+		if deref(run.WaitReason) == "checks" {
+			return run, t, apperr.Conflict("you already called complete_run and the server is checking your work; end your turn")
+		}
 		return run, t, apperr.Conflict("the run is waiting for a person (%s); call await_signal", deref(run.WaitReason))
 	case "paused":
 		return run, t, apperr.Conflict("a person paused this run; stop and call await_signal")

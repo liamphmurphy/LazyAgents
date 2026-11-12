@@ -6914,7 +6914,7 @@ components:
         workspace_path: { type: string, description: "The folder on the person's machine holding the run's checkout, while it exists; absent for a checkout in a Docker volume" }
         session_id: { type: string, description: The harness session turns resume }
         dispatched_by: { $ref: "#/components/schemas/UserRef" }
-        wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review], description: "delegation: waiting for a sub agent the run delegated to; mockup_review: waiting for a person to review a UI mockup" }
+        wait_reason: { type: string, enum: [approval, human_reply, pause, delegation, mockup_review, checks], description: "delegation: waiting for a sub agent the run delegated to; checks: a delegated run that finished, waiting for the server to check its result; mockup_review: waiting for a person to review a UI mockup" }
         parent_run_id: { type: string, format: uuid, description: "Set on a run a main agent delegated to a sub agent; it works in the parent's checkout" }
         harness: { type: string }
         model: { type: string }
@@ -7485,16 +7485,17 @@ components:
 
     DelegationEfficiency:
       type: object
-      required: [agent_id, handle, name, delegations, checked, first_pass, first_pass_rate, repair_loops, child_cost_usd_micros, parent_cost_usd_micros, total_cost_usd_micros, avg_seconds, avg_setup_seconds, avg_harness_seconds, avg_checks_seconds]
+      required: [agent_id, handle, name, delegations, checked, first_pass, first_pass_rate, repair_loops, bounces, child_cost_usd_micros, parent_cost_usd_micros, total_cost_usd_micros, avg_seconds, avg_setup_seconds, avg_harness_seconds, avg_checks_seconds]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
         name: { type: string }
         delegations: { type: integer, description: "Finished delegated runs" }
         checked: { type: integer, description: "Delegated runs the runner checked (older runs were never checked)" }
-        first_pass: { type: integer, description: "Runs whose result passed the runner's checks and needed no repeat delegation to the same agent" }
+        first_pass: { type: integer, description: "Runs whose result passed the runner's checks on the first attempt (the server never sent a check failure back) and needed no repeat delegation to the same agent" }
         first_pass_rate: { type: number, format: double, description: "first_pass / checked, 0 to 1; 0 when nothing was checked" }
         repair_loops: { type: integer, description: "Runs followed by another delegation to the same agent under the same parent run" }
+        bounces: { type: integer, description: "Times the server sent a mechanical check failure back to the sub agent before waking the main agent, summed over its runs" }
         child_cost_usd_micros: { type: integer, format: int64 }
         parent_cost_usd_micros: { type: integer, format: int64, description: "Main-agent run cost attributed to this agent: each parent run's cost is split evenly by count across its child runs, and this sums the shares of this agent's children" }
         total_cost_usd_micros: { type: integer, format: int64 }

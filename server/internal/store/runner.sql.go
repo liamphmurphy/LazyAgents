@@ -49,6 +49,86 @@ func (q *Queries) AbandonedChatCancellations(ctx context.Context, runnerID *stri
 	return items, nil
 }
 
+const claimChecksRun = `-- name: ClaimChecksRun :one
+UPDATE runs SET runner_id = $1,
+  execution_token = $2, execution_expires_at = $3
+WHERE id = (
+  SELECT r.id FROM runs r
+  WHERE r.state = 'waiting' AND r.wait_reason = 'checks' AND r.parent_run_id IS NOT NULL
+    AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+    AND (r.runner_id = $1 OR r.runner_id IS NULL
+      OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.id AND (b.status = 'running' OR b.execution_expires_at > now()))
+  ORDER BY r.started_at
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING id, workspace_id, ticket_id, agent_id, mode, state, wait_reason, resolved_spec, definition_version_id, harness, model, harness_session_id, outcome, tool_calls, input_tokens, output_tokens, cost_usd_micros, cost_source, started_at, ended_at, created_at, updated_at, dispatched_by_user_id, runner_id, workspace_volume, idle_turns, parent_run_id, purpose, contract, checks, setup_ms, harness_ms, checks_ms, hold_until, hold_started_at, hold_attempts, hold_reset_known, checkpoint_branch, checkpoint_at, checkpoint_error, workspace_host_path, execution_token, execution_expires_at, context_tokens, report, rollover_requested
+`
+
+type ClaimChecksRunParams struct {
+	RunnerID           *string
+	ExecutionToken     *uuid.UUID
+	ExecutionExpiresAt *time.Time
+}
+
+// A delegated run that called complete_run and waits on its checks, once its
+// harness process has exited: this runner leases it to check the result. Only
+// runs this runner or a dead runner last held.
+func (q *Queries) ClaimChecksRun(ctx context.Context, arg ClaimChecksRunParams) (Run, error) {
+	row := q.db.QueryRow(ctx, claimChecksRun, arg.RunnerID, arg.ExecutionToken, arg.ExecutionExpiresAt)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TicketID,
+		&i.AgentID,
+		&i.Mode,
+		&i.State,
+		&i.WaitReason,
+		&i.ResolvedSpec,
+		&i.DefinitionVersionID,
+		&i.Harness,
+		&i.Model,
+		&i.HarnessSessionID,
+		&i.Outcome,
+		&i.ToolCalls,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CostUsdMicros,
+		&i.CostSource,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DispatchedByUserID,
+		&i.RunnerID,
+		&i.WorkspaceVolume,
+		&i.IdleTurns,
+		&i.ParentRunID,
+		&i.Purpose,
+		&i.Contract,
+		&i.Checks,
+		&i.SetupMs,
+		&i.HarnessMs,
+		&i.ChecksMs,
+		&i.HoldUntil,
+		&i.HoldStartedAt,
+		&i.HoldAttempts,
+		&i.HoldResetKnown,
+		&i.CheckpointBranch,
+		&i.CheckpointAt,
+		&i.CheckpointError,
+		&i.WorkspaceHostPath,
+		&i.ExecutionToken,
+		&i.ExecutionExpiresAt,
+		&i.ContextTokens,
+		&i.Report,
+		&i.RolloverRequested,
+	)
+	return i, err
+}
+
 const claimPendingTurn = `-- name: ClaimPendingTurn :one
 UPDATE run_turns SET status = 'running', process_started_at = now(),
   execution_token = $1, execution_expires_at = $2

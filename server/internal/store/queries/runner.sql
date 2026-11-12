@@ -312,3 +312,22 @@ SELECT
   coalesce(sum((usage->>'shell_output_bytes')::bigint), 0)::bigint AS shell_output_bytes,
   coalesce(sum((usage->>'other_output_bytes')::bigint), 0)::bigint AS other_output_bytes
 FROM run_turns WHERE run_id = $1;
+
+-- name: ClaimChecksRun :one
+-- A delegated run that called complete_run and waits on its checks, once its
+-- harness process has exited: this runner leases it to check the result. Only
+-- runs this runner or a dead runner last held.
+UPDATE runs SET runner_id = sqlc.arg(runner_id),
+  execution_token = sqlc.narg(execution_token), execution_expires_at = sqlc.narg(execution_expires_at)
+WHERE id = (
+  SELECT r.id FROM runs r
+  WHERE r.state = 'waiting' AND r.wait_reason = 'checks' AND r.parent_run_id IS NOT NULL
+    AND (r.execution_expires_at IS NULL OR r.execution_expires_at <= now())
+    AND (r.runner_id = sqlc.arg(runner_id) OR r.runner_id IS NULL
+      OR r.runner_id NOT IN (SELECT id FROM runners WHERE heartbeat_at > now() - interval '45 seconds'))
+    AND NOT EXISTS (SELECT 1 FROM run_turns b WHERE b.run_id = r.id AND (b.status = 'running' OR b.execution_expires_at > now()))
+  ORDER BY r.started_at
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING *;

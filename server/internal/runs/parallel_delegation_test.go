@@ -146,6 +146,10 @@ func TestParallelDelegationRulesAndWake(t *testing.T) {
 		if err := svc.Complete(ctx, callerFor(a, &d.Run.ID), "", outcome, strings.Join(report, ""), "", ""); err != nil {
 			t.Fatal(err)
 		}
+		if r := state(d.Run.ID); r.State != "waiting" || deref(r.WaitReason) != "checks" {
+			t.Fatalf("child with a contract %s/%s, want waiting on checks", r.State, deref(r.WaitReason))
+		}
+		passChecks(t, pool, d.Run.ID)
 	}
 	finish(d1, scribe, "docs done", "- docs/guide.md:3 DOCS-FINDING")
 	finish(d3, scribe, "web done")
@@ -214,7 +218,14 @@ func TestParallelDelegationRulesAndWake(t *testing.T) {
 	if _, err := delegate("scribe", "unchecked", runs.Contract{ContinueRunID: d1.Run.ID.String()}); err == nil || !strings.Contains(err.Error(), "hasn't been checked") {
 		t.Fatalf("unchecked continuation: %v", err)
 	}
+	// Checked when it completed but not yet reported to the parent: still not continuable.
 	if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: d1.Run.ID, Checks: []byte(`{"ran":true}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := delegate("scribe", "unreported", runs.Contract{ContinueRunID: d1.Run.ID.String()}); err == nil || !strings.Contains(err.Error(), "hasn't been checked") {
+		t.Fatalf("unreported continuation: %v", err)
+	}
+	if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: d1.Run.ID, Checks: []byte(`{"ran":true,"reported_turn":2}`)}); err != nil {
 		t.Fatal(err)
 	}
 	// Give d1 a worktree, a branch and a session, as the runner would.
@@ -252,7 +263,7 @@ func TestParallelDelegationRulesAndWake(t *testing.T) {
 	if _, err := pool.Exec(ctx, "UPDATE run_turns SET status = 'done' WHERE run_id = $1", parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: d4.Run.ID, Checks: []byte(`{"ran":true}`)}); err != nil {
+	if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: d4.Run.ID, Checks: []byte(`{"ran":true,"reported_turn":3}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE runs SET harness = 'codex' WHERE id = $1", d4.Run.ID); err != nil {
@@ -420,6 +431,17 @@ func TestParallelDelegationLifecycle(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
+				// Both pass their checks at once: still one wake.
+				barrier = make(chan struct{})
+				for _, id := range []uuid.UUID{d1.Run.ID, d2.Run.ID} {
+					go func(id uuid.UUID) { <-barrier; errs <- finishChecked(pool, id) }(id)
+				}
+				close(barrier)
+				for i := 0; i < 2; i++ {
+					if err := <-errs; err != nil {
+						t.Fatal(err)
+					}
+				}
 			} else {
 				if err := svc.Complete(ctx, c1, "", "docs done", "", "", ""); err != nil {
 					t.Fatal(err)
@@ -427,6 +449,7 @@ func TestParallelDelegationLifecycle(t *testing.T) {
 				if err := svc.Complete(ctx, c2, "", "src done", "", "", ""); err != nil {
 					t.Fatal(err)
 				}
+				passChecks(t, pool, d1.Run.ID, d2.Run.ID)
 			}
 			if scenario == "paused resume" {
 				if _, err := svc.SetRunControl(ctx, me.WorkspaceID, me.ID, parent.ID, "resume"); err != nil {

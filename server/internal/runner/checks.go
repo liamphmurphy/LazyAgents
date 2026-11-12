@@ -4,9 +4,13 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -102,8 +106,10 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 		if !isDone(k.State) {
 			return ""
 		}
+		// Not yet reported (checked at completion or not at all), or reported
+		// in this turn before a crash: replayed below.
 		var checks runs.Checks
-		if len(k.Checks) == 0 || (json.Unmarshal(k.Checks, &checks) == nil && checks.ReportedTurn == reportedTurn) {
+		if len(k.Checks) == 0 || (json.Unmarshal(k.Checks, &checks) == nil && (checks.ReportedTurn == 0 || checks.ReportedTurn == reportedTurn)) {
 			ended = append(ended, k)
 		}
 	}
@@ -125,9 +131,12 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 		var k runs.Checks
 		if len(child.Checks) > 0 {
 			_ = json.Unmarshal(child.Checks, &k)
-		} else {
+		}
+		if k.ReportedTurn == 0 {
 			checksStart := time.Now()
-			k = r.checkChild(ctx, child, contract, parentBranch, env)
+			if len(child.Checks) == 0 {
+				k = r.checkChild(ctx, child, contract, parentBranch, env)
+			} // else checked when it completed (checkCompleted)
 			k.ReportedTurn = reportedTurn
 			r.mergeChild(ctx, ws, parentBranch, child, contract, &k, env)
 			if k.Merged && merged > 0 {
@@ -293,7 +302,7 @@ func (r *Runner) gitOut(ctx context.Context, ws, dir, name, script string, env m
 // files, what its branch changed against the parent's branch, allowed paths
 // and the test command.
 func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.Contract, parentBranch string, env map[string]string) runs.Checks {
-	k := runs.Checks{ChildState: child.State, TestCommand: contract.TestCommand, Branch: contract.Branch}
+	k := runs.Checks{ChildState: child.State, TestCommand: contract.TestCommand, Branch: contract.Branch, Bounces: contract.Bounces}
 	if contract.Worktree == "" {
 		k.Error = "the delegated run never got a worktree (it didn't start), so there is nothing to check"
 		k.Evaluate(contract)
@@ -472,4 +481,112 @@ func (r *Runner) gitBrief(ctx context.Context, c runCtx, env map[string]string) 
 		return ""
 	}
 	return "## Git\n\n" + b.String()
+}
+
+// tickChecks leases each delegated run that called complete_run and waits on
+// its checks (runs.completeChild), once its process has exited, and checks it
+// in a goroutine while slots last.
+func (r *Runner) tickChecks(ctx context.Context) {
+	for r.slot() {
+		token, expires := uuid.New(), time.Now().Add(executionTTL)
+		claimCtx, cancel := context.WithTimeout(ctx, controlTimeout)
+		run, err := r.q().ClaimChecksRun(claimCtx, store.ClaimChecksRunParams{RunnerID: &r.Cfg.ID, ExecutionToken: &token, ExecutionExpiresAt: &expires})
+		cancel()
+		if err != nil {
+			r.mu.Lock()
+			r.active--
+			r.mu.Unlock()
+			if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
+				r.Log.Error("claim delegated run checks", "err", err)
+			}
+			return
+		}
+		r.wg.Add(1)
+		go func() {
+			defer r.release()
+			r.execute(ctx, run.ID, false, run.ExecutionToken, run.ExecutionExpiresAt, func(ctx context.Context) { r.checkCompleted(ctx, run) })
+		}()
+	}
+}
+
+// checkCompleted checks a delegated run that waits on its checks in its
+// worktree, with its parent's secrets as delegationReport would. A pass
+// completes it and wakes the parent; a mechanical failure with bounces left
+// goes back to the sub agent's session; anything else completes it with the
+// failing checks. The parent's branch only changes when it reports and merges.
+func (r *Runner) checkCompleted(ctx context.Context, child store.Run) {
+	log := r.Log.With("run", child.ID)
+	env, err := r.parentEnv(ctx, child)
+	if err != nil {
+		// Don't retry forever: complete it unchecked, and the parent's report
+		// checks it when it wakes, as for a run with nothing checked early.
+		log.Warn("can't check a delegated run at completion; leaving it to the report", "err", err)
+		if err := pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+			q := store.New(tx)
+			if err := verifyExecution(ctx, q, child.ID); err != nil {
+				return err
+			}
+			_, err := runs.FinishCheckedChild(ctx, q, child.ID, nil)
+			return err
+		}); err != nil && ctx.Err() == nil {
+			log.Error("complete unchecked delegated run", "err", err)
+		}
+		return
+	}
+	var contract runs.Contract
+	_ = json.Unmarshal(child.Contract, &contract)
+	start := time.Now()
+	parentBranch := r.gitOut(ctx, wsID(child), "", "lazyagents-branch-"+child.ID.String(), "git symbolic-ref --short HEAD", env)
+	done := child
+	done.State = "completed" // what it will be once the checks let it
+	k := r.checkChild(ctx, done, contract, parentBranch, env)
+	if ctx.Err() != nil {
+		return // the lease was lost or the runner is stopping: checked again later
+	}
+	r.addTiming(child.ID, 0, 0, time.Since(start))
+	bounce := k.Bounceable(contract.Verdict != "") && contract.Bounces < runs.MaxCheckBounces
+	settled := false
+	err = pgx.BeginFunc(ctx, r.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if err := verifyExecution(ctx, q, child.ID); err != nil {
+			return err
+		}
+		if bounce {
+			ok, err := runs.BounceChild(ctx, q, child.ID, k.BounceMessage(contract.Bounces+1, runs.MaxCheckBounces))
+			settled = ok
+			return err
+		}
+		var raw []byte
+		if k.Ran { // otherwise delegationReport tries again when it reports
+			if raw, err = json.Marshal(k); err != nil {
+				return err
+			}
+		}
+		ok, err := runs.FinishCheckedChild(ctx, q, child.ID, raw)
+		settled = ok
+		return err
+	})
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Error("settle delegated run checks; retrying", "err", err)
+		}
+		return
+	}
+	if settled {
+		r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "checked", "passed": k.Passed, "ran": k.Ran, "bounced": bounce, "bounces": contract.Bounces})
+	}
+}
+
+// parentEnv is the secrets env of a delegated run's parent, which its checks
+// run with (as delegationReport's do).
+func (r *Runner) parentEnv(ctx context.Context, child store.Run) (map[string]string, error) {
+	parent, err := r.load(ctx, *child.ParentRunID)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := PlanSecrets(ctx, r.q(), parent.run.WorkspaceID, &parent.project.ID, parent.spec)
+	if err != nil {
+		return nil, err
+	}
+	return SecretEnv(ctx, r.Secrets, parent.run.WorkspaceID, &parent.project.ID, plan)
 }
