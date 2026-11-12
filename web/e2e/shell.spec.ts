@@ -79,7 +79,7 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   await expect(apps).toHaveAttribute("aria-expanded", "false");
   await apps.click();
   const flyout = page.getByRole("dialog", { name: "Apps" });
-  await expect(flyout.getByRole("group", { name: "Apps" }).getByRole("link")).toHaveText(["Docs", "Finance", "Library"]);
+  await expect(flyout.getByRole("group", { name: "Apps" }).getByRole("link")).toHaveText(["Docs", "Slides", "Designs", "Finance", "Library"]);
   await expect(flyout.getByRole("group", { name: "Tools" }).getByRole("link")).toHaveText(["Workflows", /Scheduled/, "Learn", /Wiki/]);
   await expect(flyout.getByRole("button", { name: "New space" })).toBeVisible();
   const flyoutBox = await flyout.boundingBox();
@@ -88,9 +88,9 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   // Arrow keys move through the grid; Esc closes and returns to the row.
   await expect(flyout.getByRole("link", { name: "Docs" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
-  await expect(flyout.getByRole("link", { name: "Finance" })).toBeFocused();
+  await expect(flyout.getByRole("link", { name: "Slides" })).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(flyout.getByRole("link", { name: "Learn" })).toBeFocused();
+  await expect(flyout.getByRole("link", { name: "Workflows" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(flyout).toHaveCount(0);
   await expect(apps).toBeFocused();

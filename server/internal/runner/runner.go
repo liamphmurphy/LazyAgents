@@ -105,6 +105,9 @@ type Runner struct {
 	Workflows *runs.WorkflowEngine
 	// Scheduled starts and settles scheduled tasks; nil leaves them idle.
 	Scheduled *runs.Service
+	// Designs draws and inspects design frames linked to a ticket, which its
+	// runs receive as context; nil delivers only a note for each frame.
+	Designs DesignRenderer
 	// StoreSecret saves logins from sign-ins started in Settings; nil leaves
 	// them to another runner.
 	StoreSecret SecretStorer
@@ -1286,6 +1289,16 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	ctxFiles, err := ContextFiles(ctx, q, c.agent, c.ticket, c.spec.Memory)
 	if err != nil {
 		log.Warn("context files", "err", err)
+	}
+	if c.run.Purpose == "ticket" && c.run.TicketID != nil {
+		// Linked design frames (ADR-designs §3.11); bounded so a slow renderer can't hold the turn.
+		dctx, cancel := context.WithTimeout(ctx, designContextTimeout)
+		frames, err := DesignFrameFiles(dctx, q, r.Designs, c.ticket)
+		cancel()
+		if err != nil {
+			log.Warn("design frames", "err", err)
+		}
+		ctxFiles = append(ctxFiles, frames...)
 	}
 	if c.run.Purpose == "planning" {
 		source, err := PlanningContextFile(ctx, q, c.run)

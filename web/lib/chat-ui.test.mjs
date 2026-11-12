@@ -136,6 +136,9 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "get_video_transcript", input: {} }, "video"],
     [{ tool: "canvas_create", input: {} }, "canvas"],
     [{ tool: "canvas_comment", input: {} }, "canvas-comment"],
+    [{ tool: "mcp__lazyagents__design_flows", input: {} }, "design-view"],
+    ...["design_create", "design_patch", "design_import", "design_comment", "design_reply", "design_link_ticket"].map((tool) => [{ tool: `mcp__lazyagents__${tool}`, input: {} }, "design"]),
+    ...["design_list", "design_outline", "design_read", "design_render", "design_comments", "design_components", "design_tokens", "design_inspect"].map((tool) => [{ tool, input: {} }, "design-view"]),
     [{ tool: "mcp__lazyagents__start_playground", input: {} }, "playground"],
     [{ tool: "playground_status", input: {} }, "playground"],
     [{ tool: "read_workflow", input: {} }, "workflow"],
@@ -347,6 +350,7 @@ test("stepDetail names files and searches but never paths or commands", () => {
     [{ tool: "Read", input: { file_path: "/w/.lazyagents/attachments/generated/a.png" } }, "Looking at the image"],
     [{ tool: "Read", input: {} }, "Reading the code"],
     [{ tool: "mcp__other__mystery", input: { a: "b" } }, "Using Other: mystery"],
+    [{ tool: "mcp__lazyagents__design_create", input: { title: "Onboarding" } }, "Starting the design “Onboarding”"],
   ];
   for (const [call, want] of cases) assert.equal(stepDetail(call), want, call.tool);
 });
@@ -607,4 +611,17 @@ test("every chat tool the server offers has a scene of its own", () => {
   const idle = new Set(["whoami", "set_chat_title"]);
   const unpictured = tools.filter((tool) => !idle.has(tool) && chatStatusOf({ tool: `mcp__lazyagents__${tool}`, input: {} }).kind === "thinking");
   assert.deepEqual(unpictured, []);
+});
+
+test("the design kinds have their own scene, with no placeholder left", () => {
+  // ADR-designs §3.9: design tools play the design scene; reads (design-view) share it, like image-view.
+  const scenes = readFileSync(new URL("../app/(app)/chat/_components/activity-scene.tsx", import.meta.url), "utf8");
+  assert.match(scenes, /^ {2}"design-view": "design",$/m, "design-view shares the design scene");
+  assert.match(scenes, /^ {2}design: \($/m, "design has a scene of its own");
+  assert.doesNotMatch(scenes, /^ {2}design: canvasScene\(/m);
+  assert.doesNotMatch(scenes, /placeholder/i);
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  for (const part of [...scenes.matchAll(/scene-dz-([a-z0-9]+)/g)].map((m) => m[1])) assert.match(css, new RegExp(`@keyframes scene-dz-${part} `), `scene-dz-${part} has keyframes`);
+  for (const tool of ["design_create", "design_patch"]) assert.equal(chatStatusOf({ tool, input: {} }).kind, "design", tool);
+  for (const tool of ["design_render", "design_outline", "design_read", "design_flows"]) assert.equal(chatStatusOf({ tool, input: {} }).kind, "design-view", tool);
 });

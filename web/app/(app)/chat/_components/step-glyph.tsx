@@ -200,12 +200,25 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4 10.5c1.5-4 3-4 4-1.5s2.5 2.5 4-3" />
     </>
   ),
+  "design-view": (
+    <>
+      <rect className="glyph-s" x="1.5" y="3" width="4.5" height="10" rx="1" />
+      <rect className="glyph-s" x="10" y="3" width="4.5" height="10" rx="1" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M6 8H10" />
+    </>
+  ),
   playground: (
     <>
       <rect className="glyph-s" x="1.5" y="2.5" width="13" height="11" rx="1.5" />
       <path className="glyph-s" d="M1.5 5.5H14.5" />
       <path d="M6.5 7.5v4l3.5-2z" fill="currentColor" />
       <circle className="glyph-a glyph-blink glyph-live" cx="12" cy="4" r="0.9" fill="currentColor" />
+    </>
+  ),
+  design: (
+    <>
+      <rect className="glyph-s" x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M4 10.5c1.5-4 3-4 4-1.5s2.5 2.5 4-3" />
     </>
   ),
   "canvas-comment": (

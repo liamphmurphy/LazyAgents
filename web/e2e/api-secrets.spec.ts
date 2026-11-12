@@ -7,9 +7,9 @@ const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 // exp 2026-11-15T00:00:00Z
 const JWT = `${b64({ alg: "HS256" })}.${b64({ sub: "liam", exp: 1794700800 })}.c2lnbmF0dXJlLXRoYXQtaXMtc2VjcmV0`;
 
-async function openChat(page: Page) {
+async function openChat(page: Page, message = "Pull last week's orders from the Acme API") {
   await page.goto("/chat");
-  await page.getByRole("combobox", { name: "Message" }).fill("Pull last week's orders from the Acme API");
+  await page.getByRole("combobox", { name: "Message" }).fill(message);
   await page.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
 }
@@ -44,12 +44,12 @@ test("a secret is added with its hosts, then given to a persona with request per
 
 test("a request with a secret waits in the chat; writes can only be allowed once", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS] });
-  await openChat(page);
+  await openChat(page, "slow: Pull last week's orders from the Acme API");
   mock.secretApprovals.push({
     id: "21111111-1111-4111-8111-111111111111", secret_id: "21111111-1111-4111-8111-111111111112", secret_name: "Acme API JWT", secret_handle: "acme-jwt",
     placement: "bearer", placement_key: "", method: "POST", url: "https://api.acme.com/v1/refunds", headers: { Accept: "application/json" }, body: '{"order":"ord_9f2"}', created_at: new Date().toISOString(),
   });
-  const card = page.getByTestId("secret-approval");
+  const card = page.getByTestId("chat-status-card").getByTestId("secret-approval");
   await expect(card).toContainText("wants to call an API with");
   await expect(card).toContainText("POST https://api.acme.com/v1/refunds");
   await expect(card).toContainText("Authorization: Bearer ‹acme-jwt›");

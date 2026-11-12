@@ -7,6 +7,9 @@ SELECT * FROM chat_canvases WHERE id = $1 AND session_id = $2 FOR UPDATE;
 -- name: GetChatCanvas :one
 SELECT * FROM chat_canvases WHERE id = $1 AND session_id = $2;
 
+-- name: DeleteChatCanvas :exec
+DELETE FROM chat_canvases WHERE id = $1 AND session_id = $2;
+
 -- name: TouchChatCanvas :exec
 UPDATE chat_canvases SET updated_at = now() WHERE id = $1;
 

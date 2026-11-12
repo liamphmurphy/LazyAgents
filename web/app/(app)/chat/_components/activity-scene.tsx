@@ -65,7 +65,9 @@ const LABELS: Record<ChatStatusKind, string> = {
   image: "Creating an image",
   "image-view": "Looking at an image",
   canvas: "Working on a canvas",
+  "design-view": "Looking at a design",
   "canvas-comment": "Commenting on a canvas",
+  design: "Designing a flow",
   playground: "Spinning up a playground",
   runs: "Checking on runs",
   workflow: "Working on a workflow",
@@ -157,7 +159,7 @@ const shelfTile = (x: number, y: number, thumb: ReactNode) => (
 );
 
 /** Kinds split off a broader one keep its scene: the step rail's glyph is what tells them apart. */
-type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save";
+type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save" | "design-view";
 
 const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   thinking: (
@@ -365,6 +367,26 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   ),
   canvas: canvasScene(),
   "canvas-comment": canvasScene(true),
+  // A frame sketches itself, its button is wired to the next frame, that frame fills in, then a sparkle.
+  design: (
+    <>
+      <rect className="scene-paper" x="26" y="4" width="32" height="48" rx="4" />
+      <path className="scene-line-accent scene-dash scene-story scene-dz-sketch" strokeWidth="1.5" pathLength={1} d="M30 4H54a4 4 0 0 1 4 4V48a4 4 0 0 1-4 4H30a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" />
+      <path className="scene-line scene-story scene-dz-a0" d="M32 12H46" />
+      <path className="scene-line scene-story scene-dz-a1" strokeWidth="1.5" opacity="0.6" d="M32 19H52M32 25H48" />
+      <rect className="scene-accent scene-story scene-dz-btn" x="32" y="40" width="20" height="7" rx="2" />
+      <path className="scene-line-accent scene-dash scene-story scene-dz-wire" strokeWidth="1.6" pathLength={1} d="M52 43.5C68 43.5 68 20 83 20" />
+      <path className="scene-accent scene-story scene-dz-head" d="M81 16.5l4 3.5-4 3.5z" />
+      <rect className="scene-paper scene-story scene-dz-frame" x="86" y="4" width="32" height="48" rx="4" stroke="var(--accent)" strokeWidth="1.5" />
+      <path className="scene-line-accent scene-story scene-dz-b0" d="M92 12H106" />
+      <path className="scene-line scene-story scene-dz-b1" strokeWidth="1.5" opacity="0.6" d="M92 19H112M92 25H104" />
+      <rect className="scene-accent scene-story scene-dz-b2" x="92" y="40" width="20" height="7" rx="2" />
+      <path className="scene-warm scene-story scene-dz-spark" d={sparkle(122, 12, 6)} />
+      <g className="scene-story scene-dz-cur">
+        <path fill="var(--text)" d="M104 36v9l2.6-2.4 3.6-.2z" />
+      </g>
+    </>
+  ),
   runs: (
     <>
       {[
@@ -821,6 +843,8 @@ const SCENE_OF: Record<SplitKind, Exclude<ChatStatusKind, SplitKind>> = {
   "web-page": "web",
   "image-view": "image",
   "memory-save": "memory",
+  // Design reads share the design scene, like image-view (ADR-designs §3.9).
+  "design-view": "design",
 };
 
 const sceneOf = (kind: ChatStatusKind) => (kind in SCENE_OF ? SCENE_OF[kind as SplitKind] : (kind as Exclude<ChatStatusKind, SplitKind>));

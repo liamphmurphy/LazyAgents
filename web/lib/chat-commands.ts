@@ -15,7 +15,27 @@ export const CHAT_COMMANDS: ChatCommand[] = [
   { name: "stop", hint: "Stop the current reply" },
   { name: "aside", args: "question", free: true, hint: "Ask about the current reply without stopping it" },
   { name: "queue", args: "message", free: true, hint: "Send this once the current reply ends" },
+  { name: "design", args: "what to design", free: true, hint: "Create a design (flow, diagram or wireframe) beside the chat" },
 ];
+
+/** What the composer's + menu offers under "Create with {persona}" (docs/design/designs-from-chat.svg). */
+export type CreateKind = "doc" | "slides" | "design";
+export const CREATE_KINDS: { kind: CreateKind; label: string; hint?: string; command?: string }[] = [
+  { kind: "doc", label: "Doc" },
+  { kind: "slides", label: "Slides" },
+  { kind: "design", label: "Design", hint: "Flow, diagram or wireframe", command: "/design" },
+];
+
+/**
+ * The message /design sends: the persona's instructions read "Create a design" as a call
+ * for design_create, which opens the design beside the chat.
+ */
+export function designRequest(brief: string): string {
+  return `Create a design: ${brief.trim()}`;
+}
+
+/** The draft the + menu's Doc leaves in the composer, for the person to finish. */
+export const DOC_DRAFT = "Create a doc: ";
 
 /**
  * The command a finished message is, or null when it's an ordinary message. Only a

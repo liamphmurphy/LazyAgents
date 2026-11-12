@@ -42,7 +42,8 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 /** Header entry point, once the chat has a canvas: goes to the newest card, or fullscreen if it has none. */
 export function CanvasButton({ chatId, live }: { chatId: string; live: boolean }) {
   const panel = useCanvasPanel();
-  const canvases = useChatCanvases(chatId, live).data?.canvases ?? [];
+  // Designs have their own cards and open beside the chat.
+  const canvases = (useChatCanvases(chatId, live).data?.canvases ?? []).filter((c) => c.kind !== "design");
   if (!canvases.length) return null;
   const go = () => {
     const card = Array.from(document.querySelectorAll<HTMLElement>("[data-canvas-card]")).at(-1);

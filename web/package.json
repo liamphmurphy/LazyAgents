@@ -11,9 +11,12 @@
     "typecheck": "next typegen && tsc --noEmit",
     "e2e": "playwright test",
     "e2e:stack": "bash e2e-stack/run.sh",
-    "test:unit": "node --experimental-strip-types --test lib/*.test.mjs"
+    "test:unit": "node --experimental-strip-types --test lib/*.test.mjs",
+    "gen:inter-metrics": "node --experimental-strip-types scripts/gen-inter-metrics.mjs",
+    "gen:design-tokens": "node --experimental-strip-types scripts/gen-design-tokens.mjs"
   },
   "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "@tanstack/react-query": "^5.105.1",
     "@tiptap/core": "3.33.0",
     "@tiptap/extension-list": "3.33.0",
@@ -25,6 +28,7 @@
     "@tiptap/starter-kit": "3.33.0",
     "@xyflow/react": "^12.12.1",
     "docx": "^9.15.3",
+    "elkjs": "^0.12.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "katex": "^0.19.1",
@@ -48,12 +52,16 @@
     "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "fflate": "^0.8.3",
     "openapi-typescript": "^7.13.0",
+    "pdfjs-dist": "^5.7.284",
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

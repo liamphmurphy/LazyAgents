@@ -42,6 +42,11 @@ type Config struct {
 	// on :8000 and the browser uses Next on :3000.
 	WebURL string
 
+	// DesignWorkerURL and DesignWorkerToken reach the Node design worker that
+	// renders designs (DESIGN_WORKER_URL, DESIGN_WORKER_TOKEN). With no token,
+	// renders are unavailable.
+	DesignWorkerURL, DesignWorkerToken string
+
 	Runner Runner
 	// PRSyncInterval is how often open PRs are polled (0 disables).
 	PRSyncInterval int // seconds
@@ -130,6 +135,9 @@ func Load() (Config, error) {
 		LocalUserEmail: env("LOCAL_USER_EMAIL", "me@localhost"),
 		SecretsKey:     env("SECRETS_KEY", ""),
 		PublicURL:      env("PUBLIC_URL", "http://localhost:8080"),
+
+		DesignWorkerURL:   env("DESIGN_WORKER_URL", "http://web:3000/internal/designs"),
+		DesignWorkerToken: env("DESIGN_WORKER_TOKEN", ""),
 	}
 	c.WebURL = strings.TrimRight(env("WEB_URL", c.PublicURL), "/")
 	var err error

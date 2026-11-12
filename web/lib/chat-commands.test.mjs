@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commandMenu, literalBody, parseCommand } from "./chat-commands.ts";
+import { CHAT_COMMANDS, CREATE_KINDS, commandMenu, designRequest, literalBody, parseCommand } from "./chat-commands.ts";
 
 test("parseCommand reads a one-line /command and its argument", () => {
   assert.deepEqual(parseCommand("/stop"), { name: "stop", arg: "" });
@@ -43,4 +43,14 @@ test("/aside and /queue take free text, with nothing to pick", () => {
   assert.equal(commandMenu("/queue "), null);
   assert.deepEqual(commandMenu("/as"), { stage: "command", query: "as" });
   assert.deepEqual(parseCommand("/aside how far along?"), { name: "aside", arg: "how far along?" });
+});
+
+test("/design takes what to design as free text and asks the persona for a design", () => {
+  assert.equal(commandMenu("/design onboarding flow"), null);
+  assert.deepEqual(commandMenu("/des"), { stage: "command", query: "des" });
+  assert.deepEqual(parseCommand("/design  sketch onboarding "), { name: "design", arg: "sketch onboarding" });
+  assert.ok(CHAT_COMMANDS.find((c) => c.name === "design")?.free);
+  assert.equal(designRequest(" sketch onboarding "), "Create a design: sketch onboarding");
+  assert.deepEqual(CREATE_KINDS.map((k) => k.label), ["Doc", "Slides", "Design"]);
+  assert.equal(CREATE_KINDS.find((k) => k.kind === "design")?.command, "/design");
 });

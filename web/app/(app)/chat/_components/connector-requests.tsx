@@ -9,26 +9,25 @@ import { PersonaAvatar, PersonaName, personaLook } from "./persona";
 
 const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : null);
 
-/** Tool calls waiting for a yes or no, and connectors a persona proposed in this chat. */
-export function ConnectorRequests({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
+/**
+ * Tool calls waiting for a yes or no. Shown inside the running status card, so a request
+ * and the step that needs it read as one thing instead of two stacked blocks.
+ */
+export function ConnectorApprovalCards({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
   const approvals = useConnectorApprovals(chatId);
-  const proposals = useConnectorProposals(chatId);
   const decide = useDecideConnectorApproval(chatId);
-  const decline = useDeclineConnectorProposal();
-  const [reviewing, setReviewing] = useState<Schemas["ConnectorProposal"] | null>(null);
   const waiting = approvals.data?.approvals ?? [];
-  const proposed = proposals.data?.proposals ?? [];
-  if (!waiting.length && !proposed.length) return null;
+  if (!waiting.length) return null;
   const busy = decide.isPending || !!disabled;
-  const error = message(decide.error) ?? message(decline.error);
+  const error = message(decide.error);
   return (
-    <li className="flex flex-col gap-2" data-testid="connector-requests">
+    <>
       {waiting.map((a) => {
         const by = personaLook(a.persona);
         return (
-          <div key={a.id} data-testid="connector-approval" className="flex max-w-[min(720px,100%)] flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-3">
-            <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] text-fg">
-              <PersonaAvatar persona={by} size={18} />
+          <div key={a.id} data-testid="connector-approval" className="flex flex-col gap-2 rounded-lg border border-pill-human-fg/35 bg-pill-human-bg px-3 py-2.5">
+            <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-fg">
+              <PersonaAvatar persona={by} size={16} />
               <PersonaName persona={by} />
               <span>wants to use {a.connector_name}</span>
             </p>
@@ -44,6 +43,21 @@ export function ConnectorRequests({ chatId, disabled }: { chatId: string; disabl
           </div>
         );
       })}
+      {error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{error}</p>}
+    </>
+  );
+}
+
+/** Connectors a persona proposed in this chat. Tool approvals live in the status card ({@link ConnectorApprovalCards}). */
+export function ConnectorRequests({ chatId, disabled }: { chatId: string; disabled?: boolean }) {
+  const proposals = useConnectorProposals(chatId);
+  const decline = useDeclineConnectorProposal();
+  const [reviewing, setReviewing] = useState<Schemas["ConnectorProposal"] | null>(null);
+  const proposed = proposals.data?.proposals ?? [];
+  if (!proposed.length) return null;
+  const error = message(decline.error);
+  return (
+    <li className="flex flex-col gap-2" data-testid="connector-requests">
       {proposed.map((p) => {
         const by = personaLook(p.proposed_by);
         return (

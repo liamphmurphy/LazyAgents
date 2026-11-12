@@ -47,20 +47,25 @@ func CheckLibraryDiagram(source string) ([]byte, error) {
 	if len(svg) > MaxLibraryDiagramBytes {
 		return nil, apperr.Invalid("svg", "over the 1 MiB limit")
 	}
+	if !IsSVGDocument(svg) {
+		return nil, apperr.Invalid("svg", "not an SVG document")
+	}
+	return svg, nil
+}
+
+// IsSVGDocument reports whether the first element is an <svg> in SVG's
+// namespace. Only the root is checked, for the reason CheckLibraryDiagram
+// gives.
+func IsSVGDocument(svg []byte) bool {
 	d := xml.NewDecoder(bytes.NewReader(svg))
 	for {
 		tok, err := d.RawToken()
 		if err != nil {
-			return nil, apperr.Invalid("svg", "not an SVG document")
+			return false
 		}
-		el, ok := tok.(xml.StartElement)
-		if !ok {
-			continue
+		if el, ok := tok.(xml.StartElement); ok {
+			return el.Name.Local == "svg" && hasSVGNamespace(el)
 		}
-		if el.Name.Local != "svg" || !hasSVGNamespace(el) {
-			return nil, apperr.Invalid("svg", "not an SVG document")
-		}
-		return svg, nil
 	}
 }
 

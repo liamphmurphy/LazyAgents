@@ -7,6 +7,9 @@
 # Env:   E2E_DATABASE_URL  use this (disposable!) Postgres instead of starting one
 #        E2E_S3_ENDPOINT   use this S3 instead of starting SeaweedFS
 #        E2E_STACK_SETUP_ONLY=1  start the stack, print URLs, wait (no Playwright)
+#        E2E_FAKE_HARNESS_MODE   the fake CLIs' mode for the whole run (default chat-read). A run
+#                          with no mode and no playwright args also restarts the runner in
+#                          design-review and runs the @design-review specs (designs-review.spec.ts)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,6 +45,8 @@ wait_for() { # url, label, seconds
 }
 
 API_PORT="$(free_port)"; WEB_PORT="$(free_port)"
+# The design worker (renders and layouts for the Go API) is the web app's /internal/designs, behind a shared token.
+DESIGN_WORKER_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"
 API_URL="http://127.0.0.1:$API_PORT"
 WEB_URL="http://127.0.0.1:$WEB_PORT"
 
@@ -102,7 +107,8 @@ stack_env() {
     SECRETS_KEY="$SECRETS_KEY" PUBLIC_URL="$WEB_URL" \
     RUNNER_BACKEND=fake RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
     RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" \
-    FAKE_HARNESS_MODE=chat-read "$@"
+    DESIGN_WORKER_URL="$WEB_URL/internal/designs" DESIGN_WORKER_TOKEN="$DESIGN_WORKER_TOKEN" \
+    FAKE_HARNESS_MODE="${HARNESS_MODE:-chat-read}" "$@"
 }
 
 echo ">> starting api on :$API_PORT (runs migrations and first-boot seed)"
@@ -110,7 +116,9 @@ stack_env "$TMP/vesper" serve >"$TMP/logs/api.log" 2>&1 &
 PIDS+=($!)
 wait_for "$API_URL/api/v1/health" api 120
 echo ">> starting runner"
+HARNESS_MODE="${E2E_FAKE_HARNESS_MODE:-chat-read}"
 stack_env "$TMP/vesper" runner >"$TMP/logs/runner.log" 2>&1 &
+RUNNER_PID=$!
 PIDS+=($!)
 
 # The API serves only signed-in browsers. Sign in the way a person does (a
@@ -149,8 +157,8 @@ done
 
 # --- Web ---------------------------------------------------------------------------
 echo ">> building and starting web on :$WEB_PORT"
-(cd "$WEB" && API_INTERNAL_URL="$API_URL" npm run build >"$TMP/logs/web-build.log" 2>&1)
-(cd "$WEB" && exec env API_INTERNAL_URL="$API_URL" npx next start -p "$WEB_PORT" -H 127.0.0.1) >"$TMP/logs/web.log" 2>&1 &
+(cd "$WEB" && API_INTERNAL_URL="$API_URL" DESIGN_WORKER_TOKEN="$DESIGN_WORKER_TOKEN" npm run build >"$TMP/logs/web-build.log" 2>&1)
+(cd "$WEB" && exec env API_INTERNAL_URL="$API_URL" DESIGN_WORKER_TOKEN="$DESIGN_WORKER_TOKEN" npx next start -p "$WEB_PORT" -H 127.0.0.1) >"$TMP/logs/web.log" 2>&1 &
 PIDS+=($!)
 wait_for "$WEB_URL/chat" web 60
 
@@ -159,4 +167,21 @@ if [ -n "${E2E_STACK_SETUP_ONLY:-}" ]; then
   echo "setup only: Ctrl-C to tear down"; wait; exit 0
 fi
 cd "$WEB"
-E2E_STACK_BASE_URL="$WEB_URL" E2E_STACK_API_URL="$API_URL" E2E_STACK_STORAGE_STATE="$TMP/storage-state.json" npx playwright test -c playwright.stack.config.ts "$@"
+pw() {
+  E2E_FAKE_HARNESS_MODE="$HARNESS_MODE" E2E_STACK_BASE_URL="$WEB_URL" E2E_STACK_API_URL="$API_URL" E2E_STACK_STORAGE_STATE="$TMP/storage-state.json" npx playwright test -c playwright.stack.config.ts "$@"
+}
+if [ -n "${E2E_FAKE_HARNESS_MODE:-}" ] || [ $# -gt 0 ]; then
+  pw "$@"
+else
+  # Specs that need another script run after the rest, once the runner is restarted in that mode.
+  code=0
+  pw --grep-invert @design-review || code=$?
+  kill "$RUNNER_PID" 2>/dev/null || true
+  wait "$RUNNER_PID" 2>/dev/null || true
+  HARNESS_MODE=design-review
+  stack_env "$TMP/vesper" runner >"$TMP/logs/runner-design-review.log" 2>&1 &
+  PIDS+=($!)
+  sleep 2
+  pw --grep @design-review || code=$?
+  exit $code
+fi
