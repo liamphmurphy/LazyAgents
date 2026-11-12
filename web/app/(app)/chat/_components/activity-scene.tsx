@@ -66,6 +66,8 @@ const LABELS: Record<ChatStatusKind, string> = {
   "image-view": "Looking at an image",
   canvas: "Working on a canvas",
   "canvas-comment": "Commenting on a canvas",
+  design: "Working on a design",
+  "design-view": "Looking at a design",
   playground: "Spinning up a playground",
   runs: "Checking on runs",
   workflow: "Working on a workflow",
@@ -365,6 +367,9 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   ),
   canvas: canvasScene(),
   "canvas-comment": canvasScene(true),
+  // Placeholders: the real design scene comes with the persona design tools' scene work.
+  design: canvasScene(),
+  "design-view": canvasScene(),
   runs: (
     <>
       {[
