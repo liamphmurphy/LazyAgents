@@ -810,6 +810,9 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 		} else if err != nil {
 			return err
 		}
+		if v == VerdictChangesRequested && reproCleared(ch) {
+			v = VerdictApproved
+		}
 		latest[ch.AgentID] = v
 	}
 	spec, err := Spec(run)
@@ -827,12 +830,44 @@ func ReviewClear(ctx context.Context, q *store.Queries, run store.Run) error {
 	return nil
 }
 
+// reproCleared reports a review whose findings the server verified fixed: the
+// reviewer said its repro_command covers every blocking finding, and
+// recheck_review ran it green on the main agent's branch.
+func reproCleared(ch store.Run) bool {
+	var contract Contract
+	var checks Checks
+	if len(ch.Contract) == 0 || len(ch.Checks) == 0 || json.Unmarshal(ch.Contract, &contract) != nil || json.Unmarshal(ch.Checks, &checks) != nil {
+		return false
+	}
+	return contract.ReproCoversAll && contract.ReproCommand != "" && checks.ReproFixed
+}
+
 // MaxReportRunes caps a delegated run's complete_run report.
 const MaxReportRunes = 8000
+
+// Repro is what a delegated reviewer reports about the failing tests it
+// committed (complete_run repro_command and repro_covers_all).
+type Repro struct {
+	Command   string
+	CoversAll bool
+}
 
 // Complete ends the run and moves the ticket (default: In Review). Done needs
 // configured independent-review approval; existing review rejections always block Done.
 func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, report, status, verdict string) error {
+	return s.CompleteWithRepro(ctx, c, key, outcome, report, status, verdict, Repro{})
+}
+
+// CompleteWithRepro is Complete for a delegated reviewer that also reports
+// its repro command.
+func (s *Service) CompleteWithRepro(ctx context.Context, c Caller, key, outcome, report, status, verdict string, repro Repro) error {
+	repro.Command = strings.TrimSpace(repro.Command)
+	if len([]rune(repro.Command)) > maxContractRunes {
+		return apperr.Invalid("repro_command", "must be at most %d characters", maxContractRunes)
+	}
+	if repro.CoversAll && repro.Command == "" {
+		return apperr.Invalid("repro_covers_all", "needs repro_command")
+	}
 	if status == "" {
 		status = "in_review"
 	}
@@ -858,11 +893,14 @@ func (s *Service) Complete(ctx context.Context, c Caller, key, outcome, report, 
 			return err
 		}
 		if delegated {
-			return s.completeChild(ctx, c, key, outcome, report, verdict)
+			return s.completeChild(ctx, c, key, outcome, report, verdict, repro)
 		}
 	}
 	if report != "" {
 		return apperr.Invalid("report", "only a delegated run sends a report")
+	}
+	if repro.Command != "" {
+		return apperr.Invalid("repro_command", "only a delegated reviewer or QA run reports a repro_command")
 	}
 	var t store.Ticket
 	err := s.tx(ctx, func(q *store.Queries) error {

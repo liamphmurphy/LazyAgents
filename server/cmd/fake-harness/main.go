@@ -63,7 +63,14 @@
 // passes to complete_run.
 // FAKE_HARNESS_CONTEXT_TOKENS sets the prompt size each Claude assistant line's
 // usage reports (default 2000). FAKE_HARNESS_PLAN="a|b" makes delegate_script's
-// first turn post that plan before delegating.
+// first turn post that plan before delegating. FAKE_HARNESS_CHILD_REPRO makes
+// a delegated run finish as a reviewer (verdict changes_requested) reporting it
+// as repro_command, with repro_covers_all when FAKE_HARNESS_CHILD_COVERS_ALL is
+// set. FAKE_HARNESS_RECHECK=<path> makes a resumed delegate_script parent told
+// to call recheck_review write "fixed" to <path>, commit it and call it for its
+// first delegated run, then on the recheck's result try complete_run
+// status=done (falling back to in_review with "DONE REFUSED: <error>");
+// FAKE_HARNESS_RECHECK_DIRTY=<path> leaves that file uncommitted first.
 //
 // Resumed turns (--resume, or a session rollover's brief) finish the run with
 // complete_run, unless FAKE_HARNESS_RESUME=idle.
@@ -759,6 +766,10 @@ func main() {
 		if rep := os.Getenv("FAKE_HARNESS_CHILD_REPORT"); rep != "" {
 			done["report"] = rep
 		}
+		if repro := os.Getenv("FAKE_HARNESS_CHILD_REPRO"); repro != "" {
+			done["verdict"], done["repro_command"] = "changes_requested", repro
+			done["repro_covers_all"] = os.Getenv("FAKE_HARNESS_CHILD_COVERS_ALL") != ""
+		}
 		call("complete_run", done)
 		if hold := os.Getenv("FAKE_HARNESS_LINGER"); hold != "" {
 			_ = os.WriteFile(hold+".started", nil, 0o644)
@@ -775,6 +786,34 @@ func main() {
 	}
 	// A delegation wake that rolled over to a fresh session is a resumed turn too.
 	if resume != "" || strings.HasPrefix(prompt, "Your earlier session was closed to keep context small") {
+		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" && os.Getenv("FAKE_HARNESS_RECHECK") != "" {
+			switch {
+			case strings.Contains(prompt, "## Review recheck"):
+				out := call("complete_run", map[string]any{"outcome": "DONE\n" + prompt, "status": "done"})
+				if e, ok := out["error"].(string); ok {
+					call("complete_run", map[string]any{"outcome": "DONE REFUSED: " + e + "\n" + prompt, "status": "in_review"})
+				}
+				result(false, "Done.")
+				return
+			case strings.Contains(prompt, "call recheck_review"):
+				// "Fix" the findings, then have the server rerun the reviewer's tests.
+				f := os.Getenv("FAKE_HARNESS_RECHECK")
+				_ = os.WriteFile(f, []byte("fixed\n"), 0o644)
+				_ = exec.Command("git", "add", f).Run()
+				_ = exec.Command("git", "commit", "-q", "-m", "Fix "+f).Run()
+				if d := os.Getenv("FAKE_HARNESS_RECHECK_DIRTY"); d != "" {
+					_ = os.WriteFile(d, []byte("not committed\n"), 0o644)
+				}
+				raw, _ := os.ReadFile(".lazyagents/children")
+				ids := strings.Fields(string(raw))
+				out := call("recheck_review", map[string]any{"run_id": ids[0]})
+				if e, ok := out["error"].(string); ok {
+					call("complete_run", map[string]any{"outcome": "RECHECK REFUSED: " + e, "status": "todo"})
+				}
+				result(false, "Waiting for the recheck.")
+				return
+			}
+		}
 		if os.Getenv("FAKE_HARNESS_MODE") == "delegate_script" {
 			if _, err := os.Stat(".lazyagents/round2"); err != nil && os.Getenv("FAKE_HARNESS_ROUND2") != "" {
 				_ = os.WriteFile(".lazyagents/round2", nil, 0o600)
