@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activePanel, closePanel, openPanels, switchPanel } from "./chat-panels.ts";
+import { activePanel, closePanel, dragCloses, openPanels, openThreads, switchPanel } from "./chat-panels.ts";
 
 const D = "01a1bbdd-4937-7baa-af62-b3726025d331";
 const C = "01a1bbdd-4937-7baa-af62-b3726025d332";
@@ -77,4 +77,20 @@ test("closePanel closes only that panel", () => {
   assert.equal(full.get("canvas"), C);
   // A pick of another panel survives.
   assert.equal(full.get("panel"), "design");
+});
+
+test("a drag down closes the sheet past a quarter of its height, or as a quick flick", () => {
+  assert.equal(dragCloses(100, 1000, 800), false);
+  assert.equal(dragCloses(200, 1000, 800), true);
+  // At least 120px on a short sheet.
+  assert.equal(dragCloses(100, 1000, 300), false);
+  assert.equal(dragCloses(130, 1000, 300), true);
+  assert.equal(dragCloses(60, 80, 800), true);
+  assert.equal(dragCloses(30, 10, 800), false);
+  assert.equal(dragCloses(-200, 10, 800), false);
+});
+
+test("the Comments count leaves out resolved threads", () => {
+  assert.equal(openThreads(undefined), 0);
+  assert.equal(openThreads([{ status: "open" }, { status: "draft" }, { status: "addressed" }, { status: "resolved" }, { status: "open", parent_id: "x" }]), 3);
 });

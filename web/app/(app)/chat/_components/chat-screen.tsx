@@ -25,7 +25,8 @@ import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton } from "@/components/domain/canvas-view";
-import { ChatPanelHost } from "./chat-panel-host";
+import { ChatPanelHost, PanelsButton } from "./chat-panel-host";
+import { useCompact } from "@/lib/viewport";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { PlaygroundButton } from "@/components/domain/playground";
 import { PersonaCarousel, personaLook } from "./persona";
@@ -338,6 +339,10 @@ export function ChatScreen({ id }: { id?: string }) {
   const boot = useBootstrap();
   // First run (or ?setup, from Settings): the Welcome Wizard takes the welcome's place until it hands over.
   const [arrived, setArrived] = useState<string>();
+  // Compact: the panels are one sheet over the chat (chat-panel-host). The chat it was dismissed in, if any.
+  const compact = useCompact();
+  const [sheetHiddenIn, setSheetHiddenIn] = useState<string>();
+  const sheet = id ? { hidden: sheetHiddenIn === id, hide: () => setSheetHiddenIn(id), show: () => setSheetHiddenIn(undefined) } : undefined;
   const mode = search.has("setup") ? "full" : wizardMode(boot.data?.me);
   const wizard = !id && !arrived && !!boot.data && !!mode;
   const noHarness = !!health && !health.ready && !wizard;
@@ -367,7 +372,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={conversation.start} actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
+              <Conversation key={id} id={id} onNew={conversation.start} actions={<>{compact && <PanelsButton chatId={id} live={turnRunning} onShow={() => setSheetHiddenIn(undefined)} />}<PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
             ) : (
               <>
                 {chats.isError ? (
@@ -395,7 +400,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} />}
+          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} layout={compact ? "sheet" : "side"} sheet={sheet} />}
       </div>
     </div>
   );

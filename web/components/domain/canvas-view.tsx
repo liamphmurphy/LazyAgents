@@ -550,12 +550,14 @@ export function CanvasFullscreen({ chatId, live, readOnly, agent, inline }: { ch
     exit.current = exitFull;
   });
   useEffect(() => {
+    // In the panel sheet, Escape closes the sheet (chat-panel-host), not the canvas.
+    if (inline) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [inline]);
   if (!id || !mounted) return null;
   const body = (
     <>

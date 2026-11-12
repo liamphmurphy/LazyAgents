@@ -59,3 +59,17 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
   if (next.get("panel") === panel) next.delete("panel");
   return next;
 }
+
+/**
+ * Whether a drag down on the sheet's grabber, released `dy` px below where it started after `ms`,
+ * closes the sheet: past a quarter of its height (at least 120px), or a quick flick of 40px or more.
+ */
+export function dragCloses(dy: number, ms: number, height: number): boolean {
+  if (dy >= Math.max(120, height / 4)) return true;
+  return dy >= 40 && dy / Math.max(ms, 1) > 0.5;
+}
+
+/** The threads a Comments button counts: top-level comments that aren't resolved (replies don't count). */
+export function openThreads(comments: readonly { status: string; parent_id?: string | null }[] | undefined): number {
+  return (comments ?? []).filter((c) => !c.parent_id && c.status !== "resolved").length;
+}
