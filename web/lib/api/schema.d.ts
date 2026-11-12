@@ -3726,6 +3726,230 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/designs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person's designs, most recently changed first */
+        get: operations["listDesigns"];
+        put?: never;
+        /**
+         * Start a design in the Designs app
+         * @description Makes a design canvas (schema 1, docs/design/ADR-designs.md) in a new
+         *     chat in the person's Designs space, blank or from a starter, with
+         *     fresh ids. project is a project key the design's chat belongs to.
+         */
+        post: operations["createDesign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * One of the person's designs, with its switches and pending suggestions
+         * @description The body comes from the chat canvas endpoints or getDesignVersion. 404 for anyone else's design or a canvas that isn't a design.
+         */
+        get: operations["getDesign"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a design with its chat, versions, suggestions and images
+         * @description Its images' blobs are swept once nothing else uses them. 404 for anyone else's design.
+         */
+        delete: operations["deleteDesign"];
+        options?: never;
+        head?: never;
+        /** Rename a design */
+        patch: operations["renameDesign"];
+        trace?: never;
+    };
+    "/designs/{canvasId}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a design's current version (with fresh ids) and images into a new design */
+        post: operations["duplicateDesign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save the person's edit as a new version
+         * @description The body is normalised (schema 1) and must be at most 2 MB. 409 when
+         *     base_seq isn't the current version: merge with it and save again.
+         */
+        post: operations["saveDesign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/versions/{seq}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        /** One version of a design, with its body */
+        get: operations["getDesignVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a design's persona switches
+         * @description Not a version, and no patch can change them.
+         */
+        patch: operations["updateDesignSettings"];
+        trace?: never;
+    };
+    "/designs/{canvasId}/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        /** A design's persona suggestions, oldest first */
+        get: operations["listDesignProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/proposals/{proposalId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept or reject each change of a pending suggestion
+         * @description Every op needs one decision. The accepted ops are applied on the
+         *     current version (not the suggestion's base) as one new version by the
+         *     person; an accepted op whose target is gone is recorded as stale and
+         *     skipped. Accepting an op that needs one you rejected (it refers to
+         *     something that op creates) is refused. 409 when it's no longer pending.
+         */
+        post: operations["resolveDesignProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an image to a design
+         * @description PNG or JPEG (sniffed by the server), at most 10 MB and 4096 pixels on
+         *     a side. Returns the asset to put in the design's assets map; uploading
+         *     doesn't change the design. Counts toward the 1 GB Library quota.
+         */
+        post: operations["uploadDesignAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/designs/{canvasId}/assets/{assetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                assetId: string;
+            };
+            cookie?: never;
+        };
+        /** One of a design's images (owner only) */
+        get: operations["getDesignAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/slide-starters": {
         parameters: {
             query?: never;
@@ -5080,11 +5304,79 @@ export interface components {
             w: number;
             h: number;
         };
+        DesignSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            project_id?: string | null;
+            pages: number;
+            /** @description Top-level frames across its pages */
+            frames: number;
+            pending_proposals: number;
+        };
+        DesignSettings: {
+            direct_edit: boolean;
+            persona_paused: boolean;
+            /** Format: uuid */
+            project_id?: string | null;
+        };
+        Design: components["schemas"]["MyCanvas"] & {
+            /**
+             * Format: int32
+             * @description The current version
+             */
+            seq: number;
+            settings: components["schemas"]["DesignSettings"];
+            pending_proposals: number;
+        };
+        DesignVersion: components["schemas"]["ChatCanvasVersion"] & {
+            /** @description The design JSON (schema 1), normalised */
+            body: string;
+        };
+        DesignDecision: {
+            i: number;
+            /** @enum {string} */
+            state: "accepted" | "rejected" | "stale";
+            reason?: string;
+        };
+        DesignProposal: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id?: string | null;
+            /** Format: uuid */
+            run_id?: string | null;
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: int32 */
+            base_seq: number;
+            summary: string;
+            /** @description design_patch ops ({op, …fields, why}), with ids the server minted for what they add */
+            ops: {
+                [key: string]: unknown;
+            }[];
+            /** @description Per op, the earlier ops it needs (they create something it refers to) */
+            deps?: number[][];
+            /** @enum {string} */
+            status: "pending" | "resolved" | "applied" | "withdrawn";
+            decisions: components["schemas"]["DesignDecision"][];
+            /** Format: int32 */
+            result_seq?: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+        };
         MyCanvas: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "text" | "svg" | "deck";
+            kind: "text" | "svg" | "deck" | "design";
             title: string;
             /** Format: uuid */
             chat_id: string;
@@ -5369,7 +5661,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "text" | "svg" | "deck";
+            kind: "text" | "svg" | "deck" | "design";
             title: string;
             /**
              * Format: int32
@@ -14663,6 +14955,386 @@ export interface operations {
         };
     };
     getDeckAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                assetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listDesigns: {
+        parameters: {
+            query?: {
+                /** @description Only designs in this project (by key) */
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 designs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        designs: components["schemas"]["DesignSummary"][];
+                    };
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Empty starts an untitled design */
+                    title?: string;
+                    /** @enum {string} */
+                    starter?: "blank" | "mobile-flow" | "web-flow" | "diagram" | "wireframe";
+                    /** @description A project key */
+                    project?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The design */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The design */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Design"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    renameDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The design */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    duplicateDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The copy */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveDesign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCanvasSave"];
+            };
+        };
+        responses: {
+            /** @description The new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignVersion"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignVersion"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateDesignSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Let personas edit directly: their patches apply at once as versions instead of waiting as suggestions */
+                    direct_edit?: boolean;
+                    /** @description Refuse persona patches until resumed */
+                    persona_paused?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The switches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignSettings"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listDesignProposals: {
+        parameters: {
+            query?: {
+                /** @description Only these; all by default */
+                status?: "pending" | "resolved" | "applied" | "withdrawn";
+            };
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 suggestions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        proposals: components["schemas"]["DesignProposal"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    resolveDesignProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    decisions: {
+                        /** @description The op's index in the suggestion */
+                        i: number;
+                        /** @enum {string} */
+                        state: "accepted" | "rejected";
+                        /** @description Why it was rejected; goes back to the persona */
+                        reason?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The resolved suggestion and the version it wrote, if any */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        proposal: components["schemas"]["DesignProposal"];
+                        version?: components["schemas"]["DesignVersion"];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadDesignAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The stored image */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckAsset"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignAsset: {
         parameters: {
             query?: never;
             header?: never;

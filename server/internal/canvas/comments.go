@@ -238,7 +238,21 @@ func writeVersion(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur
 	if err := q.TouchChatCanvas(ctx, c.ID); err != nil {
 		return v, err
 	}
+	if err := syncFrameLinks(ctx, q, c, body); err != nil {
+		return v, err
+	}
 	return v, reanchor(ctx, q, c, v)
+}
+
+// Locked runs fn in a transaction holding the canvas row, with its current
+// version, for callers that write beside a version (designs' proposals).
+func (s *Service) Locked(ctx context.Context, chat, id uuid.UUID, fn func(*store.Queries, store.ChatCanvas, store.ChatCanvasVersion) error) error {
+	return s.locked(ctx, chat, id, fn)
+}
+
+// WriteVersion writes body as the version after cur, inside Locked.
+func WriteVersion(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion, body, note string, by Actor) (store.ChatCanvasVersion, error) {
+	return writeVersion(ctx, q, c, cur, body, note, by)
 }
 
 // locked runs fn holding the canvas row, so versions and anchors change together.
@@ -338,8 +352,21 @@ func addReply(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur sto
 }
 
 // Decks have no comments yet (ADR: deferred); the persona's suggestions are
-// reviewed as changes instead.
+// reviewed as changes instead. Designs get node-anchored comments later
+// (ADR-designs §3.6, ticket 4).
 var errNoDeckComments = apperr.Invalid("canvas_id", "a slide deck can't take comments yet")
+
+var errNoDesignComments = apperr.Invalid("canvas_id", "a design can't take comments yet")
+
+func noComments(kind string) error {
+	switch kind {
+	case KindDeck:
+		return errNoDeckComments
+	case KindDesign:
+		return errNoDesignComments
+	}
+	return nil
+}
 
 // AddComment adds a person's draft comment, or a reply to an existing thread,
 // which goes back to open if it had been addressed.
@@ -351,8 +378,8 @@ func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComm
 	}
 	err = s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		var err error
-		if c.Kind == KindDeck {
-			return errNoDeckComments
+		if err := noComments(c.Kind); err != nil {
+			return err
 		}
 		if in.ParentID != nil {
 			out, err = addReply(ctx, q, c, cur, *in.ParentID, body, by, "open")
@@ -402,8 +429,8 @@ func (s *Service) AddAgentComment(ctx context.Context, chat, id uuid.UUID, in Ag
 	err = s.locked(ctx, chat, id, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		var a Anchor
 		var err error
-		if c.Kind == KindDeck {
-			return errNoDeckComments
+		if err := noComments(c.Kind); err != nil {
+			return err
 		}
 		if c.Kind == KindSVG {
 			if in.Suggestion != nil {

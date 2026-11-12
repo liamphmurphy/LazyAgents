@@ -71,6 +71,9 @@ func canvasCreate(ctx context.Context, d Deps, c agents.Caller, in CanvasCreateI
 	if in.Kind == canvas.KindDeck {
 		return nil, apperr.Invalid("kind", "slide decks are started in the Slides app; ask the person to start one there")
 	}
+	if in.Kind == canvas.KindDesign {
+		return nil, apperr.Invalid("kind", "designs are started in the Designs app; ask the person to start one there")
+	}
 	svc := canvas.Service{Pool: d.Runs.Pool}
 	cv, v, err := svc.Create(ctx, s.ChatID, canvas.New{Kind: in.Kind, Title: in.Title, Body: in.Body, Note: in.Note}, canvas.Actor{Type: "agent", ID: c.Agent.ID})
 	if err != nil {
@@ -92,6 +95,11 @@ func canvasPatch(ctx context.Context, d Deps, c agents.Caller, in CanvasPatchIn)
 		if err := requireSVG(ctx, d, c, s); err != nil {
 			return nil, err
 		}
+	}
+	if cv.Kind == canvas.KindDesign {
+		// A persona's design edits are held for the person's review
+		// (ADR-designs §3.7), which canvas_patch would bypass.
+		return nil, apperr.Invalid("canvas_id", "this is a design; persona edits to designs go through design_patch, which isn't available yet")
 	}
 	if cv.Kind == canvas.KindDeck {
 		if err := resolveSavedThemes(ctx, d, s.ChatID, in.Ops); err != nil {

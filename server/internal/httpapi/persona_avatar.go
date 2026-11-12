@@ -205,6 +205,11 @@ func (r avatarResponse) VisitGetDeckAssetResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }
 
+// VisitGetDesignAssetResponse serves a design image with the same headers.
+func (r avatarResponse) VisitGetDesignAssetResponse(w http.ResponseWriter) error {
+	return r.write(w)
+}
+
 // VisitGetUserAvatarResponse serves a profile picture with the same headers.
 func (r avatarResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
 	return r.write(w)

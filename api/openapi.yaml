@@ -46,6 +46,8 @@ tags:
   - name: docs
   - name: slides
     description: Slide decks in the Slides app
+  - name: designs
+    description: Flows, diagrams and wireframes in the Designs app
 paths:
   /agents/{handle}/runs:
     get:
@@ -4463,6 +4465,305 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /designs:
+    get:
+      operationId: listDesigns
+      summary: The signed-in person's designs, most recently changed first
+      tags: [designs]
+      parameters:
+        - { name: project, in: query, required: false, schema: { type: string }, description: "Only designs in this project (by key)" }
+      responses:
+        "200":
+          description: Up to 200 designs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [designs]
+                properties:
+                  designs: { type: array, items: { $ref: "#/components/schemas/DesignSummary" } }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createDesign
+      summary: Start a design in the Designs app
+      description: |
+        Makes a design canvas (schema 1, docs/design/ADR-designs.md) in a new
+        chat in the person's Designs space, blank or from a starter, with
+        fresh ids. project is a project key the design's chat belongs to.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200, description: "Empty starts an untitled design" }
+                starter: { type: string, enum: [blank, mobile-flow, web-flow, diagram, wireframe] }
+                project: { type: string, description: "A project key" }
+      responses:
+        "201":
+          description: The design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getDesign
+      summary: One of the person's designs, with its switches and pending suggestions
+      description: The body comes from the chat canvas endpoints or getDesignVersion. 404 for anyone else's design or a canvas that isn't a design.
+      tags: [designs]
+      responses:
+        "200":
+          description: The design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Design" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: renameDesign
+      summary: Rename a design
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: The design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteDesign
+      summary: Delete a design with its chat, versions, suggestions and images
+      description: Its images' blobs are swept once nothing else uses them. 404 for anyone else's design.
+      tags: [designs]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/duplicate:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: duplicateDesign
+      summary: Copy a design's current version (with fresh ids) and images into a new design
+      tags: [designs]
+      responses:
+        "201":
+          description: The copy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyCanvas" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/versions:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: saveDesign
+      summary: Save the person's edit as a new version
+      description: |
+        The body is normalised (schema 1) and must be at most 2 MB. 409 when
+        base_seq isn't the current version: merge with it and save again.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatCanvasSave" }
+      responses:
+        "201":
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/versions/{seq}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: seq, in: path, required: true, schema: { type: integer, format: int32, minimum: 1 } }
+    get:
+      operationId: getDesignVersion
+      summary: One version of a design, with its body
+      tags: [designs]
+      responses:
+        "200":
+          description: The version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/settings:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateDesignSettings
+      summary: Change a design's persona switches
+      description: Not a version, and no patch can change them.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                direct_edit: { type: boolean, description: "Let personas edit directly: their patches apply at once as versions instead of waiting as suggestions" }
+                persona_paused: { type: boolean, description: "Refuse persona patches until resumed" }
+      responses:
+        "200":
+          description: The switches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignSettings" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/proposals:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listDesignProposals
+      summary: A design's persona suggestions, oldest first
+      tags: [designs]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, resolved, applied, withdrawn] }, description: "Only these; all by default" }
+      responses:
+        "200":
+          description: Up to 200 suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposals]
+                properties:
+                  proposals: { type: array, items: { $ref: "#/components/schemas/DesignProposal" } }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/proposals/{proposalId}/resolve:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: resolveDesignProposal
+      summary: Accept or reject each change of a pending suggestion
+      description: |
+        Every op needs one decision. The accepted ops are applied on the
+        current version (not the suggestion's base) as one new version by the
+        person; an accepted op whose target is gone is recorded as stale and
+        skipped. Accepting an op that needs one you rejected (it refers to
+        something that op creates) is refused. 409 when it's no longer pending.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisions]
+              properties:
+                decisions:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [i, state]
+                    properties:
+                      i: { type: integer, minimum: 0, description: "The op's index in the suggestion" }
+                      state: { type: string, enum: [accepted, rejected] }
+                      reason: { type: string, maxLength: 500, description: "Why it was rejected; goes back to the persona" }
+      responses:
+        "200":
+          description: The resolved suggestion and the version it wrote, if any
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposal]
+                properties:
+                  proposal: { $ref: "#/components/schemas/DesignProposal" }
+                  version: { $ref: "#/components/schemas/DesignVersion" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/assets:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: uploadDesignAsset
+      summary: Add an image to a design
+      description: |
+        PNG or JPEG (sniffed by the server), at most 10 MB and 4096 pixels on
+        a side. Returns the asset to put in the design's assets map; uploading
+        doesn't change the design. Counts toward the 1 GB Library quota.
+      tags: [designs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: The stored image
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeckAsset" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /designs/{canvasId}/assets/{assetId}:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: assetId, in: path, required: true, schema: { type: string, pattern: "^a_[a-z0-9_]{1,40}$" } }
+    get:
+      operationId: getDesignAsset
+      summary: One of a design's images (owner only)
+      tags: [designs]
+      responses:
+        "200":
+          description: The image
+          headers:
+            X-Content-Type-Options: { schema: { type: string, enum: [nosniff] } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /slide-starters:
     get:
       operationId: listSlideStarters
@@ -5948,12 +6249,77 @@ components:
         mime: { type: string, enum: [image/png, image/jpeg] }
         w: { type: integer }
         h: { type: integer }
+    DesignSummary:
+      type: object
+      required: [id, title, chat_id, updated_at, pages, frames, pending_proposals]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        chat_id: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+        project_id: { type: string, format: uuid, nullable: true }
+        pages: { type: integer }
+        frames: { type: integer, description: "Top-level frames across its pages" }
+        pending_proposals: { type: integer }
+    DesignSettings:
+      type: object
+      required: [direct_edit, persona_paused]
+      properties:
+        direct_edit: { type: boolean }
+        persona_paused: { type: boolean }
+        project_id: { type: string, format: uuid, nullable: true }
+    Design:
+      allOf:
+        - { $ref: "#/components/schemas/MyCanvas" }
+        - type: object
+          required: [seq, settings, pending_proposals]
+          properties:
+            seq: { type: integer, format: int32, description: The current version }
+            settings: { $ref: "#/components/schemas/DesignSettings" }
+            pending_proposals: { type: integer }
+    DesignVersion:
+      allOf:
+        - { $ref: "#/components/schemas/ChatCanvasVersion" }
+        - type: object
+          required: [body]
+          properties:
+            body: { type: string, description: "The design JSON (schema 1), normalised" }
+    DesignDecision:
+      type: object
+      required: [i, state]
+      properties:
+        i: { type: integer }
+        state: { type: string, enum: [accepted, rejected, stale], x-enum-varnames: [DesignDecisionAccepted, DesignDecisionRejected, DesignDecisionStale] }
+        reason: { type: string }
+    DesignProposal:
+      type: object
+      required: [id, agent_id, base_seq, summary, ops, status, decisions, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid, nullable: true }
+        run_id: { type: string, format: uuid, nullable: true }
+        agent_id: { type: string, format: uuid }
+        base_seq: { type: integer, format: int32 }
+        summary: { type: string }
+        ops:
+          type: array
+          description: "design_patch ops ({op, …fields, why}), with ids the server minted for what they add"
+          items: { type: object, additionalProperties: true }
+        deps:
+          type: array
+          description: "Per op, the earlier ops it needs (they create something it refers to)"
+          items: { type: array, items: { type: integer } }
+        status: { type: string, enum: [pending, resolved, applied, withdrawn], x-enum-varnames: [DesignProposalPending, DesignProposalResolved, DesignProposalApplied, DesignProposalWithdrawn] }
+        decisions: { type: array, items: { $ref: "#/components/schemas/DesignDecision" } }
+        result_seq: { type: integer, format: int32, nullable: true }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
     MyCanvas:
       type: object
       required: [id, kind, title, chat_id, chat_title, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [text, svg, deck], x-enum-varnames: [MyCanvasText, MyCanvasSvg, MyCanvasDeck] }
+        kind: { type: string, enum: [text, svg, deck, design], x-enum-varnames: [MyCanvasText, MyCanvasSvg, MyCanvasDeck, MyCanvasDesign] }
         title: { type: string }
         chat_id: { type: string, format: uuid }
         chat_title: { type: string }
@@ -6201,7 +6567,7 @@ components:
       required: [id, kind, title, seq, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [text, svg, deck], x-enum-varnames: [CanvasKindText, CanvasKindSvg, CanvasKindDeck] }
+        kind: { type: string, enum: [text, svg, deck, design], x-enum-varnames: [CanvasKindText, CanvasKindSvg, CanvasKindDeck, CanvasKindDesign] }
         title: { type: string }
         seq: { type: integer, format: int32, description: The current version number }
         created_at: { type: string, format: date-time }
