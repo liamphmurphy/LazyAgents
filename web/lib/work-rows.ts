@@ -1,0 +1,231 @@
+// Pure logic for the Work screens in the chat look (LAZYAGENTS-164): which
+// tickets wait on the person, the list's groups (Needs you first), each row's
+// state text, the filter box's tokens and an epic's progress. Type-only
+// imports so node can run it directly in unit tests.
+import type { components } from "./api/schema";
+import { groupTickets, isBlocked, type GroupBy, type TicketGroup } from "./ticket-list.ts";
+
+type TicketSummary = components["schemas"]["TicketSummary"];
+type TicketStatus = components["schemas"]["TicketStatus"];
+type InboxItem = components["schemas"]["InboxItem"];
+
+/* -------------------------------------------------------------- needs you */
+
+/** Inbox kinds where a ticket's run waits on the person, most urgent first. */
+export const NEEDS_KINDS = ["approval", "question", "blocked"] as const;
+export type NeedsKind = (typeof NEEDS_KINDS)[number];
+
+export type NeedsYou = {
+  kind: NeedsKind;
+  /** The inbox item id; "approval:<uuid>" for approvals. */
+  id: string;
+  summary: string;
+  href: string;
+  run_id?: string;
+  created_at: string;
+};
+
+/** The ticket keys whose run waits on the person, with the most urgent open item each. */
+export function needsYouByTicket(items: readonly Pick<InboxItem, "id" | "kind" | "ticket_key" | "resolved" | "summary" | "href" | "run_id" | "created_at">[] | undefined) {
+  const out = new Map<string, NeedsYou>();
+  const rank = (k: string) => (NEEDS_KINDS as readonly string[]).indexOf(k);
+  for (const i of items ?? []) {
+    if (i.resolved || !i.ticket_key || rank(i.kind) < 0) continue;
+    const prev = out.get(i.ticket_key);
+    if (prev && (rank(prev.kind) < rank(i.kind) || (prev.kind === i.kind && prev.created_at <= i.created_at))) continue;
+    out.set(i.ticket_key, { kind: i.kind as NeedsKind, id: i.id, summary: i.summary, href: i.href, run_id: i.run_id, created_at: i.created_at });
+  }
+  return out;
+}
+
+/** The approval's id from its inbox id ("approval:<uuid>"), for /approvals/{id}/{decision}. */
+export function approvalId(n: Pick<NeedsYou, "id" | "kind">): string | undefined {
+  return n.kind === "approval" && n.id.startsWith("approval:") ? n.id.slice("approval:".length) : undefined;
+}
+
+const NEEDS_PREFIX: Record<NeedsKind, string> = { approval: "Wants approval", question: "Asked you", blocked: "Run stopped" };
+
+/** A row's current-state text: what it waits on, what blocks it, or where it is. */
+export function stateText(t: Pick<TicketSummary, "status" | "unmet_dependencies" | "pr">, needs?: Pick<NeedsYou, "kind" | "summary">): { text: string; tone: "human" | "blocked" | "quiet" } {
+  if (needs) return { text: needs.summary ? `${NEEDS_PREFIX[needs.kind]}: ${needs.summary}` : NEEDS_PREFIX[needs.kind], tone: "human" };
+  if (isBlocked(t as TicketSummary)) return { text: `Blocked by ${t.unmet_dependencies}`, tone: "blocked" };
+  const pr = t.pr ? ` · PR #${t.pr.number}${t.pr.state === "merged" ? " merged" : ""}` : "";
+  const text: Record<TicketStatus, string> = {
+    backlog: "Backlog",
+    todo: "Ready",
+    in_progress: "In progress",
+    in_review: "In review",
+    done: "Done",
+    canceled: "Canceled",
+  };
+  return { text: text[t.status] + pr, tone: "quiet" };
+}
+
+/* ----------------------------------------------------------------- groups */
+
+export type WorkGroup = TicketGroup & {
+  /** The group's label: "Needs you", "In progress", or the group-by's name. */
+  title: string;
+  needs: boolean;
+};
+
+/** Monday 00:00 local time of the week that contains `now`. */
+export function weekStart(now: Date): number {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+
+const STATUS_BUCKETS: Array<{ id: string; title: string; match: (t: TicketSummary, week: number) => boolean }> = [
+  { id: "in_progress", title: "In progress", match: (t) => t.status === "in_progress" || t.status === "in_review" },
+  { id: "todo", title: "Ready", match: (t) => t.status === "todo" },
+  { id: "backlog", title: "Backlog", match: (t) => t.status === "backlog" },
+  { id: "done_week", title: "Done this week", match: (t, week) => t.status === "done" && Date.parse(t.updated_at) >= week },
+  { id: "done", title: "Done earlier", match: (t) => t.status === "done" },
+  { id: "canceled", title: "Canceled", match: (t) => t.status === "canceled" },
+];
+
+function bucket(id: string, by: GroupBy, title: string, tickets: TicketSummary[], needs = false): WorkGroup {
+  let criteriaDone = 0, criteriaTotal = 0, points = 0;
+  for (const t of tickets) {
+    criteriaDone += t.criteria_done;
+    criteriaTotal += t.criteria_total;
+    if (t.status !== "canceled") points += t.estimate_points ?? 0;
+  }
+  return { id, by, name: title, title, tickets, criteriaDone, criteriaTotal, points, needs };
+}
+
+/**
+ * The list's groups. Tickets waiting on the person come first as Needs you
+ * (open tickets only). Grouped by status, the rest fall into In progress,
+ * Ready, Backlog, Done this week, Done earlier and Canceled; any other
+ * group-by keeps its own groups after Needs you.
+ */
+export function workGroups(tickets: TicketSummary[], needs: ReadonlyMap<string, unknown>, by: GroupBy, now = new Date()): WorkGroup[] {
+  const waiting = tickets.filter((t) => needs.has(t.key) && t.status !== "done" && t.status !== "canceled");
+  const waitingKeys = new Set(waiting.map((t) => t.key));
+  const rest = tickets.filter((t) => !waitingKeys.has(t.key));
+  const out: WorkGroup[] = waiting.length ? [bucket("needs_you", by, "Needs you", waiting, true)] : [];
+  if (by === "status") {
+    const week = weekStart(now);
+    const left = new Set(rest);
+    for (const b of STATUS_BUCKETS) {
+      const hit = [...left].filter((t) => b.match(t, week));
+      for (const t of hit) left.delete(t);
+      if (hit.length) out.push(bucket(b.id, by, b.title, hit));
+    }
+    return out;
+  }
+  for (const g of groupTickets(rest, by)) out.push({ ...g, title: g.name, needs: false });
+  return out;
+}
+
+/* ----------------------------------------------------------- filter box */
+
+export const FILTER_KEYS = ["project", "epic", "agent", "status"] as const;
+export type FilterKey = (typeof FILTER_KEYS)[number];
+export type FilterToken = { key: FilterKey; value: string };
+
+/** Splits the box into key:value tokens (values may be "quoted") and the free text left over. */
+export function parseFilterText(text: string): { tokens: FilterToken[]; text: string } {
+  const tokens: FilterToken[] = [];
+  const re = /(?:^|\s)(project|epic|agent|status):(?:"([^"]*)"?|(\S*))/gi;
+  const free = text.replace(re, (_m, key: string, quoted?: string, bare?: string) => {
+    const value = (quoted ?? bare ?? "").trim();
+    if (value) tokens.push({ key: key.toLowerCase() as FilterKey, value });
+    return " ";
+  });
+  return { tokens, text: free.replace(/\s+/g, " ").trim() };
+}
+
+const quote = (v: string) => (/\s/.test(v) ? `"${v}"` : v);
+
+/** The box's text for the list's current filters. */
+export function filterText(f: { project?: string; epic?: string; agent?: string; status?: string; q?: string }): string {
+  const parts: string[] = [];
+  for (const k of FILTER_KEYS) if (f[k]) parts.push(`${k}:${quote(f[k]!)}`);
+  if (f.q) parts.push(f.q);
+  return parts.join(" ");
+}
+
+const STATUS_ALIASES: Record<string, TicketStatus> = {
+  backlog: "backlog", todo: "todo", ready: "todo", in_progress: "in_progress", progress: "in_progress", "in-progress": "in_progress",
+  in_review: "in_review", review: "in_review", "in-review": "in_review", done: "done", canceled: "canceled", cancelled: "canceled",
+};
+
+export type FilterLookups = {
+  projects: ReadonlyArray<{ id: string; key: string; name: string }>;
+  epics: ReadonlyArray<{ id: string; name: string; project_id: string }>;
+  agents: ReadonlyArray<{ handle: string; name: string }>;
+};
+
+export type ResolvedFilter = { project?: string; epic?: string; assignee?: string; status?: TicketStatus; q?: string; unknown: string[] };
+
+const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, " ").trim();
+
+/**
+ * The URL filters for the box: project by key or name, epic by id or name
+ * (the project's epics first), agent by handle or name, status by name or
+ * alias. Tokens that match nothing are listed in `unknown` and not applied.
+ */
+export function resolveFilter(text: string, look: FilterLookups): ResolvedFilter {
+  const { tokens, text: q } = parseFilterText(text);
+  const out: ResolvedFilter = { unknown: [] };
+  if (q) out.q = q;
+  const byKey = new Map(tokens.map((t) => [t.key, t.value]));
+  const pv = byKey.get("project");
+  if (pv) {
+    const p = look.projects.find((x) => x.key.toLowerCase() === pv.toLowerCase()) ?? look.projects.find((x) => norm(x.name) === norm(pv));
+    if (p) out.project = p.key;
+    else out.unknown.push(`project:${pv}`);
+  }
+  const ev = byKey.get("epic");
+  if (ev) {
+    const proj = out.project ? look.projects.find((p) => p.key === out.project) : undefined;
+    const named = look.epics.filter((e) => e.id === ev || norm(e.name) === norm(ev));
+    const e = named.find((x) => !proj || x.project_id === proj.id) ?? named[0];
+    if (e) out.epic = e.id;
+    else out.unknown.push(`epic:${ev}`);
+  }
+  const av = byKey.get("agent");
+  if (av) {
+    const h = av.replace(/^@/, "").toLowerCase();
+    const a = look.agents.find((x) => x.handle.toLowerCase() === h) ?? look.agents.find((x) => norm(x.name) === norm(av));
+    if (a) out.assignee = a.handle;
+    else out.unknown.push(`agent:${av}`);
+  }
+  const sv = byKey.get("status");
+  if (sv) {
+    const s = STATUS_ALIASES[sv.toLowerCase().replace(/\s+/g, "_")];
+    if (s) out.status = s;
+    else out.unknown.push(`status:${sv}`);
+  }
+  return out;
+}
+
+/* ----------------------------------------------------------------- epics */
+
+export type EpicProgress = { done: number; running: number; needs: number; open: number; total: number };
+
+/** Segments for an epic's bar: done, running, needs you, and the rest still open. Canceled tickets don't count. */
+export function epicProgress(tickets: readonly Pick<TicketSummary, "key" | "status">[], needs: ReadonlyMap<string, unknown>): EpicProgress {
+  const p: EpicProgress = { done: 0, running: 0, needs: 0, open: 0, total: 0 };
+  for (const t of tickets) {
+    if (t.status === "canceled") continue;
+    p.total++;
+    if (t.status === "done") p.done++;
+    else if (needs.has(t.key)) p.needs++;
+    else if (t.status === "in_progress" || t.status === "in_review") p.running++;
+    else p.open++;
+  }
+  return p;
+}
+
+/**
+ * Start ready: open tickets with no live run and every blocker done start now;
+ * the blocked ones are listed so the card can say what waits on what.
+ */
+export function startReady<T extends Pick<TicketSummary, "key" | "status" | "unmet_dependencies">>(tickets: readonly T[], live: ReadonlySet<string>) {
+  const open = tickets.filter((t) => t.status !== "done" && t.status !== "canceled" && !live.has(t.key));
+  return { ready: open.filter((t) => t.unmet_dependencies === 0), blocked: open.filter((t) => t.unmet_dependencies > 0) };
+}
