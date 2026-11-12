@@ -3,14 +3,17 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { fetchDesign, fetchDesignVersion, uploadDesignAsset, useDesign, useDesignVersion, useSaveDesign } from "@/lib/api/designs-hooks";
-import { useChat, useSendChatMessage } from "@/lib/api/hooks";
+import { fetchDesign, fetchDesignVersion, uploadDesignAsset, useDesign, useDesignProposals, useDesignSettings, useDesignVersion, useResolveProposal, useSaveDesign } from "@/lib/api/designs-hooks";
+import { provideChatRefs, useChat, useChatRunEvents, useSendChatMessage } from "@/lib/api/hooks";
+import { toolCalls } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import * as W from "@/lib/designs/doc";
 import { dropTarget } from "@/lib/designs/hit";
 import { duplicateNodes, find, groupNodes, inAutoLayout, insertNodes, labelOf, mapNodes, newId, removeNodes, reorder, topLevelIds, ungroupNodes, type ZOrder } from "@/lib/designs/edit";
 import { makeLayout, settle, type LaidNode, type LaidPage } from "@/lib/designs/layout";
 import { mergeDesigns } from "@/lib/designs/merge";
+import { presenceOf } from "@/lib/designs/presence";
+import { adoptVersion, type Change } from "@/lib/designs/review";
 import { designAssetHref, useDesignFonts } from "@/lib/designs/render";
 import { DesignError, normalize, type Design, type DesignNode, type ImageNode } from "@/lib/designs/schema";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,8 @@ import { Banner, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
+import { ReviewBar, ReviewOverlay, ReviewPanel, useReview, type ReviewMode } from "./design-review";
+import { PresenceLayer } from "./presence-layer";
 import { Inspector } from "./inspector";
 import { LayersPanel } from "./layers-panel";
 
@@ -130,28 +135,12 @@ export function DesignEditor({ id }: { id: string }) {
   const saving = useRef<Promise<void> | null>(null);
   const retries = useRef(0);
   const retryRef = useRef<() => void>(() => undefined);
-  const [loadError, setLoadError] = useState<string>();
-
-  // Open the design, then follow the server while nothing here is unsaved (a persona's direct edits).
+  const scheduleRef = useRef<() => void>(() => undefined);
+  const personaRef = useRef(persona);
   useEffect(() => {
-    const v = head.data;
-    if (!v) return;
-    let d: Design;
-    try {
-      d = normalize(v.body).design;
-    } catch (e) {
-      // Showing why the body can't be opened (external data).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoadError(e instanceof DesignError ? e.message : errorText(e));
-      return;
-    }
-    const cur = docRef.current;
-    if (!cur) setDoc(W.open(v.seq, d));
-    else {
-      const next = W.fromServer(cur, v.seq, d);
-      if (next !== cur) setDoc(next);
-    }
-  }, [head.data]);
+    personaRef.current = persona;
+  }, [persona]);
+  const [loadError, setLoadError] = useState<string>();
 
   const runSave = useCallback(async (): Promise<void> => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -248,11 +237,46 @@ export function DesignEditor({ id }: { id: string }) {
     [runSave],
   );
   useEffect(() => {
+    scheduleRef.current = () => schedule();
     retryRef.current = () => {
       retries.current += 1;
       schedule(Math.min(30_000, 2_000 * 2 ** (retries.current - 1)));
     };
   }, [schedule]);
+
+  // Open the design, then follow the server: a version from elsewhere (a persona's direct edit, an
+  // accepted suggestion) replaces a clean draft or merges into unsaved edits, and is one undo step.
+  const [arrival, setArrival] = useState<{ seq: number; text: string }>();
+  useEffect(() => {
+    const v = head.data;
+    if (!v) return;
+    let d: Design;
+    try {
+      d = normalize(v.body).design;
+    } catch (e) {
+      // Showing why the body can't be opened (external data).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoadError(e instanceof DesignError ? e.message : errorText(e));
+      return;
+    }
+    const cur = docRef.current;
+    if (!cur) {
+      setDoc(W.open(v.seq, d));
+      return;
+    }
+    // A save in flight (or a conflict being asked about) meets the newer version itself, as a 409.
+    if (v.seq <= cur.saved.seq || saving.current || conflicted.current) return;
+    const r = adoptVersion(cur, v.seq, d);
+    if (r.doc === cur) return;
+    setDoc(r.doc);
+    if (r.doc.past !== cur.past) {
+      setArrival({ seq: v.seq, text: v.author_type === "agent" ? `${personaRef.current} edited the design` : "Accepted changes were applied" });
+    }
+    if (W.isDirty(r.doc)) {
+      setSaveState({ s: "unsaved" });
+      scheduleRef.current();
+    }
+  }, [head.data]);
 
   // Save on the way out: hidden tab, closed page or navigation.
   const flushRef = useRef(flush);
@@ -276,7 +300,17 @@ export function DesignEditor({ id }: { id: string }) {
     };
   }, []);
 
-  const readOnly = !!conflict || !!chat?.archived;
+  // ---- Review (a persona's suggestions as a diff): After and Diff show a preview, so nothing is editable there.
+  const proposals = useDesignProposals(id, !!ref.data).data;
+  const [reviewOpen, setReviewing] = useState(false);
+  const reviewing = reviewOpen && !!proposals?.length;
+  const [mode, setMode] = useState<ReviewMode>("diff");
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string>();
+  const resolve = useResolveProposal(id);
+  const settings = useDesignSettings(id);
+  const viewOnly = reviewing && mode !== "before" && !!proposals?.length;
+  const readOnly = !!conflict || !!chat?.archived || viewOnly;
   const readOnlyRef = useRef(readOnly);
   useEffect(() => {
     readOnlyRef.current = readOnly;
@@ -308,12 +342,15 @@ export function DesignEditor({ id }: { id: string }) {
 
   // ---- Page, selection, tools and camera.
   const design = doc?.draft;
+  const review = useReview(design, proposals, reviewing);
+  // What the canvas draws: the working copy, or in After / Diff the suggestion applied to it.
+  const shown = viewOnly && review ? review.after : design;
   const [pageId, setPageId] = useState<string>();
-  const page = design?.pages.find((p) => p.id === pageId) ?? design?.pages[0];
+  const page = shown?.pages.find((p) => p.id === pageId) ?? shown?.pages[0];
   const [selectedRaw, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string>();
   const [tool, setTool] = useState<Tool>("select");
-  const { laid, lay } = useLaidPage(design, page?.id);
+  const { laid, lay } = useLaidPage(shown, page?.id);
   // Ids that left the page (undo, another page) drop out of the selection.
   const selected = useMemo(() => (laid ? selectedRaw.filter((s) => laid.boxes.has(s)) : []), [selectedRaw, laid]);
   const [camera, setCameraState] = useState<Camera | null>(null);
@@ -512,15 +549,76 @@ export function DesignEditor({ id }: { id: string }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Every message sent from this design's chat carries what the person has selected and is looking at.
+  const ctx = useRef({ page: "", selected: [] as string[], camera: null as Camera | null, w: 1200, h: 800 });
+  useEffect(() => {
+    ctx.current = { page: page?.id ?? "", selected, camera, w: viewport.w, h: viewport.h };
+  });
+  useEffect(() => {
+    if (!chatId) return;
+    return provideChatRefs(chatId, () => {
+      const c = ctx.current;
+      if (!c.page) return undefined;
+      const z = c.camera?.z ?? 1;
+      const viewportBox = c.camera ? { x: Math.round(-c.camera.x / z), y: Math.round(-c.camera.y / z), w: Math.round(c.w / z), h: Math.round(c.h / z), zoom: z } : { x: 0, y: 0, w: Math.round(c.w), h: Math.round(c.h), zoom: 1 };
+      return [{ kind: "canvas", id, selection: { page: c.page, nodes: c.selected.slice(0, 100), viewport: viewportBox } }];
+    });
+  }, [chatId, id]);
+
+  // ---- Presence: the persona's running turn names the canvas and nodes it is working on.
+  const running = chat?.state === "running";
+  const events = useChatRunEvents(chat?.current_run_id, running && !!ref.data).data;
+  const presence = useMemo(() => (running ? presenceOf(toolCalls(events), id, true) : undefined), [events, running, id]);
+  const presenceBoxes = useMemo(() => (presence && laid ? presence.nodes.flatMap((n) => laid.boxes.get(n) ?? []) : []), [presence, laid]);
+  const [follow, setFollow] = useState(false);
+  const paused = !!ref.data?.settings?.persona_paused;
+  const presenceKey = presenceBoxes.map((b) => `${b.x},${b.y}`).join(";");
+  useEffect(() => {
+    if (!follow || !presenceBoxes.length || !viewport.known) return;
+    const x0 = Math.min(...presenceBoxes.map((b) => b.x)), y0 = Math.min(...presenceBoxes.map((b) => b.y));
+    const x1 = Math.max(...presenceBoxes.map((b) => b.x + b.w)), y1 = Math.max(...presenceBoxes.map((b) => b.y + b.h));
+    // Following means the camera tracks an external thing (the persona's turn).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCamera((c) => ({ ...c, x: viewport.w / 2 - ((x0 + x1) / 2) * c.z, y: viewport.h / 2 - ((y0 + y1) / 2) * c.z }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follows when the nodes it names move
+  }, [follow, presenceKey, viewport.known]);
+
+  // A change picked in the review: its page, and the camera moves there when it is off screen.
+  const focusChange = (c: Change) => {
+    review?.setFocus(c.i);
+    if (c.page) setPageId(c.page);
+    const b = c.box;
+    if (!b || !camera) return;
+    const sx = b.x * camera.z + camera.x, sy = b.y * camera.z + camera.y;
+    if (c.page === page?.id && sx >= 0 && sy >= 0 && sx + b.w * camera.z <= viewport.w && sy + b.h * camera.z <= viewport.h) return;
+    setCamera((cam) => ({ ...cam, x: viewport.w / 2 - (b.x + b.w / 2) * cam.z, y: viewport.h / 2 - (b.y + b.h / 2) * cam.z }));
+  };
+  /** Done: saves what is unsaved first, so the accepted ops land on it; the version that comes back merges into anything typed meanwhile. */
+  const finishReview = async () => {
+    if (!review?.body) return;
+    setResolving(true);
+    setResolveError(undefined);
+    try {
+      await flush();
+      if (conflicted.current) throw new Error("Choose between your version and the latest first.");
+      await resolve.mutateAsync({ proposalId: review.proposal.id, decisions: review.body.decisions });
+      setSelected([]);
+      setMode("diff");
+    } catch (e) {
+      setResolveError(errorText(e));
+    } finally {
+      setResolving(false);
+    }
+  };
   // A design started from a description or a ticket key asks its persona to draft it, once.
   const brief = search.get("brief");
   const briefSent = useRef(false);
   useEffect(() => {
-    if (!brief || !chatId || briefSent.current) return;
+    if (!brief || !chatId || !doc || briefSent.current) return;
     briefSent.current = true;
     router.replace(`/apps/designs/${id}`);
     void send.mutateAsync({ body: `Design this: ${brief}` }).catch((e) => setNotice(`Couldn’t ask ${persona} to draft it: ${errorText(e)}`));
-  }, [brief, chatId, id, persona, router, send]);
+  }, [brief, chatId, doc, id, persona, router, send]);
 
   const [chatOpen, setChatOpen] = useState(true);
   const title = ref.data?.title ?? "Design";
@@ -544,6 +642,23 @@ export function DesignEditor({ id }: { id: string }) {
                   )}
                 </span>
               )}
+              <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-fg-secondary" title={`Off: ${persona}’s edits wait as suggestions you review. On: they apply at once, and Undo reverts them.`}>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label="Let personas edit directly"
+                  checked={!!ref.data.settings?.direct_edit}
+                  disabled={settings.isPending}
+                  onChange={(e) => settings.mutate({ direct_edit: e.target.checked })}
+                  className="size-[14px] accent-[var(--color-accent)]"
+                />
+                Let personas edit directly
+              </label>
+              {!!proposals?.length && (
+                <Button variant="primary" aria-pressed={reviewing} onClick={() => setReviewing((r) => !r)}>
+                  Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}
+                </Button>
+              )}
               <Button variant="secondary" aria-pressed={chatOpen} onClick={() => setChatOpen((o) => !o)}>
                 ✦ {chatOpen ? "Hide chat" : `Chat with ${persona}`}
               </Button>
@@ -557,7 +672,7 @@ export function DesignEditor({ id }: { id: string }) {
             {loadError ?? (fetchError instanceof ApiError && fetchError.status === 404 ? "It may have been deleted, or it belongs to someone else." : errorText(fetchError))}
           </Banner>
         </div>
-      ) : !design || !page || !laid || !lay ? (
+      ) : !design || !shown || !page || !laid || !lay ? (
         <div aria-busy="true" className="flex min-h-0 flex-1 gap-3 p-3">
           <Skeleton className="w-[240px]" />
           <Skeleton className="flex-1" />
@@ -572,7 +687,7 @@ export function DesignEditor({ id }: { id: string }) {
           )}
           <nav aria-label="Pages and layers" className="flex min-h-0 w-[232px] flex-none flex-col border-r border-border-subtle bg-surface max-md:hidden">
             <LayersPanel
-              design={design}
+              design={shown}
               page={page}
               onPage={(pid) => {
                 setPageId(pid);
@@ -622,13 +737,40 @@ export function DesignEditor({ id }: { id: string }) {
                   {conflict.layers.length > 3 ? ` and ${conflict.layers.length - 3} more` : ""}. Nothing is saved until you choose: Keep mine saves your version over theirs (theirs stays in the version history), or use the latest version and drop your unsaved edits.
                 </Banner>
               )}
+              {presence && (
+                <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+                  <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
+                  {persona.slice(0, 1).toUpperCase()} is editing
+                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
+                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
+                </div>
+              )}
+              {paused && (
+                <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
+                  {persona}’s edits are paused
+                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
+                </div>
+              )}
+              {arrival && !reviewing && (
+                <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+                  {arrival.text}
+                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
+                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
+                </div>
+              )}
+              {!reviewing && !!proposals?.length && (
+                <Banner tone="human" title={`${persona} suggested changes`} actions={<Button variant="approve" onClick={() => setReviewing(true)}>Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}</Button>}>
+                  {proposals[0].summary || `${proposals[0].ops.length} changes`} · nothing changes until you accept.
+                </Banner>
+              )}
+              {reviewing && review && <ReviewBar review={review} persona={persona} mode={mode} onMode={setMode} busy={resolving} onDone={() => void finishReview()} onClose={() => setReviewing(false)} />}
               {chat?.archived && <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>}
               {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
               {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
             </div>
             {(
               <DesignCanvas
-                design={design}
+                design={shown}
                 page={page}
                 laid={laid}
                 selected={selected}
@@ -645,6 +787,8 @@ export function DesignEditor({ id }: { id: string }) {
                 onViewport={(w, h) => setViewport({ w, h, known: true })}
               />
             )}
+            {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
+            {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
             <div role="toolbar" aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
               {TOOLS.map((t) => (
                 <button
@@ -681,6 +825,11 @@ export function DesignEditor({ id }: { id: string }) {
               if (f) void onImage(f);
             }} />
           </main>
+          {reviewing && review ? (
+            <aside aria-label="Review" className="flex min-h-0 w-[320px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
+              <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} />
+            </aside>
+          ) : (
           <aside aria-label="Inspector" className="flex min-h-0 w-[264px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
             <div role="tablist" aria-label="Inspector" className="flex gap-4 border-b border-border-subtle px-4 pt-3">
               {["Design", "Prototype", "Inspect"].map((t) => (
@@ -693,6 +842,7 @@ export function DesignEditor({ id }: { id: string }) {
               <Inspector design={design} selected={selected} lay={lay} onEdit={apply} readOnly={readOnly} onGroup={group} onRemove={removeSelected} />
             </div>
           </aside>
+          )}
         </div>
       )}
     </div>
