@@ -11,6 +11,7 @@ x-api-env: &api-env
   SEED: ${SEED:-false}
   LOCAL_USER_NAME: ${LOCAL_USER_NAME:-Local user}
   LOCAL_USER_EMAIL: ${LOCAL_USER_EMAIL:-me@localhost}
+  ROLLOVER_CONTEXT_TOKENS: ${ROLLOVER_CONTEXT_TOKENS:-0}
 
 services:
   postgres:

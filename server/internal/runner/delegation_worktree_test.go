@@ -12,6 +12,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/harness"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -703,5 +704,106 @@ func TestChildCancelledBeforeParentProcessExits(t *testing.T) {
 	}
 	if len(e.children(parent)[0].Checks) == 0 {
 		t.Fatal("cancelled child was never reported")
+	}
+}
+
+// rolloverWake runs a main agent that delegates one task and reports
+// FAKE_HARNESS_CONTEXT_TOKENS=tokens with ROLLOVER_CONTEXT_TOKENS=limit, and
+// returns the parent run and the log line of its delegation wake.
+func rolloverWake(t *testing.T, limit int64, tokens string) (env, store.Run, map[string]string) {
+	t.Helper()
+	e := setup(t)
+	e.runner.Cfg.RolloverContextTokens = limit
+	e.subagent("scribe")
+	logPath := filepath.Join(t.TempDir(), "log.jsonl")
+	t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+	t.Setenv("FAKE_HARNESS_LOG", logPath)
+	t.Setenv("FAKE_HARNESS_CONTEXT_TOKENS", tokens)
+	t.Setenv("FAKE_HARNESS_PLAN", "Delegate the doc|Review the result")
+	t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{{"agent": "scribe", "task": "Write FILE=docs/a.txt with the release notes",
+		"acceptance_criteria": []string{"docs/a.txt exists"}, "allowed_paths": []string{"docs/"}, "test_command": "test -f docs/a.txt"}}))
+	e.dispatch("PAY-214")
+	e.until("completed", e.state("PAY-214=completed"))
+	parent := e.run("PAY-214")
+	var parentLines []map[string]string
+	for _, l := range readLog(t, logPath) {
+		if !strings.Contains(l["full_prompt"], "delegated part of") {
+			parentLines = append(parentLines, l)
+		}
+	}
+	if len(parentLines) != 2 {
+		t.Fatalf("parent invocations %d: %+v", len(parentLines), parentLines)
+	}
+	if !strings.HasPrefix(deref(parent.Outcome), "RESUMED") {
+		t.Fatalf("outcome %s", deref(parent.Outcome))
+	}
+	return e, parent, parentLines[1]
+}
+
+func TestLargeLeadRollsOverAtDelegationWake(t *testing.T) {
+	e, parent, wake := rolloverWake(t, 100000, "180000")
+	if wake["resume"] != "" {
+		t.Fatalf("rolled-over turn resumed session %q", wake["resume"])
+	}
+	p := wake["full_prompt"]
+	for _, want := range []string{
+		"Your earlier session was closed to keep context small; this brief is your state.",
+		"## Acceptance criteria", // the ticket's, from the run brief
+		"## Plan", "Delegate the doc", "Review the result",
+		"## Git", "Branch: ",
+		"## What you delegated", "@scribe", "Write FILE=docs/a.txt with the release notes", "- docs/a.txt exists", "Test command: `test -f docs/a.txt`",
+		"## Delegation report", "## Automated checks", "**MERGED**",
+	} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("rollover prompt lacks %q:\n%s", want, p)
+		}
+	}
+	// The task is quoted without the contract's sections.
+	_, delegated, _ := strings.Cut(p, "## What you delegated")
+	delegated, _, _ = strings.Cut(delegated, "## Delegation report")
+	if strings.Contains(delegated, "## Allowed files") || strings.Contains(delegated, "## Tests") {
+		t.Fatalf("delegated section repeats the contract headings:\n%s", delegated)
+	}
+	if !e.hasLifecycle(parent.ID, "session_rollover") {
+		t.Fatalf("no session_rollover event: %s", e.eventTypes(parent.ID))
+	}
+	evs, _ := e.q.ListRunEvents(e.ctx, store.ListRunEventsParams{RunID: parent.ID, Seq: 0})
+	for _, ev := range evs {
+		var pl map[string]any
+		_ = json.Unmarshal(ev.Payload, &pl)
+		if pl["state"] == "session_rollover" && (pl["reason"] != "delegation" || pl["context_tokens"] != float64(180000)) {
+			t.Fatalf("rollover event %s", ev.Payload)
+		}
+	}
+	// The fresh session's turn is billed for its own process, not the session so far.
+	turns, _ := e.q.ListTurns(e.ctx, parent.ID)
+	if len(turns) != 2 {
+		t.Fatalf("parent turns %d", len(turns))
+	}
+	var u0, u1 harness.Usage
+	_ = json.Unmarshal(turns[0].Usage, &u0)
+	_ = json.Unmarshal(turns[1].Usage, &u1)
+	if u0.CostUSD == 0 || u1.CostUSD != u0.CostUSD {
+		t.Fatalf("rolled-over turn cost %v, first turn %v", u1.CostUSD, u0.CostUSD)
+	}
+}
+
+func TestSmallLeadResumesAtDelegationWake(t *testing.T) {
+	for name, c := range map[string]struct {
+		limit  int64
+		tokens string
+	}{"below": {100000, "50000"}, "disabled": {0, "180000"}} {
+		t.Run(name, func(t *testing.T) {
+			e, parent, wake := rolloverWake(t, c.limit, c.tokens)
+			if wake["resume"] == "" {
+				t.Fatal("delegation wake didn't resume the session")
+			}
+			if p := wake["full_prompt"]; strings.Contains(p, "Your earlier session was closed") || strings.Contains(p, "## What you delegated") || !strings.Contains(p, "## Automated checks") {
+				t.Fatalf("wake prompt:\n%s", p)
+			}
+			if e.hasLifecycle(parent.ID, "session_rollover") {
+				t.Fatal("unexpected session_rollover event")
+			}
+		})
 	}
 }
