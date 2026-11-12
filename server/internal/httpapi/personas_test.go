@@ -274,6 +274,19 @@ func TestChatPersonaGroupingAndOwnership(t *testing.T) {
 	if got := list("?persona_id=none"); len(got) != 0 {
 		t.Fatalf("none list %v", got)
 	}
+	// A persona that joined a chat (by @mention) lists it too; the host still does.
+	if _, err := e.pool.Exec(context.Background(), `INSERT INTO chat_participants (chat_id, persona_id) VALUES ($1, $2)`, id1, workID); err != nil {
+		t.Fatal(err)
+	}
+	if got := list("?persona_id=" + workID); !same(got, id1, id2) {
+		t.Fatalf("work list with a joined chat %v", got)
+	}
+	if got := list(""); !same(got, id1) {
+		t.Fatalf("host list with a guest %v", got)
+	}
+	if _, err := e.pool.Exec(context.Background(), `DELETE FROM chat_participants WHERE chat_id = $1`, id1); err != nil {
+		t.Fatal(err)
+	}
 
 	// Someone else's or an unknown persona is rejected without revealing it.
 	stranger := e.strangerPersona()

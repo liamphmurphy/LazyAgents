@@ -1716,11 +1716,13 @@ const listChatsForUser = `-- name: ListChatsForUser :many
 SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids, c.temporary, c.pending_repo_url, c.parent_chat_id, c.auto_model FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3 AND NOT c.hidden
   AND ($4::text IS NULL OR p.key = $4::text)
-  -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
+  -- persona_filter: 'all', 'none' (chats without a persona) or 'id': chats
+  -- the persona hosts or joined (chat_participants).
   AND CASE $5::text
     WHEN 'all' THEN true
     WHEN 'none' THEN c.persona_id IS NULL
-    ELSE c.persona_id = $6::uuid END
+    ELSE c.persona_id = $6::uuid
+      OR EXISTS (SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.persona_id = $6::uuid) END
   -- space_filter: 'none' (chats outside any space), 'id' (space_id), else all.
   AND CASE $7::text
     WHEN 'none' THEN c.space_id IS NULL
