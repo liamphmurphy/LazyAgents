@@ -27,7 +27,7 @@ import { tokensChanged } from "@/lib/designs/tokens";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
-import { ReviewBar, ReviewOverlay, ReviewPanel, useReview, type ReviewMode } from "./design-review";
+import { ReviewOverlay, ReviewPanel, ReviewPill, stepChange, suggestionPages, useReview, type ReviewMode } from "./design-review";
 import { ExportMenu } from "./export-menu";
 import { PresenceLayer } from "./presence-layer";
 import { Inspector } from "./inspector";
@@ -626,7 +626,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       await flush();
       if (conflicted.current) throw new Error("Choose between your version and the latest first.");
       await resolve.mutateAsync({ proposalId: review.proposal.id, decisions: review.body.decisions });
-      // The last suggestion ends the review, so a later one waits behind its banner instead of taking over the dock.
+      // The last suggestion ends the review, so a later one waits behind its chat card instead of taking over the dock.
       if ((proposals?.length ?? 0) <= 1) setReviewing(false);
       setSelected([]);
       setMode("diff");
@@ -672,15 +672,19 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
   const fetchError = ref.error ?? head.error;
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
-  // ---- The dock (full editor only): Review opens from the canvas banner; Chat is unread while hidden.
-  // Each review that starts (the banner, ?review=1 once suggestions load) brings the Review tab up.
+  // ---- The dock (full editor only): Review opens from the chat's suggestion card; Chat is unread while hidden.
+  // Each review that starts (the card, ?review=1 once suggestions load) brings the Review tab up.
   const [showReview, setShowReview] = useState(0);
   const [reviewShown, setReviewShown] = useState(false);
   if (reviewing !== reviewShown) {
     setReviewShown(reviewing);
     if (reviewing) setShowReview((n) => n + 1);
   }
-  const startReview = () => setReviewing(true);
+  /** The card's Review: starts the review, or brings its tab back up if it is already going. */
+  const startReview = () => {
+    if (reviewing) setShowReview((n) => n + 1);
+    else setReviewing(true);
+  };
   const [dock, setDock] = useState<DockState>();
   const chatShowing = !dock || (dock.open && !dock.hidden && dock.tab === "chat");
   const lastReply = chat?.last_message_at;
@@ -691,6 +695,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
   const direct = !!ref.data?.settings?.direct_edit;
   const proposalCount = proposals?.length ?? 0;
   const suggestions = `${proposalCount} ${proposalCount === 1 ? "suggestion" : "suggestions"}`;
+  const pending = proposals?.[0];
+  const pendingPages = useMemo(() => (design && pending ? suggestionPages(design, pending) : []), [design, pending]);
   const look = personaLook(chat?.speaker ?? chat?.persona);
   const rename = useRenameDesign();
   const duplicate = useDuplicateDesign();
@@ -708,75 +714,81 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
     </div>
   ) : null;
 
+  // The canvas's status, most important first: a conflict to settle, a failed save, an archived chat, an
+  // image notice, paused edits, an arrived version, the persona at work.
+  const status = conflict ? (
+    <Banner
+      tone="blocked"
+      title="This design changed while you were editing"
+      actions={
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              conflicted.current = false;
+              setDoc(W.takeTheirs(conflict.seq, conflict.theirs));
+              setConflict(null);
+              setSaveState({ s: "saved" });
+            }}
+          >
+            Use the latest version
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              conflicted.current = false;
+              setDoc(W.keepMine(docRef.current!, conflict.seq, conflict.theirs));
+              setConflict(null);
+              void flush().catch(() => undefined);
+            }}
+          >
+            Keep mine
+          </Button>
+        </>
+      }
+    >
+      You and {persona} both changed {conflict.layers.slice(0, 3).join(", ")}
+      {conflict.layers.length > 3 ? ` and ${conflict.layers.length - 3} more` : ""}. Nothing is saved until you choose: Keep mine saves your version over theirs (theirs stays in the version history), or use the latest version and drop your unsaved edits.
+    </Banner>
+  ) : saveState.s === "error" ? (
+    <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>
+  ) : chat?.archived ? (
+    <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>
+  ) : notice || uploading ? (
+    <p role={notice ? "alert" : "status"} className={cx("pointer-events-auto self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>
+  ) : paused ? (
+    <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
+      {persona}’s edits are paused
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
+    </div>
+  ) : arrival && !reviewing ? (
+    <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+      {arrival.text}
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
+    </div>
+  ) : presence ? (
+    <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+      <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
+      {persona.slice(0, 1).toUpperCase()} is editing
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
+    </div>
+  ) : null;
+
   const canvas = design && shown && page && laid && lay ? (
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="absolute inset-x-3 top-3 z-10 flex flex-col gap-2">
-        {conflict && (
-          <Banner
-            tone="blocked"
-            title="This design changed while you were editing"
-            actions={
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    conflicted.current = false;
-                    setDoc(W.takeTheirs(conflict.seq, conflict.theirs));
-                    setConflict(null);
-                    setSaveState({ s: "saved" });
-                  }}
-                >
-                  Use the latest version
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    conflicted.current = false;
-                    setDoc(W.keepMine(docRef.current!, conflict.seq, conflict.theirs));
-                    setConflict(null);
-                    void flush().catch(() => undefined);
-                  }}
-                >
-                  Keep mine
-                </Button>
-              </>
-            }
-          >
-            You and {persona} both changed {conflict.layers.slice(0, 3).join(", ")}
-            {conflict.layers.length > 3 ? ` and ${conflict.layers.length - 3} more` : ""}. Nothing is saved until you choose: Keep mine saves your version over theirs (theirs stays in the version history), or use the latest version and drop your unsaved edits.
-          </Banner>
-        )}
-        {presence && (
-          <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
-            <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
-            {persona.slice(0, 1).toUpperCase()} is editing
-            <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
-            <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
-          </div>
-        )}
-        {paused && (
-          <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
-            {persona}’s edits are paused
-            <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
-          </div>
-        )}
-        {arrival && !reviewing && (
-          <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
-            {arrival.text}
-            <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
-            <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
-          </div>
-        )}
-        {!reviewing && !!proposals?.length && (
-          <Banner tone="human" title={`${persona} suggested changes`} actions={<Button variant="approve" onClick={() => (beside ? void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`)) : startReview())}>Review {suggestions}</Button>}>
-            {proposals[0].summary || `${proposals[0].ops.length} changes`} · nothing changes until you accept.
-          </Banner>
-        )}
-        {reviewing && review && <ReviewBar review={review} persona={persona} mode={mode} onMode={setMode} busy={resolving} onDone={() => void finishReview()} onClose={() => setReviewing(false)} />}
-        {chat?.archived && <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>}
-        {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
-        {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
-      </div>
+      {/* One status area: the most important message only. While reviewing it moves to the bottom, so only the review pill sits over the frame. */}
+      {status && (
+        <div data-testid="design-status" className={cx("absolute left-3 z-10 flex max-w-[min(640px,calc(100%-24px))] flex-col", reviewing ? "bottom-20" : "top-3")}>
+          {status}
+        </div>
+      )}
+      {reviewing && review && (
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-center">
+          <ReviewPill review={review} mode={mode} onMode={setMode} onStep={(dir) => { const c = stepChange(review, dir); if (c) focusChange(c); }} onClose={() => setReviewing(false)} busy={resolving} />
+        </div>
+      )}
       <DesignCanvas
         design={shown}
         page={page}
@@ -857,7 +869,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
           <span className="flex-1" />
           {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-[9px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
           {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-[11.5px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
-          <Button variant="secondary" onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`))}>Open in Designs</Button>
+          <Button variant="secondary" title={proposalCount ? `Review ${suggestions} in Designs` : undefined} onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}${proposalCount ? "?review=1" : ""}`))}>Open in Designs</Button>
           <button type="button" aria-label="Close the design" onClick={beside.onClose} className="grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
             <Icon name="x" size={14} />
           </button>
@@ -977,6 +989,16 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
       </div>
+      {pending && (
+        <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-[12.5px]">
+          <span className="font-semibold text-fg">
+            {pending.ops.length} suggested {pending.ops.length === 1 ? "change" : "changes"}
+            {pendingPages.length > 0 && ` · ${pendingPages.join(", ")}`}
+          </span>
+          <span className="text-fg-secondary">Nothing changes until you accept.{proposalCount > 1 ? ` ${proposalCount - 1} more waiting after this.` : ""}</span>
+          <Button variant="approve" className="mt-1 self-start" onClick={startReview}>Review</Button>
+        </div>
+      )}
       {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/designs")} />}
     </div>
   );
@@ -991,7 +1013,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{proposalCount}</span>,
       content:
         reviewing && review && shown ? (
-          <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} />
+          <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} onDone={() => void finishReview()} />
         ) : (
           <div className="flex flex-col items-start gap-3 p-4 text-[13px] text-fg-secondary">
             <p>{persona} suggested {suggestions}. Nothing changes until you accept.</p>

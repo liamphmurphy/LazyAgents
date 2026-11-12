@@ -69,35 +69,43 @@ const Pin = ({ n, kind, dim }: { n: number; kind: ChangeKind; dim?: boolean }) =
   </span>
 );
 
-/** The controls over the stage: Before / After / Diff, the legend, and Reject rest / Accept rest / Done. */
-export function ReviewBar({ review, persona, mode, onMode, onDone, busy, onClose }: { review: Review; persona: string; mode: ReviewMode; onMode: (m: ReviewMode) => void; onDone: () => void; busy: boolean; onClose: () => void }) {
-  const done = review.left === 0;
+/** The pages a suggestion touches, by name, for the chat card. */
+export function suggestionPages(draft: Design, proposal: DesignProposal): string[] {
+  const ops = proposal.ops as DesignOp[];
+  const deps = proposal.deps && proposal.deps.length === ops.length ? proposal.deps : dependencies(ops);
+  const ids = new Set(classify(draft, ops, deps).flatMap((c) => c.page ?? []));
+  return draft.pages.filter((p) => ids.has(p.id)).map((p) => p.name);
+}
+
+/** Which change ‹ › lands on: the next (or previous) one after the focused change, wrapping round. */
+export function stepChange(review: Review, dir: 1 | -1): Change | undefined {
+  const m = review.changes.length;
+  if (!m) return undefined;
+  const at = review.changes.findIndex((c) => c.i === review.focus);
+  return review.changes[at < 0 ? (dir > 0 ? 0 : m - 1) : (at + dir + m) % m];
+}
+
+/** The one control over the frame while reviewing: Before / After / Diff and ‹ n of m › between the changes. */
+export function ReviewPill({ review, mode, onMode, onStep, onClose, busy }: { review: Review; mode: ReviewMode; onMode: (m: ReviewMode) => void; onStep: (dir: 1 | -1) => void; onClose: () => void; busy: boolean }) {
+  const m = review.changes.length;
+  const at = review.changes.findIndex((c) => c.i === review.focus);
+  const arrow = "grid size-6 place-items-center rounded-full text-[15px] text-fg-2 hover:bg-hover disabled:opacity-40";
   return (
-    <div role="region" aria-label="Review" className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-border-float bg-surface-raised px-3 py-2 text-[12.5px] shadow-[var(--shadow-float)]">
-      <div role="group" aria-label="View" className="flex rounded-lg border border-border-subtle bg-surface p-0.5">
-        {(["before", "after", "diff"] as const).map((m) => (
-          <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)} className={cx("rounded-md px-2.5 py-1", mode === m ? "bg-selected font-semibold text-fg" : "text-fg-secondary hover:bg-hover")}>
-            {m[0].toUpperCase() + m.slice(1)}
+    <div role="region" aria-label="Review" data-testid="review-pill" className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-float bg-surface-raised p-1 text-[12.5px] shadow-[var(--shadow-float)]">
+      <div role="group" aria-label="View" className="flex rounded-full bg-surface p-0.5">
+        {(["before", "after", "diff"] as const).map((v) => (
+          <button key={v} type="button" aria-pressed={mode === v} onClick={() => onMode(v)} className={cx("rounded-full px-2.5 py-0.5", mode === v ? "bg-selected font-semibold text-fg" : "text-fg-secondary hover:bg-hover")}>
+            {v[0].toUpperCase() + v.slice(1)}
           </button>
         ))}
       </div>
-      <ul aria-label="Legend" className="flex items-center gap-3 text-[11px] text-fg-secondary max-xl:hidden">
-        {(Object.keys(KIND_COLOR) as ChangeKind[]).map((k) => (
-          <li key={k} className="flex items-center gap-1">
-            <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: KIND_COLOR[k] }} />
-            {KIND_LABEL[k]}
-          </li>
-        ))}
-      </ul>
-      <span className="text-fg" data-testid="review-status">
-        Reviewing {persona}’s changes <span className="text-fg-secondary">· {review.left} of {review.changes.length} left{review.total > 1 ? ` · suggestion 1 of ${review.total}` : ""}</span>
+      <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+      <button type="button" aria-label="Previous change" className={arrow} disabled={!m} onClick={() => onStep(-1)}>‹</button>
+      <span data-testid="review-step" className="min-w-[52px] text-center tabular-nums text-fg" aria-live="polite">
+        {at < 0 ? `${m} ${m === 1 ? "change" : "changes"}` : `${at + 1} of ${m}`}
       </span>
-      <span className="ml-auto flex items-center gap-1.5">
-        <Button variant="outline" disabled={!review.left || busy} onClick={review.rejectRest}>Reject rest</Button>
-        <Button variant="primary" disabled={!review.left || busy} onClick={review.acceptRest}>Accept rest</Button>
-        <Button variant="secondary" disabled={!done || busy} onClick={onDone}>{busy ? "Applying…" : "Done"}</Button>
-        <Button variant="ghost" disabled={busy} onClick={onClose} aria-label="Close review">✕</Button>
-      </span>
+      <button type="button" aria-label="Next change" className={arrow} disabled={!m} onClick={() => onStep(1)}>›</button>
+      <button type="button" aria-label="Close review" disabled={busy} className="grid size-6 place-items-center rounded-full text-[11px] text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-40" onClick={onClose}>✕</button>
     </div>
   );
 }
@@ -137,8 +145,9 @@ export function ReviewOverlay({ review, mode, page, camera }: { review: Review; 
 }
 
 /** The side list: one card per change with its why, Accept / Reject / Discuss. */
-export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, error, busy, onFocus }: { review: Review; design: Design; chatId: string; canvasId: string; seq: number; persona: string; error?: string; busy: boolean; onFocus: (c: Change) => void }) {
+export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, error, busy, onFocus, onDone }: { review: Review; design: Design; chatId: string; canvasId: string; seq: number; persona: string; error?: string; busy: boolean; onFocus: (c: Change) => void; onDone: () => void }) {
   const [tab, setTab] = useState<"changes" | "comments">("changes");
+  const pages = design.pages.filter((p) => review.changes.some((c) => c.page === p.id)).map((p) => p.name);
   const comments = useCanvasComments(chatId, canvasId).data?.comments ?? [];
   const tabs = [
     { id: "changes", label: "Changes", n: review.changes.length },
@@ -146,6 +155,22 @@ export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, er
   ] as const;
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="review-panel">
+      <div className="flex-none px-4 pt-3">
+        <p className="text-[13px] font-semibold text-fg">{persona}’s suggestion</p>
+        <p className="mt-0.5 text-[12px] text-fg-secondary" data-testid="review-status">
+          {review.left} of {review.changes.length} left
+          {pages.length > 0 && ` · ${pages.join(", ")}`}
+          {review.total > 1 ? ` · suggestion 1 of ${review.total}` : ""}
+        </p>
+        <ul aria-label="Legend" className="mt-1.5 flex items-center gap-3 text-[11px] text-fg-tertiary">
+          {(Object.keys(KIND_COLOR) as ChangeKind[]).map((k) => (
+            <li key={k} className="flex items-center gap-1">
+              <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: KIND_COLOR[k] }} />
+              {KIND_LABEL[k]}
+            </li>
+          ))}
+        </ul>
+      </div>
       <div role="tablist" aria-label="Review" className="flex gap-4 border-b border-border-subtle px-4 pt-3">
         {tabs.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={cx("-mb-px flex items-center gap-1.5 border-b-2 pb-2 text-[12.5px]", tab === t.id ? "border-accent font-semibold text-fg" : "border-transparent text-fg-tertiary")}>
@@ -163,12 +188,19 @@ export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, er
                 <ChangeCard key={c.i} c={c} review={review} design={design} chatId={chatId} canvasId={canvasId} seq={seq} persona={persona} busy={busy} onFocus={onFocus} />
               ))}
             </ol>
-            {error && <p role="alert" className="mt-3 text-[12px] text-pill-blocked-fg">{error}</p>}
-            <p className="mt-4 text-[11px] text-fg-tertiary">Done turns the accepted changes into one version. Rejected ones, with your reasons, go back to {persona}.</p>
           </>
         ) : (
           <CommentList comments={comments} design={design} />
         )}
+      </div>
+      <div className="flex-none border-t border-border-subtle px-4 py-3" data-testid="review-actions">
+        {error && <p role="alert" className="mb-2 text-[12px] text-pill-blocked-fg">{error}</p>}
+        <p className="mb-2 text-[11px] text-fg-tertiary">Done turns the accepted changes into one version. Rejected ones, with your reasons, go back to {persona}.</p>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Button variant="outline" disabled={!review.left || busy} onClick={review.rejectRest}>Reject rest</Button>
+          <Button variant="primary" disabled={!review.left || busy} onClick={review.acceptRest}>Accept rest</Button>
+          <Button variant="secondary" disabled={review.left > 0 || busy} onClick={onDone}>{busy ? "Applying…" : "Done"}</Button>
+        </span>
       </div>
     </div>
   );

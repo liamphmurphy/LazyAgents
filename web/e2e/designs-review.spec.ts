@@ -64,8 +64,12 @@ test.describe("@design-review", () => {
 
     // 1. The persona's patch waits as a suggestion; the design is untouched.
     await say("Tidy the Start screen");
-    const open = page.getByRole("button", { name: "Review 1 suggestion" }).first();
+    // It announces itself in the chat (a card with Review), not on the canvas.
+    const card = chat.getByTestId("suggestion-card");
+    const open = card.getByRole("button", { name: "Review", exact: true });
     await expect(open).toBeVisible({ timeout: 120_000 });
+    await expect(card).toContainText("3 suggested changes");
+    await expect(page.getByRole("button", { name: /Review \d+ suggestion/ })).toHaveCount(0);
     await expect(chat.getByText("I suggested 3 changes.")).toBeVisible();
     expect((await get(`/designs/${id}`)).seq).toBe(first.seq);
     expect((await get(`/designs/${id}`)).pending_proposals).toBe(1);
@@ -92,16 +96,29 @@ test.describe("@design-review", () => {
     await expect(promo).toHaveCount(0);
     await page.getByRole("button", { name: "Diff", exact: true }).click();
 
+    // The pill is the only control over the frame; ‹ › steps through the changes and focuses each.
+    const pill = page.getByTestId("review-pill");
+    await expect(pill).toContainText("3 changes");
+    await pill.getByRole("button", { name: "Next change" }).click();
+    await expect(pill.getByTestId("review-step")).toHaveText("1 of 3");
+    await expect(panel.getByTestId("review-change-1")).toHaveClass(/border-accent/);
+    await pill.getByRole("button", { name: "Previous change" }).click();
+    await expect(pill.getByTestId("review-step")).toHaveText("3 of 3");
+    // The bulk actions live in the Review tab only.
+    await expect(page.getByRole("button", { name: "Accept rest" })).toHaveCount(1);
+    await expect(panel.getByRole("button", { name: "Accept rest" })).toBeVisible();
+
     // 3. Accept one, reject one with a reason, accept the rest.
     await panel.getByTestId("review-change-1").getByRole("button", { name: "Accept", exact: true }).click();
     await panel.getByTestId("review-change-3").getByRole("button", { name: "Reject", exact: true }).click();
     await page.getByLabel(/Why reject change 3/).fill("Keep the placeholder copy");
     await page.getByLabel(/Why reject change 3/).press("Enter");
     await expect(panel.getByTestId("review-change-3")).toContainText("Rejected: Keep the placeholder copy");
-    await expect(page.getByRole("button", { name: "Done" })).toBeDisabled();
-    await page.getByRole("button", { name: "Accept rest" }).click();
+    const actions = panel.getByTestId("review-actions");
+    await expect(actions.getByRole("button", { name: "Done" })).toBeDisabled();
+    await actions.getByRole("button", { name: "Accept rest" }).click();
     await expect(panel.getByTestId("review-change-2")).toContainText("Accepted");
-    await expect(page.getByTestId("review-status")).toContainText("0 of 3 left");
+    await expect(panel.getByTestId("review-status")).toContainText("0 of 3 left");
 
     // Nothing changed until Done (my own nudge may have saved by now, but not the suggestion).
     const before = nodes((await head(id)).body);
@@ -110,7 +127,7 @@ test.describe("@design-review", () => {
     expect(before.some((n) => n.id === dropped.id)).toBe(true);
 
     // 4. Done: one version with the accepted changes on top of my unsaved edit.
-    await page.getByRole("button", { name: "Done" }).click();
+    await actions.getByRole("button", { name: "Done" }).click();
     await expect.poll(async () => nodes((await head(id)).body).some((n) => n.name === "Promo code"), { timeout: 30_000 }).toBe(true);
     const after = nodes((await head(id)).body);
     expect(after.find((n) => n.id === button.id)?.fill).toBe("#2F6BFF");
