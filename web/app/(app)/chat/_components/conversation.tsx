@@ -1148,6 +1148,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                     disabled={locked || running}
                   />
                 ),
+                // The desktop composer leaves this to the header; the compact + sheet lists it too.
+                project: !c.space && <ChatProjectPicker chat={c} disabled={running} />,
               }}
               actions={
                 running && (
