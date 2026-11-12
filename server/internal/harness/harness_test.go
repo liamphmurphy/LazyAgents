@@ -640,6 +640,21 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 		t.Fatal("standalone ticket must keep the Tests section")
 	}
 
+	// A sub agent outside an epic runs only the narrowest tests: the main agent
+	// runs the full suite once after merging. Lifecycle rules are stated here once.
+	sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
+	for _, want := range []string{"## Tests", "Run the narrowest tests", "Tests command, that is the bar", "Don't run the full suite", "never wait for or poll GitHub PR checks",
+		"commit what you change", "call complete_run with a short summary", "If you're blocked, call complete_run", "request_approval or await_human", "get_ticket only if"} {
+		if !strings.Contains(sub, want) {
+			t.Fatalf("delegated AGENTS.md missing %q:\n%s", want, sub)
+		}
+	}
+	for _, bad := range []string{"full suite once", "claim_ticket"} {
+		if strings.Contains(sub, bad) {
+			t.Fatalf("delegated AGENTS.md must not contain %q:\n%s", bad, sub)
+		}
+	}
+
 	// A sub agent of an epic ticket leaves the full suite too; one of the review runs it.
 	child := string(SubagentAgentsMD("", epic, nil, "PAY-1"))
 	if !strings.Contains(child, "## Checks") || strings.Contains(child, "Run the full suite") {

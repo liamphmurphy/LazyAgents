@@ -20,7 +20,10 @@ type ClaudeCode struct {
 
 func (ClaudeCode) Name() string { return agentdef.HarnessClaudeCode }
 
-const claudeMCPFile = ".lazyagents/mcp.json"
+const (
+	claudeMCPFile    = ".lazyagents/mcp.json"
+	claudeAgentsFile = ".lazyagents/claude-agents.json"
+)
 
 // claudePrivacyEnv keeps the CLI from sending anything beyond the model
 // requests themselves (names checked against Claude Code 2.1.316). Vesper owns
@@ -117,6 +120,24 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if denied(spec, "repo:write") {
 		deny = append(deny, "Bash(git push:*)", "Bash(gh pr create:*)")
 	}
+	explorer := agentdef.ExplorerOn(spec, t.Lead)
+	var agents []byte
+	if explorer {
+		// The policy hook still allows only the explorer (runs.CheckTool).
+		allow = append(allow, "Agent")
+		model := spec.HarnessOptions[agentdef.OptionExplorerModel]
+		if model == "" {
+			model = agentdef.DefaultExplorerModel
+		}
+		if agents, err = json.MarshalIndent(map[string]any{agentdef.ExplorerAgent: map[string]any{
+			"description": "Read-only code search. Use it for any question that needs a broad grep or reading more than about three files, when you need the conclusion and not the file contents.",
+			"prompt":      "Answer the question from the code. Reply in at most 300 words with file:line references. Never paste whole files or long excerpts. Say what you could not find.",
+			"tools":       []string{"Read", "Grep", "Glob"},
+			"model":       AnthropicModel(model),
+		}}, "", "  "); err != nil {
+			return Invocation{}, err
+		}
+	}
 
 	argv := []string{"claude", "-p", t.Prompt,
 		"--output-format", "stream-json", "--verbose",
@@ -135,6 +156,9 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	}
 	if len(deny) > 0 {
 		argv = append(argv, "--disallowedTools", strings.Join(deny, ","))
+	}
+	if explorer {
+		argv = append(argv, "--agents", claudeAgentsFile)
 	}
 	if noTools {
 		argv = append(argv, "--tools", "")
@@ -163,6 +187,9 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, "--input-format", "stream-json")
 	}
 	files[claudeMCPFile] = cfg
+	if explorer {
+		files[claudeAgentsFile] = agents
+	}
 	files[toolHookPath] = toolHook
 	settingsDoc := map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "timeout": 20}}}}}}
 	settings, _ := json.Marshal(settingsDoc)
@@ -285,8 +312,9 @@ func (p *claudeParser) Line(b []byte) []Event {
 			Content []claudeBlock `json:"content"`
 			Usage   *claudeUsage  `json:"usage"`
 		}
+		sub := l.Parent != nil // a sub agent's message, on the main stream
 		err := json.Unmarshal(l.Message, &msg)
-		if l.Type == "assistant" && l.Parent == nil && err == nil && msg.Usage != nil {
+		if l.Type == "assistant" && !sub && err == nil && msg.Usage != nil {
 			// This request's prompt size; only the main agent's counts.
 			var cached int64
 			if msg.Usage.CacheReadTokens != nil {
@@ -304,7 +332,7 @@ func (p *claudeParser) Line(b []byte) []Event {
 				return nil
 			}
 			var s string // user messages can be a plain string
-			if json.Unmarshal(raw.Content, &s) == nil && s != "" && l.Type == "assistant" {
+			if json.Unmarshal(raw.Content, &s) == nil && s != "" && l.Type == "assistant" && !sub {
 				p.res.Final = s
 				return []Event{{"message", map[string]any{"role": "assistant", "text": s}}}
 			}
@@ -314,30 +342,39 @@ func (p *claudeParser) Line(b []byte) []Event {
 		for _, bl := range msg.Content {
 			switch bl.Type {
 			case "text":
-				if l.Type == "assistant" && strings.TrimSpace(bl.Text) != "" {
+				// A sub agent's text is its report to the main agent, which
+				// arrives as the Agent tool's result: never the reply.
+				if l.Type == "assistant" && !sub && strings.TrimSpace(bl.Text) != "" {
 					p.res.Final = bl.Text
 					out = append(out, Event{"message", map[string]any{"role": "assistant", "text": bl.Text}})
 				}
 			case "thinking":
 				// Kept for the Activity tab; never the reply. Redacted or
 				// summarised-away thinking arrives empty and is skipped.
-				if ev, ok := thinkingEvent(bl.Thinking); ok && l.Type == "assistant" {
+				if ev, ok := thinkingEvent(bl.Thinking); ok && l.Type == "assistant" && !sub {
 					out = append(out, ev)
 				}
 			case "tool_use":
 				p.tools[bl.ID] = bl.Name
-				p.res.Usage.ToolCalls++
 				var input any
 				_ = json.Unmarshal(bl.Input, &input)
-				out = append(out, Event{"tool_call", map[string]any{"id": bl.ID, "tool": bl.Name, "input": input}})
+				pl := map[string]any{"id": bl.ID, "tool": bl.Name, "input": input}
+				if sub {
+					p.res.Usage.SubagentToolCalls++
+					pl["subagent"] = true
+				} else {
+					p.res.Usage.ToolCalls++
+				}
+				out = append(out, Event{"tool_call", pl})
 			case "tool_result":
 				text := blockText(bl.Content)
-				if l.Parent == nil { // a sub agent's results never enter the main context
+				pl := map[string]any{"id": bl.ToolUseID, "tool": p.tools[bl.ToolUseID], "is_error": bl.IsError, "output": clip(text, 4000)}
+				if sub { // a sub agent's results never enter the main context
+					pl["subagent"] = true
+				} else {
 					p.res.Usage.AddToolOutput(p.tools[bl.ToolUseID], int64(len(text)))
 				}
-				out = append(out, Event{"tool_result", map[string]any{
-					"id": bl.ToolUseID, "tool": p.tools[bl.ToolUseID], "is_error": bl.IsError, "output": clip(text, 4000),
-				}})
+				out = append(out, Event{"tool_result", pl})
 			}
 		}
 		return out
