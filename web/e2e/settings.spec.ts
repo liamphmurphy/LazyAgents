@@ -179,6 +179,31 @@ test("provider credentials show status and unlocks, are write-only, and saving r
   expect(mock.models()).toBeGreaterThan(before);
 });
 
+test("Backup & move exports everything as a download", async ({ page }) => {
+  await installSettingsApi(page);
+  let hits = 0;
+  await page.route("**/api/v1/instance/export", (route) => {
+    hits++;
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="vesper-export-2026-11-12.zip"', "cache-control": "no-store" },
+      body: "PK",
+    });
+  });
+  await page.goto("/settings");
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Backup & move" }).click();
+  const section = page.locator("#backup");
+  await expect(section.getByRole("heading", { name: "Backup & move" })).toBeVisible();
+  // Import is a command, not a button: it needs an empty instance and the same SECRETS_KEY.
+  await expect(section).toContainText("SECRETS_KEY");
+  await expect(section.getByRole("button", { name: /import/i })).toHaveCount(0);
+
+  const download = page.waitForEvent("download");
+  await section.getByRole("link", { name: "Export everything" }).click();
+  expect((await download).suggestedFilename()).toBe("vesper-export-2026-11-12.zip");
+  expect(hits).toBe(1);
+});
+
 test("project repo URLs are validated inline and accept SSH and HTTPS", async ({ page }) => {
   const mock = await installSettingsApi(page);
   await page.goto("/settings#projects");

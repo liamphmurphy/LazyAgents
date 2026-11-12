@@ -12,6 +12,7 @@ import { Icon } from "@/components/ui/icon";
 import { Toggle } from "@/components/ui/controls";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AppearanceSection } from "./appearance-section";
+import { BackupSection } from "./backup-section";
 import { ProjectsSection } from "./projects/projects-screen";
 import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
@@ -40,6 +41,7 @@ export function SettingsScreen() {
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
     { id: "overrides", label: "Project overrides", health: "idle" },
     { id: "sign-in", label: "Sign-in", health: !auth.data ? "unknown" : auth.data.password_set ? "ok" : "attention" },
+    { id: "backup", label: "Backup & move", health: "idle" },
     { id: "appearance", label: "Appearance", health: "idle" },
   ];
 
@@ -91,6 +93,9 @@ export function SettingsScreen() {
           </Section>
           <Section id="sign-in" title="Sign-in" lead="How you get into Vesper from a browser that isn’t signed in.">
             <SignInSection />
+          </Section>
+          <Section id="backup" title="Backup & move" lead="Take everything with you to another machine.">
+            <BackupSection />
           </Section>
           <Section id="appearance" title="Appearance">
             <AppearanceSection />

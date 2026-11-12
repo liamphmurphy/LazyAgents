@@ -190,6 +190,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		DesignWorker:   &designs.Worker{URL: cfg.DesignWorkerURL, Token: cfg.DesignWorkerToken},
 		Log:            log,
 		Usage:          &usage.Service{Q: q, Log: log},
+		Exporter:       exporter(cfg, pool, log),
 	}
 	// In Docker the CLIs and logins live in agent containers, so the API
 	// queues usage checks for a runner to answer. The fake backend's stand-in

@@ -306,7 +306,10 @@ See [the board guide](board.md) for estimates, statuses and the agent MCP tools.
 
 `vesper export` writes the whole instance to one zip archive: every Postgres
 table and every object in the S3 store. `vesper import` loads it into another
-instance. Both run inside the `api` container, which holds the credentials:
+instance. Both run inside the `api` container, which holds the credentials.
+Export is also a button, **Settings → Backup & move → Export everything**, which
+downloads the same archive from the running server. Import is only a command:
+it needs an empty instance, stopped, with the same `SECRETS_KEY`.
 
 ```sh
 # old machine

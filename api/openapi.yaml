@@ -1082,6 +1082,25 @@ paths:
           description: Revoked
         default: { $ref: "#/components/responses/Error" }
 
+  /instance/export:
+    get:
+      operationId: exportInstance
+      summary: Every table and stored object as one zip, to move Vesper to another machine
+      description: >
+        Streamed, so a large instance never sits in memory; a failure partway
+        ends the download early and leaves a zip that won't open. The archive
+        holds all data, including secrets sealed with SECRETS_KEY. Import is
+        the `vesper import` command, which needs the same key and an empty
+        instance.
+      tags: [workspace]
+      responses:
+        "200":
+          description: Zip archive
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
   /secrets:
     get:
       operationId: listSecrets
