@@ -89,8 +89,9 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   await expect(flyout.getByRole("link", { name: "Docs" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(flyout.getByRole("link", { name: "Slides" })).toBeFocused();
+  // Down keeps the column: Slides is second in Apps, Scheduled second in Tools.
   await page.keyboard.press("ArrowDown");
-  await expect(flyout.getByRole("link", { name: "Workflows" })).toBeFocused();
+  await expect(flyout.getByRole("link", { name: /Scheduled/ })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(flyout).toHaveCount(0);
   await expect(apps).toBeFocused();

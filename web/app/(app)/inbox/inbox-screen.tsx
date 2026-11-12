@@ -19,10 +19,12 @@ import { duration } from "@/lib/format";
 import { KIND, groupItems, isOpen, longWait, nextSelection, step, waited, type Sort, type View } from "@/lib/inbox";
 import { DetailPane, type PaneActions } from "./detail-pane";
 import { FilterMenu } from "@/components/domain/pickers";
+import { useCompact } from "@/lib/viewport";
+import { CompactInbox } from "./compact-inbox";
 
 type Item = Schemas["InboxItem"];
 
-const PILL: Record<string, string> = {
+export const PILL: Record<string, string> = {
   human: "bg-pill-human-bg text-pill-human-fg",
   blocked: "bg-pill-blocked-bg text-pill-blocked-fg",
   info: "bg-pill-review-bg text-pill-review-fg",
@@ -87,7 +89,7 @@ function Row({ item, selected, sent, onSelect }: { item: Item; selected: boolean
 }
 
 /** Nothing waits on you: say so, and show what is still running. */
-function AllClear({ project, done, onShowDone }: { project: string; done: number; onShowDone: () => void }) {
+export function AllClear({ project, done, onShowDone }: { project: string; done: number; onShowDone: () => void }) {
   const overviews = useAgentOverviews();
   const running = (overviews.data?.agents ?? [])
     .flatMap((o) => o.assignments.map((w) => ({ ...w, agent: o.agent })))
@@ -148,7 +150,12 @@ function AllClear({ project, done, onShowDone }: { project: string; done: number
   );
 }
 
+/** Compact screens get the card list and approval sheet (compact-inbox.tsx); the rest the list and pane. */
 export function InboxScreen() {
+  return useCompact() ? <CompactInbox /> : <DesktopInbox />;
+}
+
+function DesktopInbox() {
   const router = useRouter();
   const { data: bootstrap } = useBootstrap();
   const remembered = useRememberedProject();

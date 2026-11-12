@@ -70,7 +70,7 @@ export function LiveUpdates() {
   return offline ? (
     <div
       role="status"
-      className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-border-float bg-surface-raised px-4 py-2 text-sm text-fg-secondary shadow-lg"
+      className="pointer-events-none fixed bottom-5 left-1/2 z-50 max-md:top-[calc(env(safe-area-inset-top,0px)+12px)] max-md:bottom-auto -translate-x-1/2 rounded-lg border border-border-float bg-surface-raised px-4 py-2 text-sm text-fg-secondary shadow-lg"
     >
       Live updates paused. Reconnecting…
     </div>

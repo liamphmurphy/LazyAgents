@@ -8,6 +8,7 @@ import { useBootstrap } from "@/lib/api/hooks";
 import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } from "@/lib/api/board-hooks";
 import { BOARD_STATUSES, onlyBlocked, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
+import { useCompact } from "@/lib/viewport";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
@@ -20,7 +21,7 @@ import { DependencyMap } from "@/components/domain/dependency-map";
 import { useMotionList } from "@/components/ui/motion";
 import { Toggle } from "@/components/ui/controls";
 import { ticketsHref } from "@/lib/tickets-layout";
-import { TicketsLayoutBar } from "./layout-bar";
+import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
 
 export function BoardScreen() {
   const bootstrap = useBootstrap();
@@ -54,19 +55,22 @@ export function BoardScreen() {
     if (key) next.set("ticket", key); else next.delete("ticket");
     window.history.replaceState(null, "", ticketsHref("board", next));
   }
+  const compact = useCompact();
+  const boardFilters = project && (
+    <>
+      <FilterMenu label="Epic" value={filters.epic ?? ""} onChange={(v) => setParam("epic", v)}
+        options={[{ value: "", label: "All epics" }, ...epics.map((e) => ({ value: e.id, label: e.name }))]} />
+      <FilterMenu label="Assignee" value={filters.assignee ?? ""} onChange={(v) => setParam("assignee", v)}
+        options={[{ value: "", label: "All assignees" }, ...(bootstrap.data?.agents ?? []).map((a) => ({ value: a.handle, label: `@${a.handle}` }))]} />
+      <Toggle label="Show canceled" checked={filters.include_canceled} onChange={(on) => setParam("include_canceled", on ? "true" : "")} />
+      <Toggle label="Blocked only" checked={blockedOnly} onChange={(on) => setParam("blocked", on ? "true" : "")} />
+    </>
+  );
   return (
     <div data-testid="board-screen">
-      <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={project &&
-        <>
-          <FilterMenu label="Epic" value={filters.epic ?? ""} onChange={(v) => setParam("epic", v)}
-            options={[{ value: "", label: "All epics" }, ...epics.map((e) => ({ value: e.id, label: e.name }))]} />
-          <FilterMenu label="Assignee" value={filters.assignee ?? ""} onChange={(v) => setParam("assignee", v)}
-            options={[{ value: "", label: "All assignees" }, ...(bootstrap.data?.agents ?? []).map((a) => ({ value: a.handle, label: `@${a.handle}` }))]} />
-          <Toggle label="Show canceled" checked={filters.include_canceled} onChange={(on) => setParam("include_canceled", on ? "true" : "")} />
-          <Toggle label="Blocked only" checked={blockedOnly} onChange={(on) => setParam("blocked", on ? "true" : "")} />
-        </>
-      } />
+      {!compact && <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={boardFilters} />}
       <TicketsLayoutBar layout="board" />
+      {compact && boardFilters && <ChipScroller label="Board filters">{boardFilters}</ChipScroller>}
       {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-sm">
         <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
         <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
@@ -107,6 +111,18 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
   const landing = useRef<string | null>(null);
   useMotionList(columns, landing);
   const [over, setOver] = useState<BoardStatus>();
+  // Compact: one column per screen, snapped; the pager follows the scroll and scrolls to a column.
+  const compact = useCompact();
+  const [page, setPage] = useState(0);
+  const pager = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    pager.current?.children[page]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [page]);
+  function showColumn(i: number) {
+    const el = columns.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    setPage(i);
+  }
   const statuses = filters.include_canceled ? [...BOARD_STATUSES, "canceled" as const] : BOARD_STATUSES;
   const moved = query.data && withBoardMoves(query.data, Object.values(moves.pending));
   const board = moved && (blockedOnly ? onlyBlocked(moved) : moved);
@@ -120,11 +136,22 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
       {query.isPending && <p role="status" className="text-sm text-fg-secondary">Loading board…</p>}
       {query.isError && <div role="alert" className="mb-4 text-sm">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
       {board?.epic && <EpicHeader summary={board.epic} />}
-      {board && <div ref={columns} aria-label="Board columns" className="relative flex min-h-[calc(100dvh-240px)] gap-2 overflow-x-auto pb-3">
+      {board && compact && <div ref={pager} role="group" aria-label="Status pager" className="-mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none]">
+        {statuses.map((status, i) => {
+          const column = board.columns.find((c) => c.status === status);
+          return <button key={status} type="button" aria-current={i === page || undefined} onClick={() => showColumn(i)}
+            className={cx("flex h-[32px] flex-none items-center gap-1.5 rounded-full border px-3 text-[13px]", i === page ? "border-border-float bg-selected font-medium text-fg" : "border-border-strong text-fg-secondary")}>
+            <StatusGlyph state={status} label={false} />{STATUS_NAME[status]}<span className="font-mono text-[11px] text-fg-tertiary">{column?.count ?? 0}</span>
+          </button>;
+        })}
+      </div>}
+      {board && <div ref={columns} aria-label="Board columns"
+        onScroll={compact ? (e) => setPage(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth))) : undefined}
+        className={cx("relative flex min-h-[calc(100dvh-240px)] overflow-x-auto pb-3", compact ? "snap-x snap-mandatory [scrollbar-width:none]" : "gap-2")}>
         {statuses.map((status) => {
           const column = board.columns.find((c) => c.status === status);
           return <section key={status} aria-label={STATUS_NAME[status]} data-testid={`column-${status}`}
-            className={cx("min-w-[220px] flex-1 rounded-lg border p-2 transition-colors duration-150", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
+            className={cx("rounded-lg border p-2 transition-colors duration-150", compact ? "w-full flex-none snap-start" : "min-w-[220px] flex-1", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
             onDragOver={(e) => { if (dragging.current) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(status); } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(undefined); }}
             onDrop={(e) => {

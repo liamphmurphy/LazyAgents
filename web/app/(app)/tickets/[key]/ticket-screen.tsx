@@ -1,11 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, ViewTransition } from "react";
-import type { Ticket } from "@/lib/api/client";
+import type { Bootstrap, Ticket } from "@/lib/api/client";
+import { useCompact } from "@/lib/viewport";
 import { useActivity, useBootstrap, useTicket, useTickets, hasLiveRun } from "@/lib/api/hooks";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
+import { Sheet } from "@/components/ui/sheet";
 import { Markdown } from "@/components/domain/markdown";
 import { StartChatButton } from "@/components/domain/start-chat";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
@@ -20,10 +24,11 @@ import { ContextArtifacts } from "./context-artifacts";
 import { Dependencies } from "./dependencies";
 import { Criteria } from "./criteria";
 import { GateStrip } from "./gates";
+import { MetaStrip } from "./meta-strip";
 import { CodeSection, Properties } from "./properties";
 import { ApprovalBanner, needsDispatch, RunCard } from "./run-parts";
 import { RunsHistory } from "./runs-history";
-import { ConflictBanner, useTicketSave, type SaveTicket } from "./ticket-save";
+import { ConflictBanner, useTicketSave, type SaveTicket, type TicketSaver } from "./ticket-save";
 import { Composer, Timeline } from "./timeline";
 
 function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
@@ -186,8 +191,110 @@ function Header({ t, save, onEdit }: { t: Ticket; save: SaveTicket; onEdit: () =
   );
 }
 
+/** Below the meta strip on compact screens: the wide layout's side panel, as one column. */
+function CompactDetails({ t, boot, saver }: { t: Ticket; boot: Bootstrap; saver: TicketSaver }) {
+  return (
+    <section aria-label="Details" className="flex flex-col gap-6 border-t border-border-subtle pt-6">
+      <Properties t={t} boot={boot} save={saver.save} error={saver.error} />
+      <Dependencies ticket={t} />
+      {t.run && hasLiveRun(t) && <RunCard t={t} run={t.run} />}
+      <RunsHistory t={t} />
+      <div id="code" className="scroll-mt-16">
+        <CodeSection t={t} />
+      </div>
+      <section className="flex flex-col gap-2 px-1">
+        <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+        <BacklinksPanel kind="ticket" id={t.id} compact />
+      </section>
+    </section>
+  );
+}
+
+/**
+ * Compact ticket detail (DESIGN.md §3 Responsive): one column with a back bar, the key and title,
+ * then the meta strip, criteria, description and activity. Comment and Start run are pinned to the
+ * bottom edge; the tab bar is hidden here (lib/tab-bar.ts).
+ */
+function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Ticket; boot: Bootstrap; saver: TicketSaver; reloading: boolean; activity: ReturnType<typeof useActivity>; onEdit: () => void }) {
+  const [commenting, setCommenting] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
+  const dispatch = needsDispatch(t) && !t.project.archived;
+  return (
+    <>
+      <div className="flex flex-col gap-6 px-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] pt-4">
+        {t.project.archived && <Banner tone="human" title="This project is archived">History is preserved. Restore the project before starting new work.</Banner>}
+        <header className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-[12.5px]">
+            <span className="font-mono text-fg-tertiary">{t.key}</span>
+            {t.blocked_by.some((d) => d.status !== "done") && (
+              <a href="#blocked-by"><Flag tone="blocked">Blocked</Flag></a>
+            )}
+            <span className="flex-1" />
+            <IconButton icon="edit" label="Edit ticket" onClick={onEdit} />
+          </div>
+          <TitleEditor t={t} save={saver.save} />
+        </header>
+        {saver.conflict && <ConflictBanner what={saver.conflict.what} reloading={reloading} onReapply={saver.reapply} onKeep={saver.keepLatest} />}
+        <MetaStrip t={t} boot={boot} save={saver.save} />
+        {saver.error && <p role="alert" className="text-xs text-pill-blocked-fg">{saver.error}</p>}
+        {needsDispatch(t) && <p className="text-xs text-pill-human-fg">{dispatchHint(t)}</p>}
+        <GateStrip t={t} />
+        {t.approvals.map((ap) => (
+          <div key={ap.id} id={`approval-${ap.id}`} className="scroll-mt-16">
+            <ApprovalBanner t={t} ap={ap} />
+          </div>
+        ))}
+        <Criteria t={t} events={activity.data} />
+        <section className="flex flex-col gap-2">
+          <h2 className="type-heading">Description</h2>
+          <Description t={t} save={saver.save} />
+        </section>
+        <div id="mockups" className="scroll-mt-16">
+          <ContextArtifacts t={t} />
+        </div>
+        <section className="flex flex-col gap-4">
+          <h2 className="type-heading">Activity</h2>
+          {activity.data ? <Timeline events={activity.data} ticketKey={t.key} boot={boot} run={t.run} /> : <Skeleton className="h-3 w-1/2" />}
+        </section>
+        <CompactDetails t={t} boot={boot} saver={saver} />
+      </div>
+      <div role="group" aria-label="Ticket actions" className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border-subtle bg-sidebar px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]">
+        <Button variant="outline" icon="msg" onClick={() => setCommenting(true)} className="h-[44px] flex-1 justify-center">
+          Comment
+        </Button>
+        <Button variant="approve" icon="play" disabled={!dispatch} onClick={() => setDispatching(true)} className="h-[44px] flex-1 justify-center">
+          Start run
+        </Button>
+      </div>
+      <Sheet open={commenting} onOpenChange={setCommenting} title="Comment">
+        <div className="px-2">
+          <Composer ticketKey={t.key} autoFocus onDone={() => setCommenting(false)} />
+        </div>
+      </Sheet>
+      {dispatching && <DispatchDialog keys={[t.key]} open onOpenChange={setDispatching} />}
+    </>
+  );
+}
+
+/** Compact top bar: back to the project's tickets, the ticket's place in it, and copy link. */
+function CompactTopBar({ t, ticketKey, pager, onCopy, copied }: { t?: Ticket; ticketKey: string; pager: ReturnType<typeof usePager>; onCopy: () => void; copied: boolean }) {
+  const router = useRouter();
+  return (
+    <header className="flex h-[48px] items-center gap-1 border-b border-border-subtle px-1.5">
+      <Link href={t ? `/tickets?project=${t.project.key}` : "/tickets"} aria-label="Back to tickets" className="grid size-[44px] place-items-center rounded-full text-fg-secondary active:bg-hover">
+        <Icon name="chev" size={18} className="rotate-90" />
+      </Link>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-fg-2">{t ? t.project.name : "Tickets"}</span>
+      <IconButton icon="chev" label="Previous ticket" size={44} disabled={!pager.prev} onClick={() => pager.prev && router.push(`/tickets/${pager.prev}`)} className="rotate-180" />
+      <IconButton icon="chev" label="Next ticket" size={44} disabled={!pager.next} onClick={() => pager.next && router.push(`/tickets/${pager.next}`)} />
+      <IconButton icon={copied ? "check" : "link"} label={copied ? "Link copied" : `Copy link to ${ticketKey}`} size={44} onClick={onCopy} />
+    </header>
+  );
+}
+
 export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const router = useRouter();
+  const compact = useCompact();
   const ticket = useTicket(ticketKey);
   const activity = useActivity(ticketKey, hasLiveRun(ticket.data));
   const boot = useBootstrap();
@@ -229,6 +336,33 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               {ticket.error.message}
             </Banner>
           </div>
+        )}
+      </>
+    );
+  }
+
+  const copyLink = () => {
+    void navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  if (compact) {
+    return (
+      <>
+        <CompactTopBar t={t} ticketKey={ticketKey} pager={pager} onCopy={copyLink} copied={copied} />
+        {!t || !boot.data ? <DetailSkeleton /> : <CompactTicket t={t} boot={boot.data} saver={saver} reloading={ticket.isFetching} activity={activity} onEdit={() => setEditing(true)} />}
+        {editing && t && boot.data && (
+          <TicketEditorDialog
+            ticketKey={t.key}
+            detail={t}
+            bootstrap={boot.data}
+            onClose={() => setEditing(false)}
+            onReload={async () => {
+              const r = await ticket.refetch();
+              return r.isError ? undefined : r.data;
+            }}
+          />
         )}
       </>
     );

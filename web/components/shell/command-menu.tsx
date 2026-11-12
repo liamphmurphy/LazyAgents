@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { cx } from "@/lib/cx";
+import { useCompact } from "@/lib/viewport";
 import { attachQuery, type ContextRef } from "@/lib/chat-context";
 import {
   linkFromTarget,
@@ -109,6 +110,7 @@ function useDebounced(value: string, ms: number) {
 
 export function CommandMenu() {
   const router = useRouter();
+  const compact = useCompact();
   const pathname = usePathname();
   const boot = useBootstrap();
   const createChat = useCreateChat();
@@ -457,7 +459,7 @@ export function CommandMenu() {
       <Dialog.Portal>
         <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim backdrop-blur-[3px]" />
         <Dialog.Content
-          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-2xl"
+          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-2xl max-md:inset-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:rounded-none max-md:border-0 max-md:px-safe max-md:pt-safe max-md:pb-safe"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
             // The input, not the scope toggle that comes first.
@@ -476,7 +478,7 @@ export function CommandMenu() {
           {/* A hairline of the theme's accent along the top edge: the palette's only ornament. */}
           <div aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent opacity-70" />
           <Dialog.Title className="sr-only">{mode === "projects" ? "Switch project" : "Search and commands"}</Dialog.Title>
-          <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
+          <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5 max-md:pr-1.5 max-md:py-1.5">
             <Icon name="search" size={16} className="flex-none text-fg-tertiary" />
             {mode === "projects" ? (
               <button
@@ -521,7 +523,7 @@ export function CommandMenu() {
                 setActive(0);
               }}
               placeholder={mode === "projects" ? "Switch to project…" : "Search, or try is:ticket status:done…"}
-              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-tertiary"
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-tertiary max-md:text-[16px]"
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" && items.length) {
                   e.preventDefault();
@@ -558,11 +560,11 @@ export function CommandMenu() {
               {pending && <span aria-hidden className="size-1.5 animate-skeleton rounded-full bg-accent" />}
               {pending ? "Searching…" : ""}
             </span>
-            <span aria-hidden>
+            <span aria-hidden className="max-md:hidden">
               <Kbd>esc</Kbd>
             </span>
             <Dialog.Close asChild>
-              <IconButton icon="x" label="Close search" />
+              <IconButton icon="x" label="Close search" size={compact ? 44 : 28} />
             </Dialog.Close>
           </div>
           {mode === "root" && filters.tokens.length > 0 && (
@@ -583,7 +585,7 @@ export function CommandMenu() {
               ))}
             </div>
           )}
-          <div className="scroll-py-2 overflow-y-auto p-2">
+          <div className="scroll-py-2 overflow-y-auto overscroll-contain p-2 max-md:min-h-0 max-md:flex-1">
             {search.isError && (
               <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
                 Search failed. Try again.
@@ -624,7 +626,7 @@ export function CommandMenu() {
                       onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
                       onMouseMove={() => setActive(i)}
                       className={cx(
-                        "relative flex min-h-[40px] w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors duration-100",
+                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors duration-100",
                         i === index ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
                       )}
                     >
@@ -660,7 +662,7 @@ export function CommandMenu() {
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-[11.5px] text-fg-tertiary">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-[11.5px] text-fg-tertiary max-md:hidden">
             {(mode === "projects" ? PROJECT_KEYS : ROOT_KEYS).map(([keys, what]) => (
               <span key={what} className="flex items-center gap-1.5">
                 <Kbd>{keys}</Kbd>

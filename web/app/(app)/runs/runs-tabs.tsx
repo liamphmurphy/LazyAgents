@@ -5,13 +5,16 @@ import { Tabs } from "@/components/ui/controls";
 import { HighlightsScreen } from "./highlights-screen";
 import { CostsScreen } from "./costs-screen";
 import { RunsScreen } from "./runs-screen";
+import { CompactRunsScreen } from "./runs-compact";
+import { useCompact } from "@/lib/viewport";
 
 export type RunsTab = "runs" | "costs" | "highlights";
 
 /** Run activity, recorded spend, and private persona routing decisions. */
 export function RunsTabs() {
   const tab = useSearchParams().get("tab");
-  return tab === "highlights" ? <HighlightsScreen /> : tab === "costs" ? <CostsScreen /> : <RunsScreen />;
+  const compact = useCompact();
+  return tab === "highlights" ? <HighlightsScreen /> : tab === "costs" ? <CostsScreen /> : compact ? <CompactRunsScreen /> : <RunsScreen />;
 }
 
 /** The project carries over; each tab's own filters don't. */

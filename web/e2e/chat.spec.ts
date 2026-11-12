@@ -50,7 +50,8 @@ test("create, send, switch model, reload keeps history", async ({ page }) => {
   await composer(page).pressSequentially("world");
   await expect(composer(page)).toHaveValue("hello\nworld");
   await composer(page).press("Enter");
-  await expect(page.getByRole("button", { name: "Interrupt" })).toBeVisible();
+  // While the reply runs, Send queues a follow-up by default.
+  await expect(page.getByRole("button", { name: "Queue", exact: true })).toBeVisible();
   await expect(page.getByTestId("chat-status")).toHaveText(/ is thinking…$/);
   await expect(page.locator('[data-scene="thinking"]')).toBeAttached();
   const first = page.getByTestId("assistant-message").first();
@@ -168,7 +169,7 @@ test("stop ends a running reply", async ({ page }) => {
   await expect(page.getByTestId("system-message")).toHaveText("Turn cancelled");
 });
 
-test("a message sent while a reply runs interrupts it, and the next reply answers both", async ({ page }) => {
+test("a message sent in Interrupt mode while a reply runs interrupts it, and the next reply answers both", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
   await newChat(page);
@@ -176,8 +177,11 @@ test("a message sent while a reply runs interrupts it, and the next reply answer
   await expect(page.getByTestId("chat-status")).toBeVisible();
   // The composer stays open; the model and effort wait for the reply to end.
   await expect(composer(page)).toBeEnabled();
-  await expect(composer(page)).toHaveAttribute("placeholder", /is replying\. Send a message to steer it/);
+  await expect(composer(page)).toHaveAttribute("placeholder", /^Queue a follow-up for when .+ finishes…$/);
   await expect(picker(page)).toBeDisabled();
+  // Follow-up is the default; interrupting is picked explicitly.
+  await page.getByRole("radiogroup", { name: "Send as" }).getByRole("radio", { name: "Interrupt" }).click();
+  await expect(composer(page)).toHaveAttribute("placeholder", /^Stop .+ and steer it…$/);
   await composer(page).fill("focus on the risks");
   await page.getByRole("button", { name: "Interrupt" }).click();
   await expect(page.getByTestId("assistant-message").last()).toContainText("Echo: focus on the risks (interrupting: slow: summarize the plan)");

@@ -75,6 +75,8 @@ import { SecretsChip } from "./secrets-chip";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
+import { CompactChatHeader } from "./compact-chat-header";
+import { useCompact } from "@/lib/viewport";
 import { composerOptions } from "@/lib/composer-options";
 import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
@@ -406,6 +408,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const create = useCreateChat();
   const selectRepo = useSetChatRepository(id);
   const [repoSignal, setRepoSignal] = useState(0);
+  // The compact composer keeps the repository picker in its options sheet: the chat menu opens that.
+  const [sheetSignal, setSheetSignal] = useState(0);
   const savedRepos = useRepositories();
   const discard = useDeleteChat();
   const qc = useQueryClient();
@@ -417,6 +421,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // null keeps the chat's effort; "default" clears it.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
   const [tab, setTab] = useState<"chat" | "activity">("chat");
+  const compact = useCompact();
   // "View reasoning" on a chat step: the Activity tab opens on that step.
   const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
   const openStep = (key: string) => {
@@ -786,6 +791,18 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
         <DropOverlay over={drop.over} />
         {/* Sized by its own width: a panel beside the chat can leave it narrow on a wide screen. */}
         {/* The page's only header: who you're talking to, the title, then the chat's context. */}
+        {compact ? (
+          <CompactChatHeader
+            chat={c}
+            personas={group ? participants : [persona]}
+            tab={tab}
+            onTab={setTab}
+            running={running}
+            canCode={!!(c.speaker ?? c.persona)?.capabilities?.code}
+            onRepository={() => { setTab("chat"); setSheetSignal((n) => n + 1); }}
+            onRestored={restored}
+          />
+        ) : (
         <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
@@ -833,6 +850,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
+        )}
         {c.space && tab === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
         {/* Mounted while hidden so memory notices still refresh. */}
         <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
@@ -1049,6 +1067,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </div>
             )}
             <Composer
+              sheetSignal={sheetSignal}
               text={text}
               onText={setText}
               inputRef={area}
@@ -1132,6 +1151,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                     disabled={locked || running}
                   />
                 ),
+                // The desktop composer leaves this to the header; the compact + sheet lists it too.
+                project: !c.space && <ChatProjectPicker chat={c} disabled={running} />,
               }}
               actions={
                 running && (
