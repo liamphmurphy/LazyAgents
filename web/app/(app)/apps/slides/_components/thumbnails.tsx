@@ -51,7 +51,7 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
     }
   };
   return (
-    <nav aria-label="Slides" className="flex min-h-0 w-[172px] flex-none flex-col border-r border-border-subtle bg-panel max-md:w-full max-md:flex-row max-md:border-r-0 max-md:border-t">
+    <nav aria-label="Slides" className="flex min-h-0 w-full flex-1 flex-col bg-panel max-md:flex-none max-md:flex-row max-md:border-t max-md:border-border-subtle">
       <div className="flex items-center justify-between px-3.5 pb-1 pt-3 max-md:hidden">
         <span className="text-[12px] font-medium text-fg-secondary">Slides</span>
         <span className="font-mono text-[11.5px] text-fg-tertiary">{deck.slides.length}</span>
