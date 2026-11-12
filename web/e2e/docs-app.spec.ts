@@ -93,6 +93,10 @@ async function install(page: Page, first = "# Trip plan\n\nFly to **Lisbon** on 
 }
 
 const editor = (page: Page) => page.getByTestId("doc-editor");
+const dock = (page: Page) => page.getByRole("complementary", { name: "Panel", exact: true });
+const rail = (page: Page) => page.getByRole("navigation", { name: "Panel rail" });
+const dockTab = (page: Page, name: string) => dock(page).getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: new RegExp(`^${name}`) });
+const mod = process.platform === "darwin" ? "Meta" : "Control";
 
 /**
  * Puts the caret at the end of the document's first paragraph. ProseMirror
@@ -146,8 +150,11 @@ test("a new document opens as a page you type on, beside its chat", async ({ pag
   await composer.fill("Add a day in Porto");
   await composer.press("Enter");
   await expect.poll(() => mock.posted.filter((x) => x.chat === chatId).map((x) => x.body.body)).toContain("Add a day in Porto");
-  await page.getByRole("button", { name: "✦ Hide chat" }).click();
-  await expect(chat).toHaveCount(0);
+  // Chat lives in the dock; there's no Hide chat button any more.
+  await expect(page.getByRole("button", { name: /Hide chat/ })).toHaveCount(0);
+  // An app's chat keeps its own Chat/Activity switch: only the chat page puts Activity in a dock tab.
+  await chat.getByRole("tablist", { name: "Chat view" }).getByRole("tab", { name: "Activity" }).click();
+  await expect(chat.getByRole("tabpanel", { name: "Activity" })).toBeVisible();
 });
 
 test("opening a document saves nothing, even when the editor tidies it", async ({ page }) => {
@@ -167,8 +174,14 @@ test("the persona's edits come back as suggestions to accept or reject", async (
   agentEdit("# Trip plan\n\nFly on Friday morning.\n\nStay in Alfama.\n\nDay trip to Sintra.\n");
   await page.goto(`/apps/docs/${DOC}`);
 
+  // The suggestions sit in place on the page; the Review tab lists them, with a count.
   const review = page.getByTestId("doc-review");
-  await expect(review).toContainText("Assistant suggested 2 changes");
+  const list = page.getByTestId("doc-review-list");
+  await expect(dockTab(page, "Review")).toHaveAttribute("aria-selected", "true");
+  await expect(dockTab(page, "Review")).toContainText("2");
+  await expect(list).toContainText("Assistant suggested 2 changes");
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  await expect(list.getByRole("listitem").nth(1)).toContainText("Day trip to Sintra");
   const changes = review.getByTestId("doc-change");
   await expect(changes).toHaveCount(2);
   await expect(changes.first()).toContainText("Fly on Friday.");
@@ -176,11 +189,15 @@ test("the persona's edits come back as suggestions to accept or reject", async (
 
   // Keep the first, drop the second: the page goes back to editing on a version that says so.
   await changes.first().getByRole("button", { name: "Accept" }).click();
+  // Deciding in place shows in the list too.
+  await expect(list.getByRole("listitem").first()).toContainText("Accepted · Undo");
+  await expect(dockTab(page, "Review")).toContainText("1");
   await changes.nth(1).getByRole("button", { name: "Reject" }).click();
   await expect(editor(page)).toContainText("Fly on Friday morning.");
   await expect(editor(page)).not.toContainText("Sintra");
   expect(s.saves).toEqual([{ base_seq: 2, body: "# Trip plan\n\nFly on Friday morning.\n\nStay in Alfama.\n", note: "Kept 1 of Assistant's 2 changes, rejected 1" }]);
   expect(s.reviewedPosts).toEqual([]);
+  await expect(dockTab(page, "Review")).toHaveCount(0);
 
   // Accepting everything writes nothing; it records the review instead.
   agentEdit("# Trip plan\n\nFly on Friday morning.\n\nStay in Alfama, near the castle.\n");
@@ -235,7 +252,7 @@ test("exports to PDF, Word and Markdown, copies rich text, and saves to the Libr
   await page.goto(`/apps/docs/${DOC}`);
   await expect(editor(page)).toContainText("Lisbon");
   const menu = async (name: string) => {
-    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("button", { name: "Share" }).click();
     await page.getByRole("menuitem", { name: new RegExp(`^${name}`) }).click();
   };
 
@@ -278,4 +295,63 @@ test("Markdown the editor can't keep opens as source instead", async ({ page }) 
   await expect(page.getByText("This document has HTML or footnotes the editor can't keep")).toBeVisible();
   await expect(editor(page)).toHaveCount(0);
   await expect(page.getByTestId("doc-page")).toContainText("A claim.");
+});
+
+test("the dock collapses and reopens, with ⌘\\, ⌘J and ⌘., and the outline jumps to a heading", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await install(page, "# Trip plan\n\nFly to **Lisbon** on Friday.\n\n## Days\n\n- Fri: Alfama\n\n## Bookings\n\n- Flights\n");
+  await page.goto(`/apps/docs/${DOC}`);
+  await expect(editor(page)).toContainText("Lisbon");
+
+  // Header: back, title, save state, Share; the chat is the dock's Chat tab.
+  await expect(page.getByRole("link", { name: "Docs" }).first()).toHaveAttribute("href", "/apps/docs");
+  await expect(page.getByRole("heading", { name: "Trip plan", level: 1 }).first()).toBeVisible();
+  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByTestId("doc-chat")).toBeVisible();
+
+  // ⇥ collapses to the rail; the rail reopens it; clicking the active tab collapses again.
+  await dock(page).getByRole("button", { name: "Collapse panel" }).click();
+  await expect(dock(page)).toHaveCount(0);
+  await expect(rail(page)).toBeVisible();
+  await rail(page).getByRole("button", { name: "Open Chat" }).click();
+  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
+  await dockTab(page, "Chat").click();
+  await expect(rail(page)).toBeVisible();
+
+  // ⌘\ reopens it; ⌘J brings Chat up with its composer focused.
+  await page.locator("header").first().click({ position: { x: 600, y: 10 } });
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(dock(page)).toBeVisible();
+  await page.locator("header").first().click({ position: { x: 600, y: 10 } });
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(rail(page)).toBeVisible();
+  await page.keyboard.press(`${mod}+j`);
+  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByLabel("Message", { exact: true })).toBeFocused();
+
+  // ⌘. hides every panel and pressing it again restores them.
+  await page.locator("header").first().click({ position: { x: 600, y: 10 } });
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock(page)).toHaveCount(0);
+  await expect(rail(page)).toHaveCount(0);
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock(page)).toBeVisible();
+
+  // The dock stays as it was left across a reload.
+  await page.locator("header").first().click({ position: { x: 600, y: 10 } });
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(rail(page)).toBeVisible();
+  await page.reload();
+  await expect(editor(page)).toContainText("Lisbon");
+  await expect(rail(page)).toBeVisible();
+
+  // The outline starts collapsed and lists the headings.
+  const outline = page.getByRole("navigation", { name: "Outline" });
+  await expect(outline).toHaveCount(0);
+  await page.getByRole("button", { name: "Show outline" }).click();
+  await expect(outline.getByRole("list").getByRole("button")).toHaveText(["Trip plan", "Days", "Bookings"]);
+  await outline.getByRole("button", { name: "Bookings" }).click();
+  await expect(editor(page).getByRole("heading", { name: "Bookings" })).toBeInViewport();
+  await outline.getByRole("button", { name: "Hide outline" }).click();
+  await expect(outline).toHaveCount(0);
 });

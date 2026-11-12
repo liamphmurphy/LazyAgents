@@ -223,13 +223,16 @@ function NotRunning({ pg }: { pg: Playground }) {
   );
 }
 
-/** Beside the chat, while the person keeps talking to the agent; `sheet` fills the panel sheet (chat-panel-host), which is already full height, so fullscreen shows there too. */
+/**
+ * The playground in the desktop dock's tab while the person keeps talking to the agent (fullscreen
+ * shows over the window instead); `sheet` fills the compact panel sheet, so fullscreen shows there too.
+ */
 export function PlaygroundPanel({ chatId, sheet }: { chatId: string; sheet?: boolean }) {
   const panel = usePlaygroundPanel();
   const pg = useChatPlayground(chatId).data;
   if (!panel.open || (panel.fullscreen && !sheet) || !pg) return null;
   return (
-    <aside aria-label="Playground" data-testid="playground-panel" className={sheet ? "flex min-h-0 flex-1 flex-col bg-panel" : "flex w-[min(560px,48%)] flex-none flex-col border-l border-border bg-panel max-md:w-full max-md:border-l-0 max-md:border-t"}>
+    <aside aria-label="Playground" data-testid="playground-panel" className="flex min-h-0 flex-1 flex-col bg-panel">
       <PlaygroundView chatId={chatId} pg={pg} full={false} />
     </aside>
   );
@@ -240,13 +243,15 @@ export function PlaygroundFullscreen({ chatId }: { chatId: string }) {
   const panel = usePlaygroundPanel();
   const pg = useChatPlayground(chatId).data;
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
-  const exit = useRef(panel.exitFull);
+  // Only while it's showing: Escape elsewhere mustn't open the playground (in the dock, as a tab).
+  const shown = panel.fullscreen && !!pg;
+  const exit = useRef<(() => void) | null>(null);
   useEffect(() => {
-    exit.current = panel.exitFull;
+    exit.current = shown ? panel.exitFull : null;
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current();
+      if (e.key === "Escape" && !(e.target as Element).closest?.("input, textarea, select")) exit.current?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

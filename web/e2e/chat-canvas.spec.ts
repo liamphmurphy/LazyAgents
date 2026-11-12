@@ -16,6 +16,14 @@ const svgBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20" onl
 type Comment = Record<string, unknown> & { id: string; status: string };
 type Calls = { comments: Comment[]; sent: Record<string, unknown>[]; added: Record<string, unknown>[]; saved: Record<string, unknown>[]; restored: unknown[]; promoted: number; applied: string[] };
 
+// A card's Fullscreen opens the canvas in the chat's dock; the dock tab's Fullscreen takes it over the window.
+async function maximize(page: Page, from = page.getByTestId("canvas-panel")) {
+  await from.getByRole("button", { name: "Fullscreen" }).click();
+  const docked = page.getByTestId("canvas-dock");
+  await expect(docked).toBeVisible();
+  await docked.getByRole("button", { name: "Fullscreen" }).click();
+}
+
 async function open(page: Page, initial: Comment[] = [], card = DOC) {
   const calls: Calls = { comments: [...initial], sent: [], added: [], saved: [], restored: [], promoted: 0, applied: [] };
   await installChatApi(page, { replyDelayMs: 10 });
@@ -153,7 +161,12 @@ test("fullscreen covers the whole window, keeps a message box, and Escape return
   expect(box.x).toBeGreaterThanOrEqual(chat.x);
   expect(box.x + box.width).toBeLessThanOrEqual(chat.x + chat.width);
 
+  // The card's Fullscreen opens the dock's Canvas tab beside the chat; its own Fullscreen covers the window.
   await inline.getByRole("button", { name: "Fullscreen" }).click();
+  const docked = page.getByTestId("canvas-dock");
+  await expect(docked).toContainText("days.");
+  await expect(page.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: /Canvas/, selected: true })).toBeVisible();
+  await docked.getByRole("button", { name: "Fullscreen" }).click();
   const full = page.getByTestId("canvas-fullscreen");
   await expect(full).toContainText("days.");
   await expect(inline).toHaveCount(0);
@@ -165,8 +178,12 @@ test("fullscreen covers the whole window, keeps a message box, and Escape return
   await expect(full.getByTestId("canvas-latest-reply")).toContainText("Drafted it.");
   await expect(full.getByRole("textbox", { name: "Message from fullscreen" })).toBeVisible();
 
+  // Escape goes back to the dock's tab; closing that returns the canvas to its card.
   await page.keyboard.press("Escape");
   await expect(full).toHaveCount(0);
+  await expect(docked).toContainText("days.");
+  await docked.getByRole("button", { name: "Close canvas" }).click();
+  await expect(page.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: /Canvas/ })).toHaveCount(0);
   await expect(inline).toContainText("days.");
   expect(calls.sent).toHaveLength(0);
 });
@@ -182,7 +199,7 @@ test("inline, a comment sits under its passage; fullscreen puts it alongside", a
   await expect(page.getByTestId("canvas-text").getByTestId("canvas-comment")).toContainText("Too short");
   await expect(pane.getByRole("complementary", { name: "Comments" })).toHaveCount(0);
 
-  await pane.getByRole("button", { name: "Fullscreen" }).click();
+  await maximize(page, pane);
   const full = page.getByTestId("canvas-fullscreen");
   await expect(full.getByRole("complementary", { name: "Comments" }).getByTestId("canvas-comment")).toContainText("Too short");
   await expect(full.getByTestId("canvas-text").getByTestId("canvas-comment")).toHaveCount(0);
@@ -285,7 +302,7 @@ test("edit saves a version, changes show a diff, older versions restore, and it 
 test("fullscreen opens a board: zoomed out, and it pans and zooms", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 });
   const calls = await open(page, [], SVG);
-  await page.getByTestId("canvas-panel").getByRole("button", { name: "Fullscreen" }).click();
+  await maximize(page);
   const board = page.getByTestId("canvas-board");
   const svg = board.getByTestId("canvas-svg");
   await expect(svg).toBeVisible();
@@ -330,7 +347,7 @@ test("fullscreen opens a board: zoomed out, and it pans and zooms", async ({ pag
 test("on the board a document keeps text selection and pans from its margins", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 });
   await open(page);
-  await page.getByTestId("canvas-panel").getByRole("button", { name: "Fullscreen" }).click();
+  await maximize(page);
   const board = page.getByTestId("canvas-board");
   const doc = board.getByTestId("canvas-board-content");
   await expect(board).toContainText("days.");

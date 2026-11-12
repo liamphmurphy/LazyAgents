@@ -133,6 +133,8 @@ export function useResolveProposal(id: string) {
   return useMutation({
     mutationFn: (v: { proposalId: string; decisions: { i: number; state: "accepted" | "rejected"; reason?: string }[] }) =>
       unwrap(api.POST("/designs/{canvasId}/proposals/{proposalId}/resolve", { params: { path: { canvasId: id, proposalId: v.proposalId } }, body: { decisions: v.decisions } })),
+    // Drop the resolved one at once, so its banner and Review tab don't linger until the refetch.
+    onSuccess: (_, v) => qc.setQueryData<{ proposals: { id: string }[] }>(designKeys.proposals(id), (d) => (d ? { ...d, proposals: d.proposals.filter((p) => p.id !== v.proposalId) } : d)),
     onSettled: () => void qc.invalidateQueries({ queryKey: ["canvases"] }),
   });
 }

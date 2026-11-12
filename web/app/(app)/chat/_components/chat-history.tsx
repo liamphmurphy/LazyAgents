@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { useChat, useChats, useChatSearch, useCreateChat, useDeleteChat, useUpdateChat } from "@/lib/api/hooks";
-import { chatTitle, groupByDay, newestChat } from "@/lib/chat-ui";
+import { chatTitle, groupByDay, newestChat, rowMark } from "@/lib/chat-ui";
 import { shortAgo } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { isActive } from "@/lib/project-scope";
@@ -205,6 +205,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chat.title);
   const label = chatTitle(chat);
+  const mark = rowMark(chat, active);
 
   function save(e: FormEvent) {
     e.preventDefault();
@@ -237,15 +238,17 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
           >
             <RowPersonas chat={chat} all={all} />
             <span className="flex min-w-0 flex-1 items-center gap-2">
-              {chat.state === "running" && <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-done" />}
-              <span className="truncate">{label}</span>
+              {mark === "running" && <span aria-hidden data-running className="size-1.5 flex-none rounded-full bg-state-done" />}
+              {mark === "unread" && <span aria-hidden data-unread className="size-1.5 flex-none rounded-full bg-state-human" />}
+              <span className={cx("truncate", mark === "unread" && "font-semibold text-fg")}>{label}</span>
               {chat.temporary && (
                 <span title="Temporary chat: deleted after a day without messages" className="flex-none text-fg-tertiary">
                   <Icon name="clock" size={12} />
                   <span className="sr-only"> (temporary)</span>
                 </span>
               )}
-              {chat.state === "running" && <span className="sr-only"> (running)</span>}
+              {mark === "running" && <span className="sr-only"> (running)</span>}
+              {mark === "unread" && <span className="sr-only"> (unread)</span>}
               {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
             </span>
             <RowAge chat={chat} />

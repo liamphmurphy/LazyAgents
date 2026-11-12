@@ -37,7 +37,7 @@ export function FollowupTray({
       ? `Held · ${name} stopped, so these wait for you`
       : `Queued · sends after ${name}'s next reply`;
   return (
-    <section aria-label="Queued follow-ups" data-testid="followup-tray" className="mb-2 overflow-hidden rounded-xl border border-border bg-surface">
+    <section aria-label="Queued follow-ups" data-testid="followup-tray" className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-xs text-fg-secondary">
         <Icon name="clock" size={12} />
         <span className="min-w-0 truncate">{header}</span>

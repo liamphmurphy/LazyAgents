@@ -19,7 +19,7 @@ import Link from "next/link";
 import { parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
-import { Conversation } from "./conversation";
+import { ChatActivity, Conversation } from "./conversation";
 import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
@@ -370,7 +370,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={conversation.start} actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
+              <Conversation key={id} id={id} onNew={conversation.start} activityInDock actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
             ) : (
               <>
                 {chats.isError ? (
@@ -398,7 +398,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </>
             )}
           </div>
-          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} layout={compact ? "sheet" : "side"} />}
+          {id && <ChatPanelHost key={id} chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} activity={<ChatActivity chatId={id} />} layout={compact ? "sheet" : "side"} />}
       </div>
     </div>
   );

@@ -389,7 +389,7 @@ export function ChatTicketRunTray({ chatId, scene, persona }: { chatId: string; 
   // One run keeps its own card; two or more share the graphic.
   const grouped = live.length > 1;
   return (
-    <div data-testid="ticket-run-tray" className="relative mb-2 flex flex-col gap-2" style={handingGroup ? { minHeight: groupHandOffHeight(handed.length) } : undefined}>
+    <div data-testid="ticket-run-tray" className="relative flex flex-col gap-2" style={handingGroup ? { minHeight: groupHandOffHeight(handed.length) } : undefined}>
       {handingGroup && <GroupHandOff runs={handed} from={persona} leaving={handoff.leaving} />}
       {grouped ? (
         <RunGroupCard runs={live} from={persona} scene={scene} />

@@ -12,9 +12,14 @@ async function send(page: Page, text: string) {
   await composer(page).press("Enter");
 }
 
-// Memory notices live in the Activity tab, out of the conversation.
+// Memory notices live in the Activity tab, out of the conversation: on desktop it's a dock tab, opened from the rail.
 async function showActivity(page: Page) {
-  await page.getByRole("tab", { name: "Activity" }).click();
+  const tab = page.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: /Activity/ });
+  if (await tab.isVisible()) {
+    if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+    return;
+  }
+  await page.getByRole("button", { name: "Open Activity" }).click();
 }
 
 async function openChat(page: Page) {

@@ -29,12 +29,16 @@ test("a new coding chat waits for an address, starts with it, and can switch fro
 
   // Picked: the picker folds into a header chip that reopens it.
   await expect(picker(page)).toHaveCount(0);
+  // Picked: the title shows it as an icon, and the title menu reopens the picker.
   const chip = page.getByTestId("commit-email-chip");
-  await expect(chip).toHaveText("liam@phmurphy.com");
+  await expect(page.getByTestId("chat-title-status").getByRole("img", { name: "Commits are authored as liam@phmurphy.com" })).toBeVisible();
+  await page.getByTestId("chat-title-menu").click();
+  await expect(chip).toContainText("liam@phmurphy.com");
   await chip.click();
   await picker(page).getByRole("radio", { name: /liam@example\.com/ }).click();
   await expect(picker(page)).toHaveCount(0);
-  await expect(chip).toHaveText("liam@example.com");
+  await page.getByTestId("chat-title-menu").click();
+  await expect(chip).toContainText("liam@example.com");
   expect(mock.commitEmailRequests).toEqual(["liam@example.com"]);
   expect(mock.unhandled).toEqual([]);
 });
@@ -55,7 +59,8 @@ test("an existing coding chat with nothing picked asks above the composer withou
   await composer.fill("next");
   await expect(page.getByRole("button", { name: /Send|Interrupt/ })).toBeEnabled();
   await picker(page).getByRole("radio", { name: /liam@phmurphy\.com/ }).click();
-  await expect(page.getByTestId("commit-email-chip")).toHaveText("liam@phmurphy.com");
+  await page.getByTestId("chat-title-menu").click();
+  await expect(page.getByTestId("commit-email-chip")).toContainText("liam@phmurphy.com");
 });
 
 test("with one address there's nothing to ask", async ({ page }) => {

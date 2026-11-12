@@ -20,8 +20,9 @@ type Notice = { tone: "ok" | "error"; text: string; href?: string };
 /**
  * Every way a document leaves Vesper. `current` saves pending edits first and
  * returns the text as saved, so an export never misses the last few words.
+ * `trigger` renames its button, e.g. the editor header's Share ▾.
  */
-export function ExportMenu({ id, title, current }: { id: string; title: string; current: () => Promise<string> }) {
+export function ExportMenu({ id, title, current, trigger }: { id: string; title: string; current: () => Promise<string>; trigger?: string }) {
   const library = useSaveDocToLibrary(id);
   const promote = usePromoteDocToWiki(id);
   const [notice, setNotice] = useState<Notice>();
@@ -83,7 +84,13 @@ export function ExportMenu({ id, title, current }: { id: string; title: string; 
       )}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <Button variant="secondary" icon="download">Export</Button>
+          {trigger ? (
+            <Button variant="primary">
+              {trigger} <span aria-hidden>▾</span>
+            </Button>
+          ) : (
+            <Button variant="secondary" icon="download">Export</Button>
+          )}
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={6} className={`${floatPanel} z-50 w-[250px]`}>

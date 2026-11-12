@@ -14,6 +14,8 @@ import {
   useCancelChat,
   useChat,
   useChatAsides,
+  useChatFollowups,
+  useChatTicketRuns,
   useChatMessages,
   useEditLastChatMessage,
   useChatModels,
@@ -31,11 +33,16 @@ import { LiveAsides, ReplyAsides } from "./asides";
 import { RepositoryPicker } from "./repository-picker";
 import { useRepositories, useSetChatRepository } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
-import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { useChatWorkflowRuns, useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { runActive } from "@/lib/workflows";
+import { runEnded } from "@/lib/chat-dispatch";
+import { StatusSlot, type StatusItem } from "./status-slot";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
 import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
+import { focusActivityStep, useActivityFocus } from "./activity-focus";
+import { setDock } from "@/lib/chat-panels";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -48,7 +55,7 @@ import { SentChips } from "./context-chips";
 import { SaveActions } from "./save-actions";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryBadge, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
@@ -71,17 +78,16 @@ import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitc
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
-import { SecretsChip } from "./secrets-chip";
+import { ChatTitleMenu } from "./title-menu";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
 import { CompactChatHeader } from "./compact-chat-header";
 import { useCompact } from "@/lib/viewport";
 import { composerOptions } from "@/lib/composer-options";
-import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
+import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
-import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 import { hoverReveal } from "@/lib/reveal";
@@ -364,6 +370,46 @@ function ActivityLog({ list, turns, groups, running, runId, since, focus }: { li
   );
 }
 
+/** Activity's cost, model line and log, for the compact tab and the desktop dock's tab. */
+function ActivityBody({ chat: c, list, groups, focus }: { chat: NonNullable<ReturnType<typeof useChat>["data"]>; list: Message[] | undefined; groups: Groups; focus?: { key: string; at: number } }) {
+  const current: Selection = { harness: c.harness, model: c.model, auto: !!c.auto_model };
+  const running = c.state === "running";
+  const lastUser = list?.findLast((m) => m.role === "user");
+  const since = runningSince(list) ?? lastUser?.created_at;
+  return (
+    <>
+      <div className="mx-auto mb-4 flex max-w-[860px] flex-wrap items-center gap-2">
+        <ChatCostChip chatId={c.id} project={c.project} />
+        <span className="truncate font-mono text-xs text-fg-tertiary">
+          {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+          {current.auto && " (auto)"}
+          {c.effort && ` · ${effortLabel(c.effort)} effort`}
+        </span>
+      </div>
+      <ActivityLog list={list} turns={turnWindows(list)} groups={groups} running={running} runId={c.current_run_id} since={since} focus={focus} />
+    </>
+  );
+}
+
+/** The desktop dock's Activity tab: beside the conversation, so a reply and its trace read side by side. */
+export function ChatActivity({ chatId }: { chatId: string }) {
+  const chat = useChat(chatId).data;
+  const target = useSearchParams().get("message");
+  // The same query the conversation reads, so it's shared rather than fetched twice.
+  const list = useChatMessages(chatId, target ? 1000 : 200).data?.messages;
+  const groups: Groups = useChatModels().data;
+  const focus = useActivityFocus();
+  if (!chat) return null;
+  return (
+    // Its own tooltip provider: the dock sits outside the conversation's.
+    <Tooltip.Provider delayDuration={200}>
+      <div data-testid="chat-activity" className="flex-1 overflow-y-auto px-4 py-4">
+        <ActivityBody chat={chat} list={list} groups={groups} focus={focus} />
+      </div>
+    </Tooltip.Provider>
+  );
+}
+
 const DRAFT_KEY = (id: string) => `lazyagents.chat-draft:${id}`;
 function putDraft(id: string, text: string) {
   try {
@@ -387,7 +433,12 @@ function dropDraft(id: string) {
   }
 }
 
-export function Conversation({ id, onNew, actions }: { id: string; onNew: () => void; actions?: ReactNode }) {
+/**
+ * `activityInDock`: the chat page's dock (chat-panel-host) shows Activity beside the conversation
+ * on desktop, so the header has no Chat/Activity switch there. Chats embedded in an app's dock
+ * (Designs, Docs, Slides, Finance) leave it unset and keep the switch.
+ */
+export function Conversation({ id, onNew, actions, activityInDock = false }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -420,11 +471,20 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [picked, setPicked] = useState<Selection | null>(null);
   // null keeps the chat's effort; "default" clears it.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
+  // The header switches the conversation for Activity, except on the chat page's desktop dock, where Activity is a tab beside it.
   const [tab, setTab] = useState<"chat" | "activity">("chat");
   const compact = useCompact();
-  // "View reasoning" on a chat step: the Activity tab opens on that step.
+  const dockActivity = activityInDock && !compact;
+  const view = dockActivity ? "chat" : tab;
+  // "View reasoning" on a chat step: Activity opens on that step (the compact tab, or the dock's tab).
   const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
   const openStep = (key: string) => {
+    if (dockActivity) {
+      focusActivityStep(key);
+      const q = setDock(new URLSearchParams(window.location.search), { tab: "activity", open: true });
+      router.replace(`${window.location.pathname}?${q.toString()}`, { scroll: false });
+      return;
+    }
     setTab("activity");
     setTraceFocus({ key, at: Date.now() });
   };
@@ -451,6 +511,10 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [startingWorkflow, setStartingWorkflow] = useState<Workflow | null>(null);
   const setCommitEmail = useSetChatCommitEmail();
   const [commitPickerOpen, setCommitPickerOpen] = useState(false);
+  // What the trays above the composer hold, so the status slot can rank them (the queries are shared with the trays).
+  const ticketRuns = (useChatTicketRuns(id).data?.runs ?? []).filter((r) => !runEnded(r.state));
+  const workflowRuns = (useChatWorkflowRuns(id).data?.runs ?? []).filter((r) => runActive(r.state));
+  const followups = useChatFollowups(id).data ?? [];
 
   const c = chat.data;
   const loaded = !!c;
@@ -490,7 +554,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The running turn starts after the newest message, which may be a reply, not
   // the person's: a persona handing on, or the image follow-up.
   const since = runningSince(list) ?? lastUser?.created_at;
-  const turns = turnWindows(list);
   const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
   // From the playground: Send to chat's report and screenshot, or an ask to map its API.
   const addFiles = useRef(files.add);
@@ -806,71 +869,44 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
         <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
-          <h1 className="min-w-0 truncate text-[14.5px] font-semibold">{chatTitle(c)}</h1>
-          {group && (
-            <span
-              className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-1 pr-2.5 text-xs max-sm:hidden @max-[460px]:hidden"
-              data-testid="chat-participants"
-              title={participants.map((p) => p.name).join(", ")}
-            >
-              <span className="sr-only">Personas: </span>
-              <PersonaStack personas={participants} />
-              <span className="truncate">
-                {participants.map((p, i) => (
-                  <span key={p.id ?? p.name}>
-                    {i > 0 && <span className="text-fg-tertiary">, </span>}
-                    <PersonaName persona={p} />
-                  </span>
-                ))}
-              </span>
-            </span>
-          )}
-          {c.workspace_path && <WorkspaceFolderChip path={c.workspace_path} className="max-md:hidden @max-[720px]:hidden" />}
-          <SecretsChip chatId={c.id} />
-          {c.repo_url && c.commit_email && myEmails.length > 1 && (
-            <CommitEmailChip email={c.commit_email} open={commitPickerOpen} onClick={() => setCommitPickerOpen((o) => !o)} />
-          )}
-          {/* In a space the project sits with the space's context chips below. */}
-          {!c.space && <ChatProjectPicker chat={c} disabled={running} />}
-          {c.archived && <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-xs text-fg-secondary">Archived</span>}
-          {c.temporary && <TemporaryBadge />}
+          <ChatTitleMenu
+            chat={c}
+            participants={participants}
+            running={running}
+            commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
+            onCommitEmail={() => setCommitPickerOpen((o) => !o)}
+          />
           <span className="flex-1" />
           <ChatRunsPill chatId={c.id} />
-          <span className="flex-none">
-          <Tabs
-            label="Chat view"
-            value={tab}
-            onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
-            items={[
-              { key: "chat", label: "Chat" },
-              { key: "activity", label: "Activity" },
-            ]}
-          />
-          </span>
+          {!dockActivity && (
+            <span className="flex-none">
+              <Tabs
+                label="Chat view"
+                value={tab}
+                onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
+                items={[
+                  { key: "chat", label: "Chat" },
+                  { key: "activity", label: "Activity" },
+                ]}
+              />
+            </span>
+          )}
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
         )}
-        {c.space && tab === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
-        {/* Mounted while hidden so memory notices still refresh. */}
-        <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
-            <ChatCostChip chatId={c.id} project={c.project} />
-            {current && (
-              <span className="truncate font-mono text-xs text-fg-tertiary">
-                {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
-                {current.auto && " (auto)"}
-                {c.effort && ` · ${effortLabel(c.effort)} effort`}
-              </span>
-            )}
+        {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
+        {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
+        {!dockActivity && (
+          <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
+            <ActivityBody chat={c} list={list} groups={groups} focus={traceFocus} />
           </div>
-          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} focus={traceFocus} />
-        </div>
+        )}
         <div
           ref={scroller}
           role="tabpanel"
           aria-label="Chat"
-          hidden={tab !== "chat"}
+          hidden={view !== "chat"}
           className="relative flex-1 overflow-y-auto px-6 py-5"
           // Only the person's input lets go of the end. A scroll event alone can't tell: the one for our
           // own scroll, or for the browser clamping it as content shrinks, may land after the content grew
@@ -979,46 +1015,157 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[816px] flex-col gap-2 px-6 pb-3">
-          {c.state === "failed" && (
-            <Banner
-              tone="blocked"
-              title="The last turn failed"
-              actions={
-                lastUser && (
-                  <Button variant="outline" icon="refresh" disabled={locked || !!unavailable} onClick={() => submit(lastUser.body_md)}>
-                    Retry
-                  </Button>
-                )
-              }
-            >
-              {c.error ?? "No error details were recorded."}
-            </Banner>
-          )}
-          {unavailable && !c.archived && (
-            <Banner
-              tone="human"
-              title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
-              actions={
-                !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
-                  Add the key →
-                </Link>
-              }
-            >
-              {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
-            </Banner>
-          )}
-          {modeError && (
-            <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
-              {modeError}
-            </p>
-          )}
-          {actionError && (
-            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
-              {actionError instanceof ApiError && actionError.status === 409
-                ? `Can’t do that right now: ${actionError.message}`
-                : errorText(actionError)}
-            </p>
-          )}
+          {(() => {
+            // Everything above the composer goes through one slot, ranked by STATUS_PRIORITY (lib/chat-status-slot).
+            // The trays stay mounted while empty (present: false) so they see their first item arrive.
+            const status: StatusItem[] = [];
+            if (c.repo_url && (askCommitEmail || commitPickerOpen) && !c.archived) {
+              status.push({
+                key: "commit-email",
+                kind: commitPickRequired ? "blocking" : "needs-you",
+                label: "Commit email",
+                pinned: commitPickerOpen,
+                node: (
+                  <CommitEmailPicker
+                    emails={myEmails}
+                    name={boot.data?.me.name ?? ""}
+                    repo={c.repo_url}
+                    value={askCommitEmail ? undefined : c.commit_email}
+                    required={commitPickRequired}
+                    disabled={setCommitEmail.isPending}
+                    onPick={(email) => {
+                      setCommitEmail.reset();
+                      setCommitEmail.mutate({ id: c.id, email }, { onSuccess: () => setCommitPickerOpen(false) });
+                    }}
+                    onClose={() => setCommitPickerOpen(false)}
+                  />
+                ),
+              });
+            }
+            if (unavailable && !c.archived) {
+              status.push({
+                key: "model-unavailable",
+                kind: "blocking",
+                label: `${unavailable.label} unavailable`,
+                node: (
+                  <Banner
+                    tone="human"
+                    title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
+                    actions={
+                      !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                        Add the key →
+                      </Link>
+                    }
+                  >
+                    {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
+                  </Banner>
+                ),
+              });
+            }
+            if (!c.archived && workflowCard) {
+              status.push({
+                key: "workflow-start",
+                kind: "needs-you",
+                label: `Start ${workflowCard.name}`,
+                node: <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />,
+              });
+            }
+            if (c.state === "failed") {
+              status.push({
+                key: "failed-turn",
+                kind: "failed-turn",
+                label: "Last turn failed",
+                node: (
+                  <Banner
+                    tone="blocked"
+                    title="The last turn failed"
+                    actions={
+                      lastUser && (
+                        <Button variant="outline" icon="refresh" disabled={locked || !!unavailable} onClick={() => submit(lastUser.body_md)}>
+                          Retry
+                        </Button>
+                      )
+                    }
+                  >
+                    {c.error ?? "No error details were recorded."}
+                  </Banner>
+                ),
+              });
+            }
+            if (modeError) {
+              status.push({
+                key: "send-mode-error",
+                kind: "error",
+                label: "Couldn’t send",
+                node: (
+                  <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
+                    {modeError}
+                  </p>
+                ),
+              });
+            }
+            if (actionError) {
+              status.push({
+                key: "action-error",
+                kind: "error",
+                label: "Something failed",
+                node: (
+                  <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
+                    {actionError instanceof ApiError && actionError.status === 409
+                      ? `Can’t do that right now: ${actionError.message}`
+                      : errorText(actionError)}
+                  </p>
+                ),
+              });
+            }
+            if (!c.archived) {
+              const needsYou = ticketRuns.some((r) => r.approval || r.state === "waiting" || r.state === "paused");
+              status.push({
+                key: "ticket-runs",
+                present: ticketRuns.length > 0,
+                kind: needsYou ? "needs-you" : "live",
+                label: needsYou ? "Run needs you" : `${ticketRuns.length} ${ticketRuns.length === 1 ? "run" : "runs"} active`,
+                node: <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />,
+              });
+            }
+            if (!c.archived) {
+              const gate = workflowRuns.some((r) => r.state === "waiting");
+              status.push({
+                key: "workflow-runs",
+                present: workflowRuns.length > 0,
+                kind: gate ? "needs-you" : "live",
+                label: gate ? "Workflow needs you" : `${workflowRuns.length} ${workflowRuns.length === 1 ? "workflow" : "workflows"} running`,
+                node: <ChatWorkflowTray chatId={c.id} />,
+              });
+            }
+            if (!c.archived) {
+              status.push({
+                key: "followups",
+                present: followups.length > 0,
+                kind: "live",
+                label: `${followups.length} queued`,
+                node: (
+                  <FollowupTray
+                    chatId={c.id}
+                    name={speaker.name}
+                    running={running}
+                    held={!running && list?.at(-1)?.role !== "assistant"}
+                    disabled={locked}
+                    onSendNow={(body, done) => {
+                      pinned.current = true;
+                      send.mutate({ body }, { onSuccess: done });
+                    }}
+                    onEdit={(body) => {
+                      setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
+                      setSendMode("followup");
+                      area.current?.focus();
+                    }}
+                  />
+                ),
+              });
+            }
+            return <StatusSlot items={status} />;
+          })()}
           {c.archived ? (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
               <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
@@ -1026,46 +1173,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             </div>
           ) : (
             <>
-            {c.repo_url && (askCommitEmail || commitPickerOpen) && (
-              <div className="mb-2">
-                <CommitEmailPicker
-                  emails={myEmails}
-                  name={boot.data?.me.name ?? ""}
-                  repo={c.repo_url}
-                  value={askCommitEmail ? undefined : c.commit_email}
-                  required={commitPickRequired}
-                  disabled={setCommitEmail.isPending}
-                  onPick={(email) => {
-                    setCommitEmail.reset();
-                    setCommitEmail.mutate({ id: c.id, email }, { onSuccess: () => setCommitPickerOpen(false) });
-                  }}
-                  onClose={() => setCommitPickerOpen(false)}
-                />
-              </div>
-            )}
-            <ChatWorkflowTray chatId={c.id} />
-            <FollowupTray
-              chatId={c.id}
-              name={speaker.name}
-              running={running}
-              held={!running && list?.at(-1)?.role !== "assistant"}
-              disabled={locked}
-              onSendNow={(body, done) => {
-                pinned.current = true;
-                send.mutate({ body }, { onSuccess: done });
-              }}
-              onEdit={(body) => {
-                setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
-                setSendMode("followup");
-                area.current?.focus();
-              }}
-            />
-            <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />
-            {workflowCard && (
-              <div className="mb-2">
-                <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />
-              </div>
-            )}
             <Composer
               sheetSignal={sheetSignal}
               text={text}

@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { DropdownMenu, Popover } from "radix-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { fetchDesign, fetchDesignVersion, uploadDesignAsset, useDesign, useDesignProposals, useDesignSettings, useDesignVersion, useResolveProposal, useSaveDesign } from "@/lib/api/designs-hooks";
+import { fetchDesign, fetchDesignVersion, uploadDesignAsset, useDesign, useDesignProposals, useDesignSettings, useDesignVersion, useDuplicateDesign, useRenameDesign, useResolveProposal, useSaveDesign } from "@/lib/api/designs-hooks";
 import { provideChatRefs, useChat, useChatRunEvents, useSendChatMessage } from "@/lib/api/hooks";
 import { toolCalls } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -19,10 +20,14 @@ import { DesignError, normalize, type Design, type DesignNode, type ImageNode } 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton } from "@/components/ui/primitives";
-import { TopBar } from "@/components/shell/topbar";
+import { EditorLayout, type DockTab, type EditorHeader } from "@/components/shell/editor-layout";
+import { floatPanel } from "@/components/domain/pickers";
+import type { DockState } from "@/lib/editor-layout";
+import { tokensChanged } from "@/lib/designs/tokens";
+import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
-import { ReviewBar, ReviewOverlay, ReviewPanel, useReview, type ReviewMode } from "./design-review";
+import { ReviewOverlay, ReviewPanel, ReviewPill, stepChange, suggestionPages, useReview, type ReviewMode } from "./design-review";
 import { ExportMenu } from "./export-menu";
 import { PresenceLayer } from "./presence-layer";
 import { Inspector } from "./inspector";
@@ -55,6 +60,7 @@ const TOOLS: { tool: Tool | "image"; label: string; key: string; glyph: string }
 ];
 /** The beside-chat panel's cut-down toolbar (docs/design/designs-from-chat.svg). */
 const BESIDE_TOOLS = new Set<Tool | "image">(["select", "frame", "rect", "line", "text"]);
+const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
 const TOOL_KEYS: Record<string, Tool> = { v: "select", h: "hand", f: "frame", a: "frame", r: "rect", o: "ellipse", l: "line", p: "pen", t: "text", s: "sticky", c: "connector" };
 
 async function prepareImage(file: File): Promise<Blob> {
@@ -115,7 +121,10 @@ function useLaidPage(design: Design | undefined, pageId: string | undefined): { 
  * after a quiet moment; a version from elsewhere merges per node, and
  * overlapping changes ask the person.
  */
-export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: () => void } }) {
+/** Beside the chat: closing, and the review in place, whose open state the chat keeps in its URL (review=1). */
+type Beside = { onClose: () => void; reviewing?: boolean; onReview?: (on: boolean) => void };
+
+export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const router = useRouter();
   const search = useSearchParams();
   const ref = useDesign(id);
@@ -311,8 +320,10 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
 
   // ---- Review (a persona's suggestions as a diff): After and Diff show a preview, so nothing is editable there.
   const proposals = useDesignProposals(id, !!ref.data).data;
-  // ?review=1 (the chat's panel sheet sends it) opens straight into the review.
-  const [reviewOpen, setReviewing] = useState(() => search.get("review") === "1");
+  // ?review=1 (the chat's panel sheet sends it) opens straight into the review. Beside the chat, the chat's URL holds it.
+  const [reviewState, setReviewState] = useState(() => search.get("review") === "1");
+  const reviewOpen = beside ? !!beside.reviewing : reviewState;
+  const setReviewing = (on: boolean) => (beside ? beside.onReview?.(on) : setReviewState(on));
   const reviewing = reviewOpen && !!proposals?.length;
   const [mode, setMode] = useState<ReviewMode>("diff");
   const [resolving, setResolving] = useState(false);
@@ -489,6 +500,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       const t = e.target as HTMLElement;
       // Beside a chat, keys are the design's only while focus is in the panel (or nowhere).
       if (beside && t !== document.body && !root.current?.contains(t)) return;
+      // Nor while it's out of sight: behind another tab of the chat's dock, or in the collapsed dock.
+      if (beside && (!root.current || root.current.closest("[hidden]"))) return;
       if (t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
       // The chat rail takes its own keys.
       if (t.closest?.("[data-design-chat]")) return;
@@ -620,6 +633,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       await flush();
       if (conflicted.current) throw new Error("Choose between your version and the latest first.");
       await resolve.mutateAsync({ proposalId: review.proposal.id, decisions: review.body.decisions });
+      // The last suggestion ends the review, so a later one waits behind its chat card instead of taking over the dock.
+      if ((proposals?.length ?? 0) <= 1) setReviewing(false);
       setSelected([]);
       setMode("diff");
     } catch (e) {
@@ -638,7 +653,6 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
     void send.mutateAsync({ body: `Design this: ${brief}` }).catch((e) => setNotice(`Couldn’t ask ${persona} to draft it: ${errorText(e)}`));
   }, [brief, chatId, doc, id, persona, router, send]);
 
-  const [chatOpen, setChatOpen] = useState(true);
   const [tab, setTab] = useState<"Design" | "Prototype" | "Inspect">("Design");
   /** Present mode plays the saved design, so unsaved edits are saved first. */
   const present = async (frame?: string) => {
@@ -665,88 +679,408 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
   const fetchError = ref.error ?? head.error;
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
-  return (
-    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-app")}>
-      {beside ? (
+  // ---- The dock (full editor only): Review opens from the chat's suggestion card; Chat is unread while hidden.
+  // Each review that starts (the card, ?review=1 once suggestions load) brings the Review tab up.
+  const [showReview, setShowReview] = useState(0);
+  const [reviewShown, setReviewShown] = useState(false);
+  if (reviewing !== reviewShown) {
+    setReviewShown(reviewing);
+    if (reviewing) setShowReview((n) => n + 1);
+  }
+  /** The card's Review: starts the review, or brings its tab back up if it is already going. */
+  const startReview = () => {
+    if (reviewing) setShowReview((n) => n + 1);
+    else setReviewing(true);
+  };
+  const [dock, setDock] = useState<DockState>();
+  const chatShowing = !dock || (dock.open && !dock.hidden && dock.tab === "chat");
+  const lastReply = chat?.last_message_at;
+  const [seenReply, setSeenReply] = useState<string>();
+  // The reply that was there on load, or that arrived while Chat showed, counts as read.
+  if (lastReply && seenReply !== lastReply && (chatShowing || seenReply === undefined)) setSeenReply(lastReply);
+  const unread = !chatShowing && !!lastReply && !!seenReply && lastReply !== seenReply && !running;
+  const direct = !!ref.data?.settings?.direct_edit;
+  const proposalCount = proposals?.length ?? 0;
+  const suggestions = `${proposalCount} ${proposalCount === 1 ? "suggestion" : "suggestions"}`;
+  const pending = proposals?.[0];
+  const pendingPages = useMemo(() => (design && pending ? suggestionPages(design, pending) : []), [design, pending]);
+  const look = personaLook(chat?.speaker ?? chat?.persona);
+  const rename = useRenameDesign();
+  const duplicate = useDuplicateDesign();
+  const [renaming, setRenaming] = useState(false);
+  const commitRename = (v: string) => {
+    setRenaming(false);
+    if (v.trim() && v.trim() !== title) rename.mutate({ id, title: v.trim() });
+  };
+
+  const failed = fetchError || loadError ? (
+    <div className="mx-auto w-full max-w-[720px] p-6">
+      <Banner tone="blocked" title="Couldn’t open this design" actions={<Button onClick={() => router.push("/apps/designs")}>Back to Designs</Button>}>
+        {loadError ?? (fetchError instanceof ApiError && fetchError.status === 404 ? "It may have been deleted, or it belongs to someone else." : errorText(fetchError))}
+      </Banner>
+    </div>
+  ) : null;
+
+  // The canvas's status, most important first: a conflict to settle, a failed save, an archived chat, an
+  // image notice, paused edits, an arrived version, the persona at work.
+  const status = conflict ? (
+    <Banner
+      tone="blocked"
+      title="This design changed while you were editing"
+      actions={
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              conflicted.current = false;
+              setDoc(W.takeTheirs(conflict.seq, conflict.theirs));
+              setConflict(null);
+              setSaveState({ s: "saved" });
+            }}
+          >
+            Use the latest version
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              conflicted.current = false;
+              setDoc(W.keepMine(docRef.current!, conflict.seq, conflict.theirs));
+              setConflict(null);
+              void flush().catch(() => undefined);
+            }}
+          >
+            Keep mine
+          </Button>
+        </>
+      }
+    >
+      You and {persona} both changed {conflict.layers.slice(0, 3).join(", ")}
+      {conflict.layers.length > 3 ? ` and ${conflict.layers.length - 3} more` : ""}. Nothing is saved until you choose: Keep mine saves your version over theirs (theirs stays in the version history), or use the latest version and drop your unsaved edits.
+    </Banner>
+  ) : saveState.s === "error" ? (
+    <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>
+  ) : chat?.archived ? (
+    <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>
+  ) : notice || uploading ? (
+    <p role={notice ? "alert" : "status"} className={cx("pointer-events-auto self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>
+  ) : paused ? (
+    <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
+      {persona}’s edits are paused
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
+    </div>
+  ) : arrival && !reviewing ? (
+    <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+      {arrival.text}
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
+    </div>
+  ) : presence ? (
+    <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+      <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
+      {persona.slice(0, 1).toUpperCase()} is editing
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
+    </div>
+  ) : null;
+
+  const canvas = design && shown && page && laid && lay ? (
+    <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* One status area: the most important message only. While reviewing it moves to the bottom, so only the review pill sits over the frame. */}
+      {status && (
+        <div data-testid="design-status" className={cx("absolute left-3 z-10 flex max-w-[min(640px,calc(100%-24px))] flex-col", reviewing ? "bottom-20" : "top-3")}>
+          {status}
+        </div>
+      )}
+      {reviewing && review && (
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-center">
+          <ReviewPill review={review} mode={mode} onMode={setMode} onStep={(dir) => { const c = stepChange(review, dir); if (c) focusChange(c); }} onClose={() => setReviewing(false)} busy={resolving} />
+        </div>
+      )}
+      <DesignCanvas
+        design={shown}
+        page={page}
+        laid={laid}
+        selected={selected}
+        onSelect={setSelected}
+        tool={tool}
+        onTool={setTool}
+        readOnly={readOnly}
+        assetUrl={assetUrl}
+        camera={camera ?? HIDDEN_CAMERA}
+        onCamera={setCamera}
+        onEdit={apply}
+        editing={editing}
+        onEditing={setEditing}
+        onViewport={(w, h) => setViewport({ w, h, known: true })}
+        wires={tab === "Prototype"}
+      />
+      {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
+      {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
+      {/* Tools centred, zoom on the right: on a narrow canvas the 1fr sides give way and the tools slide left of the zoom instead of under it. */}
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+        <div role="toolbar" aria-label="Tools" className="pointer-events-auto col-start-2 flex items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
+          {TOOLS.filter((t) => !beside || BESIDE_TOOLS.has(t.tool)).map((t) => (
+            <button
+              key={t.tool}
+              type="button"
+              aria-label={`${t.label} (${t.key})`}
+              title={`${t.label} (${t.key})`}
+              aria-pressed={t.tool !== "image" ? tool === t.tool : undefined}
+              disabled={readOnly && t.tool !== "select" && t.tool !== "hand"}
+              className={cx("grid size-[32px] place-items-center rounded-lg text-[15px] disabled:opacity-40", tool === t.tool ? "bg-accent text-fg-on-accent" : "text-fg-2 hover:bg-hover")}
+              onClick={() => (t.tool === "image" ? fileInput.current?.click() : setTool(t.tool))}
+            >
+              {t.glyph}
+            </button>
+          ))}
+          {beside && (
+            <>
+              <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+              <button
+                type="button"
+                aria-pressed={paused}
+                data-testid="design-pause"
+                disabled={settings.isPending || !ref.data}
+                title={paused ? `Let ${persona} change this design again` : `Stop ${persona}’s changes to this design from applying or being suggested`}
+                className={cx("flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium hover:bg-hover disabled:opacity-50", paused ? "text-accent" : "text-fg-secondary")}
+                onClick={() => settings.mutate({ persona_paused: !paused })}
+              >
+                {paused ? "Resume" : "Pause"}
+              </button>
+            </>
+          )}
+        </div>
+        <div className="pointer-events-auto col-start-3 mb-1 flex items-center gap-1 justify-self-end rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
+          <button type="button" aria-label="Zoom out" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(0.8)}>−</button>
+          <button type="button" aria-label="Zoom to fit (⇧1)" data-testid="design-zoom" className="min-w-[44px] rounded px-1 hover:bg-hover" onClick={zoomToFit}>
+            {Math.round((camera?.z ?? 1) * 100)}%
+          </button>
+          <button type="button" aria-label="Zoom in" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(1.25)}>+</button>
+        </div>
+      </div>
+      <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/*" className="hidden" aria-label="Add an image to the design" data-testid="design-image-input" onChange={(e) => {
+        const f = e.target.files?.[0];
+        e.target.value = "";
+        if (f) void onImage(f);
+      }} />
+    </main>
+  ) : null;
+
+  if (beside) {
+    return (
+      <div ref={root} data-design-beside={id} className="flex h-full min-h-0 flex-col">
         <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
           <Icon name="designs" size={16} className="flex-none text-accent" />
           <h2 className="min-w-0 truncate text-[14px] font-semibold text-fg">{title}</h2>
-          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}</span>
+          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}{reviewing ? " · Reviewing" : ""}</span>
           <span className="flex-1" />
           {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-[9px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
           {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-[11.5px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
-          <Button variant="secondary" onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`))}>Open in Designs</Button>
+          {proposalCount > 0 && !reviewing && (
+            // Compact: the panel sheet's bottom bar has the Review.
+            <Button variant="approve" className="max-md:hidden" title={`Review ${suggestions} here`} onClick={() => setReviewing(true)}>
+              Review {proposalCount}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}${reviewing ? "?review=1" : ""}`))}>Open in Designs</Button>
           <button type="button" aria-label="Close the design" onClick={beside.onClose} className="grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
             <Icon name="x" size={14} />
           </button>
         </div>
-      ) : (
-      <TopBar
-        crumbs={[{ label: "Apps" }, { label: "Designs", href: "/apps/designs" }, { label: title }]}
-        actions={
-          ref.data && (
-            <>
-              {doc && (
-                <span data-testid="design-save-state" title={saveState.message} className={cx("text-[12px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
-                  {SAVE_LABEL[saveState.s]} · v{doc.saved.seq}
-                  {saveState.s === "error" && (
-                    <button type="button" className="ml-1.5 text-accent hover:underline" onClick={() => void flush().catch(() => undefined)}>
-                      Retry
-                    </button>
-                  )}
-                </span>
-              )}
-              {design && <TokensSyncBadge design={design} readOnly={readOnly} onEdit={apply} />}
-              <Button variant="secondary" disabled={!design} onClick={() => void present()} title="Play the prototype from the selected frame">
-                ▶ Present
-              </Button>
-              <ExportMenu id={id} title={title} design={design} pageId={page?.id} selected={selected} current={exportCurrent} />
-              <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-fg-secondary" title={`Off: ${persona}’s edits wait as suggestions you review. On: they apply at once, and Undo reverts them.`}>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-label="Let personas edit directly"
-                  checked={!!ref.data.settings?.direct_edit}
-                  disabled={settings.isPending}
-                  onChange={(e) => settings.mutate({ direct_edit: e.target.checked })}
-                  className="size-[14px] accent-[var(--color-accent)]"
-                />
-                Let personas edit directly
-              </label>
-              {!!proposals?.length && (
-                <Button variant="primary" aria-pressed={reviewing} onClick={() => setReviewing((r) => !r)}>
-                  Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}
-                </Button>
-              )}
-              <Button variant="secondary" aria-pressed={chatOpen} onClick={() => setChatOpen((o) => !o)}>
-                ✦ {chatOpen ? "Hide chat" : `Chat with ${persona}`}
-              </Button>
-            </>
-          )
-        }
+        {failed ?? (canvas ? (
+          <div className="relative flex min-h-0 flex-1 max-md:flex-col">
+            {canvas}
+            {/* The same review as in Designs (docs/design/designs-review.svg): the canvas with its pill, the changes beside it. */}
+            {reviewing && review && shown && (
+              <aside aria-label="Changes" data-testid="beside-review" className="flex min-h-0 flex-none flex-col border-border-subtle bg-surface max-md:max-h-[50%] max-md:border-t md:w-[304px] md:border-l">
+                <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} onDone={() => void finishReview()} />
+              </aside>
+            )}
+          </div>
+        ) : (
+          <div aria-busy="true" className="flex min-h-0 flex-1 gap-3 p-3">
+            <Skeleton className="flex-1" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const saveBad = saveState.s === "error" || saveState.s === "conflict";
+  const header: EditorHeader = {
+    back: { href: "/apps/designs", label: "Designs" },
+    title: renaming ? (
+      <input
+        autoFocus
+        aria-label="Design title"
+        maxLength={200}
+        defaultValue={title}
+        className="h-[26px] w-[240px] rounded-md border border-accent bg-surface px-2 text-[14px] font-semibold text-fg outline-none"
+        onBlur={(e) => commitRename(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commitRename(e.currentTarget.value);
+          else if (e.key === "Escape") setRenaming(false);
+        }}
       />
+    ) : (
+      title
+    ),
+    titleMenu: ref.data && !renaming && (
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button type="button" aria-label="Design menu" className="grid size-6 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">▾</button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-44")}>
+            <DropdownMenu.Item className={menuItem} onSelect={() => setRenaming(true)}>Rename</DropdownMenu.Item>
+            <DropdownMenu.Item className={menuItem} disabled={duplicate.isPending} onSelect={() => duplicate.mutate(id, { onSuccess: (d) => router.push(`/apps/designs/${d.id}`) })}>Duplicate</DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    ),
+    saveState: doc && (
+      <span data-testid="design-save-state" title={saveState.message} className={cx("flex items-center gap-1.5", saveBad && "text-pill-blocked-fg")}>
+        <span aria-hidden className={cx("size-1.5 rounded-full", saveBad ? "bg-pill-blocked-fg" : saveState.s === "saved" ? "bg-state-done" : "bg-fg-tertiary")} />
+        {SAVE_LABEL[saveState.s]} · v{doc.saved.seq}
+        {saveState.s === "error" && (
+          <button type="button" className="text-accent hover:underline" onClick={() => void flush().catch(() => undefined)}>
+            Retry
+          </button>
+        )}
+      </span>
+    ),
+    presence: presence && (
+      <span className="flex items-center gap-1.5 text-[12px] text-fg-tertiary" title={`${persona} is working on it`}>
+        <PersonaAvatar persona={look} size={22} className="ring-2 ring-[#3FC1B0]" />
+        editing
+      </span>
+    ),
+    actions: ref.data
+      ? [
+          <Button key="present" variant="secondary" disabled={!design} onClick={() => void present()} title="Play the prototype from the selected frame">
+            ▶ Present
+          </Button>,
+          <ExportMenu key="share" trigger="Share" id={id} title={title} design={design} pageId={page?.id} selected={selected} current={exportCurrent} />,
+        ]
+      : undefined,
+    overflow: ref.data && (
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button type="button" aria-label="More" className="relative grid size-7 flex-none place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg">
+            ⋯{design && tokensChanged(design) && <span aria-hidden className="absolute -right-1 -top-1 size-2 rounded-full bg-state-human" />}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content align="end" sideOffset={6} aria-label="More" className={cx(floatPanel, "z-50 flex w-[260px] flex-col gap-2 p-3 text-[12.5px]")}>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Design tokens</span>
+            {design && tokensChanged(design) ? <TokensSyncBadge design={design} readOnly={readOnly} onEdit={apply} /> : <span className="text-fg-secondary">In sync with tokens.css</span>}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    ),
+  };
+
+  const loading = <Skeleton className="m-3 flex-1" />;
+  const chatPanel = (
+    <div data-design-chat className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-none border-b border-border-subtle px-3 py-2">
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              data-testid="direct-edit"
+              disabled={!ref.data || settings.isPending}
+              title={`Suggests: ${persona}’s edits wait as suggestions you review. Edits directly: they apply at once, and Undo reverts them.`}
+              className="flex h-[26px] items-center gap-1 rounded-full border border-border bg-surface-raised px-3 text-[12px] text-fg hover:bg-hover disabled:opacity-50"
+            >
+              {persona} {direct ? "edits directly" : "suggests changes"} <span aria-hidden className="text-fg-tertiary">▾</span>
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-64")}>
+              <DropdownMenu.RadioGroup value={direct ? "direct" : "suggest"} onValueChange={(v) => settings.mutate({ direct_edit: v === "direct" })}>
+                <DropdownMenu.RadioItem value="suggest" className={cx(menuItem, "flex-col items-start")}>
+                  <span>{direct ? "" : "✓ "}Suggests changes</span>
+                  <span className="text-[11px] text-fg-tertiary">Edits wait as suggestions you review.</span>
+                </DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem value="direct" className={cx(menuItem, "flex-col items-start")}>
+                  <span>{direct ? "✓ " : ""}Edits directly</span>
+                  <span className="text-[11px] text-fg-tertiary">Edits apply at once; Undo reverts them.</span>
+                </DropdownMenu.RadioItem>
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+      {pending && (
+        <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-[12.5px]">
+          <span className="font-semibold text-fg">
+            {pending.ops.length} suggested {pending.ops.length === 1 ? "change" : "changes"}
+            {pendingPages.length > 0 && ` · ${pendingPages.join(", ")}`}
+          </span>
+          <span className="text-fg-secondary">Nothing changes until you accept.{proposalCount > 1 ? ` ${proposalCount - 1} more waiting after this.` : ""}</span>
+          <Button variant="approve" className="mt-1 self-start" onClick={startReview}>Review</Button>
+        </div>
       )}
-      {fetchError || loadError ? (
-        <div className="mx-auto w-full max-w-[720px] p-6">
-          <Banner tone="blocked" title="Couldn’t open this design" actions={<Button onClick={() => router.push("/apps/designs")}>Back to Designs</Button>}>
-            {loadError ?? (fetchError instanceof ApiError && fetchError.status === 404 ? "It may have been deleted, or it belongs to someone else." : errorText(fetchError))}
-          </Banner>
+      {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/designs")} />}
+    </div>
+  );
+  const dockTabs: DockTab[] = [
+    { id: "chat", label: "Chat", icon: "msg", avatar: <PersonaAvatar persona={look} size={16} />, busy: !!presence, unread, content: chatPanel },
+  ];
+  if (proposalCount || reviewing)
+    dockTabs.push({
+      id: "review",
+      label: "Review",
+      icon: "check",
+      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{proposalCount}</span>,
+      content:
+        reviewing && review && shown ? (
+          <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} onDone={() => void finishReview()} />
+        ) : (
+          <div className="flex flex-col items-start gap-3 p-4 text-[13px] text-fg-secondary">
+            <p>{persona} suggested {suggestions}. Nothing changes until you accept.</p>
+            <Button variant="approve" onClick={() => setReviewing(true)}>Start review</Button>
+          </div>
+        ),
+    });
+  dockTabs.push({
+    id: "design",
+    label: "Design",
+    icon: "designs",
+    content: design && lay ? (
+      <>
+        <div role="tablist" aria-label="Inspector" className="flex flex-none gap-4 border-b border-border-subtle px-4 pt-3">
+          {(["Design", "Prototype", "Inspect"] as const).map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={t === tab} onClick={() => setTab(t)} className={cx("-mb-px border-b-2 pb-2 text-[12.5px]", t === tab ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary hover:text-fg")}>
+              {t}
+            </button>
+          ))}
         </div>
-      ) : !design || !shown || !page || !laid || !lay ? (
-        <div aria-busy="true" className="flex min-h-0 flex-1 gap-3 p-3">
-          <Skeleton className="w-[240px]" />
-          <Skeleton className="flex-1" />
-          <Skeleton className="w-[260px]" />
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1">
-          {chatOpen && !beside && (
-            <aside data-design-chat aria-label={`Chat with ${persona}`} className="flex min-h-0 w-[320px] flex-none flex-col border-r border-border-subtle bg-sidebar max-xl:absolute max-xl:inset-y-0 max-xl:left-0 max-xl:z-30 max-xl:shadow-[var(--shadow-float)]">
-              {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/designs")} />}
-            </aside>
+        <div className="min-h-0 flex-1 overflow-y-auto" role="tabpanel" aria-label={selectionLabel ? `${tab}: ${labelOf(selectionLabel)}` : tab}>
+          {tab === "Design" ? (
+            <Inspector design={design} selected={selected} lay={lay} onEdit={apply} readOnly={readOnly} onGroup={group} onRemove={removeSelected} onSelect={setSelected} />
+          ) : tab === "Inspect" ? (
+            <InspectPanel design={design} selected={selected} />
+          ) : (
+            <PrototypePanel design={design} selected={selected} readOnly={readOnly} onEdit={apply} onSelect={setSelected} onPresent={(f) => void present(f)} />
           )}
-          {!beside && (
-          <nav aria-label="Pages and layers" className="flex min-h-0 w-[232px] flex-none flex-col border-r border-border-subtle bg-surface max-md:hidden">
+        </div>
+      </>
+    ) : (
+      loading
+    ),
+  });
+
+  return (
+    <EditorLayout
+      app="designs"
+      header={header}
+      show={{ tab: "review", n: showReview }}
+      onDockChange={setDock}
+      left={
+        shown && page ? (
+          <nav aria-label="Pages and layers" className="flex min-h-0 flex-1 flex-col">
             <LayersPanel
               design={shown}
               page={page}
@@ -761,176 +1095,12 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
               readOnly={readOnly}
             />
           </nav>
-          )}
-          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="absolute inset-x-3 top-3 z-10 flex flex-col gap-2">
-              {conflict && (
-                <Banner
-                  tone="blocked"
-                  title="This design changed while you were editing"
-                  actions={
-                    <>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          conflicted.current = false;
-                          setDoc(W.takeTheirs(conflict.seq, conflict.theirs));
-                          setConflict(null);
-                          setSaveState({ s: "saved" });
-                        }}
-                      >
-                        Use the latest version
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          conflicted.current = false;
-                          setDoc(W.keepMine(docRef.current!, conflict.seq, conflict.theirs));
-                          setConflict(null);
-                          void flush().catch(() => undefined);
-                        }}
-                      >
-                        Keep mine
-                      </Button>
-                    </>
-                  }
-                >
-                  You and {persona} both changed {conflict.layers.slice(0, 3).join(", ")}
-                  {conflict.layers.length > 3 ? ` and ${conflict.layers.length - 3} more` : ""}. Nothing is saved until you choose: Keep mine saves your version over theirs (theirs stays in the version history), or use the latest version and drop your unsaved edits.
-                </Banner>
-              )}
-              {presence && (
-                <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
-                  <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
-                  {persona.slice(0, 1).toUpperCase()} is editing
-                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
-                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
-                </div>
-              )}
-              {paused && (
-                <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
-                  {persona}’s edits are paused
-                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
-                </div>
-              )}
-              {arrival && !reviewing && (
-                <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
-                  {arrival.text}
-                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
-                  <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
-                </div>
-              )}
-              {!reviewing && !!proposals?.length && (
-                <Banner tone="human" title={`${persona} suggested changes`} actions={<Button variant="approve" onClick={() => (beside ? void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}`)) : setReviewing(true))}>Review {proposals.length} {proposals.length === 1 ? "suggestion" : "suggestions"}</Button>}>
-                  {proposals[0].summary || `${proposals[0].ops.length} changes`} · nothing changes until you accept.
-                </Banner>
-              )}
-              {reviewing && review && <ReviewBar review={review} persona={persona} mode={mode} onMode={setMode} busy={resolving} onDone={() => void finishReview()} onClose={() => setReviewing(false)} />}
-              {chat?.archived && <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>}
-              {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
-              {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
-            </div>
-            {(
-              <DesignCanvas
-                design={shown}
-                page={page}
-                laid={laid}
-                selected={selected}
-                onSelect={setSelected}
-                tool={tool}
-                onTool={setTool}
-                readOnly={readOnly}
-                assetUrl={assetUrl}
-                camera={camera ?? HIDDEN_CAMERA}
-                onCamera={setCamera}
-                onEdit={apply}
-                editing={editing}
-                onEditing={setEditing}
-                onViewport={(w, h) => setViewport({ w, h, known: true })}
-                wires={tab === "Prototype"}
-              />
-            )}
-            {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
-            {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
-            {/* Tools centred, zoom on the right: on a narrow canvas the 1fr sides give way and the tools slide left of the zoom instead of under it. */}
-            <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-            <div role="toolbar" aria-label="Tools" className="pointer-events-auto col-start-2 flex items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
-              {TOOLS.filter((t) => !beside || BESIDE_TOOLS.has(t.tool)).map((t) => (
-                <button
-                  key={t.tool}
-                  type="button"
-                  aria-label={`${t.label} (${t.key})`}
-                  title={`${t.label} (${t.key})`}
-                  aria-pressed={t.tool !== "image" ? tool === t.tool : undefined}
-                  disabled={readOnly && t.tool !== "select" && t.tool !== "hand"}
-                  className={cx("grid size-[32px] place-items-center rounded-lg text-[15px] disabled:opacity-40", tool === t.tool ? "bg-accent text-fg-on-accent" : "text-fg-2 hover:bg-hover")}
-                  onClick={() => (t.tool === "image" ? fileInput.current?.click() : setTool(t.tool))}
-                >
-                  {t.glyph}
-                </button>
-              ))}
-              <span aria-hidden className="mx-1 h-5 w-px bg-border" />
-              {beside ? (
-                <button
-                  type="button"
-                  aria-pressed={paused}
-                  data-testid="design-pause"
-                  disabled={settings.isPending || !ref.data}
-                  title={paused ? `Let ${persona} change this design again` : `Stop ${persona}’s changes to this design from applying or being suggested`}
-                  className={cx("flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium hover:bg-hover disabled:opacity-50", paused ? "text-accent" : "text-fg-secondary")}
-                  onClick={() => settings.mutate({ persona_paused: !paused })}
-                >
-                  {paused ? "Resume" : "Pause"}
-                </button>
-              ) : (
-              <button type="button" className="flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-accent hover:bg-hover" onClick={() => {
-                setChatOpen(true);
-                requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-design-chat] textarea")?.focus());
-              }}>
-                ✦ Ask
-              </button>
-              )}
-            </div>
-            <div className="pointer-events-auto col-start-3 mb-1 flex items-center gap-1 justify-self-end rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
-              <button type="button" aria-label="Zoom out" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(0.8)}>−</button>
-              <button type="button" aria-label="Zoom to fit (⇧1)" data-testid="design-zoom" className="min-w-[44px] rounded px-1 hover:bg-hover" onClick={zoomToFit}>
-                {Math.round((camera?.z ?? 1) * 100)}%
-              </button>
-              <button type="button" aria-label="Zoom in" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(1.25)}>+</button>
-            </div>
-            </div>
-            <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/*" className="hidden" aria-label="Add an image to the design" data-testid="design-image-input" onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void onImage(f);
-            }} />
-          </main>
-          {beside ? null : reviewing && review ? (
-            <aside aria-label="Review" className="flex min-h-0 w-[320px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
-              <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} />
-            </aside>
-          ) : (
-          <aside aria-label="Inspector" className="flex min-h-0 w-[264px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
-            <div role="tablist" aria-label="Inspector" className="flex gap-4 border-b border-border-subtle px-4 pt-3">
-              {(["Design", "Prototype", "Inspect"] as const).map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={t === tab} onClick={() => setTab(t)} className={cx("-mb-px border-b-2 pb-2 text-[12.5px]", t === tab ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary hover:text-fg")}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto" role="tabpanel" aria-label={selectionLabel ? `${tab}: ${labelOf(selectionLabel)}` : tab}>
-              {tab === "Design" ? (
-                <Inspector design={design} selected={selected} lay={lay} onEdit={apply} readOnly={readOnly} onGroup={group} onRemove={removeSelected} onSelect={setSelected} />
-              ) : tab === "Inspect" ? (
-                <InspectPanel design={design} selected={selected} />
-              ) : (
-                <PrototypePanel design={design} selected={selected} readOnly={readOnly} onEdit={apply} onSelect={setSelected} onPresent={(f) => void present(f)} />
-              )}
-            </div>
-          </aside>
-          )}
-        </div>
-      )}
-    </div>
+        ) : (
+          !failed && loading
+        )
+      }
+      main={failed ?? canvas ?? <div aria-busy="true" className="flex min-h-0 flex-1 p-3"><Skeleton className="flex-1" /></div>}
+      dock={dockTabs}
+    />
   );
 }

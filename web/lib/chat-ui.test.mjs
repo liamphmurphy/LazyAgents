@@ -1,7 +1,18 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId, rowMark } from "./chat-ui.ts";
+
+test("rowMark shows an unread dot until the chat is read or opened, and running wins", () => {
+  assert.equal(rowMark({ state: "idle", unread: 0 }), null);
+  assert.equal(rowMark({ state: "idle", unread: 2 }), "unread");
+  // Reading it (unread back to 0) or opening it clears the dot.
+  assert.equal(rowMark({ state: "idle", unread: 0 }), null);
+  assert.equal(rowMark({ state: "idle", unread: 2 }, true), null);
+  assert.equal(rowMark({ state: "running", unread: 2 }), "running");
+  assert.equal(rowMark({ state: "running", unread: 0 }, true), "running");
+  assert.equal(rowMark({ state: "failed" }), null);
+});
 
 test("tool calls pair with results and skip events before the turn", () => {
   const events = [
