@@ -4,6 +4,10 @@ const apiInternal = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // The Designs worker rasterises with resvg's native binding; keep it out of the bundle.
+  serverExternalPackages: ["@resvg/resvg-js"],
+  // The worker reads the Inter TTFs from public/ at run time; make sure the standalone trace keeps them.
+  outputFileTracingIncludes: { "/internal/designs/render": ["./public/fonts/designs/*.ttf"] },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
