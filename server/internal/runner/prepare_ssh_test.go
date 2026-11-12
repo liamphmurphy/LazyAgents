@@ -21,7 +21,8 @@ func TestSetupScriptSSH(t *testing.T) {
 	}
 	cmd := exec.Command("sh", "-c", script)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), SSHKeyEnv+"=KEYDATA")
+	// Clear SSHDirEnv: a run's own environment sets it, which would move the key.
+	cmd.Env = append(os.Environ(), SSHKeyEnv+"=KEYDATA", SSHDirEnv+"=")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
