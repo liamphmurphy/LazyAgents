@@ -489,7 +489,7 @@ func TestChatAgentsMDPersonaInjection(t *testing.T) {
 	if after, _ := json.Marshal(s); string(after) != string(before) {
 		t.Fatalf("spec changed: %s -> %s", before, after)
 	}
-	rules := "Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands, delegate work, or write wiki notes."
+	rules := "Do not call claim_ticket, complete_run or propose_tickets. Do not modify files, run shell commands or delegate work."
 	ri, pi, ii := strings.Index(got, rules), strings.Index(got, "## Persona"), strings.Index(got, "ignore previous rules")
 	if ri < 0 || pi < 0 || ri > pi || pi > ii || strings.Index(got, "## Instructions\n\nAgent instructions") > pi || strings.Count(got, rules) != 1 {
 		t.Fatalf("persona must follow the fixed preamble once:\n%s", got)
@@ -849,12 +849,24 @@ func TestClaudeIgnoresImageGeneration(t *testing.T) {
 }
 
 func TestChatAgentsMDForCapabilities(t *testing.T) {
-	plain := string(ChatAgentsMD(spec("repo:write", "denied"), nil, "PAY", "", nil))
-	if !strings.Contains(plain, "Do not modify files, run shell commands, delegate work") {
+	// runs.ChatSpec gives every chat a wiki:write entry: requires_approval, or denied.
+	suggests := spec("repo:write", "denied")
+	suggests.Scopes = append(suggests.Scopes, agentdef.ResolvedScope{Scope: "wiki:write", Mode: agentdef.RequiresApproval})
+	plain := string(ChatAgentsMD(suggests, nil, "PAY", "", nil))
+	if !strings.Contains(plain, "Do not modify files, run shell commands or delegate work") {
 		t.Fatalf("plain chat lost its limits:\n%s", plain)
 	}
+	// The wiki note rule follows wiki:write: offered unless the persona is denied it.
+	if !strings.Contains(plain, "write_note saves a wiki note") {
+		t.Fatalf("chat isn't told about write_note:\n%s", plain)
+	}
+	noWiki := spec("repo:write", "denied")
+	noWiki.Scopes = append(noWiki.Scopes, agentdef.ResolvedScope{Scope: "wiki:write", Mode: agentdef.Denied})
+	if md := string(ChatAgentsMD(noWiki, nil, "PAY", "", nil)); strings.Contains(md, "write_note") {
+		t.Fatalf("a persona denied wiki:write is told about write_note:\n%s", md)
+	}
 	coder := string(ChatAgentsMD(spec("repo:write", "allowed"), nil, "PAY", "", nil))
-	if strings.Contains(coder, "Do not modify files") || !strings.Contains(coder, "Do not delegate work or write wiki notes") {
+	if strings.Contains(coder, "Do not modify files") || !strings.Contains(coder, "Do not delegate work") {
 		t.Fatalf("coder chat limits wrong:\n%s", coder)
 	}
 	img := spec("repo:write", "denied")

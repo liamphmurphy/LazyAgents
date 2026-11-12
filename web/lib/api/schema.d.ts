@@ -3809,6 +3809,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/docs/{canvasId}/wiki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a document's current version as a wiki page
+         * @description A person's decision to share a draft: copies the text as it is now into
+         *     a wiki page that agents can read, ending with a line saying which
+         *     document it came from. Later edits to the document don't change the
+         *     page. The page is published directly (it is your own action, so there
+         *     is nothing to approve). Without `path` the page is named after the
+         *     document. 409 when the page exists, unless `replace` is true; 404 for
+         *     anyone else's canvas; 422 for an SVG canvas or an invalid path.
+         */
+        post: operations["promoteDocToWiki"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/cancel": {
         parameters: {
             query?: never;
@@ -14740,6 +14768,46 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    promoteDocToWiki: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Wiki page path, e.g. Payments/Rollback runbook. Empty names it after the document. */
+                    path?: string;
+                    /** @description Overwrite the page when it exists */
+                    replace?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The wiki page's path */
+                        path: string;
+                        /** @description False when an existing page was replaced */
+                        created: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };

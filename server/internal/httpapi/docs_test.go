@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -108,4 +109,43 @@ func TestSaveDocToLibrary(t *testing.T) {
 	}
 
 	e.want("POST", "/docs/"+uuid.NewString()+"/library", nil, http.StatusNotFound)
+}
+
+// Promoting publishes the document as it is now, with a line saying where it
+// came from; it never overwrites a page without being told to.
+func TestPromoteDocToWiki(t *testing.T) {
+	e := newChatEnv(t)
+	word := strings.ToLower(strings.ReplaceAll(uuid.NewString(), "-", ""))[:8]
+	doc := e.want("POST", "/docs", map[string]any{"title": "Rollback " + word + " / notes"}, http.StatusCreated)
+	id, chat := doc["id"].(string), doc["chat_id"].(string)
+	e.want("POST", "/chats/"+chat+"/canvases/"+id+"/versions", map[string]any{"base_seq": 1, "body": "# Rollback\n\nStep one.\n"}, http.StatusCreated)
+
+	got := e.want("POST", "/docs/"+id+"/wiki", map[string]any{}, http.StatusCreated)
+	path := "Rollback " + word + " notes"
+	if got["path"] != path || got["created"] != true {
+		t.Fatalf("promoted %v, want a new page %q", got, path)
+	}
+	page := e.want("GET", "/wiki/page?path="+url.QueryEscape(path), nil, http.StatusOK)
+	if body := page["body_md"].(string); !strings.HasPrefix(body, "# Rollback\n\nStep one.\n") || !strings.Contains(body, "_Promoted from the Doc “Rollback "+word+" / notes” on ") {
+		t.Fatalf("page body %q", body)
+	}
+
+	// The page is a copy: a taken path is refused, and replacing is explicit.
+	e.want("POST", "/chats/"+chat+"/canvases/"+id+"/versions", map[string]any{"base_seq": 2, "body": "# Rollback\n\nStep two.\n"}, http.StatusCreated)
+	if out := e.want("POST", "/docs/"+id+"/wiki", map[string]any{}, http.StatusConflict); !strings.Contains(out["message"].(string), "already exists") {
+		t.Fatalf("conflict message %v", out)
+	}
+	if again := e.want("POST", "/docs/"+id+"/wiki", map[string]any{"replace": true}, http.StatusCreated); again["created"] != false || again["path"] != path {
+		t.Fatalf("replaced %v", again)
+	}
+	if body := e.want("GET", "/wiki/page?path="+url.QueryEscape(path), nil, http.StatusOK)["body_md"].(string); !strings.Contains(body, "Step two.") {
+		t.Fatalf("replaced body %q", body)
+	}
+
+	// A chosen path, an invalid one, and a document that isn't yours or isn't there.
+	if out := e.want("POST", "/docs/"+id+"/wiki", map[string]any{"path": "Runbooks/Rollback " + word}, http.StatusCreated); out["path"] != "Runbooks/Rollback "+word {
+		t.Fatalf("chosen path %v", out)
+	}
+	e.invalid("POST", "/docs/"+id+"/wiki", map[string]any{"path": "Bad [link]"}, "path", "[[links]]")
+	e.want("POST", "/docs/"+uuid.NewString()+"/wiki", map[string]any{}, http.StatusNotFound)
 }

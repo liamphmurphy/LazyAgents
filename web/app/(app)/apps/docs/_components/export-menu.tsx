@@ -4,7 +4,9 @@ import Link from "next/link";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { generateHTML } from "@tiptap/core";
-import { docPrintHref, downloadFile, useSaveDocToLibrary } from "@/lib/api/docs-hooks";
+import { ApiError } from "@/lib/api/client";
+import { docPrintHref, downloadFile, usePromoteDocToWiki, useSaveDocToLibrary } from "@/lib/api/docs-hooks";
+import { wikiHref } from "@/lib/wikilinks";
 import { docExtensions, parseDoc } from "@/lib/doc-markdown";
 import { toDocx } from "@/lib/doc-docx";
 import { floatPanel } from "@/components/domain/pickers";
@@ -21,6 +23,7 @@ type Notice = { tone: "ok" | "error"; text: string; href?: string };
  */
 export function ExportMenu({ id, title, current }: { id: string; title: string; current: () => Promise<string> }) {
   const library = useSaveDocToLibrary(id);
+  const promote = usePromoteDocToWiki(id);
   const [notice, setNotice] = useState<Notice>();
   const say = (n: Notice) => {
     setNotice(n);
@@ -53,6 +56,18 @@ export function ExportMenu({ id, title, current }: { id: string; title: string; 
     return { tone: "ok", text: "Saved to your Library", href: "/library" };
   });
 
+  // A copy for agents to read, so it asks before replacing a page that exists.
+  const publish = attempt("Publishing to the wiki", async () => {
+    await current();
+    const done = (r: { path: string }): Notice => ({ tone: "ok", text: `Published to the wiki as ${r.path}`, href: wikiHref(r.path) });
+    try {
+      return done(await promote.mutateAsync(false));
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 409) || !window.confirm(`${e.message}\n\nReplace it with this version?`)) throw e;
+      return done(await promote.mutateAsync(true));
+    }
+  });
+
   return (
     <div className="flex items-center gap-2">
       {notice && (
@@ -78,6 +93,7 @@ export function ExportMenu({ id, title, current }: { id: string; title: string; 
             <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
             <DropdownMenu.Item className={item} onSelect={copy}>Copy as rich text<span className={detail}>Paste with formatting anywhere</span></DropdownMenu.Item>
             <DropdownMenu.Item className={item} disabled={library.isPending} onSelect={save}>Save to Library<span className={detail}>Keeps a copy as it is now</span></DropdownMenu.Item>
+            <DropdownMenu.Item className={item} disabled={promote.isPending} onSelect={publish}>Promote to wiki<span className={detail}>Shares a copy with agents</span></DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

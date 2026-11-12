@@ -55,8 +55,17 @@ func (c ChatCaps) RepoCoding() bool { return c.Code && c.RepoURL != "" }
 // codeScopes are what a coding chat is granted; every other scope stays denied.
 var codeScopes = []string{"repo:read", "repo:write", "tests:run"}
 
+func scopeModes(r agentdef.Resolved) map[string]agentdef.Mode {
+	m := map[string]agentdef.Mode{}
+	for _, s := range r.Scopes {
+		m[s.Scope] = s.Mode
+	}
+	return m
+}
+
 // ChatSpec freezes a conversation's capabilities after project overrides.
 func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
+	wikiMode, wikiSet := agentdef.ModeFor(scopeModes(r), "wiki:write")
 	r.Scopes = append([]agentdef.ResolvedScope{}, r.Scopes...)
 	for i := range r.Scopes {
 		r.Scopes[i].Mode = agentdef.Denied
@@ -74,6 +83,17 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 		for _, scope := range codeScopes {
 			r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: scope, Mode: agentdef.Allowed, Source: agentdef.FromPersona})
 		}
+	}
+	if !wikiSet || wikiMode != agentdef.Denied {
+		// write_note is a chat tool, but a chat never publishes to the shared
+		// wiki: what the persona may write becomes a suggestion the person
+		// accepts or rejects. A persona that doesn't mention wiki:write gets
+		// suggestions too (wiki.Decide); only an explicit denial keeps it out.
+		r.Scopes = slices.DeleteFunc(r.Scopes, func(s agentdef.ResolvedScope) bool {
+			_, covers := agentdef.ModeFor(map[string]agentdef.Mode{s.Scope: agentdef.Denied}, "wiki:write")
+			return covers
+		})
+		r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: "wiki:write", Mode: agentdef.RequiresApproval, Source: agentdef.FromPersona})
 	}
 	r.Services = nil
 	r.Setup = []string{}
@@ -148,7 +168,7 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona
-// capabilities: the modes of the scopes a coding chat is granted, and the
+// capabilities: the modes of wiki:write and the scopes a coding chat is granted, and the
 // sandbox, read-only, image generation and web search options. Instructions
 // and the rest of the assistant's definition are left out on purpose, so
 // editing them never ends a segment, and neither does the persona pushing a
@@ -156,7 +176,7 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 func sameCapabilities(a, b agentdef.Resolved) bool {
 	key := func(r agentdef.Resolved) string {
 		modes := map[string]agentdef.Mode{}
-		for _, scope := range codeScopes {
+		for _, scope := range append([]string{"wiki:write"}, codeScopes...) {
 			modes[scope] = r.Mode(scope)
 		}
 		opts := map[string]string{}

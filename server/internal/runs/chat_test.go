@@ -17,10 +17,15 @@ func TestChatSpecReadOnly(t *testing.T) {
 		Skills: []agentdef.Skill{{Name: "context", Body: "Read sources"}},
 	}
 	got := ChatSpec(in, ChatCaps{})
-	for _, scope := range []string{"repo:read", "repo:write", "tests:run", "wiki:write", "db:migrate", "deploy:staging", "custom:write", "future:scope"} {
+	for _, scope := range []string{"repo:read", "repo:write", "tests:run", "db:migrate", "deploy:staging", "custom:write", "future:scope"} {
 		if got.Mode(scope) != agentdef.Denied {
 			t.Errorf("%s is not denied", scope)
 		}
+	}
+	// A chat never publishes to the shared wiki: what the persona may write
+	// becomes a suggestion the person accepts or rejects.
+	if got.Mode("wiki:write") != agentdef.RequiresApproval {
+		t.Errorf("wiki:write is %q, want requires_approval", got.Mode("wiki:write"))
 	}
 	if len(got.Setup)+len(got.MCPServers)+len(got.Fallbacks) != 0 || got.HarnessOptions["readonly"] != "true" || got.HarnessOptions["sandbox"] != "read-only" {
 		t.Fatalf("unsafe chat spec: %+v", got)
@@ -69,10 +74,13 @@ func TestChatSpecCapabilities(t *testing.T) {
 						t.Errorf("%s is %s, want %s", scope, got.Mode(scope), want)
 					}
 				}
-				for _, scope := range []string{"wiki:write", "deploy:staging", "repo:admin", "web:read", "db:migrate"} {
+				for _, scope := range []string{"deploy:staging", "repo:admin", "web:read", "db:migrate"} {
 					if got.Mode(scope) != agentdef.Denied {
 						t.Errorf("%s widened to %s", scope, got.Mode(scope))
 					}
+				}
+				if got.Mode("wiki:write") != agentdef.RequiresApproval {
+					t.Errorf("wiki:write is %s, want requires_approval", got.Mode("wiki:write"))
 				}
 				opts := got.HarnessOptions
 				_, hasImages := opts[agentdef.OptionImageGeneration]
@@ -165,5 +173,36 @@ func TestSameCapabilities(t *testing.T) {
 	code := ChatCaps{Code: true, RepoURL: "https://github.com/a/b"}
 	if !sameCapabilities(ChatSpec(base, code), ChatSpec(edited, code)) {
 		t.Fatal("coding chat: unrelated edits changed the capabilities")
+	}
+}
+
+// wiki:write in a chat is never more than a suggestion, and a persona denied
+// it stays denied.
+func TestChatSpecWikiWrite(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   []agentdef.ResolvedScope
+		want agentdef.Mode
+	}{
+		{"allowed", []agentdef.ResolvedScope{{Scope: "wiki:write", Mode: agentdef.Allowed}}, agentdef.RequiresApproval},
+		{"requires approval", []agentdef.ResolvedScope{{Scope: "wiki:write", Mode: agentdef.RequiresApproval}}, agentdef.RequiresApproval},
+		{"wildcard allowed", []agentdef.ResolvedScope{{Scope: "wiki:*", Mode: agentdef.Allowed}}, agentdef.RequiresApproval},
+		{"denied", []agentdef.ResolvedScope{{Scope: "wiki:write", Mode: agentdef.Denied}}, agentdef.Denied},
+		{"unmentioned", nil, agentdef.RequiresApproval},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ChatSpec(agentdef.Resolved{Scopes: tc.in}, ChatCaps{})
+			m := map[string]agentdef.Mode{}
+			for _, s := range got.Scopes {
+				m[s.Scope] = s.Mode
+			}
+			mode, set := agentdef.ModeFor(m, "wiki:write")
+			if tc.want == agentdef.RequiresApproval && !set {
+				mode = agentdef.RequiresApproval // unset means suggest (wiki.Decide)
+			}
+			if mode != tc.want {
+				t.Errorf("wiki:write = %q, want %q", mode, tc.want)
+			}
+		})
 	}
 }
