@@ -214,3 +214,54 @@ test("reparenting keeps a node where it is on the page", () => {
   assert.deepEqual([f.node.x, f.node.y], [50, 60]);
   assert.equal(reparent(d, "n_f", "n_f", { x: 0, y: 0 }, { x: 0, y: 0 }), d);
 });
+
+// ---- review fixes (B1–B3) ----
+import { settled } from "./designs/doc.ts";
+import { resizeIn } from "./designs/edit.ts";
+
+const hugText = (id, text, extra = {}) => ({ id, type: "text", x: 0, y: 0, w: 1, h: 1, sizing: { w: "hug", h: "hug" }, paragraphs: [{ runs: [{ text, size: 16 }] }], ...extra });
+
+test("B1: a stale cache isn't a change: the saved base is settled, so a 409 merge of other layers doesn't conflict", () => {
+  // The server stores settled bodies; the editor opened one whose hug text cache was stale.
+  const opened = design([hugText("n_t", "Hello"), rect("n_a")]);
+  let s = doc.open(1, opened);
+  assert.equal(doc.isDirty(s), false, "opening isn't an edit");
+  s = doc.edit(s, design([hugText("n_t", "Hello"), rect("n_a", 9)]), undefined, 0);
+  s = doc.saved(s, 2, s.draft);
+  assert.equal(doc.isDirty(s), false);
+  // A persona edits the text on the server (settled), I nudge the rect again.
+  s = doc.edit(s, design([hugText("n_t", "Hello"), rect("n_a", 20)]), undefined, 10);
+  const theirs = settled(design([hugText("n_t", "Hello there"), rect("n_a", 9)]));
+  const r = mergeDesigns(s.saved.design, settled(s.draft), theirs);
+  assert.deepEqual(r.conflicts, []);
+  assert.equal(find(r.design, "n_a").node.x, 20);
+  assert.equal(find(r.design, "n_t").node.paragraphs[0].runs[0].text, "Hello there");
+});
+
+test("B2: deleting a component removes its instances and keeps the design valid; overrides of removed children go", () => {
+  const label = hugText("n_lbl", "Go");
+  const icon = rect("n_icon");
+  const comp = { id: "n_btn", type: "component", name: "Button", x: 0, y: 0, w: 80, h: 30, children: [label, icon] };
+  const inst = { id: "n_use", type: "instance", component: "n_btn", x: 200, y: 0, w: 80, h: 30, overrides: { n_lbl: { text: "Pay" }, n_icon: { visible: false } } };
+  const d = design([comp, inst, rect("n_other", 400)]);
+  normalize(d);
+  const noComp = removeNodes(d, new Set(["n_btn"]));
+  assert.deepEqual(ids(noComp), ["n_other"]);
+  normalize(noComp);
+  const noIcon = removeNodes(d, new Set(["n_icon"]));
+  assert.deepEqual(find(noIcon, "n_use").node.overrides, { n_lbl: { text: "Pay" } });
+  normalize(noIcon);
+});
+
+test("B3: grouping and resizing use a hug node's laid-out size, not its stale stored one", () => {
+  const d = design([hugText("n_t", "A fairly long label"), rect("n_a", 300, 0)]);
+  const g = groupNodes(d, ["n_t", "n_a"]);
+  const grp = find(g.design, g.id).node;
+  const t = find(g.design, "n_t").node;
+  assert.ok(t.w > 50, "the text's real width");
+  assert.equal(grp.w, 310);
+  // Resizing a group scales children from their real size.
+  const r = resizeIn(g.design, g.id, { x: grp.x, y: grp.y, w: 620, h: grp.h });
+  const t2 = find(r, "n_t").node;
+  assert.ok(Math.abs(t2.w - t.w * 2) < 0.02, `${t2.w} vs ${t.w * 2}`);
+});

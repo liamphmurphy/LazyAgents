@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cx } from "@/lib/cx";
-import { find, removeNodes, insertNodes, mapNodes, newFrame, newShape, newText, pathFrom, reparent, resizeNode, withPlainText, plainText, inAutoLayout, PRESETS } from "@/lib/designs/edit";
+import { find, removeNodes, insertNodes, mapNodes, newFrame, newShape, newText, pathFrom, reparent, resizeIn, withPlainText, plainText, inAutoLayout, PRESETS } from "@/lib/designs/edit";
 import { dropTarget, hitPath, inMarquee, pick } from "@/lib/designs/hit";
 import type { Box, LaidPage } from "@/lib/designs/layout";
 import { FAMILY } from "@/lib/designs/measure";
@@ -270,7 +270,7 @@ export function DesignCanvas(p: CanvasProps) {
       if (h.includes("n")) y0 = Math.min(y1 - 1, b.y + dy);
       if (h.includes("s")) y1 = Math.max(y0 + 1, b.y + b.h + dy);
       const box = { x: Math.round(x0 - drag.origin.x), y: Math.round(y0 - drag.origin.y), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
-      p.onEdit((d) => mapNodes(d, new Set([drag.id]), (n) => resizeNode(n, box)), drag.key);
+      p.onEdit((d) => resizeIn(d, drag.id, box), drag.key);
     } else {
       setDrag({ ...drag, x: wx, y: wy });
       if (drag.kind === "marquee") {

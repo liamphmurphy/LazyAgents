@@ -7,6 +7,7 @@
 //     would quietly revert someone else's changes).
 //   - "Unchanged" is decided on the canonical (normalised) JSON, not object
 //     identity, so an edit and its undo don't save a version.
+import { settle } from "./layout.ts";
 import { normalize, canonical } from "./schema.ts";
 import type { Design } from "./schema.ts";
 
@@ -24,7 +25,22 @@ export type Doc = {
   at: number;
 };
 
-export const open = (seq: number, design: Design): Doc => ({ draft: design, saved: { seq, design }, past: [], future: [], at: 0 });
+/**
+ * The body as saved: laid out (the layout's boxes are a cache the editor
+ * writes on save, ADR §3.2) and normalised. The saved base is always kept in
+ * this form, so comparisons and three-way merges see the same cache values
+ * the server stores, not stale ones that would look like edits.
+ */
+export function settled(d: Design): Design {
+  const s = settle(d);
+  try {
+    return normalize(s).design;
+  } catch {
+    return s;
+  }
+}
+
+export const open = (seq: number, design: Design): Doc => ({ draft: design, saved: { seq, design: settled(design) }, past: [], future: [], at: 0 });
 
 /** The body as the server would store it; falls back to sorted JSON for a body the validator refuses. */
 export function canonicalJson(d: Design): string {
@@ -35,7 +51,7 @@ export function canonicalJson(d: Design): string {
   }
 }
 export const sameDesign = (a: Design, b: Design) => a === b || canonicalJson(a) === canonicalJson(b);
-export const isDirty = (doc: Doc) => !sameDesign(doc.draft, doc.saved.design);
+export const isDirty = (doc: Doc) => !sameDesign(settle(doc.draft), doc.saved.design);
 
 /** An edit: next replaces the draft as one undo step (or joins the last one with the same key). */
 export function edit(doc: Doc, next: Design, key?: string, now = Date.now()): Doc {
@@ -58,7 +74,7 @@ export function redo(doc: Doc): Doc {
 }
 
 /** A save of `design` landed as seq; the draft (and its history) stay, since later edits build on it. */
-export const saved = (doc: Doc, seq: number, design: Design): Doc => ({ ...doc, saved: { seq, design } });
+export const saved = (doc: Doc, seq: number, design: Design): Doc => ({ ...doc, saved: { seq, design: settled(design) } });
 
 /**
  * A newer version from the server. With nothing unsaved here it replaces the
@@ -77,4 +93,4 @@ export const merged = (doc: Doc, seq: number, theirs: Design, draft: Design): Do
 export const takeTheirs = (seq: number, theirs: Design): Doc => open(seq, theirs);
 
 /** The person chose to keep their version: it saves on top of the latest one. */
-export const keepMine = (doc: Doc, seq: number, theirs: Design): Doc => ({ ...doc, saved: { seq, design: theirs }, past: [], future: [], key: undefined });
+export const keepMine = (doc: Doc, seq: number, theirs: Design): Doc => ({ ...doc, saved: { seq, design: settled(theirs) }, past: [], future: [], key: undefined });

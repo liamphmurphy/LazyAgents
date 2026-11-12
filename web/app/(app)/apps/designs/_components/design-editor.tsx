@@ -193,7 +193,8 @@ export function DesignEditor({ id }: { id: string }) {
             return;
           }
           const now = docRef.current!;
-          const r = mergeDesigns(base.design, now.draft, theirs);
+          // All three settled, so cached boxes don't look like edits on either side.
+          const r = mergeDesigns(base.design, W.settled(now.draft), W.settled(theirs));
           if (r.design) {
             setDoc(W.merged(now, latest.seq, theirs, r.design));
             setSaveState({ s: "unsaved" });

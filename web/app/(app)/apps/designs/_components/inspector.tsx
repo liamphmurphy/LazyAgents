@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { PRESETS, find, inAutoLayout, mapNodes, presetLabel, resizeNode } from "@/lib/designs/edit";
+import { PRESETS, find, inAutoLayout, mapNodes, presetLabel, resizeIn, resizeNode } from "@/lib/designs/edit";
 import type { Layout } from "@/lib/designs/layout";
 import { SHAPE_PRESETS, type AutoLayout, type Constraints, type Design, type DesignNode, type Paint, type Paragraph, type Run } from "@/lib/designs/schema";
 
@@ -155,7 +155,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
   const container = n.type === "frame" || n.type === "component";
   const sizing = { w: n.sizing?.w ?? "fixed", h: n.sizing?.h ?? "fixed" };
   const canHug = n.type === "text" || n.type === "instance" || (container && !!al);
-  const resize = (b: { x?: number; y?: number; w?: number; h?: number }, k: string) => set((x) => (x.type === "connector" ? x : resizeNode(x, { x: b.x ?? x.x, y: b.y ?? x.y, w: b.w ?? x.w, h: b.h ?? x.h })), k);
+  const resize = (b: { x?: number; y?: number; w?: number; h?: number }, k: string) => onEdit((d) => resizeIn(d, id, (x) => (x.type === "connector" ? { x: 0, y: 0, w: 0, h: 0 } : { x: b.x ?? x.x, y: b.y ?? x.y, w: b.w ?? x.w, h: b.h ?? x.h })), key(k));
   const setAl = (p: Partial<AutoLayout>) => patch({ auto_layout: al ? { ...al, ...p } : undefined }, "al");
   const setSizing = (axis: "w" | "h", v: string) => {
     const next = { ...n.sizing, [axis]: v === "fixed" ? undefined : v };

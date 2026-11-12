@@ -2,7 +2,7 @@
 // duplicate, group, reorder, resize (with constraints) and new nodes. Pure
 // and structurally shared, so unchanged pages and nodes keep their identity
 // (the canvas re-renders only what changed). Ids follow ADR-designs §3.1.
-import { constrain } from "./layout.ts";
+import { constrain, settle } from "./layout.ts";
 import type { Design, DesignNode, FrameNode, Page, Paragraph, PathNode, ShapeNode, TextNode } from "./schema.ts";
 
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
@@ -98,15 +98,39 @@ export function subtreeIds(n: DesignNode, out = new Set<string>()): Set<string> 
   return out;
 }
 
-/** Removes the nodes, with their subtrees and the connectors and links that touch them. */
+/**
+ * Removes the nodes, with their subtrees and the connectors and links that
+ * touch them. Instances of a removed component go too (they'd have nothing
+ * to draw), and overrides keyed by removed descendants of a main are dropped.
+ */
 export function removeNodes(d: Design, ids: ReadonlySet<string>): Design {
   const gone = new Set<string>();
-  for (const id of ids) {
+  const add = (id: string) => {
     const f = find(d, id);
     if (f) subtreeIds(f.node, gone);
-  }
+  };
+  for (const id of ids) add(id);
   if (!gone.size) return d;
-  const out = mapTree(d, (n) => (gone.has(n.id) || (n.type === "connector" && (gone.has(n.from.node) || gone.has(n.to.node))) ? null : n));
+  // Instances of removed components, until nothing more goes.
+  for (let more = true; more; ) {
+    more = false;
+    mapTree(d, (n) => {
+      if (n.type === "instance" && !gone.has(n.id) && gone.has(n.component)) {
+        add(n.id);
+        more = true;
+      }
+      return n;
+    });
+  }
+  let out = mapTree(d, (n) => (gone.has(n.id) || (n.type === "connector" && (gone.has(n.from.node) || gone.has(n.to.node))) ? null : n));
+  out = mapTree(out, (n) => {
+    if (n.type !== "instance" || !n.overrides || !Object.keys(n.overrides).some((k) => gone.has(k))) return n;
+    const overrides = Object.fromEntries(Object.entries(n.overrides).filter(([k]) => !gone.has(k)));
+    if (Object.keys(overrides).length) return { ...n, overrides };
+    const { overrides: _gone, ...rest } = n;
+    void _gone;
+    return rest as DesignNode;
+  });
   const links = d.links.filter((l) => !gone.has(l.from) && !gone.has(l.to));
   return links.length === d.links.length ? out : { ...out, links };
 }
@@ -210,6 +234,8 @@ export function unionBox(boxes: Box[]): Box | undefined {
 
 /** The selected siblings as one group at the topmost one's place; undefined unless they share a parent. */
 export function groupNodes(d: Design, ids: string[]): { design: Design; id: string } | undefined {
+  // Hug sizes are a cache in the body: group from the laid-out boxes.
+  d = settle(d);
   const fs = ids.map((id) => find(d, id)).filter((f): f is Found => !!f && f.node.type !== "connector");
   if (fs.length < 2) return undefined;
   const parent = fs[0].parent?.id ?? fs[0].page.id;
@@ -241,6 +267,10 @@ export function ungroupNodes(d: Design, ids: string[]): { design: Design; ids: s
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** resizeNode on a node of the design, after laying it out (a hug node's stored size may be stale). */
+export const resizeIn = (d: Design, id: string, b: Box | ((n: DesignNode) => Box)): Design =>
+  mapNode(settle(d), id, (n) => (n.type === "connector" ? n : resizeNode(n, typeof b === "function" ? b(n) : b)));
 
 /** Scales a path's d (node coordinates) by kx, ky. */
 export function scalePath(d: string, kx: number, ky: number): string {
