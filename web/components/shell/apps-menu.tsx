@@ -85,7 +85,7 @@ function ToolPill({ item, index, count, current, onPick }: TileArgs) {
   return (
     <Link
       {...tileProps(item, "tool", index, count, current, onPick)}
-      className={cx("motion-tile flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] outline-none focus-visible:border-accent", TILE_STATE(current))}
+      className={cx("motion-tile flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-xs outline-none focus-visible:border-accent", TILE_STATE(current))}
     >
       <Icon name={item.icon} size={14} />
       <span>{item.label}</span>
