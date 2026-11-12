@@ -110,8 +110,10 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
               // Esc in the reply or reason box goes back to the list; Esc on the list closes.
               if (isTyping(document.activeElement)) {
                 e.preventDefault();
-                (document.activeElement as HTMLElement).blur();
-                document.querySelector<HTMLElement>("[data-tray-row][aria-current]")?.focus();
+                const box = document.activeElement as HTMLElement;
+                const tray = box.closest("[data-tray]");
+                box.blur();
+                tray?.querySelector<HTMLElement>("[data-tray-row][aria-current]")?.focus();
               }
             }}
             className="motion-flyout z-50 flex max-h-[min(640px,calc(100dvh-24px))] w-[440px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-[14px] border border-border-float bg-surface-raised shadow-[var(--shadow-float)] outline-none"
@@ -174,7 +176,8 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
     focused.current = false;
   };
   const open = (item: Item) => {
-    if (!item.needs_you && isOpen(item)) read.mutate(item.id);
+    // Updates and mentions never resolve on their own: opening one from the tray is reading it.
+    if (isOpen(item) && (!item.needs_you || item.kind === "mention")) read.mutate(item.id);
     onClose();
     router.push(item.href);
   };
@@ -187,9 +190,13 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     const t = e.target;
     const onRow = t === document.body || (t instanceof HTMLElement && t.hasAttribute("data-tray-row"));
-    if (k === "Tab" && (onRow || (t instanceof HTMLElement && t.role === "tab"))) {
+    // ←/→ switch tabs (the ARIA tabs pattern). Tab keeps moving focus, so every button and link in the tray is reachable.
+    if (k === "ArrowLeft" || k === "ArrowRight") {
+      if (!onRow && !(t instanceof HTMLElement && t.role === "tab")) return;
       e.preventDefault();
-      switchTab(tab === "needs" ? "updates" : "needs");
+      const next = tab === "needs" ? "updates" : "needs";
+      switchTab(next);
+      if (t instanceof HTMLElement && t.role === "tab") requestAnimationFrame(() => document.getElementById(`tray-tab-${next}`)?.focus());
       return;
     }
     if (k === "j" || k === "k" || k === "ArrowDown" || k === "ArrowUp") {
@@ -224,14 +231,14 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
     cx("flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-accent", on ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg");
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div data-tray className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-1 px-3 pb-2 pt-3">
         <div role="tablist" aria-label="Tray" className="flex items-center gap-1">
-          <button type="button" role="tab" aria-selected={tab === "needs"} tabIndex={-1} onClick={() => switchTab("needs")} className={tabClass(tab === "needs")}>
+          <button type="button" role="tab" id="tray-tab-needs" aria-controls="tray-panel" aria-selected={tab === "needs"} tabIndex={tab === "needs" ? 0 : -1} onClick={() => switchTab("needs")} className={tabClass(tab === "needs")}>
             Needs you
             <span className={cx("font-mono text-xs", needs.length ? "text-pill-human-fg" : "text-fg-tertiary")}>{needs.length}</span>
           </button>
-          <button type="button" role="tab" aria-selected={tab === "updates"} tabIndex={-1} onClick={() => switchTab("updates")} className={tabClass(tab === "updates")}>
+          <button type="button" role="tab" id="tray-tab-updates" aria-controls="tray-panel" aria-selected={tab === "updates"} tabIndex={tab === "updates" ? 0 : -1} onClick={() => switchTab("updates")} className={tabClass(tab === "updates")}>
             Updates
             {unread.length > 0 && (
               <span data-testid="updates-dot" className="size-1.5 rounded-full bg-accent">
@@ -246,7 +253,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
           </button>
         )}
       </div>
-      <div ref={listRef} role="tabpanel" aria-label={tab === "needs" ? "Needs you" : "Updates"} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
+      <div ref={listRef} id="tray-panel" role="tabpanel" aria-label={tab === "needs" ? "Needs you" : "Updates"} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1.5">
         {inbox.isPending ? (
           <div aria-busy="true" className="space-y-2 p-2">
             {[0, 1, 2].map((i) => (
@@ -283,7 +290,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
         <span aria-hidden className="hidden items-center gap-2.5 min-[480px]:flex">
           <span><Kbd>J</Kbd> <Kbd>K</Kbd> move</span>
           <span><Kbd>A</Kbd> <Kbd>D</Kbd> decide</span>
-          <span><Kbd>Tab</Kbd> switch</span>
+          <span><Kbd>←</Kbd> <Kbd>→</Kbd> switch</span>
         </span>
         <Link href="/inbox" onClick={onClose} className="ml-auto font-medium text-accent hover:underline">
           Open all →

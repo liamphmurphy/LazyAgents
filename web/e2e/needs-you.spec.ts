@@ -133,8 +133,8 @@ test("Updates: FYI items with an unread dot and no count, and Mark all read", as
   await page.goto("/tickets?layout=board&project=WEB");
   await pill(page).click();
   await expect(selected(page)).toBeFocused();
-  // Tab switches to Updates.
-  await page.keyboard.press("Tab");
+  // → switches to Updates.
+  await page.keyboard.press("ArrowRight");
   const updatesTab = tray(page).getByRole("tab", { name: /^Updates/ });
   await expect(updatesTab).toHaveAttribute("aria-selected", "true");
   await expect(updatesTab).toHaveText("Updates, unread");
@@ -151,11 +151,20 @@ test("Updates: FYI items with an unread dot and no count, and Mark all read", as
   // Updates never change the badge.
   await expect(pill(page)).toHaveAccessibleName("Needs you, 4 waiting");
 
-  // Tab back from the list; Open all goes to the full page.
+  // ← back from the list.
   await page.keyboard.press("j");
   await expect(selected(page)).toBeFocused();
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("ArrowLeft");
   await expect(tray(page).getByRole("tab", { name: /^Needs you/ })).toHaveAttribute("aria-selected", "true");
+  // Tab is not taken over: it moves into the selected row's buttons, so every control is reachable.
+  await expect(selected(page)).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(selected(page).getByRole("button", { name: "Approve" })).toBeFocused();
+  // An asking mention never resolves by itself: opening it from the tray reads it.
+  await tray(page).locator('[data-tray-row="mention:ask"]').getByRole("link", { name: "Open" }).click();
+  await expect.poll(() => api.reads).toContain("mention:ask");
+  await expect(page).toHaveURL(/\/tickets\/WEB-3$/);
+  await pill(page).click();
   await tray(page).getByRole("link", { name: "Open all →" }).click();
   await expect(page).toHaveURL(/\/inbox$/);
   await expect(tray(page)).toHaveCount(0);
@@ -188,7 +197,7 @@ test("the shortcuts sheet lists the tray keys", async ({ page }) => {
   await expect(pill(page)).toBeVisible();
   await page.keyboard.press("?");
   const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" }).getByRole("region", { name: "Needs you tray" });
-  for (const label of ["Next / previous item", "Open the item’s page", "Switch between Needs you and Updates", "Approve the selected approval", "Deny the selected approval (with an optional reason)", "Close the tray, or leave the reply box"]) {
+  for (const label of ["Next / previous item", "Open the item’s page", "Switch between Needs you and Updates", "Reply to the selected question", "Approve the selected approval", "Deny the selected approval (with an optional reason)", "Close the tray, or leave the reply box"]) {
     await expect(sheet.getByText(label, { exact: true })).toBeVisible();
   }
 });

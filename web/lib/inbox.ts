@@ -31,6 +31,7 @@ export const GROUPS: ReadonlyArray<{ key: string; label: string; kinds: readonly
   { key: "dispatch", label: "Dispatch", kinds: ["dispatch"] },
   { key: "mention", label: "Mentions", kinds: ["mention"] },
   { key: "suggestion", label: "Wiki edits", kinds: ["suggestion"] },
+  { key: "merged", label: "Merged PRs", kinds: ["merged"] },
 ];
 
 /** Row pill label and tone: "blocked" means something broke, the rest need a person. */

@@ -57,13 +57,16 @@ func inboxNeedsYou(kind, body string) bool {
 var (
 	codeFence  = regexp.MustCompile("(?s)```.*?(```|$)")
 	inlineCode = regexp.MustCompile("`[^`\n]*`")
+	quoteLine  = regexp.MustCompile(`(?m)^\s*>.*$`)
 	linkURL    = regexp.MustCompile(`https?://\S*[^\s?.,;:!)]`)
 )
 
-// asksQuestion: the text has a question mark outside code and links (a URL's
-// query string or a code sample doesn't ask anything).
+// asksQuestion: the text has a question mark outside code, links and quoted
+// lines (a URL's query string, a code sample or a quoted earlier message
+// doesn't ask anything).
 func asksQuestion(md string) bool {
 	md = codeFence.ReplaceAllString(md, "")
+	md = quoteLine.ReplaceAllString(md, "")
 	md = inlineCode.ReplaceAllString(md, "")
 	md = linkURL.ReplaceAllString(md, "")
 	return strings.Contains(md, "?")

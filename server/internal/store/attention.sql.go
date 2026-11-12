@@ -58,8 +58,8 @@ WITH items AS (
  WHERE r.workspace_id=$3 AND r.state='running'
  AND coalesce((SELECT e.at FROM run_events e WHERE e.run_id=r.id ORDER BY e.seq DESC LIMIT 1),r.started_at) < now()-interval '30 minutes'
  UNION ALL
- -- The whole comment: ListInbox reads it for a question, then shortens it.
- SELECT 'mention:'||c.id,'mention',t.title,c.body_md,'/tickets/'||t.key,p.key,t.key,c.created_at,false,
+ -- Up to 4000 characters: ListInbox reads them for a question, then shortens the summary.
+ SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,4000),'/tickets/'||t.key,p.key,t.key,c.created_at,false,
  CASE WHEN c.author_type='agent' THEN c.author_id END,NULL,NULL
  FROM comments c JOIN tickets t ON t.id=c.ticket_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=$1
  WHERE c.workspace_id=$3 AND NOT (c.author_type='user' AND c.author_id=u.id)
@@ -70,7 +70,7 @@ WITH items AS (
  SELECT 'merged:'||e.id,'merged',t.title,'Pull request '||coalesce('#'||(e.payload->>'number')||' ','')||'merged','/tickets/'||t.key,p.key,t.key,e.created_at,false,
  t.assignee_agent_id,NULL,NULL
  FROM activity_events e JOIN tickets t ON t.id=e.ticket_id JOIN projects p ON p.id=t.project_id
- WHERE e.workspace_id=$3 AND e.verb='pr_merged' AND e.created_at>now()-interval '14 days'
+ WHERE e.workspace_id=$3 AND NOT p.archived AND e.verb='pr_merged' AND e.created_at>now()-interval '14 days'
  UNION ALL
  SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested',
  CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
@@ -120,7 +120,9 @@ SELECT items.id, items.kind, items.title, items.summary, items.href, items.proje
 FROM items LEFT JOIN inbox_reads rd ON rd.user_id=$1 AND rd.item_id=items.id
 LEFT JOIN agents ag ON ag.id=items.agent_id
 WHERE ($2::text IS NULL OR items.project=$2)
-ORDER BY items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at), items.created_at DESC,items.id LIMIT 500
+ORDER BY items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at),
+ CASE WHEN items.kind IN ('scheduled','merged') THEN 2 WHEN items.kind='mention' THEN 1 ELSE 0 END,
+ items.created_at DESC,items.id LIMIT 500
 `
 
 type ListInboxParams struct {
@@ -151,6 +153,8 @@ type ListInboxRow struct {
 
 // Every human gate in one list. agent_id, run_id and artifact_id let the
 // Inbox act on an item (reply, retry, cancel, review) without another lookup.
+// Open items to act on first, then mentions (which may ask), then news: plenty of unread
+// merged PRs or scheduled results must never push a pending approval past the limit.
 func (q *Queries) ListInbox(ctx context.Context, arg ListInboxParams) ([]ListInboxRow, error) {
 	rows, err := q.db.Query(ctx, listInbox, arg.UserID, arg.Project, arg.WorkspaceID)
 	if err != nil {

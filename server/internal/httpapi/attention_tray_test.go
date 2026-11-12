@@ -40,6 +40,7 @@ func TestInboxNeedsYou(t *testing.T) {
 		{"mention", "@liam is this fine? https://example.com/pr?tab=files", true},
 		{"mention", "@liam does https://example.com/x?", true},
 		{"mention", "@liam the `x ?: y` operator is in.", false},
+		{"mention", "> can we ship it?\n@liam shipped.", false},
 		{"mention", "@liam done.\n```js\nconst a = b ? c : d\n```", false},
 	}
 	for _, c := range cases {
@@ -118,5 +119,15 @@ func TestInboxTraySections(t *testing.T) {
 	}
 	if got := needsYou(); got != before+1 {
 		t.Fatalf("needs_you count = %d, want %d (only the asking mention counts)", got, before+1)
+	}
+
+	// A flood of newer unread news can't push items to act on past ListInbox's 500 rows.
+	if _, err := pool.Exec(ctx, `INSERT INTO activity_events(workspace_id,ticket_id,actor_type,verb,payload)
+		SELECT $1,$2,'system','pr_merged',jsonb_build_object('number',n) FROM generate_series(1,600) n`,
+		u.WorkspaceID, ticket.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := needsYou(); got != before+1 {
+		t.Fatalf("after 600 merged PRs needs_you = %d, want %d", got, before+1)
 	}
 }

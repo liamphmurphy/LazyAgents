@@ -46,8 +46,8 @@ WITH items AS (
  WHERE r.workspace_id=sqlc.arg(workspace_id) AND r.state='running'
  AND coalesce((SELECT e.at FROM run_events e WHERE e.run_id=r.id ORDER BY e.seq DESC LIMIT 1),r.started_at) < now()-interval '30 minutes'
  UNION ALL
- -- The whole comment: ListInbox reads it for a question, then shortens it.
- SELECT 'mention:'||c.id,'mention',t.title,c.body_md,'/tickets/'||t.key,p.key,t.key,c.created_at,false,
+ -- Up to 4000 characters: ListInbox reads them for a question, then shortens the summary.
+ SELECT 'mention:'||c.id,'mention',t.title,left(c.body_md,4000),'/tickets/'||t.key,p.key,t.key,c.created_at,false,
  CASE WHEN c.author_type='agent' THEN c.author_id END,NULL,NULL
  FROM comments c JOIN tickets t ON t.id=c.ticket_id JOIN projects p ON p.id=t.project_id JOIN users u ON u.id=sqlc.arg(user_id)
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND NOT (c.author_type='user' AND c.author_id=u.id)
@@ -58,7 +58,7 @@ WITH items AS (
  SELECT 'merged:'||e.id,'merged',t.title,'Pull request '||coalesce('#'||(e.payload->>'number')||' ','')||'merged','/tickets/'||t.key,p.key,t.key,e.created_at,false,
  t.assignee_agent_id,NULL,NULL
  FROM activity_events e JOIN tickets t ON t.id=e.ticket_id JOIN projects p ON p.id=t.project_id
- WHERE e.workspace_id=sqlc.arg(workspace_id) AND e.verb='pr_merged' AND e.created_at>now()-interval '14 days'
+ WHERE e.workspace_id=sqlc.arg(workspace_id) AND NOT p.archived AND e.verb='pr_merged' AND e.created_at>now()-interval '14 days'
  UNION ALL
  SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested',
  CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
@@ -108,7 +108,11 @@ SELECT items.id, items.kind, items.title, items.summary, items.href, items.proje
 FROM items LEFT JOIN inbox_reads rd ON rd.user_id=sqlc.arg(user_id) AND rd.item_id=items.id
 LEFT JOIN agents ag ON ag.id=items.agent_id
 WHERE (sqlc.narg(project)::text IS NULL OR items.project=sqlc.narg(project))
-ORDER BY items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at), items.created_at DESC,items.id LIMIT 500;
+-- Open items to act on first, then mentions (which may ask), then news: plenty of unread
+-- merged PRs or scheduled results must never push a pending approval past the limit.
+ORDER BY items.resolved, (rd.read_at IS NOT NULL AND rd.read_at>=items.created_at),
+ CASE WHEN items.kind IN ('scheduled','merged') THEN 2 WHEN items.kind='mention' THEN 1 ELSE 0 END,
+ items.created_at DESC,items.id LIMIT 500;
 
 -- name: ReadInboxItem :exec
 INSERT INTO inbox_reads (user_id,item_id) VALUES ($1,$2)
