@@ -5,11 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
 import { usePulse } from "@/components/ui/motion";
-import { useBootstrap, useSecrets } from "@/lib/api/hooks";
-import { useScheduledTasks } from "@/lib/api/connector-hooks";
-import { tasksNeedingYou } from "@/lib/schedule-ui";
+import { useBootstrap } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
-import { needsAttention } from "@/lib/settings";
+import { useNavCounts } from "@/lib/use-nav-counts";
 import { WORK_ITEMS, isActive, type NavBadge } from "@/lib/project-scope";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
@@ -18,14 +16,6 @@ import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { AppsMenu } from "./apps-menu";
-
-export type SidebarProps = {
-  inboxCount: number;
-  /** Ticket and planning runs in progress; chat runs aren't counted. */
-  liveRuns: number;
-  /** Agent edits to wiki pages waiting for a person (amber: a person acts). */
-  wikiSuggestions?: number;
-};
 
 const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "unread", runs: "running" };
 
@@ -180,11 +170,9 @@ function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, nu
   );
 }
 
-export function Sidebar({ inboxCount, liveRuns, wikiSuggestions = 0 }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
-  const secrets = useSecrets();
-  const scheduled = useScheduledTasks(true);
-  const counts: Record<NavBadge, number> = { scheduled: tasksNeedingYou(scheduled.data?.tasks), inbox: inboxCount, runs: liveRuns, wiki: wikiSuggestions, settings: needsAttention(secrets.data) ? 1 : 0 };
+  const counts = useNavCounts();
   const [expanded, setExpanded] = useExpanded();
   const [creatingSpace, setCreatingSpace] = useState(false);
   // Only a toggle animates, not restoring the remembered state after mount.
