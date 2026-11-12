@@ -297,7 +297,7 @@ test("Markdown the editor can't keep opens as source instead", async ({ page }) 
   await expect(page.getByTestId("doc-page")).toContainText("A claim.");
 });
 
-test("the dock collapses and reopens, with ⌘\\ and ⌘J, and the outline jumps to a heading", async ({ page }) => {
+test("the dock collapses and reopens, with ⌘\\, ⌘J and ⌘., and the outline jumps to a heading", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await install(page, "# Trip plan\n\nFly to **Lisbon** on Friday.\n\n## Days\n\n- Fri: Alfama\n\n## Bookings\n\n- Flights\n");
   await page.goto(`/apps/docs/${DOC}`);
@@ -328,6 +328,14 @@ test("the dock collapses and reopens, with ⌘\\ and ⌘J, and the outline jumps
   await page.keyboard.press(`${mod}+j`);
   await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
   await expect(dock(page).getByLabel("Message", { exact: true })).toBeFocused();
+
+  // ⌘. hides every panel and pressing it again restores them.
+  await page.locator("header").first().click({ position: { x: 600, y: 10 } });
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock(page)).toHaveCount(0);
+  await expect(rail(page)).toHaveCount(0);
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock(page)).toBeVisible();
 
   // The dock stays as it was left across a reload.
   await page.locator("header").first().click({ position: { x: 600, y: 10 } });

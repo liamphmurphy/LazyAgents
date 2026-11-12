@@ -636,6 +636,17 @@ test("a design opens in the shared layout: slim header, Pages and layers, and a 
   await expect(tab("Chat")).toHaveAttribute("aria-selected", "true");
   await expect(dock.getByRole("combobox", { name: "Message" })).toBeFocused();
 
+  // ⌘. hides every panel and pressing it again restores them.
+  const structure = page.getByRole("complementary", { name: "Structure" });
+  await canvas(page).click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock).toHaveCount(0);
+  await expect(rail).toHaveCount(0);
+  await expect(structure).toHaveCount(0);
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(dock).toBeVisible();
+  await expect(structure).toBeVisible();
+
   // The dock is remembered across a reload.
   await canvas(page).click({ position: { x: 20, y: 20 } });
   await page.keyboard.press(`${mod}+Backslash`);

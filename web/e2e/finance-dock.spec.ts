@@ -5,6 +5,7 @@ import { installChatApi } from "./mock-chat-api";
 // through the shared editor layout with one Chat tab, its Ask chat, in place of the old drawer.
 const dock = (page: Page) => page.getByRole("complementary", { name: "Panel", exact: true });
 const rail = (page: Page) => page.getByRole("navigation", { name: "Panel rail" });
+const tabs = (page: Page) => dock(page).getByRole("tablist", { name: "Panel tabs" });
 const mod = process.platform === "darwin" ? "Meta" : "Control";
 const PRIVACY = "Only you see this, and only Ask, here in Finance, can read it.";
 
@@ -41,7 +42,7 @@ test("Finance's Ask is the dock's Chat tab, with the privacy note, and collapses
   await expect(page.locator('[data-editor-layout="finance"]')).toBeVisible();
   // No left panel; one Chat tab.
   await expect(page.getByRole("complementary", { name: "Structure" })).toHaveCount(0);
-  await expect(dock(page).getByRole("tab")).toHaveText(["Chat"]);
+  await expect(tabs(page).getByRole("tab")).toHaveText(["Chat"]);
   await expect(dock(page).getByText(PRIVACY)).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
@@ -49,7 +50,7 @@ test("Finance's Ask is the dock's Chat tab, with the privacy note, and collapses
   await dock(page).getByRole("button", { name: "Collapse panel" }).click();
   await expect(rail(page)).toBeVisible();
   await page.getByRole("button", { name: "✦ Ask" }).click();
-  await expect(dock(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
 
   // Collapsed state is remembered across a reload; ⌘J opens Chat and focuses the composer.
   await dock(page).getByRole("button", { name: "Collapse panel" }).click();
@@ -69,9 +70,10 @@ test("asking about a spending section sends it to the Finance chat in the Chat t
 
   const question = /What made up my Groceries spending in November\?/;
   await page.getByRole("button", { name: /Groceries/ }).first().click();
-  await expect(dock(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => api.posted.map((p) => p.body.body)).toEqual([expect.stringMatching(question)]);
   expect(api.created).toEqual([expect.objectContaining({ space_id: overview.space_id })]);
-  await expect(dock(page).getByText(question).first()).toBeVisible();
+  // The inactive Activity tab stays mounted (hidden) and also lists the prompt: look in the conversation.
+  await expect(dock(page).getByRole("log", { name: "Conversation" }).getByText(question).first()).toBeVisible();
   await expect(dock(page).getByText(PRIVACY)).toBeVisible();
 });
