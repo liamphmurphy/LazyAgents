@@ -478,14 +478,19 @@ func (q *Queries) ChatLastErrors(ctx context.Context, ids []uuid.UUID) ([]ChatLa
 }
 
 const chatMessageCounts = `-- name: ChatMessageCounts :many
-SELECT session_id, count(*)::int AS n FROM chat_messages WHERE session_id = ANY($1::uuid[]) GROUP BY session_id
+SELECT m.session_id, count(*)::int AS n,
+  (count(*) FILTER (WHERE m.role = 'assistant' AND m.seq > c.last_read_seq))::int AS unread
+FROM chat_messages m JOIN chat_sessions c ON c.id = m.session_id
+WHERE m.session_id = ANY($1::uuid[]) GROUP BY m.session_id
 `
 
 type ChatMessageCountsRow struct {
 	SessionID uuid.UUID
 	N         int32
+	Unread    int32
 }
 
+// n: every message; unread: assistant replies past the person's read position.
 func (q *Queries) ChatMessageCounts(ctx context.Context, ids []uuid.UUID) ([]ChatMessageCountsRow, error) {
 	rows, err := q.db.Query(ctx, chatMessageCounts, ids)
 	if err != nil {
@@ -495,7 +500,7 @@ func (q *Queries) ChatMessageCounts(ctx context.Context, ids []uuid.UUID) ([]Cha
 	items := []ChatMessageCountsRow{}
 	for rows.Next() {
 		var i ChatMessageCountsRow
-		if err := rows.Scan(&i.SessionID, &i.N); err != nil {
+		if err := rows.Scan(&i.SessionID, &i.N, &i.Unread); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -209,6 +209,15 @@ export function chatTitle(c: { title: string }): string {
   return c.title.trim() || "New conversation";
 }
 
+/**
+ * A history row's dot: running wins over an unread reply. The open chat is never unread, since
+ * it is marked read on screen (that keeps a reply landing there from flashing a dot).
+ */
+export function rowMark(c: { state: string; unread?: number }, open = false): "running" | "unread" | null {
+  if (c.state === "running") return "running";
+  return !open && (c.unread ?? 0) > 0 ? "unread" : null;
+}
+
 /** The most recently active chat: by its last message, else when it last changed. */
 export function newestChat<T extends { last_message_at?: string | null; updated_at: string }>(chats: T[] | undefined): T | undefined {
   const t = (c: T) => Date.parse(c.last_message_at ?? c.updated_at);

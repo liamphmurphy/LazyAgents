@@ -7443,6 +7443,8 @@ export interface components {
             parent_chat_id?: string;
             revision: number;
             message_count: number;
+            /** @description Assistant replies newer than the person's read position (POST /chats/{id}/read) */
+            unread: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
