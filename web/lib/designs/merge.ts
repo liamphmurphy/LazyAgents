@@ -3,11 +3,29 @@
 // change on one side only wins; the same change on both sides is fine;
 // different changes to the same thing are a conflict, and nothing is
 // overwritten silently.
+import { settle } from "./layout.ts";
 import { canonical, normalize } from "./schema.ts";
 import type { Design, DesignNode, Page } from "./schema.ts";
 
 const PAGES = "$pages";
 type Side = { body: Map<string, string>; home: Map<string, string>; lists: Map<string, string[]>; nodes: Map<string, DesignNode>; pages: Map<string, Page> };
+
+/**
+ * Fields the layout writes (ADR §3.2: a cache every renderer recomputes):
+ * x and y of a child in an auto-layout container, and w or h on a hug axis
+ * (or a fill axis in auto layout). They're left out of the merge state, so
+ * one side's reflow (a persona's text growing in a card) doesn't look like an
+ * edit of every sibling; the merged design is laid out again.
+ */
+function layoutFields(n: DesignNode, parent: DesignNode | undefined): string[] {
+  if (n.type === "connector") return [];
+  const inFlow = !!parent && "auto_layout" in parent && !!parent.auto_layout && !n.absolute;
+  const out = inFlow ? ["x", "y"] : [];
+  const sz = n.sizing ?? {};
+  if (sz.w === "hug" || (inFlow && sz.w === "fill")) out.push("w");
+  if (sz.h === "hug" || (inFlow && sz.h === "fill")) out.push("h");
+  return out;
+}
 
 const childList = (n: DesignNode) => ("children" in n && Array.isArray(n.children) ? n.children : undefined);
 
@@ -19,14 +37,16 @@ function index(d: Design): Side {
     s.body.set(p.id, canonical({ ...p, children: undefined }));
     s.home.set(p.id, PAGES);
     s.pages.set(p.id, p);
-    const walk = (list: DesignNode[], home: string) => {
+    const walk = (list: DesignNode[], home: string, parent?: DesignNode) => {
       s.lists.set(home, list.map((n) => n.id));
       for (const n of list) {
         const { children, ...rest } = n as DesignNode & { children?: DesignNode[] };
-        s.body.set(n.id, canonical(rest));
+        const state: Record<string, unknown> = { ...rest };
+        for (const f of layoutFields(n, parent)) delete state[f];
+        s.body.set(n.id, canonical(state));
         s.home.set(n.id, home);
         s.nodes.set(n.id, n);
-        if (Array.isArray(children)) walk(children, n.id);
+        if (Array.isArray(children)) walk(children, n.id, n);
       }
     };
     walk(p.children, p.id);
@@ -124,7 +144,7 @@ export function mergeDesigns(base: Design, mine: Design, theirs: Design): MergeR
   if (!out.tokens_ref) delete out.tokens_ref;
   // A merge the validator refuses (a connector to a node the other side removed…) needs the person.
   try {
-    return { design: normalize(out).design, conflicts: [] };
+    return { design: normalize(settle(out)).design, conflicts: [] };
   } catch {
     return { conflicts: ["$design"] };
   }

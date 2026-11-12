@@ -118,7 +118,8 @@ test("a child added under a container the other side removed is a conflict", () 
 test("the acceptance design merges with itself unchanged", () => {
   const d = acceptance();
   const r = mergeDesigns(d, d, d);
-  assert.equal(normalize(r.design).json, normalize(d).json);
+  // The merge comes back laid out (its cached boxes written), as a save would store it.
+  assert.equal(normalize(r.design).json, normalize(settled(d)).json);
 });
 
 // ---- tree edits ----
@@ -264,4 +265,20 @@ test("B3: grouping and resizing use a hug node's laid-out size, not its stale st
   const r = resizeIn(g.design, g.id, { x: grp.x, y: grp.y, w: 620, h: grp.h });
   const t2 = find(r, "n_t").node;
   assert.ok(Math.abs(t2.w - t.w * 2) < 0.02, `${t2.w} vs ${t.w * 2}`);
+});
+
+test("B1: a reflow on one side isn't an edit of the siblings it moved", () => {
+  const card = (title, boxY, boxFill) => ({
+    id: "n_card", type: "frame", x: 0, y: 0, w: 300, h: 300, auto_layout: { direction: "vertical", gap: 10 },
+    children: [hugText("n_t", title), { ...rect("n_b", 0, boxY), fill: boxFill }],
+  });
+  const base = settled(design([card("Hi", 0, "#000000")]));
+  // Theirs: the text grows to two lines, which moves the box down; mine: the box's colour.
+  const theirs = settled(design([card("Hi\nthere", 0, "#000000")].map((c) => ({ ...c, children: [{ ...c.children[0], paragraphs: [{ runs: [{ text: "Hi", size: 16 }] }, { runs: [{ text: "there", size: 16 }] }] }, c.children[1]] }))));
+  const mine = { ...base, pages: [{ ...base.pages[0], children: [{ ...base.pages[0].children[0], children: [base.pages[0].children[0].children[0], { ...base.pages[0].children[0].children[1], fill: "#FF0000" }] }] }] };
+  assert.notEqual(find(theirs, "n_b").node.y, find(base, "n_b").node.y, "theirs moved the box");
+  const r = mergeDesigns(base, mine, theirs);
+  assert.deepEqual(r.conflicts, []);
+  assert.equal(find(r.design, "n_b").node.fill, "#FF0000");
+  assert.equal(find(r.design, "n_b").node.y, find(theirs, "n_b").node.y);
 });
