@@ -1,0 +1,18 @@
+{
+  "name": "designs-poc",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway proof of concept for LAZYAGENTS-145: one display list drawn as SVG in Chromium and as a PNG by resvg, ~2k-node pan/zoom timing, and Mermaid flowchart import with automatic layout.",
+  "scripts": {
+    "build": "node run.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "ajv": "8.20.0",
+    "elkjs": "0.12.1",
+    "opentype.js": "2.0.0",
+    "pixelmatch": "8.0.0",
+    "playwright-core": "1.65.0",
+    "pngjs": "7.0.0"
+  }
+}

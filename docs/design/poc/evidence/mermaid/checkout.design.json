@@ -1,0 +1,1501 @@
+{
+  "schema": 1,
+  "mode": "dark",
+  "tokens_ref": {
+    "set": "dusk-web",
+    "source": "web/styles/tokens.css",
+    "hash": "sha256:ae9c0a92ce8bf0cbe1420f1b2313bab3c5a0407515e485484ed787964e8daa82",
+    "synced_at": "2026-11-12T00:00:00Z"
+  },
+  "token_sets": {
+    "dusk-web": {
+      "name": "Dusk (web)",
+      "source": "web/styles/tokens.css",
+      "modes": {
+        "dark": {
+          "space-1": {
+            "kind": "dimension",
+            "value": "4px"
+          },
+          "space-2": {
+            "kind": "dimension",
+            "value": "8px"
+          },
+          "space-3": {
+            "kind": "dimension",
+            "value": "12px"
+          },
+          "space-4": {
+            "kind": "dimension",
+            "value": "16px"
+          },
+          "space-5": {
+            "kind": "dimension",
+            "value": "20px"
+          },
+          "space-6": {
+            "kind": "dimension",
+            "value": "24px"
+          },
+          "space-7": {
+            "kind": "dimension",
+            "value": "28px"
+          },
+          "space-8": {
+            "kind": "dimension",
+            "value": "32px"
+          },
+          "space-10": {
+            "kind": "dimension",
+            "value": "40px"
+          },
+          "space-12": {
+            "kind": "dimension",
+            "value": "48px"
+          },
+          "radius-xs": {
+            "kind": "dimension",
+            "value": "4px"
+          },
+          "radius-sm": {
+            "kind": "dimension",
+            "value": "6px"
+          },
+          "radius-md": {
+            "kind": "dimension",
+            "value": "7px"
+          },
+          "radius-lg": {
+            "kind": "dimension",
+            "value": "10px"
+          },
+          "radius-xl": {
+            "kind": "dimension",
+            "value": "12px"
+          },
+          "radius-2xl": {
+            "kind": "dimension",
+            "value": "14px"
+          },
+          "radius-pill": {
+            "kind": "dimension",
+            "value": "999px"
+          },
+          "sidebar-width": {
+            "kind": "dimension",
+            "value": "232px"
+          },
+          "header-height": {
+            "kind": "dimension",
+            "value": "52px"
+          },
+          "row-height": {
+            "kind": "dimension",
+            "value": "44px"
+          },
+          "group-row-height": {
+            "kind": "dimension",
+            "value": "38px"
+          },
+          "control-height": {
+            "kind": "dimension",
+            "value": "30px"
+          },
+          "control-height-sm": {
+            "kind": "dimension",
+            "value": "26px"
+          },
+          "content-max": {
+            "kind": "dimension",
+            "value": "1180px"
+          },
+          "reading-max": {
+            "kind": "dimension",
+            "value": "780px"
+          },
+          "brand-deep": {
+            "kind": "color",
+            "value": "#2B2366"
+          },
+          "brand-violet": {
+            "kind": "color",
+            "value": "#7864D9"
+          },
+          "brand-star": {
+            "kind": "color",
+            "value": "#F2A97E"
+          },
+          "bg": {
+            "kind": "color",
+            "value": "#0C0B12"
+          },
+          "bg-sidebar": {
+            "kind": "color",
+            "value": "#100F18"
+          },
+          "bg-panel": {
+            "kind": "color",
+            "value": "#0E0D15"
+          },
+          "surface": {
+            "kind": "color",
+            "value": "#15141F"
+          },
+          "surface-raised": {
+            "kind": "color",
+            "value": "#1B1A27"
+          },
+          "surface-sunken": {
+            "kind": "color",
+            "value": "#110F19"
+          },
+          "hover": {
+            "kind": "color",
+            "value": "#1A1925"
+          },
+          "selected": {
+            "kind": "color",
+            "value": "#201E2C"
+          },
+          "border": {
+            "kind": "color",
+            "value": "#24222F"
+          },
+          "border-subtle": {
+            "kind": "color",
+            "value": "#1E1C29"
+          },
+          "border-row": {
+            "kind": "color",
+            "value": "#181722"
+          },
+          "border-strong": {
+            "kind": "color",
+            "value": "#2E2B3B"
+          },
+          "track": {
+            "kind": "color",
+            "value": "#262432"
+          },
+          "text": {
+            "kind": "color",
+            "value": "#EEEDF3"
+          },
+          "text-2": {
+            "kind": "color",
+            "value": "#CBC9D6"
+          },
+          "text-secondary": {
+            "kind": "color",
+            "value": "#A4A1B3"
+          },
+          "text-tertiary": {
+            "kind": "color",
+            "value": "#8C899C"
+          },
+          "text-on-accent": {
+            "kind": "color",
+            "value": "#120F24"
+          },
+          "accent": {
+            "kind": "color",
+            "value": "#9B8CFF"
+          },
+          "accent-soft": {
+            "kind": "color",
+            "value": "#9B8CFF26"
+          },
+          "state-backlog": {
+            "kind": "color",
+            "value": "#6B6B73"
+          },
+          "state-todo": {
+            "kind": "color",
+            "value": "#A1A1AA"
+          },
+          "state-progress": {
+            "kind": "color",
+            "value": "#F0BF4C"
+          },
+          "state-review": {
+            "kind": "color",
+            "value": "#4EA7FC"
+          },
+          "state-done": {
+            "kind": "color",
+            "value": "#4CB782"
+          },
+          "state-human": {
+            "kind": "color",
+            "value": "#F59E5B"
+          },
+          "state-blocked": {
+            "kind": "color",
+            "value": "#EF6461"
+          },
+          "priority-urgent": {
+            "kind": "color",
+            "value": "#F2994A"
+          },
+          "pill-human-bg": {
+            "kind": "color",
+            "value": "#F59E5B1F"
+          },
+          "pill-human-fg": {
+            "kind": "color",
+            "value": "#F7B07A"
+          },
+          "pill-blocked-bg": {
+            "kind": "color",
+            "value": "#EF64611F"
+          },
+          "pill-blocked-fg": {
+            "kind": "color",
+            "value": "#F48A87"
+          },
+          "pill-review-bg": {
+            "kind": "color",
+            "value": "#4EA7FC1F"
+          },
+          "pill-review-fg": {
+            "kind": "color",
+            "value": "#7CBEFD"
+          },
+          "pill-done-bg": {
+            "kind": "color",
+            "value": "#4CB7821F"
+          },
+          "pill-done-fg": {
+            "kind": "color",
+            "value": "#6FCF97"
+          },
+          "pill-neutral-bg": {
+            "kind": "color",
+            "value": "#24222F"
+          },
+          "pill-neutral-fg": {
+            "kind": "color",
+            "value": "#A4A1B3"
+          },
+          "agent-atlas": {
+            "kind": "color",
+            "value": "#A3A6FF"
+          },
+          "agent-atlas-bg": {
+            "kind": "color",
+            "value": "#8B8FFF26"
+          },
+          "agent-quill": {
+            "kind": "color",
+            "value": "#3FC1B0"
+          },
+          "agent-quill-bg": {
+            "kind": "color",
+            "value": "#3FC1B024"
+          },
+          "agent-sentry": {
+            "kind": "color",
+            "value": "#F48A98"
+          },
+          "agent-sentry-bg": {
+            "kind": "color",
+            "value": "#F27A8A24"
+          },
+          "agent-juno": {
+            "kind": "color",
+            "value": "#5EA8FF"
+          },
+          "agent-juno-bg": {
+            "kind": "color",
+            "value": "#5EA8FF24"
+          },
+          "agent-nova": {
+            "kind": "color",
+            "value": "#F0BF4C"
+          },
+          "agent-nova-bg": {
+            "kind": "color",
+            "value": "#F0BF4C24"
+          },
+          "agent-relay": {
+            "kind": "color",
+            "value": "#6FCF7F"
+          },
+          "agent-relay-bg": {
+            "kind": "color",
+            "value": "#6FCF7F24"
+          },
+          "agent-pike": {
+            "kind": "color",
+            "value": "#E8925A"
+          },
+          "agent-pike-bg": {
+            "kind": "color",
+            "value": "#E8925A24"
+          },
+          "agent-echo": {
+            "kind": "color",
+            "value": "#B98BF5"
+          },
+          "agent-echo-bg": {
+            "kind": "color",
+            "value": "#B98BF524"
+          },
+          "human-avatar-bg": {
+            "kind": "color",
+            "value": "#2A2836"
+          },
+          "doc-prd": {
+            "kind": "color",
+            "value": "#A3A6FF"
+          },
+          "doc-prd-bg": {
+            "kind": "color",
+            "value": "#8B8FFF1F"
+          },
+          "doc-spec": {
+            "kind": "color",
+            "value": "#7CBEFD"
+          },
+          "doc-spec-bg": {
+            "kind": "color",
+            "value": "#4EA7FC1F"
+          },
+          "doc-adr": {
+            "kind": "color",
+            "value": "#F0BF4C"
+          },
+          "doc-adr-bg": {
+            "kind": "color",
+            "value": "#F0BF4C1F"
+          },
+          "doc-report": {
+            "kind": "color",
+            "value": "#6FCF7F"
+          },
+          "doc-report-bg": {
+            "kind": "color",
+            "value": "#6FCF7F1F"
+          },
+          "doc-design": {
+            "kind": "color",
+            "value": "#F48A98"
+          },
+          "doc-design-bg": {
+            "kind": "color",
+            "value": "#F27A8A1F"
+          },
+          "doc-mockup": {
+            "kind": "color",
+            "value": "#5FD0C8"
+          },
+          "doc-mockup-bg": {
+            "kind": "color",
+            "value": "#3FC8BE1F"
+          },
+          "doc-note": {
+            "kind": "color",
+            "value": "#B9B9C3"
+          },
+          "doc-note-bg": {
+            "kind": "color",
+            "value": "#B9B9C31A"
+          },
+          "row-hover": {
+            "kind": "color",
+            "value": "#15141E"
+          },
+          "border-hover": {
+            "kind": "color",
+            "value": "#332F42"
+          },
+          "border-float": {
+            "kind": "color",
+            "value": "#2E2B3B"
+          },
+          "kbd-border": {
+            "kind": "color",
+            "value": "#2E2B3B"
+          },
+          "btn-secondary-bg": {
+            "kind": "color",
+            "value": "#201E2C"
+          },
+          "btn-secondary-border": {
+            "kind": "color",
+            "value": "#3A3650"
+          },
+          "btn-outline-bg": {
+            "kind": "color",
+            "value": "#15141F"
+          },
+          "approve-fg": {
+            "kind": "color",
+            "value": "#1A1206"
+          },
+          "segment-on": {
+            "kind": "color",
+            "value": "#24222F"
+          },
+          "command-on": {
+            "kind": "color",
+            "value": "#24222F"
+          },
+          "search-bg": {
+            "kind": "color",
+            "value": "#15141F"
+          },
+          "priority-unlit": {
+            "kind": "color",
+            "value": "#363345"
+          },
+          "unassigned": {
+            "kind": "color",
+            "value": "#48455A"
+          },
+          "scrim": {
+            "kind": "color",
+            "value": "#06050C9E"
+          }
+        },
+        "light": {
+          "bg": {
+            "kind": "color",
+            "value": "#FCFBFE"
+          },
+          "bg-sidebar": {
+            "kind": "color",
+            "value": "#F4F2F9"
+          },
+          "bg-panel": {
+            "kind": "color",
+            "value": "#F9F8FC"
+          },
+          "surface": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "surface-raised": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "surface-sunken": {
+            "kind": "color",
+            "value": "#F6F5FA"
+          },
+          "hover": {
+            "kind": "color",
+            "value": "#F0EEF6"
+          },
+          "selected": {
+            "kind": "color",
+            "value": "#ECE8F7"
+          },
+          "border": {
+            "kind": "color",
+            "value": "#E5E2EE"
+          },
+          "border-subtle": {
+            "kind": "color",
+            "value": "#ECE9F3"
+          },
+          "border-row": {
+            "kind": "color",
+            "value": "#F1EFF6"
+          },
+          "border-strong": {
+            "kind": "color",
+            "value": "#DEDAEA"
+          },
+          "track": {
+            "kind": "color",
+            "value": "#ECE9F3"
+          },
+          "text": {
+            "kind": "color",
+            "value": "#17151F"
+          },
+          "text-2": {
+            "kind": "color",
+            "value": "#3A3747"
+          },
+          "text-secondary": {
+            "kind": "color",
+            "value": "#55526A"
+          },
+          "text-tertiary": {
+            "kind": "color",
+            "value": "#66637A"
+          },
+          "text-on-accent": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "accent": {
+            "kind": "color",
+            "value": "#5B4BD6"
+          },
+          "accent-soft": {
+            "kind": "color",
+            "value": "#5B4BD61F"
+          },
+          "state-backlog": {
+            "kind": "color",
+            "value": "#A8A8B0"
+          },
+          "state-todo": {
+            "kind": "color",
+            "value": "#8A8A93"
+          },
+          "state-progress": {
+            "kind": "color",
+            "value": "#D49A0A"
+          },
+          "state-review": {
+            "kind": "color",
+            "value": "#2F7FE0"
+          },
+          "state-done": {
+            "kind": "color",
+            "value": "#2E9E68"
+          },
+          "state-human": {
+            "kind": "color",
+            "value": "#E5832F"
+          },
+          "state-blocked": {
+            "kind": "color",
+            "value": "#D9424B"
+          },
+          "priority-urgent": {
+            "kind": "color",
+            "value": "#EB7A1E"
+          },
+          "pill-human-bg": {
+            "kind": "color",
+            "value": "#F59E5B26"
+          },
+          "pill-human-fg": {
+            "kind": "color",
+            "value": "#9A4A0E"
+          },
+          "pill-blocked-bg": {
+            "kind": "color",
+            "value": "#D9424B1A"
+          },
+          "pill-blocked-fg": {
+            "kind": "color",
+            "value": "#A82A33"
+          },
+          "pill-review-bg": {
+            "kind": "color",
+            "value": "#2F7FE01A"
+          },
+          "pill-review-fg": {
+            "kind": "color",
+            "value": "#1D5FB0"
+          },
+          "pill-done-bg": {
+            "kind": "color",
+            "value": "#2E9E681A"
+          },
+          "pill-done-fg": {
+            "kind": "color",
+            "value": "#1E7048"
+          },
+          "pill-neutral-bg": {
+            "kind": "color",
+            "value": "#F0EEF6"
+          },
+          "pill-neutral-fg": {
+            "kind": "color",
+            "value": "#55526A"
+          },
+          "agent-atlas": {
+            "kind": "color",
+            "value": "#4547C9"
+          },
+          "agent-atlas-bg": {
+            "kind": "color",
+            "value": "#5558E31F"
+          },
+          "agent-quill": {
+            "kind": "color",
+            "value": "#0B7A6E"
+          },
+          "agent-quill-bg": {
+            "kind": "color",
+            "value": "#0F8A7C1A"
+          },
+          "agent-sentry": {
+            "kind": "color",
+            "value": "#B42F48"
+          },
+          "agent-sentry-bg": {
+            "kind": "color",
+            "value": "#C2364F17"
+          },
+          "agent-juno": {
+            "kind": "color",
+            "value": "#1D5FB0"
+          },
+          "agent-juno-bg": {
+            "kind": "color",
+            "value": "#2F7FE01A"
+          },
+          "agent-nova": {
+            "kind": "color",
+            "value": "#8A6100"
+          },
+          "agent-nova-bg": {
+            "kind": "color",
+            "value": "#D49A0A1F"
+          },
+          "agent-relay": {
+            "kind": "color",
+            "value": "#277538"
+          },
+          "agent-relay-bg": {
+            "kind": "color",
+            "value": "#2E85401A"
+          },
+          "agent-pike": {
+            "kind": "color",
+            "value": "#A44A18"
+          },
+          "agent-pike-bg": {
+            "kind": "color",
+            "value": "#B5541F17"
+          },
+          "agent-echo": {
+            "kind": "color",
+            "value": "#6C3BB8"
+          },
+          "agent-echo-bg": {
+            "kind": "color",
+            "value": "#7A45C917"
+          },
+          "human-avatar-bg": {
+            "kind": "color",
+            "value": "#E5E1EE"
+          },
+          "doc-prd": {
+            "kind": "color",
+            "value": "#4547C9"
+          },
+          "doc-prd-bg": {
+            "kind": "color",
+            "value": "#5558E31A"
+          },
+          "doc-spec": {
+            "kind": "color",
+            "value": "#1D5FB0"
+          },
+          "doc-spec-bg": {
+            "kind": "color",
+            "value": "#2F7FE01A"
+          },
+          "doc-adr": {
+            "kind": "color",
+            "value": "#8A6100"
+          },
+          "doc-adr-bg": {
+            "kind": "color",
+            "value": "#D49A0A1F"
+          },
+          "doc-report": {
+            "kind": "color",
+            "value": "#1E7048"
+          },
+          "doc-report-bg": {
+            "kind": "color",
+            "value": "#2E9E681A"
+          },
+          "doc-design": {
+            "kind": "color",
+            "value": "#B42F48"
+          },
+          "doc-design-bg": {
+            "kind": "color",
+            "value": "#C2364F17"
+          },
+          "doc-mockup": {
+            "kind": "color",
+            "value": "#0E7C75"
+          },
+          "doc-mockup-bg": {
+            "kind": "color",
+            "value": "#14A8A01A"
+          },
+          "doc-note": {
+            "kind": "color",
+            "value": "#55555F"
+          },
+          "doc-note-bg": {
+            "kind": "color",
+            "value": "#6B6B751A"
+          },
+          "row-hover": {
+            "kind": "color",
+            "value": "#F7F5FB"
+          },
+          "border-hover": {
+            "kind": "color",
+            "value": "#D3CEE2"
+          },
+          "border-float": {
+            "kind": "color",
+            "value": "#DEDAEA"
+          },
+          "kbd-border": {
+            "kind": "color",
+            "value": "#DEDAEA"
+          },
+          "btn-secondary-bg": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "btn-secondary-border": {
+            "kind": "color",
+            "value": "#D3CEE2"
+          },
+          "btn-outline-bg": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "approve-fg": {
+            "kind": "color",
+            "value": "#1A1206"
+          },
+          "segment-on": {
+            "kind": "color",
+            "value": "#ECE8F7"
+          },
+          "command-on": {
+            "kind": "color",
+            "value": "#ECE8F7"
+          },
+          "search-bg": {
+            "kind": "color",
+            "value": "#FFFFFF"
+          },
+          "priority-unlit": {
+            "kind": "color",
+            "value": "#D4D4DA"
+          },
+          "unassigned": {
+            "kind": "color",
+            "value": "#B8B8C0"
+          },
+          "scrim": {
+            "kind": "color",
+            "value": "#17171A52"
+          }
+        }
+      }
+    }
+  },
+  "assets": {
+    "a_landscape": {
+      "mime": "image/png",
+      "w": 1200,
+      "h": 800,
+      "file": "landscape.png",
+      "alt": "Stylised mountains under a yellow sun"
+    }
+  },
+  "pages": [
+    {
+      "id": "p_import",
+      "name": "Import",
+      "background": "$bg",
+      "children": [
+        {
+          "id": "n_m024",
+          "type": "section",
+          "name": "Imported flowchart",
+          "x": 0,
+          "y": 0,
+          "w": 1663.9154,
+          "h": 339.7538333333334,
+          "fill": "$surface",
+          "children": [
+            {
+              "id": "n_m012",
+              "type": "section",
+              "name": "Payment",
+              "x": 699.1718,
+              "y": 126.15383333333334,
+              "w": 577.8921,
+              "h": 181.60000000000002,
+              "fill": "$surface-raised",
+              "children": [
+                {
+                  "id": "n_m004",
+                  "type": "shape",
+                  "shape": "roundRect",
+                  "name": "Card details",
+                  "x": 20,
+                  "y": 94.13333333333334,
+                  "w": 125.93799999999999,
+                  "h": 46,
+                  "radius": 6,
+                  "fill": "$surface",
+                  "stroke": "$border-strong",
+                  "stroke_width": 1.5,
+                  "text": {
+                    "valign": "middle",
+                    "paragraphs": [
+                      {
+                        "align": "center",
+                        "runs": [
+                          {
+                            "text": "Card details",
+                            "size": 15,
+                            "weight": 500,
+                            "color": "$text"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "n_m005",
+                  "type": "shape",
+                  "shape": "diamond",
+                  "name": "Card OK?",
+                  "x": 165.938,
+                  "y": 88,
+                  "w": 162.4695,
+                  "h": 73.60000000000001,
+                  "fill": "$accent-soft",
+                  "stroke": "$accent",
+                  "stroke_width": 1.5,
+                  "text": {
+                    "valign": "middle",
+                    "paragraphs": [
+                      {
+                        "align": "center",
+                        "runs": [
+                          {
+                            "text": "Card OK?",
+                            "size": 15,
+                            "weight": 500,
+                            "color": "$text"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "n_m006",
+                  "type": "shape",
+                  "shape": "roundRect",
+                  "name": "Charge card",
+                  "x": 422.016975,
+                  "y": 114.06666666666668,
+                  "w": 128.69650000000001,
+                  "h": 46,
+                  "radius": 6,
+                  "fill": "$surface",
+                  "stroke": "$border-strong",
+                  "stroke_width": 1.5,
+                  "text": {
+                    "valign": "middle",
+                    "paragraphs": [
+                      {
+                        "align": "center",
+                        "runs": [
+                          {
+                            "text": "Charge card",
+                            "size": 15,
+                            "weight": 500,
+                            "color": "$text"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "n_m007",
+                  "type": "shape",
+                  "shape": "roundRect",
+                  "name": "Declined banner",
+                  "x": 400.4811,
+                  "y": 48.06666666666668,
+                  "w": 157.411,
+                  "h": 46,
+                  "radius": 6,
+                  "fill": "$surface",
+                  "stroke": "$border-strong",
+                  "stroke_width": 1.5,
+                  "text": {
+                    "valign": "middle",
+                    "paragraphs": [
+                      {
+                        "align": "center",
+                        "runs": [
+                          {
+                            "text": "Declined banner",
+                            "size": 15,
+                            "weight": 500,
+                            "color": "$text"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "n_m001",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Open cart",
+              "x": 32,
+              "y": 220.28716666666668,
+              "w": 110.68599999999999,
+              "h": 46,
+              "radius": 23,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Open cart",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m002",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Cart",
+              "x": 198.68599999999998,
+              "y": 220.28716666666668,
+              "w": 96,
+              "h": 46,
+              "radius": 6,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Cart",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m003",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Shipping address",
+              "x": 473.20079999999996,
+              "y": 220.28716666666668,
+              "w": 164.97099999999998,
+              "h": 46,
+              "radius": 6,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Shipping address",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m008",
+              "type": "shape",
+              "shape": "ellipse",
+              "name": "Done",
+              "x": 1338.0639,
+              "y": 138,
+              "w": 77.7205,
+              "h": 77.7205,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Done",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m009",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Send receipt",
+              "x": 1343.4729000000002,
+              "y": 251.72050000000002,
+              "w": 131.0335,
+              "h": 46,
+              "radius": 6,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Send receipt",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m010",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Update ledger",
+              "x": 1338.0639,
+              "y": 56,
+              "w": 141.8515,
+              "h": 46,
+              "radius": 6,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Update ledger",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m011",
+              "type": "shape",
+              "shape": "roundRect",
+              "name": "Archive",
+              "x": 1535.9154,
+              "y": 251.72050000000002,
+              "w": 96,
+              "h": 46,
+              "radius": 0,
+              "fill": "$surface",
+              "stroke": "$border-strong",
+              "stroke_width": 1.5,
+              "text": {
+                "valign": "middle",
+                "paragraphs": [
+                  {
+                    "align": "center",
+                    "runs": [
+                      {
+                        "text": "Archive",
+                        "size": 15,
+                        "weight": 500,
+                        "color": "$text"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "n_m013",
+              "type": "connector",
+              "from": {
+                "node": "n_m001",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m002",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  142.69,
+                  243.29
+                ],
+                [
+                  198.69,
+                  243.29
+                ]
+              ]
+            },
+            {
+              "id": "n_m014",
+              "type": "connector",
+              "from": {
+                "node": "n_m002",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m003",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "label": "Checkout",
+              "points": [
+                [
+                  294.69,
+                  243.29
+                ],
+                [
+                  473.2,
+                  243.29
+                ]
+              ]
+            },
+            {
+              "id": "n_m015",
+              "type": "connector",
+              "from": {
+                "node": "n_m004",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m005",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  845.11,
+                  250.95
+                ],
+                [
+                  865.11,
+                  250.95
+                ]
+              ]
+            },
+            {
+              "id": "n_m016",
+              "type": "connector",
+              "from": {
+                "node": "n_m005",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m006",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "label": "yes",
+              "points": [
+                [
+                  1027.58,
+                  263.22
+                ],
+                [
+                  1121.19,
+                  263.22
+                ]
+              ]
+            },
+            {
+              "id": "n_m017",
+              "type": "connector",
+              "from": {
+                "node": "n_m005",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m007",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "dash": "dash",
+              "end_arrow": "arrow",
+              "label": "no",
+              "points": [
+                [
+                  1027.58,
+                  238.69
+                ],
+                [
+                  1037.58,
+                  238.69
+                ],
+                [
+                  1037.58,
+                  204.89
+                ],
+                [
+                  1099.65,
+                  204.89
+                ]
+              ]
+            },
+            {
+              "id": "n_m018",
+              "type": "connector",
+              "from": {
+                "node": "n_m007",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m004",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "dash": "dash",
+              "end_arrow": "arrow",
+              "label": "retry",
+              "points": [
+                [
+                  1099.65,
+                  189.55
+                ],
+                [
+                  1089.65,
+                  189.55
+                ],
+                [
+                  1089.65,
+                  193.15
+                ],
+                [
+                  855.11,
+                  193.15
+                ],
+                [
+                  855.11,
+                  235.62
+                ],
+                [
+                  845.11,
+                  235.62
+                ]
+              ]
+            },
+            {
+              "id": "n_m019",
+              "type": "connector",
+              "from": {
+                "node": "n_m003",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m004",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  638.17,
+                  243.29
+                ],
+                [
+                  719.17,
+                  243.29
+                ]
+              ]
+            },
+            {
+              "id": "n_m020",
+              "type": "connector",
+              "from": {
+                "node": "n_m006",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m008",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-2",
+              "stroke_width": 3,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  1249.89,
+                  263.22
+                ],
+                [
+                  1302.06,
+                  263.22
+                ],
+                [
+                  1302.06,
+                  176.86
+                ],
+                [
+                  1338.06,
+                  176.86
+                ]
+              ]
+            },
+            {
+              "id": "n_m021",
+              "type": "connector",
+              "from": {
+                "node": "n_m006",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m009",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  1249.89,
+                  274.72
+                ],
+                [
+                  1343.47,
+                  274.72
+                ]
+              ]
+            },
+            {
+              "id": "n_m022",
+              "type": "connector",
+              "from": {
+                "node": "n_m006",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m010",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "arrow",
+              "points": [
+                [
+                  1249.89,
+                  251.72
+                ],
+                [
+                  1292.06,
+                  251.72
+                ],
+                [
+                  1292.06,
+                  79
+                ],
+                [
+                  1338.06,
+                  79
+                ]
+              ]
+            },
+            {
+              "id": "n_m023",
+              "type": "connector",
+              "from": {
+                "node": "n_m009",
+                "anchor": "auto"
+              },
+              "to": {
+                "node": "n_m011",
+                "anchor": "auto"
+              },
+              "route": "orthogonal",
+              "stroke": "$text-secondary",
+              "stroke_width": 1.5,
+              "end_arrow": "none",
+              "points": [
+                [
+                  1474.51,
+                  274.72
+                ],
+                [
+                  1535.92,
+                  274.72
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": []
+}
