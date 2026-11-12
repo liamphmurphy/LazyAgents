@@ -19,6 +19,7 @@ import { TopBar } from "@/components/shell/topbar";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
 import { Inspector } from "./inspector";
+import { PrototypePanel } from "./prototype-panel";
 import { LayersPanel } from "./layers-panel";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
@@ -523,6 +524,20 @@ export function DesignEditor({ id }: { id: string }) {
   }, [brief, chatId, id, persona, router, send]);
 
   const [chatOpen, setChatOpen] = useState(true);
+  const [tab, setTab] = useState<"Design" | "Prototype">("Design");
+  /** Present mode plays the saved design, so unsaved edits are saved first. */
+  const present = async (frame?: string) => {
+    try {
+      await flush();
+    } catch {
+      // The save banner explains; Present shows the last saved version.
+    }
+    const q = new URLSearchParams();
+    if (frame) q.set("start", frame);
+    else if (selected.length === 1) q.set("start", selected[0]);
+    if (page) q.set("page", page.id);
+    router.push(`/present/designs/${id}?${q}`);
+  };
   const title = ref.data?.title ?? "Design";
   const fetchError = ref.error ?? head.error;
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
@@ -544,6 +559,9 @@ export function DesignEditor({ id }: { id: string }) {
                   )}
                 </span>
               )}
+              <Button variant="secondary" disabled={!design} onClick={() => void present()} title="Play the prototype from the selected frame">
+                ▶ Present
+              </Button>
               <Button variant="secondary" aria-pressed={chatOpen} onClick={() => setChatOpen((o) => !o)}>
                 ✦ {chatOpen ? "Hide chat" : `Chat with ${persona}`}
               </Button>
@@ -643,6 +661,7 @@ export function DesignEditor({ id }: { id: string }) {
                 editing={editing}
                 onEditing={setEditing}
                 onViewport={(w, h) => setViewport({ w, h, known: true })}
+                wires={tab === "Prototype"}
               />
             )}
             <div role="toolbar" aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
@@ -683,14 +702,18 @@ export function DesignEditor({ id }: { id: string }) {
           </main>
           <aside aria-label="Inspector" className="flex min-h-0 w-[264px] flex-none flex-col border-l border-border-subtle bg-surface max-lg:hidden">
             <div role="tablist" aria-label="Inspector" className="flex gap-4 border-b border-border-subtle px-4 pt-3">
-              {["Design", "Prototype", "Inspect"].map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={t === "Design"} disabled={t !== "Design"} title={t === "Design" ? undefined : "Coming in a later release"} className={cx("-mb-px border-b-2 pb-2 text-[12.5px]", t === "Design" ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary")}>
+              {(["Design", "Prototype", "Inspect"] as const).map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={t === tab} disabled={t === "Inspect"} title={t === "Inspect" ? "Coming in a later release" : undefined} onClick={() => t !== "Inspect" && setTab(t)} className={cx("-mb-px border-b-2 pb-2 text-[12.5px]", t === tab ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary", t !== "Inspect" && t !== tab && "hover:text-fg")}>
                   {t}
                 </button>
               ))}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto" role="tabpanel" aria-label={selectionLabel ? `Design: ${labelOf(selectionLabel)}` : "Design"}>
-              <Inspector design={design} selected={selected} lay={lay} onEdit={apply} readOnly={readOnly} onGroup={group} onRemove={removeSelected} />
+            <div className="min-h-0 flex-1 overflow-y-auto" role="tabpanel" aria-label={selectionLabel ? `${tab}: ${labelOf(selectionLabel)}` : tab}>
+              {tab === "Design" ? (
+                <Inspector design={design} selected={selected} lay={lay} onEdit={apply} readOnly={readOnly} onGroup={group} onRemove={removeSelected} />
+              ) : (
+                <PrototypePanel design={design} selected={selected} readOnly={readOnly} onEdit={apply} onSelect={setSelected} onPresent={(f) => void present(f)} />
+              )}
             </div>
           </aside>
         </div>

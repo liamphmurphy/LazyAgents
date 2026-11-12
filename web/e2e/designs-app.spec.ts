@@ -353,3 +353,80 @@ test("pan and zoom stay smooth on the ~2k-node PoC design", async ({ page }, inf
   expect(result.p95).toBeLessThan(34);
   expect(result.over33 / result.frames).toBeLessThan(0.05);
 });
+
+// ---- Prototype links and Present mode (LAZYAGENTS-149).
+
+/** simple() with a second frame, and optionally links. */
+const twoFrames = (links: unknown[] = []) => {
+  const b = simple();
+  (b.pages[0].children as unknown[]).push({ id: "n_next", type: "frame", name: "Details", x: 500, y: 0, w: 393, h: 852, fill: "#F4F4F8", clip: true, children: [] });
+  return { ...b, links };
+};
+
+test("the Prototype tab adds, edits and removes a layer's links, and they're saved in the body", async ({ page }) => {
+  const { latest } = await install(page, { [D1]: twoFrames() });
+  await page.goto(`/apps/designs/${D1}`);
+  await expect(savedState(page)).toContainText("Saved · v1");
+  const layers = page.getByRole("tree", { name: "Layers" });
+  await layers.getByRole("treeitem", { name: "Home" }).getByRole("button", { name: "Expand" }).click();
+  await layers.getByRole("treeitem", { name: "Box" }).locator("div").first().click();
+  await page.getByRole("tab", { name: "Prototype" }).click();
+
+  await page.getByRole("button", { name: "Add interaction" }).click();
+  await expect(savedState(page)).toContainText("Saved · v2");
+  expect(latest(D1).links).toEqual([expect.objectContaining({ from: "n_box", to: "n_next", trigger: "click", transition: "dissolve" })]);
+  await expect(page.getByTestId("design-wires").locator("[data-wire]")).toHaveCount(1);
+
+  await page.getByRole("combobox", { name: "Transition" }).selectOption({ label: "Slide left" });
+  await page.getByRole("combobox", { name: "Trigger" }).selectOption({ label: "After delay" });
+  await expect(savedState(page)).toContainText("Saved · v3");
+  expect(latest(D1).links[0]).toMatchObject({ transition: "slide-left", trigger: "after-delay", delay_ms: 800 });
+
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(savedState(page)).toContainText("Saved · v4");
+  expect(latest(D1).links).toEqual([]);
+});
+
+test("a link to a deleted frame shows as broken in the editor and is skipped in Present", async ({ page }) => {
+  const broken = { id: "k_gone", from: "n_box", to: "n_gone", trigger: "click", transition: "dissolve", duration_ms: 300 };
+  const live = { id: "k_live", from: "n_title", to: "n_next", trigger: "click", transition: "instant" };
+  await install(page, { [D1]: twoFrames([broken, live]) });
+  await page.goto(`/apps/designs/${D1}`);
+  await page.getByRole("tab", { name: "Prototype" }).click();
+  await expect(page.getByRole("region", { name: "Flow" })).toContainText("1 broken");
+  await expect(page.locator('[data-link="k_gone"][data-broken]')).toContainText("deleted frame (broken)");
+  await expect(page.locator('[data-wire="k_gone"][data-broken]')).toBeAttached();
+  await page.locator('[data-link="k_gone"] button').first().click();
+  await expect(page.getByRole("alert").filter({ hasText: "Broken link" })).toBeVisible();
+
+  await page.goto(`/present/designs/${D1}?start=n_frame`);
+  await expect(page.getByTestId("present-frame")).toHaveAttribute("data-at", "n_frame");
+  await expect(page.locator("[data-hotspot]")).toHaveCount(1);
+  await page.locator('[data-hotspot="k_live"]').click();
+  await expect(page.getByTestId("present-frame")).toHaveAttribute("data-at", "n_next");
+});
+
+test("Present starts from a chosen frame, follows hotspots, and goes back, restarts and exits by keyboard", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await install(page, { [D1]: acceptance });
+  await page.goto(`/apps/designs/${D1}`);
+  await page.getByRole("tree", { name: "Layers" }).getByRole("treeitem", { name: "Shipping" }).locator("div").first().click();
+  await page.getByRole("tab", { name: "Prototype" }).click();
+  await page.getByRole("button", { name: "Present from “Shipping”" }).click();
+  await expect(page).toHaveURL(new RegExp(`/present/designs/${D1}\\?start=n_ship`));
+  const frame = page.getByTestId("present-frame");
+  await expect(frame).toHaveAttribute("data-at", "n_ship");
+
+  await page.getByRole("button", { name: "Go to Payment" }).click();
+  await expect(frame).toHaveAttribute("data-at", "n_pay");
+  await page.getByRole("button", { name: "Go to Confirmation" }).click();
+  await expect(frame).toHaveAttribute("data-at", "n_done");
+  await page.keyboard.press("ArrowLeft");
+  await expect(frame).toHaveAttribute("data-at", "n_pay");
+  await page.keyboard.press("r");
+  await expect(frame).toHaveAttribute("data-at", "n_ship");
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(new RegExp(`/apps/designs/${D1}$`));
+  expect(errors).toEqual([]);
+});
