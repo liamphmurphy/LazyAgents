@@ -195,6 +195,28 @@ const OptionNoTools = "no_tools"
 // sets it, and the MCP surface it gets is read-only.
 const OptionAside = "aside"
 
+// OptionExplorer ("true") gives a Claude Code lead ticket run one read-only
+// sub agent, "explorer", that searches and reads code on a cheap model and
+// returns conclusions, keeping that output out of the lead's context.
+// OptionExplorerModel picks its model (default DefaultExplorerModel). See
+// ExplorerOn for when it applies.
+const (
+	OptionExplorer       = "explorer"
+	OptionExplorerModel  = "explorer_model"
+	DefaultExplorerModel = "haiku-5.5"
+	// ExplorerAgent is the explorer's sub agent type.
+	ExplorerAgent = "explorer"
+)
+
+// ExplorerOn reports whether a run gets the explorer sub agent: the option is
+// "true", the harness is Claude Code, the run is a lead (an undelegated ticket
+// run), and the spec is neither readonly nor no_tools.
+func ExplorerOn(spec Resolved, lead bool) bool {
+	o := spec.HarnessOptions
+	return lead && spec.Harness == HarnessClaudeCode && o[OptionExplorer] == "true" &&
+		o["readonly"] != "true" && o[OptionNoTools] != "true"
+}
+
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
