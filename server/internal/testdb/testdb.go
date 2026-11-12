@@ -34,7 +34,13 @@ func requiredBy() string {
 }
 
 // New creates a uniquely named database, migrates it and drops it when the test ends.
-func New(t testing.TB) *pgxpool.Pool {
+func New(t testing.TB) *pgxpool.Pool { return create(t, true) }
+
+// NewUnmigrated is New without the migrations: a database as a fresh machine
+// has it, for tests of code that migrates it itself.
+func NewUnmigrated(t testing.TB) *pgxpool.Pool { return create(t, false) }
+
+func create(t testing.TB, migrate bool) *pgxpool.Pool {
 	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
@@ -70,8 +76,10 @@ func New(t testing.TB) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatal(err)
+	if migrate {
+		if err := db.Migrate(ctx, pool); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Cleanup(func() {

@@ -30,6 +30,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/transfer"
 	"github.com/liamphmurphy/vesper/server/internal/usage"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
@@ -57,6 +58,9 @@ type Server struct {
 	PublicURL      string
 	Blobs          *blob.Store
 	ArtifactBucket string
+	// Exporter writes the whole-instance archive (Settings → Backup & move);
+	// nil makes the export endpoint refuse.
+	Exporter *transfer.Exporter
 	// DesignWorker renders designs; nil leaves renders unavailable.
 	DesignWorker *designs.Worker
 	// Usage keeps harness plan-usage readings for the activity orb; nil

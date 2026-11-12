@@ -302,6 +302,51 @@ Open **Board** to see project tickets by status, edit a ticket in its modal,
 or filter by epic to manage final acceptance criteria and the done gate.
 See [the board guide](board.md) for estimates, statuses and the agent MCP tools.
 
+### Move Vesper to another machine
+
+`vesper export` writes the whole instance to one zip archive: every Postgres
+table and every object in the S3 store. `vesper import` loads it into another
+instance. Both run inside the `api` container, which holds the credentials.
+Export is also a button, **Settings → Backup & move → Export everything**, which
+downloads the same archive from the running server. Import is only a command:
+it needs an empty instance, stopped, with the same `SECRETS_KEY`.
+
+```sh
+# old machine
+docker compose exec -T api vesper export -o - > vesper.zip
+# new machine: set the same SECRETS_KEY in .env, then
+docker compose up -d postgres seaweedfs                    # not api yet
+docker compose run --rm -T api import - < vesper.zip
+docker compose up -d
+```
+
+The image has no shell and runs as a non-root user, so `-` reads or writes the
+archive on stdin and stdout; progress goes to stderr. Outside Docker, pass a
+file path instead.
+
+- **Same `SECRETS_KEY`.** Stored secrets are sealed with it. The archive carries
+  only a fingerprint, and import refuses a different key before changing anything.
+- **Import into a fresh instance.** Start only Postgres and the object store, so
+  the target has no data. If it does, import refuses; `--replace` discards what
+  the exported tables hold. A target that has never been migrated is migrated to
+  the archive's schema version, loaded, then upgraded to the running version.
+  An archive from a newer Vesper than the target is refused.
+- **What moves.** Everything except machine-bound or regenerated state: browser
+  sessions and sign-in codes (people sign in again), runner registrations, live
+  playgrounds and provider usage caches. Each excluded table and its reason is
+  in `server/internal/transfer/schema.go`.
+- **Tables and buckets are discovered, not listed.** Export reads the Postgres
+  catalog and the bucket listing, so a table or bucket added later is included
+  without touching the exporter. The configured `S3_BUCKETS` are always
+  included, since some stores (SeaweedFS without credentials) list no buckets.
+  Export lists *every* bucket the S3 credential can see, so give Vesper its own
+  credential on a shared S3 account.
+- **Quiet the instance first.** The database is read in one snapshot, objects a
+  moment later. Runs still in flight when you export come back as they were,
+  with nobody working on them.
+- The archive holds all your data, including sealed secrets. Treat it like a
+  database backup; it is written with mode 0600.
+
 ## Develop
 
 Requires Go 1.26+, Node 24+ and Docker for Postgres and SeaweedFS.

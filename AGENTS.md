@@ -64,3 +64,20 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
 - The first start compiles the API and starts `next dev`, which takes a few
   minutes. Call `playground_status` until it's running, and read `log` if it
   failed.
+
+## Export and import (adding tables and buckets)
+
+`vesper export` / `vesper import` (`server/internal/transfer`) move a whole
+instance. They read the Postgres catalog and the S3 bucket listing, so **a new
+table or bucket is exported with no code change**. Don't add it to a list.
+
+- To keep a table out (a cache, a session, anything tied to this machine), add
+  it to `excluded` in `server/internal/transfer/schema.go` **with the reason**.
+  `TestEveryTableIsExportedOrExcluded` fails for a table that is neither.
+- Foreign-key cycles are handled by deferring one key; a new cycle needs nothing.
+- A migration that rewrites existing rows works on imported data too: import
+  loads rows at the archive's schema version, then runs the newer migrations.
+- A new bucket needs nothing, but add it to the `S3_BUCKETS` default so export
+  finds it on stores that won't list buckets.
+- The real-store test runs when `TEST_S3_ENDPOINT` is set (dev compose
+  SeaweedFS); the rest run on `TEST_DATABASE_URL` alone.

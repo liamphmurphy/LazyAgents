@@ -80,3 +80,51 @@ func migrate(ctx context.Context, sqldb *sql.DB) error {
 	}
 	return nil
 }
+
+// Version is the newest goose migration applied, or 0 on a database that has
+// none. It creates goose's bookkeeping table when it is missing.
+func Version(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
+	sqldb := stdlib.OpenDBFromPool(pool)
+	defer sqldb.Close()
+	goose.SetBaseFS(migrations.FS)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("postgres"); err != nil {
+		return 0, err
+	}
+	v, err := goose.GetDBVersionContext(ctx, sqldb)
+	if err != nil {
+		return 0, fmt.Errorf("db: version: %w", err)
+	}
+	return v, nil
+}
+
+// MigrateTo applies goose migrations up to and including version, so a data
+// import can load rows into the schema they were exported from before newer
+// migrations reshape them.
+func MigrateTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
+	sqldb := stdlib.OpenDBFromPool(pool)
+	defer sqldb.Close()
+	goose.SetBaseFS(migrations.FS)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	if err := goose.UpToContext(ctx, sqldb, ".", version); err != nil {
+		return fmt.Errorf("db: migrate to %d: %w", version, err)
+	}
+	return nil
+}
+
+// LatestVersion is the newest migration embedded in this binary.
+func LatestVersion() (int64, error) {
+	goose.SetBaseFS(migrations.FS)
+	all, err := goose.CollectMigrations(".", 0, goose.MaxVersion)
+	if err != nil {
+		return 0, fmt.Errorf("db: collect migrations: %w", err)
+	}
+	last, err := all.Last()
+	if err != nil {
+		return 0, err
+	}
+	return last.Version, nil
+}
