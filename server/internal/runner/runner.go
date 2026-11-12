@@ -1302,6 +1302,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		}
 		prompt += r.delegationReport(ctx, c, env, int(turn.Seq))
 	}
+	if c.run.ParentRunID != nil && turn.Seq == 1 {
+		prompt += r.checkoutSection(ctx, c, env)
+	}
 	if c.run.Purpose == "chat" {
 		// The files this turn's message attached, listed in its prompt.
 		refFiles, refPrompt, err := ChatTurnContext(ctx, q, c.run, turn)
@@ -1583,11 +1586,48 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 // watch streams a turn's output into events, enforces pause/cancel and the
 // runtime guard, and returns what the parser learned.
 func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Parser, env map[string]string, remaining time.Duration) (harness.Result, []byte, int, error) {
-	return r.watchSession(ctx, c, proc, p, env, remaining, func(s string) {
+	write := func(wctx context.Context, n int64) {
+		qctx, cancel := context.WithTimeout(wctx, controlTimeout)
+		defer cancel()
+		if err := r.q().SetRunContextTokens(qctx, store.SetRunContextTokensParams{ID: c.run.ID, ContextTokens: n}); err != nil {
+			r.Log.Warn("record context tokens", "run", c.run.ID, "err", err)
+		}
+	}
+	cp := &contextParser{Parser: p, write: func(n int64) { write(ctx, n) }}
+	res, raw, code, err := r.watchSession(ctx, c, proc, cp, env, remaining, func(s string) {
 		qctx, cancel := context.WithTimeout(ctx, controlTimeout)
 		defer cancel()
 		_ = r.q().SetRunSession(qctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: &s})
 	})
+	// At turn end, the final value. A Claude turn that never reached a request
+	// (a rejected resume, an early crash) keeps the last known size; a Codex
+	// turn writes 0, since its context is unknown.
+	if n := res.Usage.ContextTokens; n > 0 || c.spec.Harness == agentdef.HarnessCodex {
+		write(context.WithoutCancel(ctx), n)
+	}
+	return res, raw, code, err
+}
+
+// contextWriteEvery bounds how often a streaming turn writes runs.context_tokens.
+const contextWriteEvery = 15 * time.Second
+
+// contextParser records the main agent's context size while a turn streams,
+// at most once every contextWriteEvery, so MCP handlers can read a recent
+// value mid-turn. Line is called from one goroutine only.
+type contextParser struct {
+	harness.Parser
+	write   func(int64)
+	last    int64
+	written time.Time
+}
+
+func (cp *contextParser) Line(b []byte) []harness.Event {
+	evs := cp.Parser.Line(b)
+	if n := cp.Parser.Result().Usage.ContextTokens; n > 0 && n != cp.last && time.Since(cp.written) >= contextWriteEvery {
+		cp.last, cp.written = n, time.Now()
+		cp.write(n)
+	}
+	return evs
 }
 
 // watchSession is watch with the choice of what to do when the harness reports

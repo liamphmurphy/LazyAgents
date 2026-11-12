@@ -59,6 +59,9 @@ SELECT * FROM run_turns WHERE id = $1;
 -- name: SetRunSession :exec
 UPDATE runs SET harness_session_id = $2 WHERE id = $1;
 
+-- name: SetRunContextTokens :exec
+UPDATE runs SET context_tokens = $2 WHERE id = $1;
+
 -- name: SetRunWorkspace :exec
 UPDATE runs SET workspace_volume = $2 WHERE id = $1;
 
@@ -295,3 +298,11 @@ ORDER BY started_at;
 SELECT coalesce(checkpoint_branch, '')::text FROM runs
 WHERE ticket_id = sqlc.arg(ticket_id) AND id <> sqlc.arg(id) AND parent_run_id IS NULL AND purpose = 'ticket'
 ORDER BY started_at DESC LIMIT 1;
+
+-- name: RunToolOutputBytes :one
+-- What filled a run's context: its turns' tool output bytes, by group.
+SELECT
+  coalesce(sum((usage->>'explore_output_bytes')::bigint), 0)::bigint AS explore_output_bytes,
+  coalesce(sum((usage->>'shell_output_bytes')::bigint), 0)::bigint AS shell_output_bytes,
+  coalesce(sum((usage->>'other_output_bytes')::bigint), 0)::bigint AS other_output_bytes
+FROM run_turns WHERE run_id = $1;
