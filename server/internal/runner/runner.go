@@ -1333,6 +1333,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			} else if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
 				log.Warn("rollover: clear session; resuming it", "err", err)
 			} else {
+				r.resetContextTokens(ctx, c)
 				r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_rollover", "reason": "delegation", "context_tokens": c.run.ContextTokens})
 				c.run.HarnessSessionID = nil
 				prompt = brief

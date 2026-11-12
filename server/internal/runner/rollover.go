@@ -61,7 +61,17 @@ func (r *Runner) takePlanStepRollover(ctx context.Context, c runCtx) {
 	if err := q.SetRunSession(ctx, store.SetRunSessionParams{ID: c.run.ID, HarnessSessionID: nil}); err != nil {
 		r.Log.Warn("rollover: clear session", "run", c.run.ID, "err", err)
 	}
+	r.resetContextTokens(ctx, c)
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "session_rollover", "reason": "plan_step", "context_tokens": c.run.ContextTokens})
+}
+
+// resetContextTokens zeroes the recorded context size once a rollover drops
+// the session: until the fresh session reports its own, the old size would
+// make an early update_step(done) request another rollover at once.
+func (r *Runner) resetContextTokens(ctx context.Context, c runCtx) {
+	if err := r.q().SetRunContextTokens(ctx, store.SetRunContextTokensParams{ID: c.run.ID, ContextTokens: 0}); err != nil {
+		r.Log.Warn("rollover: reset context tokens", "run", c.run.ID, "err", err)
+	}
 }
 
 // rolloverPrompt briefs a fresh session at a delegation wake: the run's state,
