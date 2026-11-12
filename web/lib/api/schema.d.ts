@@ -10799,6 +10799,8 @@ export interface operations {
                 ticket?: string;
                 /** @description Chat session id (every run segment of the chat) */
                 chat?: string;
+                /** @description Epic id (runs of its tickets, sub agents included) */
+                epic?: string;
             };
             header?: never;
             path?: never;

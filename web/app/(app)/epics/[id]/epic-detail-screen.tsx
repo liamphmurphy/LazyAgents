@@ -1,22 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useDispatch, useEpicOverviews, useTickets, useUpdateEpic } from "@/lib/api/hooks";
+import { hasLiveRun, keys, useBootstrap, useBulkUpdate, useCosts, useDecideRunApproval, useDispatch, useEpicOverviews, useInbox, useTickets, useUpdateEpic } from "@/lib/api/hooks";
+import { spendLabel } from "@/lib/costs";
+import { cx } from "@/lib/cx";
+import { approvalId, epicProgress, needsYouByTicket, startReady, type NeedsYou } from "@/lib/work-rows";
+import { Icon } from "@/components/ui/icon";
+import { StackedBar } from "@/components/domain/data";
+import { StateText } from "@/app/(app)/tickets/_components/ticket-row";
 import { useBoard } from "@/lib/api/board-hooks";
 import { dueDate } from "@/lib/format";
 import { burnUp, isOverdue, ymd, type BurnUp } from "@/lib/epics";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Toggle } from "@/components/ui/controls";
 import { Content, TopBar, type Crumb } from "@/components/shell/topbar";
 import { AgentStack, HealthPill, type EpicOverview } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { DocTypeTag, Pill } from "@/components/domain/labels";
-import { StatusGlyph } from "@/components/domain/glyphs";
-import { STATUS_NAME, STATUS_ORDER } from "@/components/domain/meta";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { ticketsHref } from "@/lib/tickets-layout";
@@ -70,8 +74,12 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
   const today = ymd(new Date());
   const overdue = isOverdue(e, today);
   const tickets = useTickets({ epic: e.epic.id, view: "all" });
+  // Tickets whose run waits on the person, from the same queue as the Inbox.
+  const inbox = useInbox(e.project.key);
+  const needs = useMemo(() => needsYouByTicket(inbox.data), [inbox.data]);
+  const waiting = (tickets.data ?? []).filter((t) => needs.has(t.key) && t.status !== "done" && t.status !== "canceled");
   return (
-    <div className="space-y-6">
+    <article className="mx-auto max-w-[860px] space-y-8">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="type-display">{e.epic.name}</h1>
@@ -85,7 +93,7 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
           </span>·
           <span>{e.owner ? `Owner ${e.owner.name}` : "No owner"}</span>
         </p>
-        <p className="max-w-3xl text-sm text-fg-secondary">{e.objective || "No objective has been written yet."}</p>
+        <p className="whitespace-pre-line text-[14px] leading-relaxed text-fg-2">{e.objective || "No objective has been written yet."}</p>
         <div className="flex flex-wrap gap-2">
           <ButtonLink variant="outline" href={boardHref(e)}>Board filtered to this epic</ButtonLink>
           <ButtonLink variant="outline" href={`/tickets?view=all&epic=${e.epic.id}&project=${encodeURIComponent(e.project.key)}`}>Ticket list</ButtonLink>
@@ -93,49 +101,166 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
         </div>
       </header>
 
-      <nav aria-label="Epic views" className="flex gap-5 border-b border-border pb-3 text-sm">
-        <button aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "font-semibold text-accent" : ""} onClick={() => setTab("overview")}>Overview</button>
-        <button aria-current={tab === "map" ? "page" : undefined} className={tab === "map" ? "font-semibold text-accent" : ""} onClick={() => setTab("map")}>Map</button>
+      <EpicProgressBar epicId={e.epic.id} tickets={tickets.data} needs={needs} />
+
+      {waiting.length > 0 && <NeedsYouBanner tickets={waiting} needs={needs} />}
+
+      <nav aria-label="Epic views" className="flex gap-5 border-b border-border-subtle pb-2 text-sm">
+        <button aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "font-semibold text-fg" : "text-fg-secondary"} onClick={() => setTab("overview")}>Overview</button>
+        <button aria-current={tab === "map" ? "page" : undefined} className={tab === "map" ? "font-semibold text-fg" : "text-fg-secondary"} onClick={() => setTab("map")}>Map</button>
       </nav>
       {tab === "map" ? <DependencyMap key={e.epic.id} project={e.project.key} epic={e.epic.id} /> : <>
-      <Card title="Done gate and acceptance criteria" as="section">
-        <Completion projectKey={e.project.key} epicId={e.epic.id} />
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Card title="Points burn-up">
-          {tickets.isError ? (
-            <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
-          ) : tickets.isPending ? (
-            <Skeleton className="h-48" />
-          ) : (
-            <BurnUpChart data={burnUp(tickets.data, { start: e.start_date, today })} />
-          )}
-        </Card>
-        <Card title="Details">
-          <Details epic={e} />
-        </Card>
-      </div>
-
-      <Card title="Dispatch" bodyClassName="p-0">
-        <EpicDispatch key={e.epic.id} epic={e} />
-      </Card>
-
-      <Card
-        title="Tickets"
-        bodyClassName="p-0"
-        action={<span className="font-mono text-xs text-fg-tertiary">{e.epic.tickets_open} open of {e.epic.tickets_total}</span>}
-      >
+      <section aria-label="Tickets" className="space-y-2">
+        <h2 className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">
+          Tickets <span className="font-mono">{e.epic.tickets_open} open of {e.epic.tickets_total}</span>
+        </h2>
         {tickets.isError ? (
-          <p role="alert" className="p-5 text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
+          <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
         ) : tickets.isPending ? (
-          <Skeleton className="m-5 h-24" />
+          <Skeleton className="h-24" />
         ) : (
-          <TicketGroups tickets={tickets.data} />
+          <TicketChecklist tickets={tickets.data} needs={needs} />
         )}
-      </Card>
+      </section>
+
+      <StartReady key={e.epic.id} epic={e} />
+
+      {/* LAZYAGENTS-163's Context panel isn't merged yet: criteria and specs live in collapsible sections here. */}
+      <details open className="group rounded-xl border border-border-subtle">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-medium">
+          <Icon name="chev" size={12} className="-rotate-90 text-fg-tertiary transition-transform group-open:rotate-0" />
+          Acceptance criteria and done gate
+          <span className="font-mono text-xs text-fg-tertiary">{e.epic.criteria_done}/{e.epic.criteria_total}</span>
+        </summary>
+        <div className="border-t border-border-subtle p-4">
+          <Completion projectKey={e.project.key} epicId={e.epic.id} />
+        </div>
+      </details>
+      <details className="group rounded-xl border border-border-subtle">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-medium">
+          <Icon name="chev" size={12} className="-rotate-90 text-fg-tertiary transition-transform group-open:rotate-0" />
+          Specs and details
+          {e.source && <span className="truncate text-xs font-normal text-fg-tertiary">{e.source.title}</span>}
+        </summary>
+        <div className="space-y-6 border-t border-border-subtle p-4">
+          <Details epic={e} />
+          <section aria-label="Points burn-up" className="space-y-2">
+            <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">Points burn-up</h3>
+            {tickets.isError ? (
+              <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
+            ) : tickets.isPending ? (
+              <Skeleton className="h-48" />
+            ) : (
+              <BurnUpChart data={burnUp(tickets.data, { start: e.start_date, today })} />
+            )}
+          </section>
+        </div>
+      </details>
       </>}
-    </div>
+    </article>
+  );
+}
+
+/** Done, running, needs you and the rest as one segmented bar, with counts and spend so far. */
+function EpicProgressBar({ epicId, tickets, needs }: { epicId: string; tickets?: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
+  const p = epicProgress(tickets ?? [], needs);
+  const spend = useCosts({ epic: epicId });
+  const parts = [
+    { value: p.done, label: "done", color: "var(--state-done)" },
+    { value: p.running, label: "running", color: "var(--state-progress)" },
+    { value: p.needs, label: "need you", color: "var(--state-human)" },
+    { value: p.open, label: "open", color: "var(--track)" },
+  ];
+  return (
+    <section aria-label="Epic progress" className="space-y-2">
+      <StackedBar segments={parts} height={8} />
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-secondary">
+        {parts.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5">
+            <span aria-hidden className="size-2 rounded-full" style={{ background: s.color }} />
+            <span className={cx("font-mono", s.label === "need you" && s.value > 0 ? "text-pill-human-fg" : "text-fg")}>{s.value}</span> {s.label}
+          </span>
+        ))}
+        <span className="ml-auto" title="Spend on this epic's runs, sub agents included">
+          {spend.data ? <><span className="font-mono text-fg">{spendLabel(spend.data.total.cost_micros, spend.data.unpriced_runs)}</span> spent so far</> : spend.isError ? "Spend unavailable" : "…"}
+        </span>
+      </p>
+    </section>
+  );
+}
+
+/** Tickets in the epic whose run waits on the person, answerable inline. */
+function NeedsYouBanner({ tickets, needs }: { tickets: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
+  return (
+    <section aria-label="Needs you" className="rounded-xl border border-state-human/50 bg-pill-human-bg/40 p-3">
+      <h2 className="mb-1 px-1 text-[11px] font-medium uppercase tracking-[0.06em] text-pill-human-fg">
+        Needs you <span className="font-mono">{tickets.length}</span>
+      </h2>
+      <ul>
+        {tickets.map((t) => <NeedsYouItem key={t.key} t={t} needs={needs.get(t.key)!} />)}
+      </ul>
+    </section>
+  );
+}
+
+function NeedsYouItem({ t, needs }: { t: TicketSummary; needs: NeedsYou }) {
+  const decide = useDecideRunApproval(needs.run_id ?? "");
+  const approval = approvalId(needs);
+  return (
+    <li className="flex flex-wrap items-center gap-3 rounded-lg px-1 py-1.5">
+      <span className="font-mono text-xs text-fg-tertiary">{t.key}</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="truncate text-[13px] font-medium hover:underline">{t.title}</Link>
+        <StateText t={t} needs={needs} className="text-xs" />
+      </span>
+      {decide.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{decide.error.message}</span>}
+      {decide.isSuccess ? (
+        <span role="status" className="text-xs text-fg-secondary">Approved</span>
+      ) : approval && (
+        <Button variant="approve" disabled={decide.isPending} onClick={() => decide.mutate({ id: approval, decision: "approve" })} aria-label={`Approve ${t.key}`}>
+          {decide.isPending ? "Approving…" : "Approve"}
+        </Button>
+      )}
+      <ButtonLink variant="approve-outline" href={needs.href} aria-label={`Open what ${t.key} needs`}>Open</ButtonLink>
+    </li>
+  );
+}
+
+const CHECKLIST_ORDER: TicketSummary["status"][] = ["in_progress", "in_review", "todo", "backlog", "done", "canceled"];
+
+/** The epic's tickets as a checklist: done ones ticked, current state on the right. */
+function TicketChecklist({ tickets, needs }: { tickets: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
+  if (!tickets.length) return <p className="text-sm text-fg-tertiary">No tickets in this epic yet.</p>;
+  const sorted = [...tickets].sort((a, b) =>
+    Number(needs.has(b.key) && b.status !== "done") - Number(needs.has(a.key) && a.status !== "done") ||
+    CHECKLIST_ORDER.indexOf(a.status) - CHECKLIST_ORDER.indexOf(b.status));
+  return (
+    <ul aria-label="Ticket checklist">
+      {sorted.map((t) => {
+        const done = t.status === "done";
+        return (
+          <li key={t.id} className="relative flex min-h-10 items-center gap-3 rounded-lg px-2 hover:bg-row-hover">
+            <span
+              role="img"
+              aria-label={done ? "Done" : t.status === "canceled" ? "Canceled" : "Not done"}
+              className={cx("grid size-4 flex-none place-items-center rounded-[5px] border", done ? "border-state-done bg-state-done text-on-accent" : "border-border-strong")}
+            >
+              {done && <Icon name="check" size={11} strokeWidth={2.2} />}
+            </span>
+            <span className="w-[72px] flex-none truncate font-mono text-xs text-fg-tertiary">{t.key}</span>
+            <Link
+              href={`/tickets/${encodeURIComponent(t.key)}`}
+              className={cx("min-w-0 flex-1 truncate text-[13px] font-medium after:absolute after:inset-0", (done || t.status === "canceled") && "text-fg-secondary", t.status === "canceled" && "line-through")}
+            >
+              {t.title}
+            </Link>
+            {t.assignee && <span className="hidden text-xs text-fg-tertiary sm:inline">{t.assignee.name}</span>}
+            <span className="w-10 flex-none text-right font-mono text-xs text-fg-tertiary">{t.estimate_points != null ? `${t.estimate_points} pt` : "—"}</span>
+            <StateText t={t} needs={needs.get(t.key)} className="w-[200px] flex-none text-right max-sm:w-[110px]" />
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -228,38 +353,13 @@ function Details({ epic: e }: { epic: EpicOverview }) {
   );
 }
 
-function TicketGroups({ tickets }: { tickets: TicketSummary[] }) {
-  const groups = STATUS_ORDER.map((status) => ({ status, items: tickets.filter((t) => t.status === status) })).filter((g) => g.items.length);
-  if (!groups.length) return <p className="p-5 text-sm text-fg-tertiary">No tickets in this epic yet.</p>;
-  return (
-    <div>
-      {groups.map((g) => (
-        <section key={g.status} aria-label={`${STATUS_NAME[g.status]} tickets`}>
-          <h3 className="flex items-center gap-2 border-t border-border-subtle bg-surface-sunken px-4 py-2 text-xs font-medium text-fg-secondary first:border-t-0">
-            <StatusGlyph state={g.status} label={false} />
-            {STATUS_NAME[g.status]}
-            <span className="font-mono text-fg-tertiary">{g.items.length}</span>
-            <span className="ml-auto font-mono text-fg-tertiary">{g.items.reduce((n, t) => n + (t.estimate_points ?? 0), 0)} pts</span>
-          </h3>
-          <ul>
-            {g.items.map((t) => (
-              <li key={t.id}>
-                <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="flex min-h-11 items-center gap-3 border-t border-border-row px-4 py-2 hover:bg-row-hover">
-                  <span className="shrink-0 font-mono text-xs text-fg-tertiary">{t.key}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{t.title}</span>
-                  {t.assignee && <span className="hidden text-xs text-fg-tertiary sm:inline">{t.assignee.name}</span>}
-                  <span className="w-12 shrink-0 text-right font-mono text-xs text-fg-tertiary">{t.estimate_points != null ? `${t.estimate_points} pt` : "—"}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function EpicDispatch({ epic }: { epic: EpicOverview }) {
+/**
+ * Start ready: queue the open tickets with every blocker done (existing
+ * assignments are kept; unassigned ones go to the chosen main agent) and say
+ * what is still blocked. Blocked tickets are started later, from here or the
+ * ticket, once their blockers finish.
+ */
+function StartReady({ epic }: { epic: EpicOverview }) {
   const [agentId, setAgentId] = useState("");
   const bootstrap = useBootstrap();
   const agents = (bootstrap.data?.agents ?? []).filter((a) => a.kind === "main");
@@ -280,6 +380,7 @@ function EpicDispatch({ epic }: { epic: EpicOverview }) {
   // The overview only contains a sample of tickets. Fetch the whole epic.
   const list = useTickets({ epic: epic.epic.id, view: "all" });
   const remaining = (list.data ?? []).filter((t) => t.status !== "done" && t.status !== "canceled");
+  // Details tell which tickets already have a live run.
   const details = useQueries({ queries: remaining.map((t) => ({
     queryKey: keys.ticket(t.key),
     queryFn: () => unwrap(api.GET("/tickets/{key}", { params: { path: { key: t.key } } })),
@@ -287,39 +388,60 @@ function EpicDispatch({ epic }: { epic: EpicOverview }) {
   const loading = list.isPending || details.some((q) => q.isPending);
   const failed = list.isError || details.some((q) => q.isError);
   const incomplete = !!list.data && list.data.length < epic.counts.total;
-  const candidates = details.flatMap((q) => q.data && q.data.status !== "done" && q.data.status !== "canceled" && !hasLiveRun(q.data) ? [q.data] : []);
-  const dispatchKeys = candidates.map((t) => t.key);
-  const unassignedKeys = candidates.filter((t) => !t.assignee).map((t) => t.key);
+  const live = new Set(details.flatMap((q) => (q.data && hasLiveRun(q.data) ? [q.data.key] : [])));
+  const { ready, blocked } = startReady(remaining, live);
+  const detail = new Map(details.flatMap((q) => (q.data ? [[q.data.key, q.data] as const] : [])));
+  const dispatchKeys = ready.map((t) => t.key);
+  const unassignedKeys = ready.filter((t) => !(detail.get(t.key) ?? t).assignee).map((t) => t.key);
   const unassigned = unassignedKeys.length;
   return (
-    <div className="space-y-2 px-5 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        {unassigned > 0 && (
-          <label className="flex items-center gap-2 text-xs text-fg-secondary">
-            Agent for unassigned tickets
-            <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
-              disabled={start.isPending || bootstrap.isPending}
-              onChange={(e) => { setAgentId(e.target.value); start.reset(); }}
-              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
-              {!agents.length && <option value="">No main agents available</option>}
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>
-        )}
+    <section aria-label="Start ready" className="space-y-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h2 className="text-[13.5px] font-medium">
+            {loading ? "Checking which tickets can start…" : ready.length ? `${ready.length} ${ready.length === 1 ? "ticket is" : "tickets are"} ready to start` : "Nothing is ready to start"}
+          </h2>
+          <p className="text-xs text-fg-secondary">
+            Starts only tickets whose blockers are done. Existing agent assignments are kept; runs begin as runner slots free up.
+          </p>
+        </div>
         <Button variant="approve" disabled={epic.epic.status === "done" || loading || failed || incomplete || !dispatchKeys.length || start.isPending || (unassigned > 0 && !selectedAgent)}
           onClick={() => start.mutate({ ticketKeys: dispatchKeys, unassignedKeys, assignee: selectedAgent?.id })}>
-          {start.isPending ? "Dispatching…" : loading ? "Loading tickets…" : `${unassigned ? "Assign & dispatch epic" : "Dispatch epic"} (${dispatchKeys.length})`}
+          {start.isPending ? "Starting…" : loading ? "Loading tickets…" : `${unassigned ? "Assign & start ready" : "Start ready"} (${dispatchKeys.length})`}
         </Button>
-        <p className="text-xs text-fg-secondary">
-          Queue all remaining tickets. Existing agent assignments are kept. Runs start automatically as dependencies finish and runner slots become available.
-        </p>
       </div>
-      {unassigned > 0 && <p className="text-xs text-fg-secondary">{unassigned} tickets will be assigned to {selectedAgent?.name ?? "the agent you choose"} before dispatch.</p>}
-      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-xs text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and dispatch these tickets."}</p>}
-      {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t dispatch the epic: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to dispatch."}</p>}
+      {unassigned > 0 && (
+        <label className="flex flex-wrap items-center gap-2 text-xs text-fg-secondary">
+          Agent for unassigned tickets
+          <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
+            disabled={start.isPending || bootstrap.isPending}
+            onChange={(e) => { setAgentId(e.target.value); start.reset(); }}
+            className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
+            {!agents.length && <option value="">No main agents available</option>}
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <span>{unassigned} {unassigned === 1 ? "ticket" : "tickets"} will be assigned to {selectedAgent?.name ?? "the agent you choose"} first.</span>
+        </label>
+      )}
+      {!loading && blocked.length > 0 && (
+        <div className="text-xs text-fg-secondary">
+          <p>Still blocked, so not started:</p>
+          <ul className="mt-1 space-y-0.5">
+            {blocked.map((t) => (
+              <li key={t.key}>
+                <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="font-mono text-fg-tertiary hover:text-fg">{t.key}</Link>{" "}
+                {t.title} <span className="text-pill-blocked-fg">· blocked by {t.unmet_dependencies}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!loading && live.size > 0 && <p className="text-xs text-fg-tertiary">{live.size} already {live.size === 1 ? "has a run" : "have runs"}.</p>}
+      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-xs text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and start these tickets."}</p>}
+      {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t start the tickets: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to start."}</p>}
       {failed && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
-      {incomplete && <p role="alert" className="text-xs text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to dispatch in smaller batches.</p>}
-      {start.isSuccess && <p role="status" className="text-xs text-fg-secondary">{start.data} epic tickets queued. Follow their progress below.</p>}
-    </div>
+      {incomplete && <p role="alert" className="text-xs text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to start tickets in smaller batches.</p>}
+      {start.isSuccess && <p role="status" className="text-xs text-fg-secondary">{start.data} epic tickets queued. Follow their progress above.</p>}
+    </section>
   );
 }

@@ -53,7 +53,17 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await expect(page.getByRole("heading", { level: 1, name: "Kanban board" })).toBeVisible();
   await expect(page.getByText("Ship the board")).toBeVisible();
   await expect(page.getByRole("link", { name: "Board filtered to this epic" })).toHaveAttribute("href", "/tickets?layout=board&project=WEB&epic=epic-1");
+  // Progress: done / running / needs you / open, with spend so far.
+  const progress = page.getByRole("region", { name: "Epic progress" });
+  await expect(progress).toContainText("1 done");
+  await expect(progress).toContainText("1 running");
+  await expect(progress).toContainText("0 need you");
+  await expect(progress).toContainText("2 open");
+  await expect(progress).toContainText("$0.00 spent so far");
+  // Specs, details and the burn-up sit in a collapsible section until the Context panel lands.
+  await page.getByText("Specs and details").click();
   await expect(page.getByRole("img", { name: "Points burn-up: 5 of 10 points done (50%)" })).toBeVisible();
+  await expect(page.getByText("Requires mockup", { exact: true })).toBeVisible();
 
   const panel = page.getByRole("region", { name: "Epic completion" });
   const criteria = panel.getByRole("region", { name: "Final acceptance criteria" });
@@ -66,9 +76,10 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await expect(panel.getByRole("region", { name: "Done blockers" }).getByRole("list", { name: "Open tickets" }).getByRole("link"))
     .toHaveText(["WEB-1 ↗", "WEB-2 ↗", "WEB-5 ↗"]);
 
-  // Tickets are grouped by status.
-  await expect(page.getByRole("region", { name: "Done tickets" })).toContainText("WEB-3");
-  await expect(page.getByRole("region", { name: "Todo tickets" })).toContainText("WEB-1");
+  // Tickets are a checklist with their state on the right.
+  const checklist = page.getByRole("list", { name: "Ticket checklist" });
+  await expect(checklist.getByRole("listitem").filter({ hasText: "WEB-3" }).getByRole("img", { name: "Done" })).toBeVisible();
+  await expect(checklist.getByRole("listitem").filter({ hasText: "WEB-1" })).toContainText("Blocked by 1");
 
   // Once everything is closed the epic can be marked done, and reopened.
   for (const key of ["WEB-1", "WEB-2", "WEB-5"]) api.editTicket(key, { status: "done" });
@@ -80,6 +91,26 @@ test("epic detail shows the burn-up, board link, who checked criteria and the do
   await expect(panel.getByRole("button", { name: "Mark epic done" })).toBeEnabled();
   expect(api.epicWrites.filter((w) => w.method === "PATCH" && w.path === "/epics/epic-1").map((w) => w.body)).toEqual([{ status: "done" }, { status: "open" }]);
   expect(api.unhandled).toEqual([]);
+});
+
+test("the epic page's Needs you banner approves inline and Start ready skips blocked tickets", async ({ page }) => {
+  const api = await installBoardApi(page);
+  api.inbox.push({ id: "approval:ap-5", kind: "approval", title: "Review board", summary: "Merge the PR", href: "/tickets/WEB-5", project: "WEB", ticket_key: "WEB-5", created_at: "2026-11-12T10:00:00Z", resolved: false, read: false, run_id: "run-5" });
+  await page.goto("/epics/epic-1");
+  const banner = page.getByRole("region", { name: "Needs you" });
+  await expect(banner).toContainText("WEB-5");
+  await expect(banner).toContainText("Wants approval: Merge the PR");
+  await expect(banner.getByRole("link", { name: "Open what WEB-5 needs" })).toHaveAttribute("href", "/tickets/WEB-5");
+  await expect(page.getByRole("region", { name: "Epic progress" })).toContainText("1 need you");
+  await banner.getByRole("button", { name: "Approve WEB-5" }).click();
+  await expect.poll(() => api.decisions).toEqual([{ id: "ap-5", decision: "approve" }]);
+  await expect(page.getByRole("region", { name: "Needs you" })).toHaveCount(0);
+
+  // WEB-1 waits on WEB-2, so only WEB-2 and WEB-5 are ready.
+  const start = page.getByRole("region", { name: "Start ready" });
+  await expect(start).toContainText("Still blocked, so not started");
+  await expect(start).toContainText("WEB-1");
+  await expect(start.getByRole("button", { name: /start ready \(2\)/i })).toBeVisible();
 });
 
 test("an unknown epic shows not found", async ({ page }) => {

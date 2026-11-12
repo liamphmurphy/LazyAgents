@@ -797,7 +797,7 @@ export function useRunPages(f: RunListFilters, pages: number) {
 
 export const RUNS_PAGE = 50;
 
-export type CostQuery = { from?: string; to?: string; project?: string; ticket?: string; chat?: string };
+export type CostQuery = { from?: string; to?: string; project?: string; ticket?: string; chat?: string; epic?: string };
 
 /**
  * Spend summed server-side from run counters (GET /costs). Ticket and range

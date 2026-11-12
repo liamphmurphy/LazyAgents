@@ -29,6 +29,7 @@ WITH base AS (
     AND (sqlc.narg(project_id)::uuid IS NULL OR coalesce(t.project_id, ps.project_id, cs.project_id) = sqlc.narg(project_id))
     AND (sqlc.narg(ticket_id)::uuid IS NULL OR r.ticket_id = sqlc.narg(ticket_id))
     AND (sqlc.narg(chat_id)::uuid IS NULL OR cs.id = sqlc.narg(chat_id))
+    AND (sqlc.narg(epic_id)::uuid IS NULL OR t.epic_id = sqlc.narg(epic_id))
 ),
 replies AS (
   SELECT m.run_id, m.created_at, coalesce(m.harness, b.harness) AS harness, coalesce(m.model, b.model) AS model,

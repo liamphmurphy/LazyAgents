@@ -1476,6 +1476,7 @@ paths:
         - { name: project, in: query, description: Project key, schema: { type: string } }
         - { name: ticket, in: query, description: Ticket key (its runs and their sub agents), schema: { type: string } }
         - { name: chat, in: query, description: Chat session id (every run segment of the chat), schema: { type: string, format: uuid } }
+        - { name: epic, in: query, description: "Epic id (runs of its tickets, sub agents included)", schema: { type: string, format: uuid } }
       responses:
         "200":
           description: The cost report
