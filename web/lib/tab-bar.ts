@@ -4,7 +4,7 @@
  * rules are unit-tested; the bar itself is components/shell/tab-bar.tsx.
  */
 import type { IconName } from "@/components/ui/icon";
-import { isActive, type NavBadge } from "./project-scope.ts";
+import { NAV_GROUPS, isActive, type NavBadge, type NavGroup } from "./project-scope.ts";
 
 export type Tab = { key: "chat" | "inbox" | "runs" | "tickets" | "more"; href: string; label: string; icon: IconName; badge?: NavBadge };
 
@@ -34,4 +34,22 @@ export function badgeLabel(label: string, badge: NavBadge | undefined, counts: R
   const n = badge ? counts[badge] : 0;
   const word = badge && BADGE_WORD[badge];
   return n > 0 && word ? `${label} ${n} ${word}` : label;
+}
+
+/**
+ * What More lists: every NAV_GROUPS group with the items the bar has no tab for, in the
+ * sidebar's order. Read from NAV_GROUPS so a new nav item lands here too.
+ */
+export function moreSections(groups: NavGroup[] = NAV_GROUPS): NavGroup[] {
+  const tabbed = new Set(TABS.map((t) => t.href));
+  return groups.map((g) => ({ ...g, items: g.items.filter((i) => !tabbed.has(i.href)) })).filter((g) => g.items.length > 0);
+}
+
+/** A More row's accessible name, carrying the badge the row shows as a number or a dot. */
+export function moreLabel(label: string, badge: NavBadge | undefined, counts: Record<NavBadge, number>): string {
+  const n = badge ? counts[badge] : 0;
+  if (!badge || n <= 0) return label;
+  if (badge === "settings") return `${label}: a setting runs need is missing`;
+  if (badge === "wiki") return `${label}, ${n} suggested edit${n === 1 ? "" : "s"} to review`;
+  return `${label}, ${n} need${n === 1 ? "s" : ""} you`;
 }
