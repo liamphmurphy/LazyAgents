@@ -70,8 +70,6 @@ jobs:
       - run: cd web && npm ci
       - run: make gen-check
 
-  +  # Mocked-API Playwright suite (e2e/): the desktop "chromium" project and the
-+  # "mobile" project (*.mobile.spec.ts, iPhone 15 on Chromium at 390x844).
 +  e2e:
 +    runs-on: ubuntu-latest
 +    env:
