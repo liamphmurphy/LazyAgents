@@ -36,9 +36,15 @@ func TestChildPromptRendersContract(t *testing.T) {
 		t.Fatalf("empty contract rendered sections:\n%s", plain)
 	}
 	p := runs.ChildPrompt("PAY-1", "atlas", "Do it", runs.Contract{AcceptanceCriteria: []string{"it works"}, AllowedPaths: []string{"docs/"}, TestCommand: "make test"})
-	for _, want := range []string{"## Task\n\nDo it", "- it works", "- docs/", "`make test`"} {
+	for _, want := range []string{"## Task\n\nDo it", "- it works", "- docs/", "`make test`", "@atlas delegated part of PAY-1", "own git worktree", "in parallel", "AGENTS.md"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q:\n%s", want, p)
+		}
+	}
+	// Lifecycle rules live in the sub agent's AGENTS.md only.
+	for _, bad := range []string{"claim_ticket", "complete_run", "get_ticket", "blocked"} {
+		if strings.Contains(plain, bad) {
+			t.Errorf("prompt restates %q:\n%s", bad, plain)
 		}
 	}
 }
