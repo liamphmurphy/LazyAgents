@@ -1,20 +1,25 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useCanvasComments, useChatCanvases } from "@/lib/api/canvas-hooks";
 import { useChatPlayground } from "@/lib/api/playground-hooks";
 import { useDesignProposals } from "@/lib/api/designs-hooks";
-import { activePanel, closePanel, dragCloses, hideSheet, openPanels, openThreads, PANELS, sheetHidden, switchPanel, type ChatPanel, type PanelLayout } from "@/lib/chat-panels";
+import { useChat, useChatRunEvents } from "@/lib/api/hooks";
+import { activePanel, closePanel, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThreads, PANELS, setDock, sheetHidden, switchPanel, type ChatPanel, type DockTabId, type PanelLayout } from "@/lib/chat-panels";
+import { toolCalls } from "@/lib/chat-ui";
+import { presenceOf } from "@/lib/designs/presence";
+import { claimReadingFocus, dockReducer, dockShortcut, type DockAction, type DockState } from "@/lib/editor-layout";
+import { Dock, type DockTab } from "@/components/shell/editor-layout";
 import { cx } from "@/lib/cx";
 import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
-import { CanvasFullscreen } from "@/components/domain/canvas-view";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { CanvasDock, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
 import { DesignPanel, useOpenNewDesigns } from "./design-panel";
 
-const LABELS: Record<ChatPanel, string> = { design: "Design", canvas: "Canvas", playground: "Playground" };
+const LABELS: Record<DockTabId, string> = { design: "Design", canvas: "Canvas", playground: "Playground", activity: "Activity" };
 
 /** Which of a chat's panels are open and which a sheet shows, with the moves between them (lib/chat-panels). */
 export function useChatPanels(chatId: string, live: boolean) {
@@ -48,27 +53,148 @@ export function useChatPanels(chatId: string, live: boolean) {
 }
 
 /**
- * A chat's panels: the design, canvas and playground. `side` (desktop) lays them out as they
- * always have been: the playground beside the chat, a design beside it, and the canvas and
- * playground fullscreen over the window. `sheet` (the compact shell) shows the open one as a
- * full-height sheet over the chat ("4 Panel sheet"): a grabber, a switch over the open panels,
- * a close button, and a bottom bar with Comments and Review. Key it by chat.
+ * A chat's panels: the design, canvas and playground. `side` (desktop) puts them in the shared
+ * dock (components/shell/editor-layout) beside the conversation, one tab each, with Activity
+ * always there too ("Chat: side panels in the shared dock"); the canvas and playground can still
+ * go fullscreen from their tab. `sheet` (the compact shell) shows the open one as a full-height
+ * sheet over the chat ("4 Panel sheet"): a grabber, a switch over the open panels, a close
+ * button, and a bottom bar with Comments and Review. Key it by chat.
  */
-export function ChatPanelHost({ chatId, live, readOnly, agent, layout = "side" }: { chatId: string; live: boolean; readOnly: boolean; agent: string; layout?: PanelLayout }) {
+export function ChatPanelHost({ chatId, live, readOnly, agent, activity, layout = "side" }: { chatId: string; live: boolean; readOnly: boolean; agent: string; activity: ReactNode; layout?: PanelLayout }) {
   useOpenNewDesigns(chatId, live);
   const panels = useChatPanels(chatId, live);
-  if (layout === "side") {
-    return (
-      <>
-        {/* The playground sits beside the chat: a running app needs the width more than a canvas does. */}
-        <DesignPanel chatId={chatId} live={live} />
-        <PlaygroundPanel chatId={chatId} />
-        <PlaygroundFullscreen chatId={chatId} />
-        {panels.open.includes("canvas") ? <CanvasFullscreen chatId={chatId} live={live} readOnly={readOnly} agent={agent} /> : null}
-      </>
-    );
-  }
+  if (layout === "side") return <ChatDock chatId={chatId} live={live} readOnly={readOnly} agent={agent} activity={activity} panels={panels} />;
   return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} />;
+}
+
+const ICONS: Record<DockTabId, IconName> = { design: "designs", canvas: "artifacts", playground: "play", activity: "history" };
+
+/**
+ * Which tabs changed since they last showed: a tab is unread once its `sig` moves on from what it
+ * was the last time it was the visible tab (or when the chat opened).
+ */
+function useUnread(sigs: Partial<Record<DockTabId, string>>, visible: DockTabId | undefined): Set<DockTabId> {
+  const [seen, setSeen] = useState<Partial<Record<DockTabId, string>>>(sigs);
+  const unread = new Set<DockTabId>();
+  for (const [t, sig] of Object.entries(sigs) as [DockTabId, string | undefined][]) {
+    if (sig === undefined) continue;
+    if (t === visible || seen[t] === undefined) {
+      if (seen[t] !== sig) setSeen((s) => ({ ...s, [t]: sig }));
+    } else if (seen[t] !== sig) unread.add(t);
+  }
+  return unread;
+}
+
+/** The desktop dock: its tab and open/collapsed state live in the URL (lib/chat-panels), ⌘. only for the visit. */
+function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId: string; live: boolean; readOnly: boolean; agent: string; activity: ReactNode; panels: ReturnType<typeof useChatPanels> }) {
+  const uid = useId();
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const canvasPanel = useCanvasPanel();
+  const canvases = useChatCanvases(chatId, live).data?.canvases;
+  const pg = useChatPlayground(chatId).data;
+  const chat = useChat(chatId).data;
+  const { open } = panels;
+  const [hidden, setHidden] = useState(false);
+  const state: DockState = { open: dockOpen(search, open), tab: dockTab(search, open), hidden };
+  const go = (q: URLSearchParams) => router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+
+  // ⌘. hides the Vesper sidebar along with the dock, without writing its preference.
+  useEffect(() => (hidden ? claimReadingFocus() : undefined), [hidden]);
+
+  const latest = useRef({ state, search });
+  useEffect(() => {
+    latest.current = { state, search };
+  });
+  const dispatch = useCallback(
+    (a: DockAction) => {
+      const { state: s, search: q } = latest.current;
+      const next = dockReducer(s, a);
+      // A second key before the URL update renders works from this state, not the old one.
+      latest.current = { ...latest.current, state: next };
+      if (next.hidden !== s.hidden) setHidden(next.hidden);
+      if (next.open !== s.open || next.tab !== s.tab) go(setDock(new URLSearchParams(q.toString()), { tab: next.tab as DockTabId, open: next.open }));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the latest state through the ref
+    [pathname],
+  );
+
+  // A panel opening (a card's Open, a design the persona starts, a new playground) opens the dock on it.
+  // Not before the chat's canvases load: a design in the URL only counts as open then, and a
+  // reload must keep the dock as the URL left it.
+  const key = open.join(",");
+  const ready = !!canvases;
+  const seen = useRef<ChatPanel[] | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const before = seen.current;
+    seen.current = open;
+    const opened = before ? open.filter((p) => !before.includes(p)) : [];
+    if (!opened.length) return;
+    setHidden(false);
+    go(setDock(new URLSearchParams(search.toString()), { tab: opened.at(-1)!, open: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the set of open panels changes
+  }, [key, ready]);
+
+  // ⌘\ collapses or reopens the dock and ⌘. hides or restores it with the sidebar. The composer
+  // usually has focus in a chat, so they apply while typing too. ⌘J doesn't: the composer is always there.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const action = dockShortcut(e, false);
+      if (action !== "toggle" && action !== "hideAll") return;
+      e.preventDefault();
+      dispatch({ type: action === "toggle" ? "toggle" : "toggleHidden" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dispatch]);
+
+  // Busy: the persona editing the open design, the playground starting or restarting, a turn running.
+  const designId = open.includes("design") ? canvasPanel.focus : undefined;
+  const events = useChatRunEvents(chat?.current_run_id, live && !!designId).data;
+  const designBusy = useMemo(() => !!designId && live && !!presenceOf(toolCalls(events), designId, true)?.busy, [designId, live, events]);
+  const pgBusy = !!pg && (pg.state === "starting" || !!pg.action);
+
+  const sigOf = (id?: string) => {
+    const c = id ? canvases?.find((x) => x.id === id) : undefined;
+    return c && `${c.seq}:${c.updated_at}`;
+  };
+  const canvasId = canvasPanel.focus ?? canvases?.at(-1)?.id;
+  const unread = useUnread(
+    {
+      design: open.includes("design") ? sigOf(designId) : undefined,
+      canvas: open.includes("canvas") ? sigOf(canvasId) : undefined,
+      playground: pg && open.includes("playground") ? `${pg.state}:${pg.action ?? ""}:${pg.data_reset_at ?? ""}` : undefined,
+      activity: chat ? `${chat.state}:${chat.current_run_id ?? ""}` : undefined,
+    },
+    state.open && !hidden ? (state.tab as DockTabId) : undefined,
+  );
+
+  const content: Record<DockTabId, ReactNode> = {
+    design: <DesignPanel chatId={chatId} live={live} />,
+    canvas: <CanvasDock chatId={chatId} live={live} readOnly={readOnly} agent={agent} />,
+    playground: <PlaygroundPanel chatId={chatId} />,
+    activity,
+  };
+  const busy: Partial<Record<DockTabId, boolean>> = { design: designBusy, playground: pgBusy, activity: live };
+  const tabs: DockTab[] = [...open, "activity" as const].map((id) => ({
+    id,
+    label: LABELS[id],
+    icon: ICONS[id],
+    busy: busy[id],
+    unread: unread.has(id),
+    wide: id !== "activity",
+    content: content[id],
+  }));
+
+  return (
+    <>
+      <Dock uid={uid} tabs={tabs} state={state} dispatch={dispatch} overlay="lg" />
+      <PlaygroundFullscreen chatId={chatId} />
+      {canvasPanel.maximized && open.includes("canvas") ? <CanvasFullscreen chatId={chatId} live={live} readOnly={readOnly} agent={agent} /> : null}
+    </>
+  );
 }
 
 function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string; live: boolean; readOnly: boolean; agent: string; panels: ReturnType<typeof useChatPanels> }) {
@@ -168,7 +294,7 @@ function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string;
       {/* Every open panel stays mounted, so switching doesn't reload a playground or lose a canvas's scroll. */}
       {open.map((p) => (
         <div key={p} data-panel-body={p} hidden={p !== active} className={cx("flex min-h-0 flex-1 flex-col", p !== active && "hidden")}>
-          {p === "design" && <DesignPanel chatId={chatId} live={live} sheet />}
+          {p === "design" && <DesignPanel chatId={chatId} live={live} />}
           {p === "canvas" && <CanvasFullscreen chatId={chatId} live={live} readOnly={readOnly} agent={agent} inline />}
           {p === "playground" && <PlaygroundPanel chatId={chatId} sheet />}
         </div>

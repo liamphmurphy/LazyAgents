@@ -101,3 +101,29 @@ export function subscribeEditorRail(l: () => void): () => void {
   listeners.add(l);
   return () => listeners.delete(l);
 }
+
+// ⌘. in the chat ("reading focus") hides the Vesper sidebar too, for as long as it's claimed,
+// without touching its remembered preference. A count, like the editor rail.
+let focusClaims = 0;
+const focusListeners = new Set<() => void>();
+const notifyFocus = () => focusListeners.forEach((l) => l());
+
+/** Hide the Vesper sidebar; call the returned function to show it again. */
+export function claimReadingFocus(): () => void {
+  focusClaims++;
+  notifyFocus();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    focusClaims--;
+    notifyFocus();
+  };
+}
+
+export const readingFocusActive = () => focusClaims > 0;
+
+export function subscribeReadingFocus(l: () => void): () => void {
+  focusListeners.add(l);
+  return () => focusListeners.delete(l);
+}

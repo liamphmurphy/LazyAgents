@@ -8,6 +8,8 @@ import { cx } from "@/lib/cx";
 import {
   claimEditorRail,
   dockReducer,
+  readingFocusActive,
+  subscribeReadingFocus,
   dockShortcut,
   editorRailActive,
   loadDock,
@@ -29,6 +31,8 @@ export type DockTab = {
   badge?: ReactNode;
   busy?: boolean;
   unread?: boolean;
+  /** Needs the room of a document or a running app rather than a side conversation: the dock widens while it shows. */
+  wide?: boolean;
   content: ReactNode;
 };
 
@@ -48,6 +52,11 @@ export type EditorHeader = {
 /** True while an EditorLayout is mounted: the Vesper sidebar then shows as its icon rail. */
 export function useEditorRail(): boolean {
   return useSyncExternalStore(subscribeEditorRail, editorRailActive, () => false);
+}
+
+/** True while the chat's ⌘. reading focus is on: the Vesper sidebar then hides. */
+export function useReadingFocus(): boolean {
+  return useSyncExternalStore(subscribeReadingFocus, readingFocusActive, () => false);
 }
 
 const COMPOSER = "[data-dock-composer], textarea, [contenteditable='true'], input:not([type='hidden'])";
@@ -167,22 +176,8 @@ export function EditorLayout({
   const hasDock = dock.length > 0;
   const showLeft = !!left && !state.hidden;
   const docked = hasDock && !state.hidden;
-  const dockOpen = docked && state.open && !compact;
 
-  const panels = dock.map((t) => (
-    <div
-      key={t.id}
-      role="tabpanel"
-      id={`${uid}-panel-${t.id}`}
-      aria-labelledby={compact ? undefined : `${uid}-tab-${t.id}`}
-      aria-label={compact ? t.label : undefined}
-      data-dock-panel={`${uid}:${t.id}`}
-      hidden={t.id !== active?.id}
-      className="flex min-h-0 flex-1 flex-col"
-    >
-      {t.content}
-    </div>
-  ));
+  const panels = dockPanels(uid, dock, active?.id, compact);
 
   return (
     <div data-editor-layout={app} className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 flex-col bg-bg md:h-dvh">
@@ -194,72 +189,8 @@ export function EditorLayout({
           </aside>
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
-        {dockOpen && (
-          <aside
-            aria-label="Panel"
-            className="flex w-[360px] flex-none flex-col border-l border-border-subtle bg-surface max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:shadow-[var(--shadow-float)]"
-          >
-            <div className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle bg-sidebar px-2">
-              <div role="tablist" aria-label="Panel tabs" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-                {dock.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    id={`${uid}-tab-${t.id}`}
-                    aria-selected={t.id === active?.id}
-                    aria-controls={`${uid}-panel-${t.id}`}
-                    title={t.id === active?.id ? `${t.label}: click to collapse` : t.label}
-                    onClick={() => dispatch({ type: "select", tab: t.id })}
-                    className={cx(
-                      "relative flex h-7 flex-none items-center gap-1.5 rounded-md px-2 text-[13px]",
-                      t.id === active?.id ? "bg-selected font-medium text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
-                    )}
-                  >
-                    <TabIcon tab={t} />
-                    {t.label}
-                    {t.badge}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                aria-label="Collapse panel"
-                title="Collapse panel (⌘\)"
-                onClick={() => dispatch({ type: "collapse" })}
-                className="grid size-7 flex-none place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg"
-              >
-                <span aria-hidden>⇥</span>
-              </button>
-            </div>
-            {panels}
-          </aside>
-        )}
-        {docked && !dockOpen && (
-          <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">
-            <button
-              type="button"
-              aria-label="Expand panel"
-              title="Expand panel (⌘\)"
-              onClick={() => dispatch({ type: "open", tab: active?.id ?? "" })}
-              className="grid size-7 place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg"
-            >
-              <span aria-hidden>⇤</span>
-            </button>
-            {dock.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                aria-label={`Open ${t.label}`}
-                title={t.label}
-                onClick={() => dispatch({ type: "open", tab: t.id })}
-                className="relative grid size-8 place-items-center rounded-full text-fg-secondary hover:bg-hover hover:text-fg"
-              >
-                <TabIcon tab={t} size={16} />
-              </button>
-            ))}
-          </nav>
-        )}
+        {/* An app's panels unmount while the dock is collapsed, as they always have. */}
+        {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open && !state.hidden ? panels : null} railOnly={compact} />}
       </div>
       {compact && docked && (
         <Sheet open={sheetOpen} onOpenChange={(o) => (o ? setSheetOpen(true) : dispatch({ type: "collapse" }))} title={active?.label ?? ""} className="h-[85dvh]">
@@ -267,6 +198,131 @@ export function EditorLayout({
         </Sheet>
       )}
     </div>
+  );
+}
+
+/** The tab panels of a dock, one per tab, only the active one shown. Kept mounted so switching tabs or collapsing keeps their state. */
+export function dockPanels(uid: string, tabs: DockTab[], activeId: string | undefined, compact = false): ReactNode {
+  return tabs.map((t) => (
+    <div
+      key={t.id}
+      role="tabpanel"
+      id={`${uid}-panel-${t.id}`}
+      aria-labelledby={compact ? undefined : `${uid}-tab-${t.id}`}
+      aria-label={compact ? t.label : undefined}
+      data-dock-panel={`${uid}:${t.id}`}
+      hidden={t.id !== activeId}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      {t.content}
+    </div>
+  ));
+}
+
+/**
+ * The desktop dock on the right of an EditorLayout or the chat: a tab strip with ⇥ over the active
+ * tab's panel, or, collapsed, a 44px rail of tab icons in the same place. Controlled: the owner
+ * keeps the state (EditorLayout in localStorage, the chat in the URL). By default the panels stay
+ * mounted while collapsed (the chat's playground shouldn't reload). `overlay` is the breakpoint below which the open dock floats over the content.
+ */
+export function Dock({
+  uid,
+  tabs,
+  state,
+  dispatch,
+  panels,
+  overlay = "xl",
+  railOnly = false,
+}: {
+  uid: string;
+  tabs: DockTab[];
+  state: DockState;
+  dispatch: (a: DockAction) => void;
+  /** The tab panels, if not the default dockPanels; null renders none (they unmount while collapsed). */
+  panels?: ReactNode;
+  overlay?: "xl" | "lg";
+  /** Phones: only the rail, whose icons open the owner's sheet. */
+  railOnly?: boolean;
+}) {
+  const active = tabs.find((t) => t.id === state.tab) ?? tabs[0];
+  if (!tabs.length) return null;
+  // ⌘. hides the dock but keeps its panels mounted (the owner passes null panels to unmount them).
+  const shown = state.open && !state.hidden;
+  return (
+    <>
+      {!railOnly && <aside
+        aria-label="Panel"
+        hidden={!shown}
+        className={cx(
+          "flex flex-none flex-col border-l border-border-subtle bg-surface",
+          active?.wide ? "w-[540px] max-w-[55%]" : "w-[360px]",
+          overlay === "xl"
+            ? "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:shadow-[var(--shadow-float)]"
+            : "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:max-w-[calc(100%-44px)] max-lg:shadow-[var(--shadow-float)]",
+          !shown && "hidden",
+        )}
+      >
+        <div className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle bg-sidebar px-2">
+          <div role="tablist" aria-label="Panel tabs" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`${uid}-tab-${t.id}`}
+                aria-selected={t.id === active?.id}
+                aria-controls={`${uid}-panel-${t.id}`}
+                title={t.id === active?.id ? `${t.label}: click to collapse` : t.label}
+                onClick={() => dispatch({ type: "select", tab: t.id })}
+                className={cx(
+                  "relative flex h-7 flex-none items-center gap-1.5 rounded-md px-2 text-[13px]",
+                  t.id === active?.id ? "bg-selected font-medium text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
+                )}
+              >
+                <TabIcon tab={t} />
+                {t.label}
+                {t.badge}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-label="Collapse panel"
+            title="Collapse panel (⌘\)"
+            onClick={() => dispatch({ type: "collapse" })}
+            className="grid size-7 flex-none place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg"
+          >
+            <span aria-hidden>⇥</span>
+          </button>
+        </div>
+        {panels === undefined ? dockPanels(uid, tabs, active?.id) : panels}
+      </aside>}
+      {!state.hidden && (railOnly || !state.open) && (
+        <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">
+          <button
+            type="button"
+            aria-label="Expand panel"
+            title="Expand panel (⌘\)"
+            onClick={() => dispatch({ type: "open", tab: active?.id ?? "" })}
+            className="grid size-7 place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg"
+          >
+            <span aria-hidden>⇤</span>
+          </button>
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-label={`Open ${t.label}${t.busy ? ", working" : ""}${t.unread ? ", unread" : ""}`}
+              title={t.label}
+              onClick={() => dispatch({ type: "open", tab: t.id })}
+              className="relative grid size-8 place-items-center rounded-full text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              <TabIcon tab={t} size={16} />
+            </button>
+          ))}
+        </nav>
+      )}
+    </>
   );
 }
 

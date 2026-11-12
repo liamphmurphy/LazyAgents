@@ -36,6 +36,8 @@ import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflo
 import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
+import { focusActivityStep, useActivityFocus } from "./activity-focus";
+import { setDock } from "@/lib/chat-panels";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -364,6 +366,46 @@ function ActivityLog({ list, turns, groups, running, runId, since, focus }: { li
   );
 }
 
+/** Activity's cost, model line and log, for the compact tab and the desktop dock's tab. */
+function ActivityBody({ chat: c, list, groups, focus }: { chat: NonNullable<ReturnType<typeof useChat>["data"]>; list: Message[] | undefined; groups: Groups; focus?: { key: string; at: number } }) {
+  const current: Selection = { harness: c.harness, model: c.model, auto: !!c.auto_model };
+  const running = c.state === "running";
+  const lastUser = list?.findLast((m) => m.role === "user");
+  const since = runningSince(list) ?? lastUser?.created_at;
+  return (
+    <>
+      <div className="mx-auto mb-4 flex max-w-[860px] flex-wrap items-center gap-2">
+        <ChatCostChip chatId={c.id} project={c.project} />
+        <span className="truncate font-mono text-xs text-fg-tertiary">
+          {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+          {current.auto && " (auto)"}
+          {c.effort && ` · ${effortLabel(c.effort)} effort`}
+        </span>
+      </div>
+      <ActivityLog list={list} turns={turnWindows(list)} groups={groups} running={running} runId={c.current_run_id} since={since} focus={focus} />
+    </>
+  );
+}
+
+/** The desktop dock's Activity tab: beside the conversation, so a reply and its trace read side by side. */
+export function ChatActivity({ chatId }: { chatId: string }) {
+  const chat = useChat(chatId).data;
+  const target = useSearchParams().get("message");
+  // The same query the conversation reads, so it's shared rather than fetched twice.
+  const list = useChatMessages(chatId, target ? 1000 : 200).data?.messages;
+  const groups: Groups = useChatModels().data;
+  const focus = useActivityFocus();
+  if (!chat) return null;
+  return (
+    // Its own tooltip provider: the dock sits outside the conversation's.
+    <Tooltip.Provider delayDuration={200}>
+      <div data-testid="chat-activity" className="flex-1 overflow-y-auto px-4 py-4">
+        <ActivityBody chat={chat} list={list} groups={groups} focus={focus} />
+      </div>
+    </Tooltip.Provider>
+  );
+}
+
 const DRAFT_KEY = (id: string) => `lazyagents.chat-draft:${id}`;
 function putDraft(id: string, text: string) {
   try {
@@ -387,7 +429,12 @@ function dropDraft(id: string) {
   }
 }
 
-export function Conversation({ id, onNew, actions }: { id: string; onNew: () => void; actions?: ReactNode }) {
+/**
+ * `activityInDock`: the chat page's dock (chat-panel-host) shows Activity beside the conversation
+ * on desktop, so the header has no Chat/Activity switch there. Chats embedded in an app's dock
+ * (Designs, Docs, Slides, Finance) leave it unset and keep the switch.
+ */
+export function Conversation({ id, onNew, actions, activityInDock = false }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -420,11 +467,20 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [picked, setPicked] = useState<Selection | null>(null);
   // null keeps the chat's effort; "default" clears it.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
+  // The header switches the conversation for Activity, except on the chat page's desktop dock, where Activity is a tab beside it.
   const [tab, setTab] = useState<"chat" | "activity">("chat");
   const compact = useCompact();
-  // "View reasoning" on a chat step: the Activity tab opens on that step.
+  const dockActivity = activityInDock && !compact;
+  const view = dockActivity ? "chat" : tab;
+  // "View reasoning" on a chat step: Activity opens on that step (the compact tab, or the dock's tab).
   const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
   const openStep = (key: string) => {
+    if (dockActivity) {
+      focusActivityStep(key);
+      const q = setDock(new URLSearchParams(window.location.search), { tab: "activity", open: true });
+      router.replace(`${window.location.pathname}?${q.toString()}`, { scroll: false });
+      return;
+    }
     setTab("activity");
     setTraceFocus({ key, at: Date.now() });
   };
@@ -490,7 +546,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The running turn starts after the newest message, which may be a reply, not
   // the person's: a persona handing on, or the image follow-up.
   const since = runningSince(list) ?? lastUser?.created_at;
-  const turns = turnWindows(list);
   const drop = useFileDrop(files.add, !!c && !c.archived && !locked);
   // From the playground: Send to chat's report and screenshot, or an ask to map its API.
   const addFiles = useRef(files.add);
@@ -836,41 +891,35 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.temporary && <TemporaryBadge />}
           <span className="flex-1" />
           <ChatRunsPill chatId={c.id} />
-          <span className="flex-none">
-          <Tabs
-            label="Chat view"
-            value={tab}
-            onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
-            items={[
-              { key: "chat", label: "Chat" },
-              { key: "activity", label: "Activity" },
-            ]}
-          />
-          </span>
+          {!dockActivity && (
+            <span className="flex-none">
+              <Tabs
+                label="Chat view"
+                value={tab}
+                onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
+                items={[
+                  { key: "chat", label: "Chat" },
+                  { key: "activity", label: "Activity" },
+                ]}
+              />
+            </span>
+          )}
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
         )}
-        {c.space && tab === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
-        {/* Mounted while hidden so memory notices still refresh. */}
-        <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="mx-auto mb-4 flex max-w-[860px] items-center gap-2">
-            <ChatCostChip chatId={c.id} project={c.project} />
-            {current && (
-              <span className="truncate font-mono text-xs text-fg-tertiary">
-                {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
-                {current.auto && " (auto)"}
-                {c.effort && ` · ${effortLabel(c.effort)} effort`}
-              </span>
-            )}
+        {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
+        {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
+        {!dockActivity && (
+          <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
+            <ActivityBody chat={c} list={list} groups={groups} focus={traceFocus} />
           </div>
-          <ActivityLog list={list} turns={turns} groups={groups} running={running} runId={c.current_run_id} since={since} focus={traceFocus} />
-        </div>
+        )}
         <div
           ref={scroller}
           role="tabpanel"
           aria-label="Chat"
-          hidden={tab !== "chat"}
+          hidden={view !== "chat"}
           className="relative flex-1 overflow-y-auto px-6 py-5"
           // Only the person's input lets go of the end. A scroll event alone can't tell: the one for our
           // own scroll, or for the browser clamping it as content shrinks, may land after the content grew

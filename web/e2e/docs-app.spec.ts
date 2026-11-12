@@ -152,6 +152,9 @@ test("a new document opens as a page you type on, beside its chat", async ({ pag
   await expect.poll(() => mock.posted.filter((x) => x.chat === chatId).map((x) => x.body.body)).toContain("Add a day in Porto");
   // Chat lives in the dock; there's no Hide chat button any more.
   await expect(page.getByRole("button", { name: /Hide chat/ })).toHaveCount(0);
+  // An app's chat keeps its own Chat/Activity switch: only the chat page puts Activity in a dock tab.
+  await chat.getByRole("tablist", { name: "Chat view" }).getByRole("tab", { name: "Activity" }).click();
+  await expect(chat.getByRole("tabpanel", { name: "Activity" })).toBeVisible();
 });
 
 test("opening a document saves nothing, even when the editor tidies it", async ({ page }) => {

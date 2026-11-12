@@ -17,7 +17,7 @@ import { SidebarSpaces, SpaceRail } from "@/app/(app)/spaces/_components/spaces-
 import { NewSpaceDialog } from "@/app/(app)/spaces/_components/new-space-dialog";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { AppsMenu } from "./apps-menu";
-import { useEditorRail } from "./editor-layout";
+import { useEditorRail, useReadingFocus } from "./editor-layout";
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
@@ -169,6 +169,8 @@ export function Sidebar() {
   const [expanded, setExpanded] = useExpanded();
   // An app editor shows the menu as its rail without touching the remembered preference.
   const editorRail = useEditorRail();
+  // The chat's ⌘. reading focus hides the menu altogether, again leaving the preference alone.
+  const readingFocus = useReadingFocus();
   const [creatingSpace, setCreatingSpace] = useState(false);
   // Only a toggle animates, not restoring the remembered state after mount.
   const [toggled, setToggled] = useState(false);
@@ -179,6 +181,7 @@ export function Sidebar() {
   const settingsNeedYou = counts.settings > 0;
   const newSpace = () => setCreatingSpace(true);
   const searchEvent = () => window.dispatchEvent(new Event("la:search"));
+  if (readingFocus) return null;
   if (!expanded || editorRail) {
     return (
       <aside aria-label="Main menu" onTransitionEnd={settle} className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pb-3.5 pt-3 min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh", toggled && "motion-sidebar")}>
