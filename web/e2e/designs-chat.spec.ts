@@ -102,3 +102,83 @@ test("a design the persona starts opens beside the chat and leaves a Design card
   await card.first().getByRole("button", { name: "Present" }).click();
   await expect(page).toHaveURL(new RegExp(`/present/designs/${D}`));
 });
+
+// The chat's panels share the apps' dock (LAZYAGENTS-165): a tab per open panel plus Activity.
+const dock = (page: Page) => page.getByRole("complementary", { name: "Panel" });
+const rail = (page: Page) => page.getByRole("navigation", { name: "Panel rail" });
+const dockTab = (page: Page, name: string) => dock(page).getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: new RegExp(name) });
+const mod = process.platform === "darwin" ? "Meta" : "Control";
+
+async function openDesign(page: Page) {
+  const s = await install(page);
+  await box(page).fill("Now sketch onboarding");
+  await box(page).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[^/?]+/);
+  s.created = true;
+  await box(page).fill(`canvas: ${D}`);
+  await box(page).press("Enter");
+  await expect(page.getByTestId("design-panel")).toBeVisible();
+  return s;
+}
+
+test("with a design open, the dock collapses to its rail and reopens, and the URL keeps it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openDesign(page);
+  await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
+  await expect(dockTab(page, "Activity")).toBeVisible();
+  await expect(rail(page)).toHaveCount(0);
+
+  // ⇥ collapses it in place; the rail's icon reopens that tab.
+  await dock(page).getByRole("button", { name: "Collapse panel" }).click();
+  await expect(dock(page)).toHaveCount(0);
+  await expect(rail(page).getByRole("button", { name: "Open Design" })).toBeVisible();
+  await rail(page).getByRole("button", { name: "Open Design" }).click();
+  await expect(page.getByTestId("design-panel")).toBeVisible();
+
+  // Clicking the active tab collapses it; ⌘\ reopens it.
+  await dockTab(page, "Design").click();
+  await expect(rail(page)).toBeVisible();
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
+
+  // Activity sits beside the conversation, and a reload keeps the tab and the open panels.
+  await dockTab(page, "Activity").click();
+  await expect(page.getByTestId("chat-activity")).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" })).toBeVisible();
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(rail(page)).toBeVisible();
+  await page.reload();
+  await expect(rail(page).getByRole("button", { name: "Open Design" })).toBeVisible();
+  await expect(dock(page)).toHaveCount(0);
+  await rail(page).getByRole("button", { name: "Open Activity" }).click();
+  await expect(dockTab(page, "Activity")).toHaveAttribute("aria-selected", "true");
+  await page.reload();
+  await expect(dockTab(page, "Activity")).toHaveAttribute("aria-selected", "true");
+  await expect(dockTab(page, "Design")).toBeVisible();
+
+  // Closing the design removes its tab.
+  await dockTab(page, "Design").click();
+  await page.getByTestId("design-panel").getByRole("button", { name: "Close the design" }).click();
+  await expect(dockTab(page, "Design")).toHaveCount(0);
+  await expect(dockTab(page, "Activity")).toHaveAttribute("aria-selected", "true");
+});
+
+test("⌘. hides the Vesper sidebar and the dock, and restores both without touching the preference", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openDesign(page);
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  await expect(menu).toBeVisible();
+  await expect(dock(page)).toBeVisible();
+
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(menu).toHaveCount(0);
+  await expect(dock(page)).toHaveCount(0);
+  await expect(rail(page)).toHaveCount(0);
+  await expect(page.getByRole("log", { name: "Conversation" })).toBeVisible();
+
+  await page.keyboard.press(`${mod}+Period`);
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute("data-expanded", "");
+  await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
+  expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBe("1");
+});

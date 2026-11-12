@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activePanel, closePanel, dragCloses, hideSheet, openPanels, openThreads, sheetHidden, switchPanel } from "./chat-panels.ts";
+import { activePanel, closePanel, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThreads, setDock, sheetHidden, switchPanel } from "./chat-panels.ts";
 
 const D = "01a1bbdd-4937-7baa-af62-b3726025d331";
 const C = "01a1bbdd-4937-7baa-af62-b3726025d332";
@@ -103,4 +103,35 @@ test("a dismissed sheet stays dismissed until a switch shows it again", () => {
   const shown = switchPanel(hidden, "playground");
   assert.equal(sheetHidden(shown), false);
   assert.equal(shown.get("playground"), "open");
+});
+
+test("a maximised canvas is still the open canvas panel", () => {
+  assert.deepEqual(openPanels(q(`canvas=${C}&canvas_view=max`), [D]), ["canvas"]);
+  assert.equal(closePanel(q(`canvas=${C}&canvas_view=max`), "canvas").get("canvas_view"), null);
+});
+
+test("dock: Activity is the tab when nothing is open, and the dock starts on its rail", () => {
+  assert.equal(dockTab(q(""), []), "activity");
+  assert.equal(dockOpen(q(""), []), false);
+  assert.equal(dockOpen(q("panel=activity"), []), true);
+});
+
+test("dock: an open panel opens the dock on it, unless the person collapsed it", () => {
+  const open = openPanels(q(`canvas=${D}`), [D]);
+  assert.equal(dockTab(q(`canvas=${D}`), open), "design");
+  assert.equal(dockOpen(q(`canvas=${D}`), open), true);
+  assert.equal(dockOpen(q(`canvas=${D}&dock=0`), open), false);
+  // A picked panel that has since closed falls back to the frontmost open one.
+  assert.equal(dockTab(q(`canvas=${D}&panel=playground`), open), "design");
+  assert.equal(dockTab(q(`canvas=${D}&panel=activity`), open), "activity");
+});
+
+test("dock: setDock writes the tab and open state, keeping the panels", () => {
+  const next = setDock(q(`canvas=${D}&playground=open`), { tab: "activity", open: false });
+  assert.equal(next.get("panel"), "activity");
+  assert.equal(next.get("dock"), "0");
+  assert.deepEqual(openPanels(next, [D]), ["design", "playground"]);
+  assert.equal(dockTab(next, openPanels(next, [D])), "activity");
+  assert.equal(dockOpen(next, []), false);
+  assert.equal(dockOpen(setDock(next, { tab: "design", open: true }), []), true);
 });
