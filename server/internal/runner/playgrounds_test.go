@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/playground"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
@@ -33,6 +35,7 @@ type fakePlaygrounds struct {
 	started map[uuid.UUID]int
 	stopped map[uuid.UUID]int
 	fail    error
+	pulled  []string
 }
 
 func (f *fakePlaygrounds) StartPlayground(_ context.Context, pg runner.PlaygroundRun, step func(string)) (map[string]string, error) {
@@ -55,6 +58,13 @@ func (f *fakePlaygrounds) StopPlayground(_ context.Context, id uuid.UUID) error 
 	defer f.mu.Unlock()
 	f.stopped[id]++
 	return nil
+}
+
+func (f *fakePlaygrounds) PullMissing(_ context.Context, image string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pulled = append(f.pulled, image)
+	return true, nil
 }
 
 func (f *fakePlaygrounds) RunningPlaygrounds(context.Context) ([]uuid.UUID, error) { return nil, nil }
@@ -116,10 +126,15 @@ func setupPlaygrounds(t *testing.T, ports int) playgroundRig {
 // startPlayground gives a chat with a workspace a playground to start.
 func (rig playgroundRig) startPlayground() store.Playground {
 	rig.t.Helper()
+	return rig.startPlaygroundWith(playground.Spec{Processes: []playground.Process{{Name: "web", Command: "npm run dev", Port: 3000}}})
+}
+
+func (rig playgroundRig) startPlaygroundWith(s playground.Spec) store.Playground {
+	rig.t.Helper()
 	chat := rig.startChat("Show me the app")
 	rig.until("chat reply", func() bool { return rig.chat(chat.ID).State == "idle" })
 	run := rig.chatRun(chat.ID)
-	spec, _ := json.Marshal(playground.Spec{Processes: []playground.Process{{Name: "web", Command: "npm run dev", Port: 3000}}})
+	spec, _ := json.Marshal(s)
 	pg, err := rig.q.StartChatPlayground(rig.ctx, store.StartChatPlaygroundParams{WorkspaceID: rig.ws, UserID: rig.me.ID, ChatID: chat.ID, RunID: &run.ID, Spec: spec})
 	if err != nil {
 		rig.t.Fatal(err)
@@ -280,5 +295,41 @@ func TestChatTurnsReachTheirRunningPlayground(t *testing.T) {
 	}
 	if !regexp.MustCompile(`enter=http://playground:\d+/__vesper/enter\?token=[0-9a-f]{48}`).MatchString(reply) {
 		t.Errorf("turn saw no enter URL: %q", reply)
+	}
+}
+
+// A runner pulls the service images its install's playgrounds used lately,
+// each once, and not another install's.
+func TestRunnerPullsRecentPlaygroundImages(t *testing.T) {
+	rig := setupPlaygrounds(t, 1)
+	pg := rig.startPlaygroundWith(playground.Spec{
+		Services: []agentdef.Service{
+			{Name: "postgres", Image: "postgres:17-alpine"},
+			{Name: "s3", Image: "chrislusf/seaweedfs:4.48"},
+			{Name: "replica", Image: "postgres:17-alpine"},
+		},
+		Processes: []playground.Process{{Name: "web", Command: "npm run dev", Port: 3000}},
+	})
+	rig.until("playground running", func() bool { return rig.playground(pg.ChatID).State == "running" })
+
+	pulled := func() []string {
+		rig.fake.mu.Lock()
+		defer rig.fake.mu.Unlock()
+		got := rig.fake.pulled
+		rig.fake.pulled = nil
+		return got
+	}
+	pulled() // what ServePlaygrounds pulled when the rig started: nothing yet
+	rig.runner.PullPlaygroundImages(rig.ctx, rig.fake)
+	if got, want := pulled(), []string{"chrislusf/seaweedfs:4.48", "postgres:17-alpine"}; !slices.Equal(got, want) {
+		t.Errorf("pulled %q, want %q", got, want)
+	}
+
+	if _, err := rig.pool.Exec(rig.ctx, "UPDATE playgrounds SET stack = 'another-install' WHERE id = $1", pg.ID); err != nil {
+		t.Fatal(err)
+	}
+	rig.runner.PullPlaygroundImages(rig.ctx, rig.fake)
+	if got := pulled(); len(got) != 0 {
+		t.Errorf("pulled %q for another install's playground", got)
 	}
 }

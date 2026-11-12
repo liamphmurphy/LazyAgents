@@ -113,3 +113,13 @@ ON CONFLICT (workspace_id, repo) DO UPDATE SET spec = excluded.spec, saved_from_
 
 -- name: GetPlaygroundSpec :one
 SELECT * FROM playground_specs WHERE workspace_id = $1 AND repo = $2;
+
+-- name: RecentPlaygroundImages :many
+-- The service images this install's playgrounds used lately, so a runner
+-- can pull those it lacks before a start has to wait for them.
+SELECT DISTINCT (s ->> 'image')::text AS image
+FROM playgrounds p,
+  jsonb_array_elements(CASE WHEN jsonb_typeof(p.spec -> 'services') = 'array' THEN p.spec -> 'services' ELSE '[]'::jsonb END) s
+WHERE p.stack = sqlc.arg(stack)::text AND p.updated_at > now() - interval '30 days' AND coalesce(s ->> 'image', '') <> ''
+ORDER BY image
+LIMIT 20;

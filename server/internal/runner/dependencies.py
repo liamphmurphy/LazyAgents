@@ -42,7 +42,7 @@ def inspect_caches():
             continue
         directory = Path(location)
         exists = directory.is_dir()
-        report['caches'].append({'name': name, 'path': location, 'shared': variable != 'GOCACHE',
+        report['caches'].append({'name': name, 'path': location, 'shared': True,
                                  'exists': exists, 'writable': exists and os.access(directory, os.W_OK)})
 
 

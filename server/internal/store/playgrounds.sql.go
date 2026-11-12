@@ -260,6 +260,37 @@ func (q *Queries) PlaygroundsForRun(ctx context.Context, runID *uuid.UUID) ([]Pl
 	return items, nil
 }
 
+const recentPlaygroundImages = `-- name: RecentPlaygroundImages :many
+SELECT DISTINCT (s ->> 'image')::text AS image
+FROM playgrounds p,
+  jsonb_array_elements(CASE WHEN jsonb_typeof(p.spec -> 'services') = 'array' THEN p.spec -> 'services' ELSE '[]'::jsonb END) s
+WHERE p.stack = $1::text AND p.updated_at > now() - interval '30 days' AND coalesce(s ->> 'image', '') <> ''
+ORDER BY image
+LIMIT 20
+`
+
+// The service images this install's playgrounds used lately, so a runner
+// can pull those it lacks before a start has to wait for them.
+func (q *Queries) RecentPlaygroundImages(ctx context.Context, stack string) ([]string, error) {
+	rows, err := q.db.Query(ctx, recentPlaygroundImages, stack)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var image string
+		if err := rows.Scan(&image); err != nil {
+			return nil, err
+		}
+		items = append(items, image)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const refusePlayground = `-- name: RefusePlayground :exec
 UPDATE playgrounds SET state = 'failed', error = $1, step = '', updated_at = now()
 WHERE id = $2 AND state = 'starting' AND runner_id IS NULL

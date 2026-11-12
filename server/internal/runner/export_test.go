@@ -18,3 +18,9 @@ func (r *Runner) HandoffPrompt(ctx context.Context, runID uuid.UUID, previousHar
 // TickChecks runs only the checks of delegated runs that called complete_run,
 // without claiming the turns they wake.
 func (r *Runner) TickChecks(ctx context.Context) { r.tickChecks(ctx) }
+
+// PullPlaygroundImages pulls recent playgrounds' missing service images, as
+// ServePlaygrounds does in the background.
+func (r *Runner) PullPlaygroundImages(ctx context.Context, pb PlaygroundBackend) {
+	r.pullPlaygroundImages(ctx, pb)
+}
