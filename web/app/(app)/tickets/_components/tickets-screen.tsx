@@ -6,31 +6,30 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseE
 import { cx } from "@/lib/cx";
 import { useCompact } from "@/lib/viewport";
 import type { TicketStatus, TicketSummary } from "@/lib/api/client";
-import { useBulkEach, useBootstrap, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
+import { useBulkEach, useBootstrap, useInbox, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
+import { filterText, needsYouByTicket, resolveFilter, withoutProjectToken, workGroups, type WorkGroup } from "@/lib/work-rows";
 import {
   GROUPS,
   GROUP_NAME,
   applyLocalFilters,
-  groupTickets,
   moveFocus,
   parseGroup,
   rangeKeys,
   type BulkResult,
-  type TicketGroup,
 } from "@/lib/ticket-list";
 import { ButtonLink } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, FilterChip, Kbd, Skeleton } from "@/components/ui/primitives";
 import { AgentAvatar, UnassignedAvatar } from "@/components/domain/avatars";
-import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
-import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
-import { AgentPicker, floatPanel } from "@/components/domain/pickers";
+import { PriorityGlyph } from "@/components/domain/glyphs";
+import { PRIORITY_NAME } from "@/components/domain/meta";
+import { floatPanel } from "@/components/domain/pickers";
 import { SavedViewHeader, SavedViewTabs } from "@/components/domain/saved-views";
 import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { BulkBar, BulkResultPanel } from "./bulk-bar";
-import { COL, CompactTicketRow, TicketRow, type Density } from "./ticket-row";
+import { CompactTicketRow, TicketRow, type Density } from "./ticket-row";
 import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
 
 const VIEWS: Array<{ key: TicketView; label: string }> = [
@@ -76,17 +75,14 @@ function isTyping(el: EventTarget | null) {
 
 function ListSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Loading tickets">
+    <div aria-busy="true" aria-label="Loading tickets" className="px-3 pt-4">
       {[0, 1].map((g) => (
-        <div key={g}>
-          <div className="flex h-[38px] items-center gap-3 border-b border-border-row bg-surface-sunken px-6">
-            <Skeleton className="size-3.5 rounded-full" />
-            <Skeleton className="h-3 w-24" />
-          </div>
+        <div key={g} className="mb-5">
+          <Skeleton className="mx-3 mb-2 h-2.5 w-24" />
           {[0.6, 0.45, 0.7, 0.5].map((w, i) => (
-            <div key={i} className="flex h-11 items-center gap-3 border-b border-border-row px-6 pl-[50px]">
-              <Skeleton className="h-3 w-16" />
+            <div key={i} className="flex h-11 items-center gap-3 px-3">
               <Skeleton className="size-3.5 rounded-full" />
+              <Skeleton className="h-3 w-16" />
               <Skeleton className="h-3" style={{ width: `${w * 50}%` }} />
             </div>
           ))}
@@ -96,30 +92,23 @@ function ListSkeleton() {
   );
 }
 
-function GroupLabel({ g }: { g: TicketGroup }) {
-  if (g.by === "status") {
-    const s = g.id as TicketStatus;
-    return (
-      <>
-        <StatusGlyph state={s} surface="var(--surface-sunken)" label={false} />
-        <span className="font-medium">{STATUS_NAME[s]}</span>
-      </>
-    );
-  }
+/** The group's quiet uppercase label: Needs you, a status bucket, or the group-by's value. */
+function GroupLabel({ g }: { g: WorkGroup }) {
+  if (g.needs || g.by === "status") return <span className={g.needs ? "text-pill-human-fg" : undefined}>{g.title}</span>;
   if (g.by === "priority") {
     const p = g.id as TicketSummary["priority"];
     return (
       <>
         <PriorityGlyph priority={p} label={false} />
-        <span className="font-medium">{PRIORITY_NAME[p]}</span>
+        <span>{PRIORITY_NAME[p]}</span>
       </>
     );
   }
   if (g.by === "epic") {
     return (
       <>
-        <Icon name="epics" size={14} className={g.id === "none" ? "text-fg-tertiary" : "text-fg-secondary"} />
-        <span className={cx("font-medium", g.id === "none" && "text-fg-secondary")}>{g.id === "none" ? "No epic" : g.name}</span>
+        <Icon name="epics" size={12} />
+        <span>{g.id === "none" ? "No epic" : g.name}</span>
       </>
     );
   }
@@ -127,28 +116,28 @@ function GroupLabel({ g }: { g: TicketGroup }) {
   return a ? (
     <>
       <AgentAvatar name={a.name} colorIndex={a.color_index} label={false} />
-      <span className="font-medium">{a.name}</span>
+      <span>{a.name}</span>
     </>
   ) : (
     <>
       <UnassignedAvatar />
-      <span className="font-medium text-fg-secondary">Unassigned</span>
+      <span>Unassigned</span>
     </>
   );
 }
 
-function groupLabelText(g: TicketGroup) {
-  if (g.by === "status") return STATUS_NAME[g.id as TicketStatus];
+function groupLabelText(g: WorkGroup) {
+  if (g.needs || g.by === "status") return g.title;
   if (g.by === "priority") return PRIORITY_NAME[g.id as TicketSummary["priority"]];
   if (g.id === "none") return g.by === "epic" ? "No epic" : "Unassigned";
   return g.name;
 }
 
 /** Composer link that starts a ticket in this group. */
-function newInGroup(g: TicketGroup, project?: string) {
+function newInGroup(g: WorkGroup, project?: string) {
   const p = new URLSearchParams();
   if (project) p.set("project", project);
-  if (g.by === "status") p.set("status", g.id);
+  if (g.by === "status" && !g.needs) p.set("status", g.id === "done_week" ? "done" : g.id);
   return `/tickets/new${p.size ? `?${p}` : ""}`;
 }
 
@@ -166,19 +155,30 @@ export function TicketsScreen() {
   const unestimated = params.get("unestimated") === "true";
   const group = parseGroup(params.get("group"));
   const svId = params.get("sv");
-  const [search, setSearch] = useState(q);
-  // Opening a saved view (or Discard) changes ?q= from outside the box; the
-  // box's own debounced writes (pushedQ) must not overwrite what's typed since.
-  const [urlQ, setUrlQ] = useState(q);
-  const [pushedQ, setPushedQ] = useState(q);
-  if (q !== urlQ) {
-    setUrlQ(q);
-    if (q !== pushedQ) setSearch(q);
-  }
   const compact = useCompact();
   const density = useSyncExternalStore(subscribeDensity, readDensity, () => "comfortable" as Density);
 
   const boot = useBootstrap();
+  // The filter box shows the URL's epic, agent and status as tokens, then the search.
+  // project: tokens move the project picker, which shows the project.
+  const urlText = filterText({ epic: epic && (boot.data?.epics.find((e) => e.id === epic)?.name ?? epic), agent: assignee, status, q });
+  const [search, setSearch] = useState(urlText);
+  // Opening a saved view (or Discard) changes the URL from outside the box; the
+  // box's own debounced writes (pushedText) must not overwrite what's typed since.
+  const [seenText, setSeenText] = useState(urlText);
+  // Matches once: after the URL catches up, a later return to the same text (Back) must reset the box.
+  const [pushedText, setPushedText] = useState<string | null>(null);
+  if (urlText !== seenText) {
+    setSeenText(urlText);
+    if (urlText !== pushedText) setSearch(urlText);
+    setPushedText(null);
+  }
+  const lookups = useMemo(
+    () => ({ projects: boot.data?.projects ?? [], epics: boot.data?.epics ?? [], agents: boot.data?.agents ?? [], currentEpic: epic }),
+    [boot.data, epic],
+  );
+  const bootReady = !!boot.data;
+  const resolved = useMemo(() => resolveFilter(search, lookups), [search, lookups]);
   const each = useBulkEach();
   // No ?project= resolves to the remembered project; "All projects" leaves it empty.
   const scope = useProjectScope("optional");
@@ -186,19 +186,31 @@ export function TicketsScreen() {
   const savedViews = useSavedViews();
   const savedView = svId ? savedViews.data?.find((v) => v.id === svId) : undefined;
 
-  // Debounced search → URL, so views are shareable.
+  // Debounced box → URL, so views are shareable. Tokens that match nothing aren't applied.
   useEffect(() => {
-    if (search === q) return;
+    if (search === urlText || !bootReady) return;
     const id = setTimeout(() => {
-      setPushedQ(search);
-      setParam("q", search || null);
+      const r = resolveFilter(search, lookups);
+      const epicName = r.epic && lookups.epics.find((e) => e.id === r.epic)?.name;
+      setPushedText(filterText({ epic: epicName, agent: r.assignee, status: r.status, q: r.q }));
+      // project: moves the picker, which then shows it; the token leaves the box so it can't reapply later.
+      if (r.project) setSearch(withoutProjectToken(search));
+      replaceParams((next) => {
+        if (r.project) next.set("project", r.project);
+        for (const [k, v] of [["epic", r.epic], ["assignee", r.assignee], ["status", r.status], ["q", r.q]] as const) {
+          if (v) next.set(k, v);
+          else next.delete(k);
+        }
+      });
     }, 250);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, bootReady]);
 
   function replaceParams(edit: (p: URLSearchParams) => void) {
-    const next = new URLSearchParams(params);
+    // From the live URL, not this render's params: a debounced write that fires after a
+    // navigation committed must not put back filters (or the project) from before it.
+    const next = new URLSearchParams(window.location.search);
     edit(next);
     router.replace(`/tickets${next.size ? `?${next}` : ""}`);
   }
@@ -212,7 +224,10 @@ export function TicketsScreen() {
   };
 
   const tickets = useMemo(() => applyLocalFilters(list.data ?? [], { blocked: blockedOnly, unestimated }), [list.data, blockedOnly, unestimated]);
-  const groups = useMemo(() => groupTickets(tickets, group), [tickets, group]);
+  // Tickets whose run waits on the person, from the same queue as the Inbox.
+  const inbox = useInbox(project);
+  const needs = useMemo(() => needsYouByTicket(inbox.data), [inbox.data]);
+  const groups = useMemo(() => workGroups(tickets, needs, group), [tickets, needs, group]);
   const flat = useMemo(() => groups.flatMap((g) => g.tickets.map((t) => t.key)), [groups]);
 
   // Selection (x, Shift+x, shift-click ranges) and the j/k cursor, keyed by ticket key.
@@ -303,38 +318,42 @@ export function TicketsScreen() {
   }
   // Archived projects keep their read-only history (banner below); unknown keys and redirects don't list.
   const blocked = scope.status !== "ready" && !(scope.status === "unavailable" && scope.archived);
-  const agentFilter = boot.data?.agents.find((a) => a.handle === assignee);
   const projectEpics = (boot.data?.epics ?? []).filter((e) => !proj || e.project_id === proj.id);
   const filtered = !!(q || assignee || status || blockedOnly || unestimated || epic || ready);
   const allSelected = flat.length > 0 && selectedKeys.length === flat.length;
 
   // The list's filters: in the bar beside the views when wide, one sideways-scrolling line of chips when compact.
   const chipH = compact ? "h-[32px]" : "h-[26px]";
-  const filterControls = (
-    <>
-      <button type="button" aria-pressed={ready} className={cx(`${chipH} rounded-sm border border-border-strong px-2 text-xs hover:bg-hover`, ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
-      {epic && <FilterChip label="Epic" value={`${boot.data?.epics.find(e => e.id === epic)?.name ?? "Selected epic"} ×`} onClick={() => setParam("epic", null)} title="Clear epic filter"/>}
-      {status && <FilterChip label="Status" value={`${STATUS_NAME[status] ?? status} ×`} onClick={() => setParam("status", null)} title="Clear status filter" />}
-      {blockedOnly && <FilterChip label="Only" value="Blocked ×" onClick={() => setParam("blocked", null)} title="Clear blocked filter" />}
-      {unestimated && <FilterChip label="Only" value="Unestimated ×" onClick={() => setParam("unestimated", null)} title="Clear unestimated filter" />}
-      <label className={`flex ${chipH} items-center gap-1.5 rounded-sm border border-border-strong px-2 text-xs text-fg-tertiary focus-within:border-accent`}>
+  const filterBox = (
+    <div className={cx("relative flex min-w-0 flex-col", compact ? "w-[260px]" : "w-[340px] max-lg:w-[260px]")}>
+      <label className={`flex ${chipH} items-center gap-1.5 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs text-fg-tertiary focus-within:border-accent`}>
         <Icon name="search" size={12} />
-        <span className="sr-only">Search tickets</span>
+        <span className="sr-only">Filter tickets</span>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search"
-          className="w-28 bg-transparent text-fg-2 outline-none placeholder:text-fg-tertiary"
+          placeholder="Filter… project: epic: agent: status:"
+          aria-describedby={resolved.unknown.length ? "ticket-filter-unknown" : undefined}
+          className="min-w-0 flex-1 bg-transparent text-fg-2 outline-none placeholder:text-fg-tertiary"
         />
-      </label>
-      {boot.data && (
-        <AgentPicker label="Agent" agents={boot.data.agents} value={agentFilter?.id} onChange={(id) => setParam("assignee", boot.data.agents.find((a) => a.id === id)?.handle ?? null)}>
-          <button type="button" className={`inline-flex ${chipH} items-center overflow-hidden rounded-sm border border-border-strong text-xs hover:bg-hover`}>
-            <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Agent</span>
-            <span className="px-2 text-fg-2">{agentFilter?.name ?? "any"}</span>
+        {search && (
+          <button type="button" aria-label="Clear filter" onClick={() => setSearch("")} className="text-fg-tertiary hover:text-fg">
+            <Icon name="x" size={12} />
           </button>
-        </AgentPicker>
+        )}
+      </label>
+      {resolved.unknown.length > 0 && (
+        <span id="ticket-filter-unknown" role="status" className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-md border border-border-float bg-surface-raised px-2 py-1 text-[11.5px] text-pill-blocked-fg shadow-sm">
+          No match for {resolved.unknown.join(", ")}
+        </span>
       )}
+    </div>
+  );
+  const filterControls = (
+    <>
+      <button type="button" aria-pressed={ready} className={cx(`${chipH} rounded-sm border border-border-strong px-2 text-xs hover:bg-hover`, ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
+      {blockedOnly && <FilterChip label="Only" value="Blocked ×" onClick={() => setParam("blocked", null)} title="Clear blocked filter" />}
+      {unestimated && <FilterChip label="Only" value="Unestimated ×" onClick={() => setParam("unestimated", null)} title="Clear unestimated filter" />}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button
@@ -400,6 +419,7 @@ export function TicketsScreen() {
       {proj?.archived && <div className="px-6 py-3 max-md:px-4"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
       {compact ? (
         <ChipScroller label="Filters">
+          {filterBox}
           <Tabs label="Views" value={svId ? "" : view} items={VIEWS.map((v) => ({ ...v, href: href(v.key) }))} />
           <SavedViewTabs project={project} />
           {filterControls}
@@ -411,6 +431,7 @@ export function TicketsScreen() {
             <SavedViewTabs project={project} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {filterBox}
             {filterControls}
             {densitySwitch}
           </div>
@@ -438,25 +459,29 @@ export function TicketsScreen() {
           {filtered ? "Try a different search or clear a filter." : "Tickets you create, or that agents open as follow-ups, will appear here."}
         </EmptyState>
       ) : compact ? (
-        <div className="pb-8">
+        <div className="pb-8 pt-2">
           {groups.map((g) => (
-            <section key={`${g.by}:${g.id}`} aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}>
-              <h2 className="sticky top-0 z-10 flex h-9 items-center gap-2.5 border-b border-border-row bg-surface-sunken px-4 text-[13px]">
+            <section
+              key={`${g.by}:${g.id}`}
+              aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}
+              className={cx("mb-3", g.needs && "mx-3 rounded-xl border border-border bg-surface-raised py-1 shadow-sm")}
+            >
+              <h2 className={cx("flex h-8 items-center gap-2 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary", g.needs ? "px-3" : "px-4")}>
                 <GroupLabel g={g} />
-                <span className="font-mono text-xs text-fg-tertiary">{g.tickets.length}</span>
+                <span className="font-mono">{g.tickets.length}</span>
                 <span className="flex-1" />
-                {g.points > 0 && <span className="whitespace-nowrap text-[11.5px] text-fg-tertiary">{g.points} pts</span>}
+                {g.points > 0 && <span className="whitespace-nowrap normal-case tracking-normal">{g.points} pts</span>}
               </h2>
               {g.tickets.map((t) => (
-                <CompactTicketRow key={t.id} t={t} />
+                <CompactTicketRow key={t.id} t={t} needs={needs.get(t.key)} />
               ))}
             </section>
           ))}
         </div>
       ) : (
         <div className="overflow-x-auto pb-32">
-          <div className="min-w-[760px]">
-            <div className="flex h-8 items-center gap-3 border-b border-border-row pl-6 pr-6 text-[11.5px] text-fg-tertiary">
+          <div className="min-w-[760px] px-3 pt-3">
+            <div className="flex h-7 items-center gap-3 px-3 text-[11.5px] text-fg-tertiary">
               <input
                 type="checkbox"
                 aria-label={allSelected ? "Clear selection" : "Select all tickets"}
@@ -467,38 +492,43 @@ export function TicketsScreen() {
                 onChange={() => setSelected(allSelected ? new Set() : new Set(flat))}
                 className="size-3.5 flex-none accent-[var(--accent)]"
               />
-              <span className="flex-1 pl-[94px]">Ticket</span>
-              <span className={COL.criteria}>Criteria</span>
-              <span className={COL.estimate}>Est.</span>
-              <span className={COL.pr}>PR</span>
-              {group !== "epic" && <span className={COL.epic}>Epic</span>}
-              <span className={COL.assignee}>Assignee</span>
-              <span className={COL.updated}>Updated</span>
+              <span>{tickets.length} {tickets.length === 1 ? "ticket" : "tickets"}</span>
             </div>
             {groups.map((g) => (
-              <section key={`${g.by}:${g.id}`} aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}>
-                <h2 className="flex h-[38px] items-center gap-2.5 border-b border-border-row bg-surface-sunken pl-6 pr-6 text-[13px]">
+              <section
+                key={`${g.by}:${g.id}`}
+                aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}
+                className={cx("group/section mb-4", g.needs && "rounded-xl border border-border bg-surface-raised p-1 shadow-sm")}
+              >
+                <h2 className="flex h-8 items-center gap-2 px-3 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">
                   <GroupLabel g={g} />
-                  <span className="font-mono text-xs text-fg-tertiary">{g.tickets.length}</span>
+                  <span className="font-mono">{g.tickets.length}</span>
                   <span className="flex-1" />
-                  <span className={cx(COL.criteria, "font-mono text-[11.5px] text-fg-tertiary")} title="Criteria done in this group">
-                    {g.criteriaTotal > 0 ? `${g.criteriaDone}/${g.criteriaTotal}` : ""}
-                  </span>
-                  <span className={cx(COL.estimate, "whitespace-nowrap text-[11.5px] text-fg-tertiary")} title="Estimated points in this group">
-                    {g.points > 0 ? `${g.points} pts` : ""}
-                  </span>
-                  <ButtonLink
-                    href={newInGroup(g, project)}
-                    variant="ghost"
-                    icon="plus"
-                    aria-label={`New ticket in ${groupLabelText(g)}`}
-                    className="ml-auto h-7 px-2 text-fg-tertiary"
-                  />
+                  {g.criteriaTotal > 0 && (
+                    <span className="font-mono normal-case tracking-normal" title="Criteria done in this group">
+                      {g.criteriaDone}/{g.criteriaTotal}
+                    </span>
+                  )}
+                  {g.points > 0 && (
+                    <span className="whitespace-nowrap normal-case tracking-normal" title="Estimated points in this group">
+                      {g.points} pts
+                    </span>
+                  )}
+                  {!g.needs && (
+                    <ButtonLink
+                      href={newInGroup(g, project)}
+                      variant="ghost"
+                      icon="plus"
+                      aria-label={`New ticket in ${groupLabelText(g)}`}
+                      className="h-6 px-1.5 text-fg-tertiary"
+                    />
+                  )}
                 </h2>
                 {g.tickets.map((t) => (
                   <TicketRow
                     key={t.id}
                     t={t}
+                    needs={needs.get(t.key)}
                     selected={selected.has(t.key)}
                     focused={focused === t.key}
                     density={density}
