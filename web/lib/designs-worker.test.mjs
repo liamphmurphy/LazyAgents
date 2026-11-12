@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { deps, handleLayout, handleRender, MAX_CONCURRENT } from "./designs/worker.ts";
+import { deps, handleInspect, handleLayout, handleRender, MAX_CONCURRENT } from "./designs/worker.ts";
 
 const fx = (p) => new URL(`../../docs/design/fixtures/${p}`, import.meta.url);
 const body = readFileSync(fx("acceptance-design.json"), "utf8");
@@ -116,4 +116,16 @@ test("layout returns absolute boxes for every stored node", async () => {
   const only = await (await call(handleLayout, { body, page: design.pages[0].id })).json();
   assert.equal(only.pages.length, 1);
   assert.equal((await call(handleLayout, { body, page: "p_nope" })).status, 400);
+});
+
+test("inspect returns the node's code, tokens and assets", async () => {
+  const r = await call(handleInspect, { body, node: "n_pay", target: "tailwind" });
+  assert.equal(r.status, 200);
+  const out = await r.json();
+  assert.equal(out.node.id, "n_pay");
+  assert.ok(out.code.includes("bg-panel"));
+  assert.ok(out.tokens.some((t) => t.name === "bg-panel"));
+  assert.equal((await call(handleInspect, { body, node: "n_nope" })).status, 400);
+  assert.equal((await call(handleInspect, { body, node: "n_pay", target: "swift" })).status, 400);
+  assert.equal((await call(handleInspect, { body, node: "n_pay" }, "wrong")).status, 401);
 });

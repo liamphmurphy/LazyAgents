@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,7 @@ type stubWorker struct {
 	down    bool
 	renders []map[string]any
 	layouts int
+	inspects []map[string]any
 }
 
 var stubPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
@@ -58,6 +60,15 @@ func (w *stubWorker) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		// Settled boxes differ from the stored ones, so a test can tell which it got.
 		_ = json.NewEncoder(rw).Encode(map[string]any{"pages": []any{map[string]any{"id": "p_flows", "boxes": map[string]any{
 			"n_cart": map[string]any{"x": 1, "y": 2, "w": 393, "h": 852}, "n_cart_title": map[string]any{"x": 24, "y": 24, "w": 200, "h": 34}}}}})
+	case "/inspect":
+		w.inspects = append(w.inspects, in)
+		if in["node"] == "n_gone" {
+			rw.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(rw).Encode(map[string]any{"message": "node: n_gone isn't drawn"})
+			return
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]any{"node": map[string]any{"id": in["node"]}, "target": in["target"], "code": "<div className=\"bg-panel\" />",
+			"tokens": []any{map[string]any{"name": "bg-panel", "value": "#16151F"}}})
 	default:
 		rw.WriteHeader(http.StatusNotFound)
 	}
@@ -494,3 +505,62 @@ func TestDesignRender(t *testing.T) {
 }
 
 var _ = store.ChatCanvas{}
+
+// design_components, design_tokens, design_inspect and design_link_ticket on
+// the acceptance design.
+func TestDesignLibraryTools(t *testing.T) {
+	e, stub := newDesignToolsEnv(t)
+	id, _, token := e.acceptance()
+
+	comps := e.call(token, "design_components", map[string]any{"canvas_id": id})["components"].([]any)
+	if len(comps) != 1 {
+		t.Fatalf("components: %v", comps)
+	}
+	if c := comps[0].(map[string]any); c["id"] != "n_btn" || c["name"] != "Button / Primary" || c["page"] != "p_components" || len(c["instances"].([]any)) != 3 {
+		t.Fatalf("component: %v", c)
+	}
+
+	tk := e.call(token, "design_tokens", map[string]any{"canvas_id": id})
+	if tk["tokens_css_changed"] != false || tk["tokens_ref"].(map[string]any)["set"] != "dusk-web" || tk["token_sets"].(map[string]any)["dusk-web"] == nil {
+		t.Fatalf("design_tokens: %v", tk)
+	}
+	if used := fmt.Sprint(tk["used"]); !strings.Contains(used, "accent") {
+		t.Fatalf("used: %v", used)
+	}
+
+	ins := e.call(token, "design_inspect", map[string]any{"canvas_id": id, "node_id": "n_pay", "target": "tailwind"})
+	if ins["code"] == nil || ins["version"] != 2.0 || len(stub.inspects) != 1 || stub.inspects[0]["target"] != "tailwind" || stub.inspects[0]["node"] != "n_pay" || !strings.Contains(stub.inspects[0]["body"].(string), "n_pay") {
+		t.Fatalf("design_inspect: %v / %v", ins, stub.inspects)
+	}
+	e.call(token, "design_inspect", map[string]any{"canvas_id": id, "node_id": "n_pay"})
+	if stub.inspects[1]["target"] != "react" {
+		t.Fatalf("default target: %v", stub.inspects[1]["target"])
+	}
+	if code, out := e.tool(token, "design_inspect", map[string]any{"canvas_id": id, "node_id": "n_pay", "target": "swift"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad target = %d %v", code, out)
+	}
+	if code, out := e.tool(token, "design_inspect", map[string]any{"canvas_id": id, "node_id": "n_nope"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown node = %d %v", code, out)
+	}
+	stub.set(true)
+	if out := e.call(token, "design_inspect", map[string]any{"canvas_id": id, "node_id": "n_pay"}); out["inspect"] != "unavailable" {
+		t.Fatalf("worker down: %v", out)
+	}
+	stub.set(false)
+
+	// Linking is a suggestion the person reviews; the body is unchanged until then.
+	out := e.call(token, "design_link_ticket", map[string]any{"canvas_id": id, "node_id": "n_ship", "ticket": e.payKey})
+	if out["pending_review"] != true || out["ops"] != 1.0 {
+		t.Fatalf("design_link_ticket: %v", out)
+	}
+	if n := e.count(`SELECT count(*) FROM design_frame_links WHERE canvas_id = $1 AND node_id = 'n_ship'`, id); n != 0 {
+		t.Fatalf("linked before review: %d", n)
+	}
+	var ops string
+	if err := e.pool.QueryRow(e.t.Context(), `SELECT ops::text FROM design_proposals WHERE canvas_id = $1`, id).Scan(&ops); err != nil || !strings.Contains(ops, `"link_ticket"`) || !strings.Contains(ops, e.payKey) {
+		t.Fatalf("proposal ops: %s %v", ops, err)
+	}
+	if code, out := e.tool(token, "design_link_ticket", map[string]any{"canvas_id": id, "node_id": "n_ship", "ticket": "NOPE-1"}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown ticket = %d %v", code, out)
+	}
+}
