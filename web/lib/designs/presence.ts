@@ -14,7 +14,7 @@ export type Presence = {
 };
 
 const NODE_KEYS = ["id", "parent", "after", "from", "to", "node", "component"];
-const isNode = (s: unknown): s is string => typeof s === "string" && /^n_[a-z0-9]+$/i.test(s);
+const isNode = (s: unknown): s is string => typeof s === "string" && /^n_[a-z0-9_]{1,40}$/.test(s);
 
 /** The node ids a design tool call's input names. */
 export function nodesOf(input: unknown): string[] {

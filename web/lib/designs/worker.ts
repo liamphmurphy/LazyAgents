@@ -64,6 +64,7 @@ const fail = (e: unknown) => {
 
 type Obj = Record<string, unknown>;
 async function readBody(req: Request): Promise<Obj> {
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_REQUEST) throw new WorkerError(400, "request is too large");
   const text = await req.text();
   if (text.length > MAX_REQUEST) throw new WorkerError(400, "request is too large");
   let v: unknown;
@@ -93,7 +94,7 @@ const ASSET = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/;
 
 let running = 0;
 
-async function render(req: Obj): Promise<Response> {
+async function render(req: Obj, slot: Slot): Promise<Response> {
   const nodeId = optId(req.node, "n_", "node");
   const pageId = optId(req.page, "p_", "page");
   if (nodeId && pageId) throw new WorkerError(400, "give node or page, not both");
@@ -150,15 +151,16 @@ async function render(req: Obj): Promise<Response> {
   const height = Math.max(1, Math.round(box.h * scale));
   if (Math.max(width, height) > MAX_EDGE) throw new WorkerError(400, `the image would be ${width}×${height} px; the longest edge is at most ${MAX_EDGE}`);
 
-  if (running >= MAX_CONCURRENT) throw new WorkerError(503, "the renderer is busy; try again shortly");
-  running++;
-  try {
+  {
     const svg = toSvg(ops, { box, background: laid.background, assets });
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     let out;
     try {
+      const raster = deps.rasterize(svg, width, signal);
+      // The slot is held until the native render itself ends, even after a 504.
+      slot.hold(raster);
       out = await Promise.race([
-        deps.rasterize(svg, width, signal),
+        raster,
         new Promise<never>((_, rej) => {
           const late = () => rej(new WorkerError(504, "the render took too long"));
           if (signal.aborted) late();
@@ -174,9 +176,35 @@ async function render(req: Obj): Promise<Response> {
       status: 200,
       headers: { "content-type": "image/png", "x-design-width": String(out.width), "x-design-height": String(out.height), "cache-control": "no-store" },
     });
-  } finally {
-    running--;
   }
+}
+
+/**
+ * One of the MAX_CONCURRENT worker slots, taken before a request's body is
+ * parsed (layout is CPU work too). release() frees it unless hold() handed it
+ * to a render still running natively, which frees it when it settles.
+ */
+type Slot = { hold: (p: Promise<unknown>) => void; release: () => void };
+function takeSlot(): Slot {
+  if (running >= MAX_CONCURRENT) throw new WorkerError(503, "the renderer is busy; try again shortly");
+  running++;
+  let held = false;
+  let freed = false;
+  const free = () => {
+    if (!freed) {
+      freed = true;
+      running--;
+    }
+  };
+  return {
+    hold: (p) => {
+      held = true;
+      p.then(free, free);
+    },
+    release: () => {
+      if (!held) free();
+    },
+  };
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -201,20 +229,28 @@ const unauthorized = () => json(401, { message: "unauthorized" });
 
 export async function handleRender(req: Request): Promise<Response> {
   if (!authorized(req)) return unauthorized();
+  let slot: Slot | undefined;
   try {
-    return await render(await readBody(req));
+    slot = takeSlot();
+    return await render(await readBody(req), slot);
   } catch (e) {
     return fail(e);
+  } finally {
+    slot?.release();
   }
 }
 
 export async function handleLayout(req: Request): Promise<Response> {
   if (!authorized(req)) return unauthorized();
+  let slot: Slot | undefined;
   try {
+    slot = takeSlot();
     const b = await readBody(req);
     const pageId = optId(b.page, "p_", "page");
     return json(200, layoutBoxes(normalize(b.body as string).design, pageId));
   } catch (e) {
     return fail(e);
+  } finally {
+    slot?.release();
   }
 }

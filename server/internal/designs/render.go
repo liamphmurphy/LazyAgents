@@ -1,6 +1,8 @@
 package designs
 
 import (
+	"maps"
+	"slices"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -32,7 +34,8 @@ func (s *Service) assetURIs(ctx context.Context, canvasID uuid.UUID, body string
 	q := store.New(s.Pool)
 	out := map[string]string{}
 	total := 0
-	for id := range used {
+	// Sorted, so the images kept under the size cap don't vary between renders.
+	for _, id := range slices.Sorted(maps.Keys(used)) {
 		a, err := q.GetDesignAsset(ctx, store.GetDesignAssetParams{CanvasID: canvasID, ID: id})
 		if err != nil {
 			continue

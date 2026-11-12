@@ -8,7 +8,11 @@
 		}
 	}
 	# The design worker is for the API only (it also checks a bearer token).
-	respond /internal/* 404
+	# A handle, not a bare respond: Caddy orders respond after handle, so a
+	# bare respond would never run before the catch-all below.
+	handle /internal/* {
+		respond 404
+	}
 	handle {
 		reverse_proxy web:3000
 	}
