@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type Schemas } from "./client";
+import { api, postForm, unwrap, type Schemas } from "./client";
+import { libraryKeys } from "./library-hooks";
 import type { paths } from "./schema";
 
 // ---- The Designs app: the person's designs, each a design canvas in its own chat.
@@ -98,6 +99,19 @@ export async function uploadDesignAsset(canvasId: string, file: Blob): Promise<S
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((body as { message?: string }).message ?? `Upload failed (${r.status})`);
   return body as Schemas["DeckAsset"];
+}
+
+/** Keeps one finished export file (PNG, SVG or PDF) in the person's Library. */
+export function useSaveDesignExport(canvasId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return postForm<Schemas["LibraryItem"]>(`/designs/${canvasId}/library`, form);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
 }
 
 export type DesignProposal = Schemas["DesignProposal"];

@@ -416,9 +416,11 @@ The Export menu covers the selection, a frame, a page or all frames.
 | **SVG** | `toSvg(display list)` in the browser. Text stays `<text>`. The used Inter faces are embedded as WOFF2 data URIs in `@font-face`, so it opens offline, plus a `font-family` fallback list. Images are inline data URIs. | Same |
 | **PDF** | jsPDF from the display list, as Slides §4.1 does. One page per frame at the frame's size (1 px = 0.75 pt), in page order. Inter TTFs are embedded and subset by jsPDF. | Same |
 
-- The Library save is a multipart upload to the existing Library endpoint, counted against the 1 GB quota.
-- A failure leaves no partial item: the upload happens only after the whole file is built.
-- Ticket 9's comparison test renders the acceptance fixture through all three and pixel-diffs against the editor, using `poc/parity.mjs`'s method and the tolerance in §5.1.
+- The Library save is a multipart upload to `POST /designs/{id}/library` ([[LAZYAGENTS-150]]), counted against the 1 GB quota. It is design-scoped rather than the generic `POST /library`, which stays images-only for a person's own uploads: the design endpoint checks ownership, ties the item to the design's chat, and accepts exactly the three export types, typed by content (PNG → `image`, SVG → `diagram`, PDF → `document`).
+- A failure leaves no partial item: the upload happens only after the whole file is built, and the Library takes one file per save. A PNG or SVG export of several items is downloaded as a `.zip`; to keep several items in the Library, export them as one PDF.
+- Scopes (`web/lib/designs/export.ts`): a selected node is drawn as its region of its top-level node, as the worker draws `node=`; "frame" is the top-level frame holding the selection, else the page's first; "page" is the whole page with its connectors; "all frames" is every visible top-level frame, in page order then layer order. Export draws the *saved* version (pending edits are saved first), so PNG from the server and SVG/PDF from the browser show the same thing.
+- File names join the design title and the item name with an ASCII ` - `: Chromium drops a `download` name with non-ASCII characters.
+- The comparison test (`web/e2e/designs-export.spec.ts`) renders `n_pay` and `n_state` of the acceptance fixture through all three and pixel-diffs each against the editor references committed in `web/e2e/designs-export/`, using `poc/parity.mjs`'s method and the tolerance in §5.1. The SVG is opened from disk with the network off; the PDF is rasterised by pdf.js. Measured: PNG 0.026 % / 0.011 %, SVG 0 % / 0 %, PDF 0.026 % / 0.018 %.
 
 ### 3.11 Ticket runs get linked frames
 

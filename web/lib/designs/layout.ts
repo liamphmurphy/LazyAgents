@@ -353,7 +353,7 @@ export function makeLayout(design: Design) {
         break;
       }
       case "path": {
-        const d = n.d.replace(/(-?[\d.]+(?:e-?\d+)?)[ ,]+(-?[\d.]+(?:e-?\d+)?)/g, (_, x, y) => `${r2(ax + +x)} ${r2(ay + +y)}`);
+        const d = n.d.replace(/(-?[\d.]+(?:e-?\d+)?)[ ,]+(-?[\d.]+(?:e-?\d+)?)/gi, (_, x, y) => `${r2(ax + +x)} ${r2(ay + +y)}`);
         ops.push({ op: "path", d, box, fill: paint(n.fill, mode), ...stroke(n), cap: n.cap, join: n.join, el: id });
         break;
       }

@@ -3955,6 +3955,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/designs/{canvasId}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save an export of a design (PNG, SVG or PDF) to the Library
+         * @description Stores one finished export file, built by the Export menu, in the
+         *     caller's Library: a PNG as an image, an SVG as a diagram and a PDF as
+         *     a document, titled after the file name. The file's content decides
+         *     its type, not its name. It counts against the Library's 1 GB storage
+         *     cap. 404 for anyone else's design; 422 for another type, an empty
+         *     file, one over 25 MB or a full Library, and then nothing is stored.
+         */
+        post: operations["saveDesignExportToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/designs/{canvasId}/assets/{assetId}": {
         parameters: {
             query?: never;
@@ -15415,6 +15442,38 @@ export interface operations {
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveDesignExportToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
