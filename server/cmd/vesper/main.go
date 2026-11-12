@@ -34,6 +34,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/config"
 	"github.com/liamphmurphy/vesper/server/internal/db"
+	"github.com/liamphmurphy/vesper/server/internal/designs"
 	"github.com/liamphmurphy/vesper/server/internal/httpapi"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
 	"github.com/liamphmurphy/vesper/server/internal/metrics"
@@ -180,6 +181,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
 		ArtifactBucket: cfg.S3.ArtifactBucket,
+		DesignWorker:   &designs.Worker{URL: cfg.DesignWorkerURL, Token: cfg.DesignWorkerToken},
 		Log:            log,
 		Usage:          &usage.Service{Q: q, Log: log},
 	}
@@ -389,6 +391,7 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		Pool: pool, Backend: backend, Secrets: secretStore,
 		Tracker: &tracker.Service{Pool: pool}, Blobs: blobs, Attachments: blobs, Log: log,
 		Workflows: workflows,
+		Designs:   &designs.Service{Pool: pool, Worker: &designs.Worker{URL: cfg.DesignWorkerURL, Token: cfg.DesignWorkerToken}, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket},
 		Scheduled: &runs.Service{Pool: pool, Secrets: secretStore, Tracker: &tracker.Service{Pool: pool}, Artifacts: &artifacts.Service{Pool: pool, Blobs: blobs, Bucket: cfg.S3.ArtifactBucket}, RequireHarnessKey: rc.Backend == "docker", PlanModels: planModels(rc.Backend, pool), RolloverContextTokens: int64(cfg.RolloverContextTokens)},
 		StoreSecret: func(ctx context.Context, ws, by uuid.UUID, name, value string) error {
 			_, err := secretStore.Set(ctx, ws, by, secrets.SetInput{Name: name, Value: value})

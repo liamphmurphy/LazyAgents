@@ -134,6 +134,20 @@ func (q *Queries) CreateChatCanvasVersion(ctx context.Context, arg CreateChatCan
 	return i, err
 }
 
+const deleteChatCanvas = `-- name: DeleteChatCanvas :exec
+DELETE FROM chat_canvases WHERE id = $1 AND session_id = $2
+`
+
+type DeleteChatCanvasParams struct {
+	ID        uuid.UUID
+	SessionID uuid.UUID
+}
+
+func (q *Queries) DeleteChatCanvas(ctx context.Context, arg DeleteChatCanvasParams) error {
+	_, err := q.db.Exec(ctx, deleteChatCanvas, arg.ID, arg.SessionID)
+	return err
+}
+
 const deleteChatCanvasDraftComment = `-- name: DeleteChatCanvasDraftComment :execrows
 DELETE FROM chat_canvas_comments WHERE id = $1 AND canvas_id = $2 AND status = 'draft'
 `

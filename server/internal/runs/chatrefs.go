@@ -21,6 +21,8 @@ type ChatContextRef struct {
 	ID     *uuid.UUID `json:"id,omitempty"`
 	Key    string     `json:"key,omitempty"` // ticket key; for a page, optionally the wiki path
 	Anchor string     `json:"anchor,omitempty"`
+	// Selection is what the person had selected in a design (kind canvas only).
+	Selection *canvas.Selection `json:"selection,omitempty"`
 }
 
 // MaxChatContextRefs matches the contract's maxItems for context_refs.
@@ -74,7 +76,16 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r
 		if r.ID == nil || r.Key != "" || r.Anchor != "" {
 			return d, bad("a canvas ref needs an id and nothing else")
 		}
-		title, body, err := canvas.ContextDoc(ctx, q, chat, *r.ID)
+		var title, body string
+		var err error
+		if r.Selection != nil {
+			if err = r.Selection.Check(); err != nil {
+				return d, err
+			}
+			title, body, err = canvas.SelectionDoc(ctx, q, chat, *r.ID, *r.Selection)
+		} else {
+			title, body, err = canvas.ContextDoc(ctx, q, chat, *r.ID)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return d, unknown
 		}
@@ -84,6 +95,9 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r
 		d.Title, d.Body = title, body
 		return d, nil
 	case "ticket":
+		if r.Selection != nil {
+			return d, bad("only a canvas ref has a selection")
+		}
 		if r.Key == "" || r.ID != nil {
 			return d, bad("a ticket ref needs a key and no id")
 		}
@@ -98,6 +112,9 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r
 		d.Body = fmt.Sprintf("# %s %s\n\nStatus: %s\nPriority: %s\n\n%s\n", t.Key, t.Title, t.Status, t.Priority, t.DescriptionMd)
 		return d, nil
 	case "artifact", "section", "page":
+		if r.Selection != nil {
+			return d, bad("only a canvas ref has a selection")
+		}
 		var a store.Artifact
 		var err error
 		switch {

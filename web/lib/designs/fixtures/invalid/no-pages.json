@@ -1,0 +1,51 @@
+{
+ "schema": 1,
+ "mode": "dark",
+ "tokens_ref": {
+  "set": "web",
+  "source": "web/styles/tokens.css",
+  "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "synced_at": "2026-11-01T00:00:00Z"
+ },
+ "token_sets": {
+  "web": {
+   "name": "Web",
+   "source": "web/styles/tokens.css",
+   "modes": {
+    "dark": {
+     "surface": {
+      "kind": "color",
+      "value": "#101014"
+     },
+     "space-2": {
+      "kind": "dimension",
+      "value": "8px"
+     }
+    },
+    "light": {
+     "surface": {
+      "kind": "color",
+      "value": "#FFFFFF"
+     }
+    }
+   }
+  }
+ },
+ "assets": {
+  "a_pic": {
+   "mime": "image/png",
+   "w": 10,
+   "h": 10
+  }
+ },
+ "pages": [],
+ "links": [
+  {
+   "id": "k_go",
+   "from": "n_btn",
+   "to": "n_next",
+   "trigger": "click",
+   "transition": "slide-left"
+  }
+ ]
+}

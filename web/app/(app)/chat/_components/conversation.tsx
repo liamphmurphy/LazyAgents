@@ -1,6 +1,7 @@
 "use client";
 
 import { canvasFenceIds } from "@/lib/chat-canvas";
+import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -184,7 +185,11 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
       {!mine && videos?.length ? <VideoRendererNotes videos={videos} /> : null}
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
       {!mine && <CodeChanges changes={m.code_changes} />}
-      {mine && <SentChips chips={(m.context_refs ?? []).map((r) => chipFromRef(r, names))} />}
+      {mine && <SentChips chips={(m.context_refs ?? []).map((r) => {
+        const chip = chipFromRef(r, names);
+        // A design's selection rides along with every message sent from the editor.
+        return r.kind === "canvas" && r.selection ? { ...chip, label: r.selection.nodes.length ? `Design · ${r.selection.nodes.length} selected` : "Design" } : chip;
+      })} />}
       {mine && editable && !editing && (
         <div className={REVEAL}>
           <Button variant="ghost" icon="edit" onClick={() => { setDraft(m.body_md); setEditing(true); }}>Edit</Button>
@@ -635,6 +640,16 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     const qs = q.toString();
     router.replace(qs ? `/chat/${id}?${qs}` : `/chat/${id}`);
   };
+  // The + menu's "Create with {persona}": Doc and Design start a draft for the person to finish; decks start in Slides.
+  const createWith = (kind: CreateKind) => {
+    if (kind === "slides") return router.push("/apps/slides");
+    setText((t) => (kind === "design" ? `/design ${t.trim()}` : `${DOC_DRAFT}${t.trim()}`));
+    requestAnimationFrame(() => {
+      const el = area.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
+  };
   const commandOptions = (name: string): { name: string; run: CommandRun }[] => {
     switch (name) {
       case "workflow":
@@ -956,20 +971,25 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   : undefined
               }
               commands={{ plain: plainCommands, options: commandOptions,
-              free: Object.fromEntries(
-                (["aside", "queue"] as const).map((name) => [
-                  name,
-                  (body: string) => {
-                    const mode = commandSendMode(name)!;
-                    if (running) return sendWhileRunning(mode, body);
-                    if (mode === "aside") return `Nothing is running, so there's nothing to ask about on the side: send it as a message.`;
-                    submit(body);
-                  },
-                ]),
-              ),
+              free: {
+                ...Object.fromEntries(
+                  (["aside", "queue"] as const).map((name) => [
+                    name,
+                    (body: string) => {
+                      const mode = commandSendMode(name)!;
+                      if (running) return sendWhileRunning(mode, body);
+                      if (mode === "aside") return `Nothing is running, so there's nothing to ask about on the side: send it as a message.`;
+                      submit(body);
+                    },
+                  ]),
+                ),
+                // The persona starts it with design_create, which opens it beside the chat.
+                design: (brief: string) => (running ? sendWhileRunning("followup", designRequest(brief)) : submit(designRequest(brief))),
+              },
               repository: (arg) => { if (!(c.speaker ?? c.persona)?.capabilities?.code) return "This persona cannot write code."; if (arg) selectRepo.mutate(arg); else setRepoSignal((n) => n + 1); }, hasWorkflows: published.length > 0 }}
               personas={personas.data?.personas ?? []}
               inChat={(personaId) => participants.some((x) => x.id === personaId)}
+              create={c.archived ? undefined : { persona: speaker.name, onCreate: createWith }}
               disabled={locked}
               placeholder={
                 locked

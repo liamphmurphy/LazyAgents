@@ -20,6 +20,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/connectors"
+	"github.com/liamphmurphy/vesper/server/internal/designs"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
@@ -34,6 +35,7 @@ type Deps struct {
 	Runs       *runs.Service
 	Tracker    *tracker.Service
 	Wiki       *wiki.Service
+	Designs    *designs.Service
 }
 
 // Tool is one Agent API operation, independent of transport.
@@ -974,7 +976,22 @@ var Tools = []Tool{
 	define("canvas_read", "Read a canvas: its current version, or an earlier one. An SVG canvas comes with the data-vid of each element, which canvas_patch uses. The current version also lists its comment threads.", canvasRead),
 	define("canvas_comment", "Comment on a passage or element of a canvas, to flag something for the person. On a text canvas you can include suggested replacement text, which they can apply with one click.", canvasComment),
 	define("canvas_reply", "Answer a comment thread on a canvas. Set addressed once you have made the change it asked for.", canvasReply),
+	define("design_list", "List the designs in this chat (the person's Designs app): canvas_id, title, pages, frames, current version and how many of your suggestions await their review.", designList),
+	define("design_outline", "Start here when working on a design: a compact tree of its pages and nodes ({id, type, name, box, children, child_count}) with the boxes the renderer computed. Read the nodes you will change with design_read before patching.", designOutline),
+	define("design_read", "Read nodes of a design in full (node_ids, or a page's top-level nodes): every field, each $token shown as {token, value} for the mode in effect, instance overrides, and the prototype links touching them, plus the design's version for design_patch.", designRead),
+	define("design_render", "See a design: a PNG of a node or a whole page (scale 1 to 3), returned as an image with its size. Use it after a large patch has been accepted, and when a layout question needs eyes.", designRender),
+	define("design_patch", "Suggest changes to a design as a list of ops against the version you last read, each with a why. By default the person reviews them one by one and the design stays unchanged until they do; wait for their review. If they let you edit directly, the ops apply at once. Refused if the design has moved on or the person paused you. "+patchOpsHelp+".", designPatch),
+	define("design_import", "Import a Mermaid flowchart or an SVG into a page of a design. A flowchart becomes a section of shapes, subgraph sections and connectors laid out and routed automatically; an SVG becomes a group of shapes, paths and text where the mapping is clear. Like design_patch, it arrives as one suggestion for the person to review unless they let you edit directly. Text it can't import is refused with the line and the problem, and the design doesn't change; warnings list what was skipped (styling, unsupported SVG).", designImport),
+	define("design_comments", "List the comment threads on a design, each anchored to a node (with an optional x, y inside its box), with replies.", designComments),
+	define("design_comment", "Comment on a node of a design to flag something for the person, without changing it.", designComment),
+	define("design_reply", "Answer a comment thread on a design. Set addressed once you have made the change it asked for.", designReply),
+	define("design_create", "Start a design (a flow, diagram or wireframe) beside this chat when the person asks for one: it opens next to the conversation and you work on it with the design_* tools. Returns its canvas_id; then design_outline it and design_patch in the frames. Starters: blank, mobile-flow, web-flow, diagram, wireframe.", designCreate),
 	define("canvas_list", "List this chat's canvases and their current versions.", canvasList),
+	define("design_flows", "A design's prototype: its frames and the links between them (hotspot, trigger, transition) as JSON, plus a Mermaid flowchart LR of the flow. Links whose target frame was removed are listed as broken_links.", designFlows),
+	define("design_components", "A design's main components ({id, name, page, instances}). Place one with the instantiate op and change per-instance text, fill or visibility with set_overrides; editing the main changes every instance.", designComponents),
+	define("design_tokens", "A design's token sets (its own snapshot of tokens.css plus per-design sets), the set in use (tokens_ref), the tokens it uses, and whether tokens.css has changed since the person last synced. Use these $tokens for colours; propose set_token edits only on sets whose source is null.", designTokens),
+	define("design_inspect", "A node (usually a frame) as code to build from: target css, tailwind or react (default), with its box, spacing, type styles, the tokens it uses with their values, and its images. Components appear as React components with text overrides as props.", designInspect),
+	define("design_link_ticket", "Link a frame (or component) of a design to a ticket, or unlink it. Like design_patch it's a suggestion the person reviews unless they let you edit directly. Runs on a linked ticket receive the frame's PNG and Inspect output.", designLinkTicket),
 	define("finance_summary", "The person's finances from their imported bank statements: cash flow per month (money in and out, transfers between their accounts left out), net worth, savings rate, spending by category for a month against the months before, and their accounts. Only in the Finance app's Ask chat.", financeSummary),
 	define("finance_query", "Find the person's transactions by month or dates, category, words in the description, direction or account; returns up to 50, newest first, with the count and total of every match. Only in the Finance app's Ask chat.", financeQuery),
 	define("finance_recurring", "The person's monthly recurring charges (subscriptions, rent, memberships): the latest amount, price changes and which are new. Only in the Finance app's Ask chat.", financeRecurring),

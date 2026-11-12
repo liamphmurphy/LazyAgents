@@ -264,6 +264,8 @@ export type ChatStatusKind =
   | "image-view"
   | "canvas"
   | "canvas-comment"
+  | "design"
+  | "design-view"
   | "playground"
   | "runs"
   | "workflow"
@@ -472,6 +474,34 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "canvas_comment":
     case "canvas_reply":
       return status("canvas-comment", "commenting on a canvas");
+    case "design_flows":
+      return status("design-view", "tracing a design's flow");
+    case "design_list":
+      return status("design-view", "looking through your designs");
+    case "design_outline":
+    case "design_read":
+      return status("design-view", "looking at a design");
+    case "design_render":
+      return status("design-view", "rendering a design");
+    case "design_comments":
+      return status("design-view", "reading comments on a design");
+    case "design_create":
+      return status("design", "starting a design");
+    case "design_components":
+      return status("design-view", "looking at a design's components");
+    case "design_tokens":
+      return status("design-view", "checking a design's tokens");
+    case "design_inspect":
+      return status("design-view", "inspecting a design");
+    case "design_link_ticket":
+      return status("design", "linking a design to a ticket");
+    case "design_patch":
+      return status("design", "suggesting design changes");
+    case "design_import":
+      return status("design", "importing a diagram into a design");
+    case "design_comment":
+    case "design_reply":
+      return status("design", "commenting on a design");
     case "start_playground":
       return status("playground", "spinning up a playground");
     case "playground_status":
@@ -694,6 +724,10 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
     case "canvas_comment":
     case "canvas_reply":
       return named("Commenting on", known(o.canvas_id));
+    case "design_flows":
+      return named("Tracing the flow of", known(o.canvas_id));
+    case "design_create":
+      return named("Starting the design", o.title);
     case "read_workflow":
       return named("Looking over", known(o.workflow_id));
     case "propose_workflow_edit":

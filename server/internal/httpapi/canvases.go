@@ -198,7 +198,7 @@ func (s *Server) CreateChatCanvasComment(ctx context.Context, req api.CreateChat
 		return nil, err
 	}
 	b := req.Body
-	in := canvas.NewComment{ParentID: b.ParentId, Start: b.Start, End: b.End, VID: deref(b.Vid), Body: b.Body}
+	in := canvas.NewComment{ParentID: b.ParentId, Start: b.Start, End: b.End, VID: deref(b.Vid), Node: deref(b.Node), Body: b.Body}
 	if b.Seq != nil {
 		in.Seq = *b.Seq
 	}

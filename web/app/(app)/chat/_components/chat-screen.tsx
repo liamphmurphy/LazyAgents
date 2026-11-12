@@ -25,6 +25,8 @@ import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
+import { DesignPanel } from "./design-panel";
+import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { PlaygroundButton, PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
 import { PersonaCarousel, personaLook } from "./persona";
 import { CommitEmailPicker } from "./commit-email";
@@ -211,6 +213,18 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
     },
     repository: (arg) => { if (!fullPersona?.capabilities.code) return "This persona cannot write code."; if (arg) setRepoPicked(arg); else setRepoSignal((n) => n + 1); },
     hasWorkflows: published.length > 0,
+    // The persona starts it with design_create once the chat exists.
+    free: { design: (brief) => submit(designRequest(brief)) },
+  };
+  // The + menu's "Create with {persona}", as in a conversation.
+  const createWith = (kind: CreateKind) => {
+    if (kind === "slides") return router.push("/apps/slides");
+    setText((t) => (kind === "design" ? `/design ${t.trim()}` : `${DOC_DRAFT}${t.trim()}`));
+    requestAnimationFrame(() => {
+      const el = area.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
   };
   const actionError = start.error ?? create.error;
   return (
@@ -256,6 +270,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             commands={commands}
             personas={personas.data?.personas ?? []}
             inChat={(id) => id === personaId}
+            create={{ persona: persona.name, onCreate: createWith }}
             rows={2}
             disabled={locked}
             placeholder={arrived ? `Message ${persona.name}…` : name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
@@ -379,6 +394,7 @@ export function ChatScreen({ id }: { id?: string }) {
             )}
           </div>
           {/* The playground sits beside the chat: a running app needs the width more than a canvas does. */}
+          {id && <DesignPanel key={id} chatId={id} live={turnRunning} />}
           {id && <PlaygroundPanel chatId={id} />}
           {id && <PlaygroundFullscreen chatId={id} />}
           {id && canvas.fullscreen ? <CanvasFullscreen chatId={id} live={turnRunning} readOnly={!!current.data?.archived} agent={current.data?.persona?.name ?? "Assistant"} /> : null}

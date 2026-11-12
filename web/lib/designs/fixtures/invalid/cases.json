@@ -1,0 +1,94 @@
+[
+ {
+  "file": "unknown-field.json",
+  "want": "unknown field shadow"
+ },
+ {
+  "file": "unknown-token.json",
+  "want": "token $nope"
+ },
+ {
+  "file": "duplicate-id.json",
+  "want": "duplicate id n_title"
+ },
+ {
+  "file": "link-to-non-frame.json",
+  "want": "isn't a top-level frame"
+ },
+ {
+  "file": "missing-asset.json",
+  "want": "asset a_gone"
+ },
+ {
+  "file": "cross-page-connector.json",
+  "want": "on another page"
+ },
+ {
+  "file": "override-outside-component.json",
+  "want": "override n_title"
+ },
+ {
+  "file": "font-on-run.json",
+  "want": "unknown field font"
+ },
+ {
+  "file": "children-on-shape.json",
+  "want": "unknown field children"
+ },
+ {
+  "file": "fill-without-auto-layout.json",
+  "want": "fill sizing"
+ },
+ {
+  "file": "bad-hex.json",
+  "want": "#12345G"
+ },
+ {
+  "file": "schema-2.json",
+  "want": "schema 2"
+ },
+ {
+  "file": "after-delay-without-delay.json",
+  "want": "after-delay needs delay_ms"
+ },
+ {
+  "file": "instance-of-itself.json",
+  "want": "instance of itself"
+ },
+ {
+  "file": "crop-leaves-nothing.json",
+  "want": "crop leaves nothing"
+ },
+ {
+  "file": "hug-on-shape.json",
+  "want": "hug sizing"
+ },
+ {
+  "file": "connector-in-group.json",
+  "want": "connectors can't sit in a group"
+ },
+ {
+  "file": "too-deep.json",
+  "want": "nested 33 deep"
+ },
+ {
+  "file": "text-over-cap.json",
+  "want": "characters of text"
+ },
+ {
+  "file": "component-missing.json",
+  "want": "isn't a component"
+ },
+ {
+  "file": "unknown-node-type.json",
+  "want": "type: must be one of"
+ },
+ {
+  "file": "no-pages.json",
+  "want": "pages: must have 1 to 50 items"
+ },
+ {
+  "file": "token-not-in-sets.json",
+  "want": "tokens_ref.set nope"
+ }
+]

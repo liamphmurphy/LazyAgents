@@ -7,7 +7,7 @@ import { CHAT_COMMANDS, commandMenu, literalBody, parseCommand } from "@/lib/cha
 import { insertMention, mentionQuery, mentionSuggestions } from "@/lib/persona-ui";
 import { cx } from "@/lib/cx";
 import { LinkEditor } from "@/components/domain/link-editor";
-import { acceptTarget, AddContext, ChipList } from "./context-chips";
+import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-chips";
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
 import { ComposerHints, composerFrameFor, composerInput, SendButton, type SendTone } from "./reply-tools";
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
@@ -51,6 +51,7 @@ export function Composer({
   send,
   onCycle,
   hints,
+  create,
 }: {
   text: string;
   onText: (text: string) => void;
@@ -74,6 +75,8 @@ export function Composer({
   onCycle?: (back: boolean) => void;
   /** Replaces the usual line of hints under the box. */
   hints?: ReactNode;
+  /** The + menu's "Create with {persona}" section. */
+  create?: CreateWith;
 }) {
   // The @mention being typed, and which suggestion is highlighted.
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
@@ -132,7 +135,8 @@ export function Composer({
     if (!command) return setCommandError(`Unknown command /${name}. Start with // to send it as a message.`);
     if (name === "repo" && commands.repository) return runCommand(() => commands.repository!(arg));
     const free = command.free ? commands.free?.[name] : undefined;
-    if (free) return arg ? runCommand(() => free(arg)) : setCommandError(`Say what to send: /${name} <${command.args}>`);
+    if (free) return arg ? runCommand(() => free(arg)) : setCommandError(`Say ${name === "design" ? "what to design" : "what to send"}: /${name} <${command.args}>`);
+    if (command.free) return setCommandError(`/${name} works once the conversation has started.`);
     if (!command.args) return arg ? setCommandError(`/${name} doesn’t take anything after it.`) : runCommand(commands.plain[name]);
     if (name === "workflow" && !commands.hasWorkflows) return setCommandError("You have no published workflows yet. Build one under Workflows.");
     if (!arg) return setCommandError(`Say which ${command.args}: /${name} <${command.args}>`);
@@ -291,7 +295,7 @@ export function Composer({
           {/* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */}
           <div className="flex items-end gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <AddContext onPick={attach} onClosed={() => inputRef.current?.focus()} disabled={disabled} compact />
+              <AddContext onPick={attach} onClosed={() => inputRef.current?.focus()} disabled={disabled} compact create={create} />
               <AttachButton onFiles={files.add} disabled={disabled} compact />
               {options}
             </div>

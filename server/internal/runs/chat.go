@@ -1077,6 +1077,41 @@ func (s *Service) DeleteChat(ctx context.Context, ws, user, id uuid.UUID) error 
 	})
 }
 
+// DeleteAppCanvas deletes one canvas, preserving shared conversations. Only a
+// chat in the named app space with exactly this canvas is owned by the canvas.
+func (s *Service) DeleteAppCanvas(ctx context.Context, ws, user, chatID, canvasID uuid.UUID, app string) error {
+	return s.tx(ctx, func(q *store.Queries) error {
+		chat, err := lockChat(ctx, q, ws, user, chatID)
+		if err != nil {
+			return err
+		}
+		if _, err := q.GetChatCanvas(ctx, store.GetChatCanvasParams{ID: canvasID, SessionID: chat.ID}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return apperr.ErrNotFound
+			}
+			return err
+		}
+		if chat.SpaceID != nil {
+			sp, err := q.GetChatSpace(ctx, store.GetChatSpaceParams{ID: *chat.SpaceID, WorkspaceID: ws, UserID: user})
+			if err != nil {
+				return err
+			}
+			if sp.App != nil && *sp.App == app {
+				canvases, err := q.ListChatCanvases(ctx, chat.ID)
+				if err != nil {
+					return err
+				}
+				if len(canvases) == 1 && canvases[0].ID == canvasID {
+					return deleteChat(ctx, q, chat)
+				}
+			}
+		}
+		// Cascades remove versions, settings, proposals and assets; asset
+		// deletion queues blobs for the shared sweep.
+		return q.DeleteChatCanvas(ctx, store.DeleteChatCanvasParams{ID: canvasID, SessionID: chat.ID})
+	})
+}
+
 // DeleteIdleTemporaryChat deletes a temporary chat that is still idle since
 // before cutoff once its lock is held, so a message posted after the sweep
 // listed it keeps the chat. Reports whether it was deleted.

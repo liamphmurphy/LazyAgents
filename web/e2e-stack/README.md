@@ -30,6 +30,13 @@ database because epic creation has no standalone REST endpoint; criteria,
 tickets, estimates and status changes use the real API/MCP. The script provides
 both `E2E_STACK_BASE_URL` (web) and `E2E_STACK_API_URL` (API) to Playwright.
 
+`designs-review.spec.ts` (tagged `@design-review`, the spec itself is
+`e2e/designs-review.spec.ts`) covers reviewing a persona's design suggestions,
+direct edit with Undo, and a selection reaching the persona. It needs the fake in
+`design-review` mode, so a run with no arguments restarts the runner in that mode
+after the other specs; to run just it: `E2E_FAKE_HARNESS_MODE=design-review npm run e2e:stack -- designs-review`.
+The design worker token (`DESIGN_WORKER_TOKEN`) is set for the API and web.
+
 ## The disposable fixture (`run.sh`)
 
 Everything lives under a fresh temp dir and is torn down on exit (success,

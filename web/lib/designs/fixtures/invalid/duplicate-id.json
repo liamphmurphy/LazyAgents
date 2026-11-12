@@ -1,0 +1,212 @@
+{
+ "schema": 1,
+ "mode": "dark",
+ "tokens_ref": {
+  "set": "web",
+  "source": "web/styles/tokens.css",
+  "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "synced_at": "2026-11-01T00:00:00Z"
+ },
+ "token_sets": {
+  "web": {
+   "name": "Web",
+   "source": "web/styles/tokens.css",
+   "modes": {
+    "dark": {
+     "surface": {
+      "kind": "color",
+      "value": "#101014"
+     },
+     "space-2": {
+      "kind": "dimension",
+      "value": "8px"
+     }
+    },
+    "light": {
+     "surface": {
+      "kind": "color",
+      "value": "#FFFFFF"
+     }
+    }
+   }
+  }
+ },
+ "assets": {
+  "a_pic": {
+   "mime": "image/png",
+   "w": 10,
+   "h": 10
+  }
+ },
+ "pages": [
+  {
+   "id": "p_flows",
+   "name": "Flows",
+   "children": [
+    {
+     "id": "n_home",
+     "type": "frame",
+     "preset": "iphone-15",
+     "x": 0,
+     "y": 0,
+     "w": 393,
+     "h": 852,
+     "fill": "$surface",
+     "auto_layout": {
+      "direction": "vertical",
+      "gap": 12,
+      "padding": [
+       16,
+       16,
+       16,
+       16
+      ]
+     },
+     "children": [
+      {
+       "id": "n_title",
+       "type": "text",
+       "x": 0,
+       "y": 0,
+       "w": 200,
+       "h": 20,
+       "paragraphs": [
+        {
+         "runs": [
+          {
+           "text": "Home",
+           "size": 16
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "n_pic",
+       "type": "image",
+       "x": 0,
+       "y": 0,
+       "w": 100,
+       "h": 100,
+       "asset": "a_pic"
+      },
+      {
+       "id": "n_btn",
+       "type": "instance",
+       "x": 0,
+       "y": 0,
+       "w": 120,
+       "h": 40,
+       "component": "n_button",
+       "overrides": {
+        "n_label": {
+         "text": "Go"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "id": "n_next",
+     "type": "frame",
+     "x": 500,
+     "y": 0,
+     "w": 393,
+     "h": 852,
+     "children": [
+      {
+       "id": "n_title",
+       "type": "text",
+       "x": 0,
+       "y": 0,
+       "w": 200,
+       "h": 20,
+       "paragraphs": [
+        {
+         "runs": [
+          {
+           "text": "Again",
+           "size": 16
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "n_box",
+     "type": "shape",
+     "shape": "roundRect",
+     "x": 0,
+     "y": 900,
+     "w": 100,
+     "h": 50
+    },
+    {
+     "id": "n_wire",
+     "type": "connector",
+     "from": {
+      "node": "n_home"
+     },
+     "to": {
+      "node": "n_next"
+     }
+    }
+   ]
+  },
+  {
+   "id": "p_parts",
+   "name": "Components",
+   "children": [
+    {
+     "id": "n_button",
+     "type": "component",
+     "x": 0,
+     "y": 0,
+     "w": 120,
+     "h": 40,
+     "auto_layout": {
+      "direction": "horizontal"
+     },
+     "sizing": {
+      "w": "hug",
+      "h": "hug"
+     },
+     "children": [
+      {
+       "id": "n_label",
+       "type": "text",
+       "x": 0,
+       "y": 0,
+       "w": 200,
+       "h": 20,
+       "paragraphs": [
+        {
+         "runs": [
+          {
+           "text": "Button",
+           "size": 16
+          }
+         ]
+        }
+       ],
+       "sizing": {
+        "w": "hug"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "id": "k_go",
+   "from": "n_btn",
+   "to": "n_next",
+   "trigger": "click",
+   "transition": "slide-left"
+  }
+ ]
+}
