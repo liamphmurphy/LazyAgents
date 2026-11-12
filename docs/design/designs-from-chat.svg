@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900" font-family="Inter, system-ui, sans-serif">
+  <title>Persona chat: create a design from the composer, design card in the transcript, live Designing scene, design open beside chat</title>
+  <defs>
+    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#24222F"/></pattern>
+    <marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#4EA7FC"/></marker>
+  </defs>
+  <rect width="1440" height="900" fill="#0C0B12"/>
+  <g id="sidebar">
+    <rect width="232" height="900" fill="#100F18"/>
+    <path d="M232.5 0V900" stroke="#1E1C29"/>
+    <circle cx="28" cy="28" r="10" fill="#7864D9"/><circle cx="32" cy="24" r="2.5" fill="#F2A97E"/>
+    <text x="46" y="33" font-size="14" font-weight="600" fill="#EEEDF3">Vesper</text>
+    <rect x="12" y="52" width="208" height="30" rx="7" fill="none" stroke="#2E2B3B"/>
+    <text x="28" y="72" font-size="13" fill="#EEEDF3">+  New chat</text>
+    <text x="20" y="112" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">TODAY</text>
+    <rect x="12" y="120" width="208" height="28" rx="6" fill="#201E2C"/>
+    <text x="24" y="139" font-size="13" fill="#EEEDF3">Designs app mockups</text>
+    <text x="24" y="167" font-size="13" fill="#A4A1B3">GitHub MCP runbook</text>
+    <text x="24" y="195" font-size="13" fill="#A4A1B3">Auto model routing</text>
+    <text x="20" y="232" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">APPS</text>
+    <g font-size="13" fill="#A4A1B3">
+      <text x="24" y="262">▤  Docs</text>
+      <text x="24" y="290">▭  Slides</text>
+      <text x="24" y="318">◫  Finance</text>
+      <text x="24" y="346" fill="#EEEDF3">◇  Designs</text>
+    </g>
+    <rect x="102" y="333" width="34" height="17" rx="4" fill="#9B8CFF26"/>
+    <text x="119" y="345" font-size="10" font-weight="600" fill="#C5BCFF" text-anchor="middle">NEW</text>
+  </g>
+  <g id="chat">
+    <circle cx="268" cy="28" r="13" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/>
+    <text x="268" y="32.5" font-size="12" font-weight="600" fill="#3FC1B0" text-anchor="middle">H</text>
+    <text x="290" y="33" font-size="14" font-weight="600" fill="#EEEDF3">Hackerman</text>
+    <text x="378" y="33" font-size="12" fill="#8C899C">· vesper</text>
+    <path d="M233 56.5H900" stroke="#1E1C29"/>
+    <rect x="526" y="76" width="350" height="40" rx="12" fill="#1B1A27"/>
+    <text x="540" y="101" font-size="14" fill="#EEEDF3">Mock the checkout flow for LAZYAGENTS-150</text>
+    <text x="256" y="148" font-size="14" fill="#CBC9D6">Here's the checkout flow, wired as a prototype. Tap through it</text>
+    <text x="256" y="170" font-size="14" fill="#CBC9D6">with Present; the declined-card path is still open.</text>
+    <rect x="256" y="186" width="420" height="168" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="257" y="187" width="418" height="104" rx="11" fill="url(#dots)"/>
+    <g>
+      <rect x="290" y="200" width="44" height="80" rx="6" fill="#FFFFFF"/><rect x="296" y="208" width="18" height="4" rx="2" fill="#1B1A27"/><rect x="296" y="266" width="32" height="8" rx="3" fill="#7864D9"/>
+      <rect x="370" y="200" width="44" height="80" rx="6" fill="#FFFFFF"/><rect x="376" y="208" width="22" height="4" rx="2" fill="#1B1A27"/><g fill="#F0EEF6"><rect x="376" y="220" width="32" height="8" rx="2"/><rect x="376" y="232" width="32" height="8" rx="2"/></g><rect x="376" y="266" width="32" height="8" rx="3" fill="#7864D9"/>
+      <rect x="450" y="200" width="44" height="80" rx="6" fill="#FFFFFF"/><rect x="456" y="214" width="32" height="20" rx="3" fill="#2B2366"/><rect x="456" y="266" width="32" height="8" rx="3" fill="#7864D9"/>
+      <rect x="530" y="200" width="44" height="80" rx="6" fill="#FFFFFF"/><circle cx="552" cy="236" r="9" fill="#4CB78233" stroke="#4CB782" stroke-width="1.5"/>
+      <path d="M548 236l3 3 5-6" fill="none" stroke="#4CB782" stroke-width="1.6" stroke-linecap="round"/>
+      <g fill="none" stroke="#4EA7FC" stroke-width="1.4"><path d="M328 270C350 270 348 236 368 236" marker-end="url(#pa)"/><path d="M408 270C430 270 428 236 448 236" marker-end="url(#pa)"/><path d="M488 270C510 270 508 236 528 236" marker-end="url(#pa)"/></g>
+      <rect x="600" y="244" width="64" height="40" rx="3" fill="#F0BF4C" transform="rotate(3 632 264)"/>
+      <path d="M610 258h40M610 268h28" stroke="#6B5A1E" stroke-width="2" transform="rotate(3 632 264)"/>
+    </g>
+    <path d="M256 291.5H676" stroke="#24222F"/>
+    <rect x="270" y="304" width="22" height="22" rx="6" fill="#9B8CFF26"/>
+    <path d="M281 309l6 3.5v7L281 323l-6-3.5v-7z" fill="none" stroke="#9B8CFF" stroke-width="1.5"/>
+    <text x="302" y="314" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">DESIGN</text>
+    <text x="302" y="330" font-size="13" font-weight="600" fill="#EEEDF3">Checkout flow</text>
+    <text x="302" y="346" font-size="11" fill="#8C899C">4 frames · 3 links · 1 sticky · Flows</text>
+    <rect x="510" y="304" width="74" height="26" rx="7" fill="none" stroke="#2E2B3B"/>
+    <text x="547" y="321" font-size="12" fill="#EEEDF3" text-anchor="middle">Present</text>
+    <rect x="590" y="304" width="74" height="26" rx="7" fill="#9B8CFF"/>
+    <text x="627" y="321" font-size="12" font-weight="600" fill="#120F24" text-anchor="middle">Open</text>
+    <rect x="456" y="380" width="420" height="40" rx="12" fill="#1B1A27"/>
+    <text x="470" y="405" font-size="14" fill="#EEEDF3">Now sketch onboarding for the Designs app</text>
+    <rect x="256" y="440" width="420" height="80" rx="12" fill="#15141F" stroke="#24222F"/>
+    <g transform="translate(268 452)">
+      <rect x="22" y="4" width="32" height="48" rx="4" fill="#1B1A27" stroke="#2E2B3B"/>
+      <path d="M28 12H42" stroke="#8C899C" stroke-width="2" stroke-linecap="round"/>
+      <path d="M28 19H48M28 25H44" stroke="#8C899C" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      <rect x="28" y="40" width="20" height="7" rx="2" fill="#9B8CFF"/>
+      <path d="M48 43.5C64 43.5 64 20 79 20" fill="none" stroke="#4EA7FC" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M77 16.5l4 3.5-4 3.5z" fill="#4EA7FC"/>
+      <rect x="82" y="4" width="32" height="48" rx="4" fill="none" stroke="#9B8CFF" stroke-width="1.5"/>
+      <path d="M88 12H102" stroke="#9B8CFF" stroke-width="2" stroke-linecap="round"/>
+      <path d="M88 19H108M88 25H100" stroke="#8C899C" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      <rect x="88" y="40" width="20" height="7" rx="2" fill="#9B8CFF"/>
+      <path d="M118 6l1.5 4.5 4.5 1.5-4.5 1.5-1.5 4.5-1.5-4.5-4.5-1.5 4.5-1.5z" fill="#F0BF4C"/>
+      <path d="M100 36v9l2.6-2.4 3.6-.2z" fill="#EEEDF3"/>
+    </g>
+    <text x="414" y="474" font-size="14" font-weight="600" fill="#EEEDF3">Designing a flow</text>
+    <text x="414" y="494" font-size="12" fill="#8C899C">Onboarding · frame 2 of 4</text>
+    <rect x="620" y="466" width="44" height="22" rx="6" fill="none" stroke="#2E2B3B"/>
+    <text x="642" y="481" font-size="11" fill="#A4A1B3" text-anchor="middle">Stop</text>
+    <g font-size="12" fill="#A4A1B3">
+      <circle cx="268" cy="542" r="3" fill="#4CB782"/><text x="280" y="546">Read the Docs and Slides app screens</text>
+      <circle cx="268" cy="564" r="3" fill="#4CB782"/><text x="280" y="568">Created design “Onboarding” (Flows page, iPhone frames)</text>
+      <circle cx="268" cy="586" r="3" fill="#9B8CFF"/><text x="280" y="590" fill="#EEEDF3">Adding frame “Pick a starter”</text>
+      <path d="M268 546V560M268 568V582" stroke="#2E2B3B"/>
+    </g>
+    <rect x="256" y="604" width="250" height="196" rx="12" fill="#1B1A27" stroke="#2E2B3B"/>
+    <text x="270" y="628" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">ADD</text>
+    <text x="270" y="652" font-size="13" fill="#CBC9D6">⇪  Attach a file</text>
+    <text x="270" y="678" font-size="13" fill="#CBC9D6">▣  From Library</text>
+    <path d="M256 692.5H506" stroke="#2E2B3B"/>
+    <text x="270" y="714" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">CREATE WITH HACKERMAN</text>
+    <text x="270" y="738" font-size="13" fill="#CBC9D6">▤  Doc</text>
+    <text x="340" y="738" font-size="13" fill="#CBC9D6">▭  Slides</text>
+    <rect x="262" y="750" width="238" height="42" rx="8" fill="#9B8CFF26"/>
+    <path d="M280 760l7 4v8l-7 4-7-4v-8z" fill="none" stroke="#9B8CFF" stroke-width="1.5"/>
+    <text x="296" y="768" font-size="13" font-weight="600" fill="#EEEDF3">Design</text>
+    <text x="296" y="784" font-size="11" fill="#A4A1B3">Flow, diagram or wireframe</text>
+    <text x="490" y="768" font-size="11" fill="#8C899C" text-anchor="end">/design</text>
+    <rect x="256" y="808" width="620" height="76" rx="14" fill="#15141F" stroke="#2E2B3B"/>
+    <text x="276" y="836" font-size="14" fill="#8C899C">Message Hackerman…</text>
+    <circle cx="282" cy="862" r="12" fill="#9B8CFF26" stroke="#9B8CFF"/>
+    <text x="282" y="867" font-size="15" fill="#C5BCFF" text-anchor="middle">+</text>
+    <rect x="304" y="851" width="88" height="22" rx="11" fill="#201E2C"/>
+    <text x="348" y="866" font-size="11" fill="#A4A1B3" text-anchor="middle">Auto · Opus</text>
+    <rect x="836" y="848" width="28" height="28" rx="8" fill="#2E2B3B"/>
+    <rect x="845" y="857" width="10" height="10" rx="2" fill="#EEEDF3"/>
+  </g>
+  <g id="beside">
+    <rect x="900" y="0" width="540" height="900" fill="#0E0D15"/>
+    <path d="M900.5 0V900" stroke="#1E1C29"/>
+    <path d="M920 18l7 4v8l-7 4-7-4v-8z" fill="none" stroke="#9B8CFF" stroke-width="1.5"/>
+    <text x="936" y="31" font-size="14" font-weight="600" fill="#EEEDF3">Onboarding</text>
+    <text x="1042" y="31" font-size="12" fill="#8C899C">Design · Flows</text>
+    <circle cx="1262" cy="26" r="10" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/>
+    <text x="1262" y="30" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+    <rect x="1282" y="13" width="112" height="26" rx="7" fill="none" stroke="#2E2B3B"/>
+    <text x="1338" y="30" font-size="12" fill="#EEEDF3" text-anchor="middle">Open in Designs</text>
+    <text x="1420" y="31" font-size="15" fill="#8C899C" text-anchor="middle">×</text>
+    <path d="M901 52.5H1440" stroke="#1E1C29"/>
+    <rect x="901" y="53" width="539" height="847" fill="url(#dots)"/>
+    <text x="940" y="112" font-size="11" fill="#8C899C">Welcome</text>
+    <rect x="940" y="120" width="140" height="300" rx="14" fill="#15141F" stroke="#2E2B3B"/>
+    <circle cx="1010" cy="200" r="22" fill="#7864D9"/><circle cx="1018" cy="192" r="5" fill="#F2A97E"/>
+    <rect x="970" y="240" width="80" height="8" rx="3" fill="#EEEDF3"/>
+    <rect x="960" y="258" width="100" height="5" rx="2" fill="#8C899C"/><rect x="972" y="270" width="76" height="5" rx="2" fill="#8C899C"/>
+    <rect x="956" y="372" width="108" height="28" rx="8" fill="#9B8CFF"/>
+    <text x="1010" y="390" font-size="10" font-weight="600" fill="#120F24" text-anchor="middle">Start a design</text>
+    <text x="1124" y="112" font-size="11" fill="#9B8CFF">Pick a starter</text>
+    <rect x="1124" y="120" width="140" height="300" rx="14" fill="#15141F" stroke="#9B8CFF" stroke-width="1.5"/>
+    <rect x="1138" y="138" width="70" height="7" rx="3" fill="#EEEDF3"/>
+    <g fill="#1B1A27" stroke="#2E2B3B">
+      <rect x="1138" y="158" width="52" height="52" rx="8"/><rect x="1198" y="158" width="52" height="52" rx="8"/>
+      <rect x="1138" y="218" width="52" height="52" rx="8"/>
+    </g>
+    <rect x="1198" y="218" width="52" height="52" rx="8" fill="none" stroke="#9B8CFF" stroke-dasharray="3 3"/>
+    <path d="M1150 176h28M1150 186h20" stroke="#8C899C" stroke-width="2"/>
+    <g fill="none" stroke="#8C899C" stroke-width="1.5"><rect x="1208" y="172" width="12" height="10" rx="2"/><rect x="1228" y="186" width="12" height="10" rx="2"/><path d="M1220 177h4v9"/></g>
+    <rect x="1150" y="232" width="28" height="22" rx="3" fill="none" stroke="#8C899C" stroke-width="1.5" stroke-dasharray="2 2"/>
+    <path d="M1236 252v13l3.7-3.4 5.2-.3z" fill="#3FC1B0" stroke="#0C0B12"/>
+    <rect x="1240" y="266" width="84" height="20" rx="10" fill="#3FC1B0"/>
+    <text x="1282" y="280" font-size="11" font-weight="600" fill="#0C0B12" text-anchor="middle">Hackerman</text>
+    <path d="M1064 386C1094 386 1092 270 1122 270" fill="none" stroke="#4EA7FC" stroke-width="1.6" marker-end="url(#pa)"/>
+    <circle cx="1064" cy="386" r="3" fill="#4EA7FC"/>
+    <text x="1308" y="112" font-size="11" fill="#8C899C">Canvas</text>
+    <rect x="1308" y="120" width="140" height="300" rx="14" fill="none" stroke="#2E2B3B" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="940" y="470" font-size="11" fill="#8C899C">Signed-in flow · draft</text>
+    <rect x="940" y="480" width="460" height="108" rx="10" fill="#15141F" fill-opacity="0.6" stroke="#2E2B3B" stroke-dasharray="4 4"/>
+    <text x="1170" y="540" font-size="12" fill="#8C899C" text-anchor="middle">Hackerman will add frames 3–4 here</text>
+    <rect x="1018" y="830" width="306" height="44" rx="12" fill="#1B1A27" stroke="#2E2B3B"/>
+    <g stroke="#CBC9D6" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <path d="M1036 842v15l4.2-4 5.8-.4z" fill="#CBC9D6" stroke="none"/>
+      <path d="M1064 846H1082M1064 856H1082M1068 842V860M1078 842V860"/>
+      <rect x="1098" y="844" width="16" height="14" rx="2"/>
+      <path d="M1132 860L1148 844M1142 844H1148V850"/>
+      <path d="M1166 844H1180M1173 844V860"/>
+      <path d="M1196 844h16v12h-9l-5 4v-4h-2z"/>
+    </g>
+    <path d="M1228 840V864" stroke="#2E2B3B"/>
+    <text x="1276" y="857" font-size="12" fill="#A4A1B3" text-anchor="middle">Pause</text>
+  </g>
+  <g font-size="11" fill="#F2A97E">
+    <path d="M516 700h28" stroke="#F2A97E" stroke-dasharray="3 3"/>
+    <text x="550" y="696">① Entry: + menu or /design.</text>
+    <text x="550" y="712">Persona creates the design and</text>
+    <text x="550" y="728">opens it beside the chat.</text>
+    <path d="M686 480h20" stroke="#F2A97E" stroke-dasharray="3 3"/>
+    <text x="712" y="476">② New “design” scene</text>
+    <text x="712" y="492">plays while it draws.</text>
+    <path d="M686 250h20" stroke="#F2A97E" stroke-dasharray="3 3"/>
+    <text x="712" y="246">③ Finished turn leaves</text>
+    <text x="712" y="262">a Design card (live</text>
+    <text x="712" y="278">thumbnail, Present/Open).</text>
+  </g>
+</svg>

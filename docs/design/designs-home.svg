@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900" font-family="Inter, system-ui, sans-serif">
+  <title>Designs home: start with a persona, starters, and recent designs</title>
+  <defs>
+    <pattern id="dots" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.8" fill="#24222F"/></pattern>
+    <marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#4EA7FC"/></marker>
+    <marker id="da" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#A4A1B3"/></marker>
+  </defs>
+  <rect width="1440" height="900" fill="#0C0B12"/>
+  <g id="sidebar">
+    <rect width="232" height="900" fill="#100F18"/>
+    <path d="M232.5 0V900" stroke="#1E1C29"/>
+    <circle cx="28" cy="28" r="10" fill="#7864D9"/><circle cx="32" cy="24" r="2.5" fill="#F2A97E"/>
+    <text x="46" y="33" font-size="14" font-weight="600" fill="#EEEDF3">Vesper</text>
+    <text x="20" y="80" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">APPS</text>
+    <g font-size="13" fill="#A4A1B3">
+      <text x="24" y="110">▤  Docs</text>
+      <text x="24" y="138">▭  Slides</text>
+      <text x="24" y="166">◫  Finance</text>
+    </g>
+    <rect x="12" y="176" width="208" height="28" rx="6" fill="#201E2C"/>
+    <text x="24" y="195" font-size="13" fill="#EEEDF3">◇  Designs</text>
+  </g>
+  <g id="header">
+    <text x="264" y="44" font-size="26" font-weight="600" fill="#EEEDF3" letter-spacing="-0.5">Designs</text>
+    <text x="264" y="68" font-size="13" fill="#8C899C">App flows, diagrams and wireframes you build with your personas.</text>
+    <rect x="1300" y="24" width="112" height="30" rx="7" fill="#9B8CFF"/>
+    <text x="1356" y="43" font-size="12" font-weight="600" fill="#120F24" text-anchor="middle">+ New design</text>
+  </g>
+  <rect x="264" y="92" width="1148" height="104" rx="14" fill="#15141F" stroke="#2E2B3B"/>
+  <circle cx="292" cy="122" r="13" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/>
+  <text x="292" y="126.5" font-size="12" font-weight="600" fill="#3FC1B0" text-anchor="middle">H</text>
+  <text x="314" y="127" font-size="15" fill="#8C899C">Describe a flow or diagram, or paste a ticket key…</text>
+  <rect x="280" y="154" width="160" height="26" rx="13" fill="#1B1A27" stroke="#2E2B3B"/>
+  <text x="360" y="171" font-size="12" fill="#CBC9D6" text-anchor="middle">Hackerman ▾</text>
+  <rect x="448" y="154" width="150" height="26" rx="13" fill="#1B1A27" stroke="#2E2B3B"/>
+  <text x="523" y="171" font-size="12" fill="#CBC9D6" text-anchor="middle">Project: VESPER ▾</text>
+  <rect x="606" y="154" width="176" height="26" rx="13" fill="#1B1A27" stroke="#2E2B3B"/>
+  <text x="694" y="171" font-size="12" fill="#CBC9D6" text-anchor="middle">Tokens: Dusk (web) ▾</text>
+  <rect x="1300" y="152" width="96" height="30" rx="8" fill="#9B8CFF"/>
+  <text x="1348" y="171" font-size="12" font-weight="600" fill="#120F24" text-anchor="middle">Start</text>
+  <text x="264" y="234" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">START FROM</text>
+  <g id="starters">
+    <rect x="264" y="246" width="176" height="128" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="265" y="247" width="174" height="84" rx="11" fill="url(#dots)"/>
+    <text x="352" y="296" font-size="22" fill="#8C899C" text-anchor="middle">+</text>
+    <text x="280" y="358" font-size="13" font-weight="600" fill="#EEEDF3">Blank</text>
+    <rect x="456" y="246" width="176" height="128" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="457" y="247" width="174" height="84" rx="11" fill="url(#dots)"/>
+    <rect x="488" y="258" width="30" height="62" rx="5" fill="#EEEDF3"/><rect x="560" y="258" width="30" height="62" rx="5" fill="#EEEDF3"/>
+    <rect x="493" y="306" width="20" height="6" rx="2" fill="#7864D9"/>
+    <path d="M513 309C536 309 534 280 558 280" fill="none" stroke="#4EA7FC" stroke-width="1.4" marker-end="url(#pa)"/>
+    <text x="472" y="358" font-size="13" font-weight="600" fill="#EEEDF3">Mobile flow</text>
+    <rect x="648" y="246" width="176" height="128" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="649" y="247" width="174" height="84" rx="11" fill="url(#dots)"/>
+    <rect x="668" y="262" width="62" height="44" rx="4" fill="#EEEDF3"/><rect x="752" y="276" width="56" height="40" rx="4" fill="#EEEDF3"/>
+    <rect x="668" y="262" width="62" height="7" rx="3" fill="#B9B6C6"/><rect x="752" y="276" width="56" height="7" rx="3" fill="#B9B6C6"/>
+    <path d="M730 290C740 290 740 296 750 296" fill="none" stroke="#4EA7FC" stroke-width="1.4" marker-end="url(#pa)"/>
+    <text x="664" y="358" font-size="13" font-weight="600" fill="#EEEDF3">Web flow</text>
+    <rect x="840" y="246" width="176" height="128" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="841" y="247" width="174" height="84" rx="11" fill="url(#dots)"/>
+    <g fill="#1B1A27" stroke="#8C899C"><rect x="858" y="262" width="40" height="20" rx="4"/><rect x="928" y="262" width="40" height="20" rx="4"/><rect x="928" y="300" width="40" height="20" rx="4"/></g>
+    <path d="M898 272H926M948 282V298" stroke="#A4A1B3" stroke-width="1.4" marker-end="url(#da)"/>
+    <path d="M987 262l12 12-12 12-12-12z" fill="none" stroke="#9B8CFF" stroke-width="1.4"/>
+    <text x="856" y="358" font-size="13" font-weight="600" fill="#EEEDF3">Diagram</text>
+    <rect x="1032" y="246" width="176" height="128" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="1033" y="247" width="174" height="84" rx="11" fill="url(#dots)"/>
+    <g fill="none" stroke="#8C899C" stroke-width="1.4" stroke-dasharray="3 2"><rect x="1052" y="260" width="136" height="58" rx="4"/><path d="M1052 274H1188M1088 274V318"/></g>
+    <path d="M1100 286h60M1100 296h40" stroke="#8C899C" stroke-width="2"/>
+    <text x="1048" y="358" font-size="13" font-weight="600" fill="#EEEDF3">Wireframe</text>
+    <rect x="1224" y="246" width="188" height="128" rx="12" fill="#9B8CFF14" stroke="#9B8CFF55"/>
+    <rect x="1240" y="262" width="54" height="20" rx="4" fill="#24222F"/>
+    <text x="1267" y="276" font-size="10" font-weight="600" fill="#A4A1B3" text-anchor="middle">VESPER</text>
+    <circle cx="1244" cy="300" r="4" fill="#F0BF4C"/>
+    <text x="1254" y="304" font-size="13" font-weight="600" fill="#EEEDF3">From a ticket</text>
+    <text x="1240" y="342" font-size="12" fill="#A4A1B3">Persona drafts the flow</text>
+    <text x="1240" y="358" font-size="12" fill="#A4A1B3">from its criteria</text>
+  </g>
+  <text x="264" y="420" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">RECENT</text>
+  <g font-size="12">
+    <rect x="370" y="404" width="40" height="24" rx="6" fill="#201E2C"/><text x="390" y="420" fill="#EEEDF3" text-anchor="middle">All</text>
+    <text x="446" y="420" fill="#A4A1B3" text-anchor="middle">Mine</text>
+    <text x="534" y="420" fill="#A4A1B3" text-anchor="middle">Persona-made</text>
+    <text x="650" y="420" fill="#A4A1B3" text-anchor="middle">Needs review</text>
+    <rect x="698" y="409" width="18" height="15" rx="7.5" fill="#F59E5B1F"/><text x="707" y="420" font-size="10" fill="#F7B07A" text-anchor="middle">2</text>
+  </g>
+  <rect x="1252" y="404" width="160" height="26" rx="7" fill="#15141F" stroke="#24222F"/>
+  <text x="1266" y="421" font-size="12" fill="#8C899C">Search designs</text>
+  <g>
+    <rect x="264" y="446" width="272" height="216" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="265" y="447" width="270" height="138" rx="11" fill="url(#dots)"/>
+    <g fill="#FFFFFF"><rect x="286" y="466" width="44" height="96" rx="6"/><rect x="346" y="466" width="44" height="96" rx="6"/><rect x="406" y="466" width="44" height="96" rx="6"/><rect x="466" y="466" width="44" height="96" rx="6"/></g>
+    <g fill="#7864D9"><rect x="292" y="546" width="32" height="8" rx="3"/><rect x="352" y="546" width="32" height="8" rx="3"/><rect x="412" y="546" width="32" height="8" rx="3"/></g>
+    <rect x="412" y="478" width="32" height="20" rx="3" fill="#2B2366"/>
+    <text x="280" y="610" font-size="13" font-weight="600" fill="#EEEDF3">Checkout flow</text>
+    <text x="280" y="630" font-size="12" fill="#8C899C">5 frames · edited 4m ago</text>
+    <rect x="280" y="638" width="104" height="18" rx="4" fill="#24222F"/><text x="332" y="651" font-size="10" fill="#A4A1B3" text-anchor="middle">LAZYAGENTS-150</text>
+    <rect x="392" y="638" width="84" height="18" rx="9" fill="#F59E5B1F"/><text x="434" y="651" font-size="10" fill="#F7B07A" text-anchor="middle">3 to review</text>
+    <circle cx="500" cy="614" r="10" fill="#2A2836" stroke="#15141F" stroke-width="2"/><text x="500" y="618" font-size="9" fill="#EEEDF3" text-anchor="middle">L</text>
+    <circle cx="516" cy="614" r="10" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/><text x="516" y="618" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+  </g>
+  <g>
+    <rect x="556" y="446" width="272" height="216" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="557" y="447" width="270" height="138" rx="11" fill="url(#dots)"/>
+    <g fill="#1B1A27" stroke="#8C899C"><rect x="578" y="472" width="56" height="26" rx="5"/><rect x="664" y="472" width="56" height="26" rx="5"/><rect x="750" y="472" width="56" height="26" rx="5"/><rect x="664" y="530" width="56" height="26" rx="5"/></g>
+    <g stroke="#A4A1B3" stroke-width="1.4" fill="none"><path d="M634 485H662" marker-end="url(#da)"/><path d="M720 485H748" marker-end="url(#da)"/><path d="M692 498V528" marker-end="url(#da)"/></g>
+    <text x="572" y="610" font-size="13" font-weight="600" fill="#EEEDF3">Runner architecture</text>
+    <text x="572" y="630" font-size="12" fill="#8C899C">Diagram · edited yesterday</text>
+    <rect x="572" y="638" width="104" height="18" rx="4" fill="#24222F"/><text x="624" y="651" font-size="10" fill="#A4A1B3" text-anchor="middle">server/runner</text>
+    <circle cx="808" cy="614" r="10" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/><text x="808" y="618" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+  </g>
+  <g>
+    <rect x="848" y="446" width="272" height="216" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="849" y="447" width="270" height="138" rx="11" fill="url(#dots)"/>
+    <rect x="872" y="462" width="224" height="108" rx="6" fill="#1B1A27" stroke="#2E2B3B"/>
+    <rect x="872" y="462" width="52" height="108" rx="6" fill="#100F18"/>
+    <path d="M882 478h32M882 490h26M882 502h30" stroke="#8C899C" stroke-width="2"/>
+    <rect x="936" y="476" width="148" height="80" rx="4" fill="#15141F" stroke="#2E2B3B"/>
+    <text x="864" y="610" font-size="13" font-weight="600" fill="#EEEDF3">Onboarding</text>
+    <text x="864" y="630" font-size="12" fill="#8C899C">Web flow · in progress</text>
+    <rect x="864" y="638" width="98" height="18" rx="9" fill="#9B8CFF26"/><text x="913" y="651" font-size="10" fill="#C5BCFF" text-anchor="middle">H is designing…</text>
+    <circle cx="1100" cy="614" r="10" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/><text x="1100" y="618" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+  </g>
+  <g>
+    <rect x="1140" y="446" width="272" height="216" rx="12" fill="#15141F" stroke="#24222F"/>
+    <rect x="1141" y="447" width="270" height="138" rx="11" fill="url(#dots)"/>
+    <rect x="1170" y="466" width="96" height="96" rx="4" fill="#F0BF4C" transform="rotate(-2 1218 514)"/>
+    <rect x="1284" y="470" width="96" height="96" rx="4" fill="#9B8CFF" transform="rotate(2 1332 518)"/>
+    <path d="M1184 490h60M1184 504h48M1298 494h60M1298 508h40" stroke="#120F24" stroke-opacity="0.5" stroke-width="2"/>
+    <text x="1156" y="610" font-size="13" font-weight="600" fill="#EEEDF3">D&amp;D session board</text>
+    <text x="1156" y="630" font-size="12" fill="#8C899C">Whiteboard · edited 3d ago</text>
+    <circle cx="1392" cy="614" r="10" fill="#2A2836"/><text x="1392" y="618" font-size="9" fill="#EEEDF3" text-anchor="middle">L</text>
+  </g>
+  <text x="264" y="712" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">ALSO IN DESIGNS</text>
+  <g font-size="12" fill="#A4A1B3">
+    <rect x="264" y="724" width="364" height="60" rx="10" fill="#15141F" stroke="#24222F"/>
+    <text x="280" y="748" fill="#EEEDF3">◐  Token sets</text>
+    <text x="280" y="768">Dusk (web), Dusk (iOS) · synced from tokens.css</text>
+    <rect x="644" y="724" width="364" height="60" rx="10" fill="#15141F" stroke="#24222F"/>
+    <text x="660" y="748" fill="#EEEDF3">◇  Component libraries</text>
+    <text x="660" y="768">Vesper UI · 34 components · used by 3 designs</text>
+    <rect x="1024" y="724" width="388" height="60" rx="10" fill="#15141F" stroke="#24222F"/>
+    <text x="1040" y="748" fill="#EEEDF3">⇪  Import</text>
+    <text x="1040" y="768">SVG, PNG, Mermaid, Excalidraw · Figma file (later)</text>
+  </g>
+</svg>

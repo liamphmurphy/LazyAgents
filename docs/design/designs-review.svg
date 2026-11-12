@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900" font-family="Inter, system-ui, sans-serif">
+  <title>Designs review: a persona's proposed changes as a diff on the canvas, with per-change accept and reject, and comment threads</title>
+  <defs>
+    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#24222F"/></pattern>
+    <pattern id="strike" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V8" stroke="#EF6461" stroke-width="2" stroke-opacity="0.5"/></pattern>
+    <marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#4EA7FC"/></marker>
+    <marker id="ga" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#4CB782"/></marker>
+  </defs>
+  <rect width="1440" height="900" fill="#0C0B12"/>
+  <g id="topbar">
+    <path d="M0 52.5H1440" stroke="#1E1C29"/>
+    <text x="20" y="31" font-size="13" fill="#8C899C">Designs</text>
+    <text x="78" y="31" font-size="13" fill="#4A4758">/</text>
+    <text x="92" y="31" font-size="13" font-weight="600" fill="#EEEDF3">Checkout flow</text>
+    <rect x="430" y="10" width="580" height="32" rx="8" fill="#9B8CFF1A" stroke="#9B8CFF55"/>
+    <circle cx="450" cy="26" r="10" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/>
+    <text x="450" y="30" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+    <text x="468" y="30.5" font-size="13" fill="#EEEDF3">Reviewing Hackerman's changes</text>
+    <text x="680" y="30.5" font-size="12" fill="#A4A1B3">· 3 of 5 left</text>
+    <rect x="806" y="15" width="90" height="22" rx="6" fill="none" stroke="#2E2B3B"/>
+    <text x="851" y="30" font-size="12" fill="#EEEDF3" text-anchor="middle">Reject rest</text>
+    <rect x="902" y="15" width="100" height="22" rx="6" fill="#9B8CFF"/>
+    <text x="952" y="30" font-size="12" font-weight="600" fill="#120F24" text-anchor="middle">Accept rest</text>
+    <rect x="1340" y="12" width="86" height="28" rx="7" fill="none" stroke="#2E2B3B"/>
+    <text x="1383" y="30" font-size="12" fill="#EEEDF3" text-anchor="middle">Done</text>
+  </g>
+  <g id="rail">
+    <rect x="0" y="53" width="56" height="847" fill="#100F18"/>
+    <path d="M56.5 53V900" stroke="#1E1C29"/>
+    <circle cx="28" cy="82" r="13" fill="#3FC1B024" stroke="#3FC1B0" stroke-width="1.5"/>
+    <text x="28" y="86.5" font-size="12" font-weight="600" fill="#3FC1B0" text-anchor="middle">H</text>
+    <path d="M20 118h16v12h-9l-5 4v-4h-2z" fill="none" stroke="#A4A1B3" stroke-width="1.5"/>
+    <path d="M20 160H36M20 166H36M20 172H30" stroke="#A4A1B3" stroke-width="1.5"/>
+    <text x="28" y="880" font-size="16" fill="#8C899C" text-anchor="middle">»</text>
+  </g>
+  <g id="stage">
+    <rect x="57" y="53" width="1043" height="847" fill="url(#dots)"/>
+    <rect x="80" y="72" width="222" height="30" rx="7" fill="#15141F" stroke="#24222F"/>
+    <text x="118" y="92" font-size="12" fill="#A4A1B3" text-anchor="middle">Before</text>
+    <text x="188" y="92" font-size="12" fill="#A4A1B3" text-anchor="middle">After</text>
+    <rect x="227" y="75" width="72" height="24" rx="5" fill="#201E2C"/>
+    <text x="263" y="92" font-size="12" font-weight="600" fill="#EEEDF3" text-anchor="middle">Diff</text>
+    <g font-size="11" fill="#A4A1B3">
+      <rect x="326" y="82" width="10" height="10" rx="2" fill="#4CB782"/><text x="342" y="91">Added</text>
+      <rect x="396" y="82" width="10" height="10" rx="2" fill="#F0BF4C"/><text x="412" y="91">Changed</text>
+      <rect x="478" y="82" width="10" height="10" rx="2" fill="#EF6461"/><text x="494" y="91">Removed</text>
+    </g>
+    <text x="96" y="148" font-size="11" fill="#8C899C">Shipping · unchanged</text>
+    <g opacity="0.4">
+      <rect x="96" y="156" width="216" height="468" rx="18" fill="#FFFFFF"/>
+      <rect x="116" y="182" width="80" height="10" rx="4" fill="#1B1A27"/>
+      <g fill="#F4F3F8" stroke="#E4E2EC"><rect x="116" y="214" width="176" height="36" rx="8"/><rect x="116" y="262" width="176" height="36" rx="8"/><rect x="116" y="310" width="84" height="36" rx="8"/><rect x="208" y="310" width="84" height="36" rx="8"/></g>
+      <rect x="116" y="560" width="176" height="42" rx="12" fill="#7864D9"/>
+    </g>
+    <text x="376" y="148" font-size="11" fill="#EEEDF3">Payment</text>
+    <rect x="376" y="156" width="216" height="468" rx="18" fill="#FFFFFF"/>
+    <rect x="396" y="182" width="70" height="10" rx="4" fill="#1B1A27"/>
+    <rect x="396" y="210" width="176" height="104" rx="12" fill="#2B2366"/>
+    <rect x="412" y="228" width="28" height="18" rx="4" fill="#F2A97E"/>
+    <rect x="412" y="282" width="100" height="8" rx="3" fill="#C5BCFF"/>
+    <g fill="#F4F3F8" stroke="#E4E2EC"><rect x="396" y="330" width="176" height="36" rx="8"/><rect x="396" y="378" width="84" height="36" rx="8"/><rect x="488" y="378" width="84" height="36" rx="8"/></g>
+    <rect x="396" y="426" width="176" height="36" rx="8" fill="url(#strike)" stroke="#EF6461" stroke-dasharray="4 3"/>
+    <text x="484" y="449" font-size="11" fill="#C24A47" text-anchor="middle">Promo code</text>
+    <rect x="396" y="560" width="176" height="42" rx="12" fill="#7864D9"/>
+    <text x="484" y="586" font-size="13" font-weight="600" fill="#FFFFFF" text-anchor="middle">Pay $84.00</text>
+    <rect x="391" y="555" width="186" height="52" rx="15" fill="none" stroke="#F0BF4C" stroke-width="1.5"/>
+    <text x="680" y="148" font-size="11" fill="#6FCF97">Payment · Declined</text>
+    <rect x="680" y="156" width="216" height="468" rx="18" fill="#FFFFFF"/>
+    <rect x="677" y="153" width="222" height="474" rx="20" fill="none" stroke="#4CB782" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <rect x="700" y="182" width="70" height="10" rx="4" fill="#1B1A27"/>
+    <rect x="700" y="210" width="176" height="52" rx="10" fill="#FDECEC" stroke="#F4B4B2"/>
+    <circle cx="722" cy="236" r="9" fill="#EF6461"/>
+    <rect x="740" y="226" width="110" height="7" rx="3" fill="#8A2E2C"/><rect x="740" y="240" width="76" height="6" rx="3" fill="#C98B89"/>
+    <rect x="700" y="276" width="176" height="76" rx="12" fill="#2B2366" opacity="0.9"/>
+    <g fill="#F4F3F8" stroke="#E4E2EC"><rect x="700" y="366" width="176" height="36" rx="8"/></g>
+    <rect x="700" y="560" width="176" height="42" rx="12" fill="#7864D9"/>
+    <text x="788" y="586" font-size="13" font-weight="600" fill="#FFFFFF" text-anchor="middle">Try again</text>
+    <path d="M572 581C626 581 622 400 676 400" fill="none" stroke="#4CB782" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#ga)"/>
+    <rect x="590" y="470" width="66" height="20" rx="10" fill="#0C0B12" stroke="#4CB782"/>
+    <text x="623" y="484" font-size="10" fill="#6FCF97" text-anchor="middle">declined</text>
+    <path d="M312 590C344 590 344 400 374 400" fill="none" stroke="#4EA7FC" stroke-width="1.6" marker-end="url(#pa)" opacity="0.5"/>
+    <g font-size="11" font-weight="700" text-anchor="middle" fill="#0C0B12">
+      <circle cx="896" cy="156" r="11" fill="#4CB782"/><text x="896" y="160">1</text>
+      <circle cx="577" cy="555" r="11" fill="#F0BF4C"/><text x="577" y="559">2</text>
+      <circle cx="572" cy="426" r="11" fill="#EF6461"/><text x="572" y="430">3</text>
+      <circle cx="623" cy="458" r="11" fill="#4CB782"/><text x="623" y="462">4</text>
+      <circle cx="876" cy="210" r="11" fill="#4CB782"/><text x="876" y="214">5</text>
+    </g>
+    <circle cx="300" cy="590" r="12" fill="#F2A97E"/>
+    <path d="M288 590V602H300" fill="#F2A97E"/>
+    <text x="300" y="594" font-size="11" font-weight="700" fill="#120F24" text-anchor="middle">L</text>
+    <rect x="96" y="650" width="300" height="168" rx="12" fill="#1B1A27" stroke="#2E2B3B"/>
+    <circle cx="116" cy="672" r="10" fill="#2A2836"/><text x="116" y="676" font-size="10" font-weight="600" fill="#EEEDF3" text-anchor="middle">L</text>
+    <text x="134" y="676" font-size="12" font-weight="600" fill="#EEEDF3">Liam</text><text x="170" y="676" font-size="11" fill="#8C899C">2m</text>
+    <text x="134" y="696" font-size="12" fill="#CBC9D6">Should Continue stay disabled</text>
+    <text x="134" y="712" font-size="12" fill="#CBC9D6">until the address validates?</text>
+    <circle cx="116" cy="738" r="10" fill="#3FC1B024" stroke="#3FC1B0"/><text x="116" y="742" font-size="9" font-weight="700" fill="#3FC1B0" text-anchor="middle">H</text>
+    <text x="134" y="742" font-size="12" font-weight="600" fill="#EEEDF3">Hackerman</text>
+    <text x="134" y="762" font-size="12" fill="#CBC9D6">Yes, and I added a disabled variant</text>
+    <text x="134" y="778" font-size="12" fill="#CBC9D6">to Button / Primary to match.</text>
+    <rect x="134" y="790" width="70" height="20" rx="6" fill="none" stroke="#2E2B3B"/>
+    <text x="169" y="804" font-size="11" fill="#EEEDF3" text-anchor="middle">Resolve</text>
+    <text x="216" y="804" font-size="11" fill="#8C899C">Reply…</text>
+    <rect x="560" y="840" width="180" height="36" rx="10" fill="#1B1A27" stroke="#2E2B3B"/>
+    <text x="580" y="863" font-size="12" fill="#A4A1B3">‹</text>
+    <text x="650" y="863" font-size="12" fill="#EEEDF3" text-anchor="middle">Change 3 of 5</text>
+    <text x="720" y="863" font-size="12" fill="#A4A1B3">›</text>
+  </g>
+  <g id="changes">
+    <rect x="1101" y="53" width="339" height="847" fill="#0E0D15"/>
+    <path d="M1100.5 53V900" stroke="#1E1C29"/>
+    <text x="1120" y="80" font-size="12" font-weight="600" fill="#EEEDF3">Changes</text>
+    <rect x="1178" y="68" width="20" height="16" rx="8" fill="#24222F"/><text x="1188" y="80" font-size="10" fill="#A4A1B3" text-anchor="middle">5</text>
+    <text x="1220" y="80" font-size="12" fill="#8C899C">Comments</text>
+    <rect x="1290" y="68" width="20" height="16" rx="8" fill="#24222F"/><text x="1300" y="80" font-size="10" fill="#A4A1B3" text-anchor="middle">2</text>
+    <path d="M1120 91H1200" stroke="#9B8CFF" stroke-width="2"/>
+    <path d="M1101 92.5H1440" stroke="#1E1C29"/>
+    <text x="1120" y="118" font-size="12" fill="#A4A1B3">Why: covers the declined path from</text>
+    <text x="1120" y="134" font-size="12" fill="#A4A1B3">Liam's sticky and LAZYAGENTS-150 AC #3.</text>
+    <rect x="1116" y="150" width="308" height="62" rx="10" fill="#15141F" stroke="#24222F" opacity="0.6"/>
+    <circle cx="1136" cy="170" r="9" fill="#4CB782"/><text x="1136" y="174" font-size="10" font-weight="700" fill="#0C0B12" text-anchor="middle">1</text>
+    <text x="1154" y="174" font-size="13" font-weight="600" fill="#EEEDF3">Add frame “Payment · Declined”</text>
+    <text x="1154" y="196" font-size="11" fill="#6FCF97">✓ Accepted</text>
+    <rect x="1116" y="220" width="308" height="62" rx="10" fill="#15141F" stroke="#24222F" opacity="0.6"/>
+    <circle cx="1136" cy="240" r="9" fill="#F0BF4C"/><text x="1136" y="244" font-size="10" font-weight="700" fill="#0C0B12" text-anchor="middle">2</text>
+    <text x="1154" y="244" font-size="13" font-weight="600" fill="#EEEDF3">Pay button: radius 8 → 12</text>
+    <text x="1154" y="266" font-size="11" fill="#6FCF97">✓ Accepted</text>
+    <rect x="1116" y="290" width="308" height="112" rx="10" fill="#15141F" stroke="#9B8CFF"/>
+    <circle cx="1136" cy="310" r="9" fill="#EF6461"/><text x="1136" y="314" font-size="10" font-weight="700" fill="#0C0B12" text-anchor="middle">3</text>
+    <text x="1154" y="314" font-size="13" font-weight="600" fill="#EEEDF3">Remove “Promo code” field</text>
+    <text x="1154" y="334" font-size="12" fill="#A4A1B3">Not in the ticket's scope; promo</text>
+    <text x="1154" y="350" font-size="12" fill="#A4A1B3">codes belong on Cart.</text>
+    <rect x="1154" y="364" width="78" height="26" rx="7" fill="#9B8CFF"/>
+    <text x="1193" y="381" font-size="12" font-weight="600" fill="#120F24" text-anchor="middle">Accept</text>
+    <rect x="1238" y="364" width="70" height="26" rx="7" fill="none" stroke="#2E2B3B"/>
+    <text x="1273" y="381" font-size="12" fill="#EEEDF3" text-anchor="middle">Reject</text>
+    <text x="1322" y="381" font-size="12" fill="#8C899C">Discuss</text>
+    <rect x="1116" y="410" width="308" height="80" rx="10" fill="#15141F" stroke="#24222F"/>
+    <circle cx="1136" cy="430" r="9" fill="#4CB782"/><text x="1136" y="434" font-size="10" font-weight="700" fill="#0C0B12" text-anchor="middle">4</text>
+    <text x="1154" y="434" font-size="13" font-weight="600" fill="#EEEDF3">Link Pay (declined) → Declined</text>
+    <text x="1154" y="454" font-size="12" fill="#A4A1B3">Prototype · Smart animate</text>
+    <text x="1154" y="476" font-size="12" fill="#C5BCFF">Accept</text><text x="1206" y="476" font-size="12" fill="#A4A1B3">Reject</text>
+    <rect x="1116" y="498" width="308" height="80" rx="10" fill="#15141F" stroke="#24222F"/>
+    <circle cx="1136" cy="518" r="9" fill="#4CB782"/><text x="1136" y="522" font-size="10" font-weight="700" fill="#0C0B12" text-anchor="middle">5</text>
+    <text x="1154" y="522" font-size="13" font-weight="600" fill="#EEEDF3">New component “Banner / Error”</text>
+    <text x="1154" y="542" font-size="12" fill="#A4A1B3">Uses state/blocked tokens</text>
+    <text x="1154" y="564" font-size="12" fill="#C5BCFF">Accept</text><text x="1206" y="564" font-size="12" fill="#A4A1B3">Reject</text>
+    <path d="M1101 600.5H1440" stroke="#1E1C29"/>
+    <text x="1120" y="628" font-size="10" font-weight="600" fill="#8C899C" letter-spacing="0.6">WHEN YOU'RE DONE</text>
+    <text x="1120" y="652" font-size="12" fill="#A4A1B3">Accepted changes become a version</text>
+    <text x="1120" y="668" font-size="12" fill="#A4A1B3">(v14). Rejections go back to</text>
+    <text x="1120" y="684" font-size="12" fill="#A4A1B3">Hackerman with your reason.</text>
+    <rect x="1120" y="700" width="300" height="30" rx="7" fill="#15141F" stroke="#24222F"/>
+    <text x="1132" y="719" font-size="12" fill="#8C899C">Reason for rejecting (optional)…</text>
+  </g>
+</svg>
