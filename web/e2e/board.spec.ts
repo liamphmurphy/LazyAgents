@@ -24,7 +24,7 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page)).toContainText("Build ticket modal");
   await expect(card(page)).toContainText("High");
   await expect(card(page)).toContainText("3 pt");
-  await expect(card(page)).toContainText("@builder");
+  await expect(card(page)).toContainText("Builder");
   await expect(card(page)).toContainText("Blocked");
   await expect(card(page).getByLabel("1 of 1 criteria met")).toBeVisible();
   await expect(card(page, "WEB-2")).toContainText("unestimated");
