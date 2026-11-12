@@ -168,3 +168,39 @@ func TestPersonaDockHidesArchived(t *testing.T) {
 		t.Fatalf("archived chat shown: %v", got)
 	}
 }
+
+func (e *chatEnv) listedUnread(chat uuid.UUID) any {
+	e.t.Helper()
+	for _, c := range e.want("GET", "/chats?persona_id=all", nil, 200)["chats"].([]any) {
+		if field(c, "id") == chat.String() {
+			return field(c, "unread")
+		}
+	}
+	e.t.Fatalf("chat %s not listed", chat)
+	return nil
+}
+
+func TestChatListCarriesUnreadReplies(t *testing.T) {
+	e := newChatEnv(t)
+	gwen := e.dockPersona("Gwen")
+	chat := e.dockChat(gwen)
+	if got := e.listedUnread(chat); got != float64(0) {
+		t.Fatalf("new chat unread %v", got)
+	}
+	e.reply(chat, &gwen, "One.")
+	seq := e.reply(chat, &gwen, "Two.")
+	if got := e.listedUnread(chat); got != float64(2) {
+		t.Fatalf("unread %v, want 2", got)
+	}
+	e.want("POST", fmt.Sprintf("/chats/%s/read", chat), map[string]any{"seq": seq}, 204)
+	if got := e.listedUnread(chat); got != float64(0) {
+		t.Fatalf("read chat unread %v", got)
+	}
+	// The person's own messages are never unread.
+	if _, err := e.q.AppendChatMessage(context.Background(), store.AppendChatMessageParams{SessionID: chat, Role: "user", BodyMd: "Thanks.", ContextRefs: json.RawMessage("[]"), Citations: json.RawMessage("[]")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.listedUnread(chat); got != float64(0) {
+		t.Fatalf("own message counted unread: %v", got)
+	}
+}

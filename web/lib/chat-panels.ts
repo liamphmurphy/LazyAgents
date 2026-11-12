@@ -10,12 +10,16 @@ export type PanelLayout = "side" | "sheet";
 
 export const PANELS: ChatPanel[] = ["design", "canvas", "playground"];
 
+/** A tab in the desktop dock: the open panels, and Activity, which is always there. */
+export type DockTabId = ChatPanel | "activity";
+
 type Query = Pick<URLSearchParams, "get">;
 
 /** The panels open now, in switch order. `designIds` are the chat's designs: a canvas focus on one of them opens the design panel. */
 export function openPanels(q: Query, designIds: readonly string[]): ChatPanel[] {
   const focus = q.get("canvas");
-  const full = q.get("canvas_view") === "full";
+  // "full" shows the canvas as a panel (the dock, or the compact sheet); "max" takes it over the window.
+  const full = q.get("canvas_view") === "full" || q.get("canvas_view") === "max";
   const pg = q.get("playground");
   const open: ChatPanel[] = [];
   if (!full && focus && focus !== "none" && designIds.includes(focus)) open.push("design");
@@ -70,6 +74,31 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
     next.delete("playground_tab");
   }
   if (next.get("panel") === panel) next.delete("panel");
+  return next;
+}
+
+/** The tab the desktop dock shows: the one picked (Activity, or a panel still open), else the frontmost open panel, else Activity. */
+export function dockTab(q: Query, open: readonly ChatPanel[]): DockTabId {
+  if (q.get("panel") === "activity") return "activity";
+  return activePanel(q, open) ?? "activity";
+}
+
+/**
+ * Whether the desktop dock is open or collapsed to its rail: `dock=1` / `dock=0` once the person
+ * chose, else open while a panel (or Activity) is picked or open, so a chat with nothing open starts on the rail.
+ */
+export function dockOpen(q: Query, open: readonly ChatPanel[]): boolean {
+  const d = q.get("dock");
+  if (d === "0") return false;
+  if (d === "1") return true;
+  return open.length > 0 || q.get("panel") === "activity";
+}
+
+/** The query showing the dock on `tab` (which must already be open), open or collapsed. */
+export function setDock(q: URLSearchParams, s: { tab: DockTabId; open: boolean }): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.set("panel", s.tab);
+  next.set("dock", s.open ? "1" : "0");
   return next;
 }
 

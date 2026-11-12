@@ -351,7 +351,7 @@ export function Rail({ inline, threads, replies, resolved, target, activeId, set
 
 /** One canvas: inline in a chat card (a fixed height, comments under their passages) or fullscreen (comments alongside). */
 /** `page` lays it out like fullscreen, for a page of its own (a document in the Docs app). */
-export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCollapse, onFullscreen, onExitFullscreen }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; page?: boolean; onCollapse?: () => void; onFullscreen?: () => void; onExitFullscreen?: () => void }) {
+export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCollapse, onFullscreen, onExitFullscreen, onClose }: { chatId: string; canvasId: string; live: boolean; readOnly: boolean; agent: string; page?: boolean; onCollapse?: () => void; onFullscreen?: () => void; onExitFullscreen?: () => void; onClose?: () => void }) {
   // Undefined follows the current version as the agent revises it.
   const [seq, setSeq] = useState<number>();
   const [view, setView] = useState<View>("preview");
@@ -442,6 +442,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
         {onFullscreen && <IconButton icon="expand" label="Fullscreen" onClick={onFullscreen} />}
         {onExitFullscreen && <IconButton icon="shrink" label="Exit fullscreen" onClick={onExitFullscreen} />}
         {onCollapse && <IconButton icon="chevronUp" label="Collapse canvas" onClick={onCollapse} />}
+        {onClose && <IconButton icon="x" label="Close canvas" onClick={onClose} />}
       </div>
       <div className="flex items-center gap-2 border-b border-border-row px-4 py-1.5 text-xs text-fg-tertiary">
         {c && viewing !== undefined && (
@@ -538,13 +539,31 @@ function FullscreenChat({ chatId, live, readOnly }: { chatId: string; live: bool
 
 const noSubscribe = () => () => {};
 
-/** A canvas over the whole browser window, with the conversation reduced to a message box. */
+/** The desktop dock's Canvas tab: the canvas in the dock's width, with Fullscreen to take it over the window and Close to put it back in its card. */
+export function CanvasDock({ chatId, live, readOnly, agent }: { chatId: string; live: boolean; readOnly: boolean; agent: string }) {
+  const panel = useCanvasPanel();
+  const canvases = useChatCanvases(chatId, live).data?.canvases;
+  const id = panel.focus ?? canvases?.at(-1)?.id;
+  // While it's over the window (CanvasFullscreen) it shows only there.
+  if (!id || panel.maximized) return null;
+  return (
+    <section aria-label="Canvas" data-testid="canvas-dock" className="flex min-h-0 flex-1 flex-col bg-surface-sunken">
+      <CanvasView key={id} chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={agent} onFullscreen={() => panel.maximize(id)} onClose={panel.exitFull} />
+    </section>
+  );
+}
+
+/**
+ * A canvas over the whole browser window, with the conversation reduced to a message box; on
+ * desktop it's taken there from the dock's Canvas tab and Exit goes back to it. `inline` fills
+ * the compact panel sheet instead, where Exit closes the canvas.
+ */
 export function CanvasFullscreen({ chatId, live, readOnly, agent, inline }: { chatId: string; live: boolean; readOnly: boolean; agent: string; inline?: boolean }) {
   const panel = useCanvasPanel();
   const canvases = useChatCanvases(chatId, live).data?.canvases;
   const id = panel.focus ?? canvases?.at(-1)?.id;
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
-  const { exitFull } = panel;
+  const exitFull = inline ? panel.exitFull : panel.restore;
   const exit = useRef(exitFull);
   useEffect(() => {
     exit.current = exitFull;

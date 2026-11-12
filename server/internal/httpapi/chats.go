@@ -105,13 +105,13 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 			personaRows[p.ID] = p
 		}
 	}
-	counts := map[uuid.UUID]int{}
+	counts := map[uuid.UUID]store.ChatMessageCountsRow{}
 	rows, err := s.Q.ChatMessageCounts(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range rows {
-		counts[r.SessionID] = int(r.N)
+		counts[r.SessionID] = r
 	}
 	spaces, err := s.chatSpaceRefs(ctx, chats)
 	if err != nil {
@@ -142,7 +142,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 	for _, c := range chats {
 		item := api.ChatSession{
 			Id: c.ID, Title: c.Title, Harness: api.Harness(c.Harness), Model: c.Model, State: api.ChatState(c.State),
-			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: counts[c.ID],
+			CurrentRunId: c.CurrentRunID, Archived: c.Archived, Revision: int(c.Revision), MessageCount: int(counts[c.ID].N), Unread: int(counts[c.ID].Unread),
 			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, LastMessageAt: c.LastMessageAt, RepoUrl: c.RepoUrl,
 		}
 		repos := repositoriesByChat[c.ID]

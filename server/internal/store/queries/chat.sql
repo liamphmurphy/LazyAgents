@@ -149,7 +149,11 @@ ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
 -- name: ChatMessageCounts :many
-SELECT session_id, count(*)::int AS n FROM chat_messages WHERE session_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY session_id;
+-- n: every message; unread: assistant replies past the person's read position.
+SELECT m.session_id, count(*)::int AS n,
+  (count(*) FILTER (WHERE m.role = 'assistant' AND m.seq > c.last_read_seq))::int AS unread
+FROM chat_messages m JOIN chat_sessions c ON c.id = m.session_id
+WHERE m.session_id = ANY(sqlc.arg(ids)::uuid[]) GROUP BY m.session_id;
 
 -- name: ChatLastErrors :many
 -- The newest system message of each chat; the API shows it as `error` while the chat is failed.

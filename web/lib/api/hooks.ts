@@ -1217,7 +1217,8 @@ export function useMarkChatRead() {
     mutationFn: async (v: { id: string; seq: number }) => {
       await api.POST("/chats/{id}/read", { params: { path: { id: v.id } }, body: { seq: v.seq } });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dock"] }),
+    // The history lists carry `unread` too, so their dots clear with the dock's.
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ["dock"] }), qc.invalidateQueries({ queryKey: [...chatKeys.all, "list"] })]),
   });
 }
 
