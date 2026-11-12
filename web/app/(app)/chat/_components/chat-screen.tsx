@@ -370,7 +370,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={conversation.start} actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
+              <Conversation key={id} id={id} onNew={conversation.start} activityInDock actions={<><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
             ) : (
               <>
                 {chats.isError ? (

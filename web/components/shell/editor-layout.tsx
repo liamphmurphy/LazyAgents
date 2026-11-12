@@ -190,7 +190,7 @@ export function EditorLayout({
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
         {/* An app's panels unmount while the dock is collapsed, as they always have. */}
-        {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open ? panels : null} railOnly={compact} />}
+        {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open && !state.hidden ? panels : null} railOnly={compact} />}
       </div>
       {compact && docked && (
         <Sheet open={sheetOpen} onOpenChange={(o) => (o ? setSheetOpen(true) : dispatch({ type: "collapse" }))} title={active?.label ?? ""} className="h-[85dvh]">
@@ -245,19 +245,21 @@ export function Dock({
   railOnly?: boolean;
 }) {
   const active = tabs.find((t) => t.id === state.tab) ?? tabs[0];
-  if (!tabs.length || state.hidden) return null;
+  if (!tabs.length) return null;
+  // ⌘. hides the dock but keeps its panels mounted (the owner passes null panels to unmount them).
+  const shown = state.open && !state.hidden;
   return (
     <>
       {!railOnly && <aside
         aria-label="Panel"
-        hidden={!state.open}
+        hidden={!shown}
         className={cx(
           "flex flex-none flex-col border-l border-border-subtle bg-surface",
           active?.wide ? "w-[540px] max-w-[55%]" : "w-[360px]",
           overlay === "xl"
             ? "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:shadow-[var(--shadow-float)]"
             : "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:max-w-[calc(100%-44px)] max-lg:shadow-[var(--shadow-float)]",
-          !state.open && "hidden",
+          !shown && "hidden",
         )}
       >
         <div className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle bg-sidebar px-2">
@@ -295,7 +297,7 @@ export function Dock({
         </div>
         {panels === undefined ? dockPanels(uid, tabs, active?.id) : panels}
       </aside>}
-      {(railOnly || !state.open) && (
+      {!state.hidden && (railOnly || !state.open) && (
         <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">
           <button
             type="button"
@@ -310,7 +312,7 @@ export function Dock({
             <button
               key={t.id}
               type="button"
-              aria-label={`Open ${t.label}`}
+              aria-label={`Open ${t.label}${t.busy ? ", working" : ""}${t.unread ? ", unread" : ""}`}
               title={t.label}
               onClick={() => dispatch({ type: "open", tab: t.id })}
               className="relative grid size-8 place-items-center rounded-full text-fg-secondary hover:bg-hover hover:text-fg"

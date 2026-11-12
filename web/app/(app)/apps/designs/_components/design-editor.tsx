@@ -495,6 +495,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
       const t = e.target as HTMLElement;
       // Beside a chat, keys are the design's only while focus is in the panel (or nowhere).
       if (beside && t !== document.body && !root.current?.contains(t)) return;
+      // Nor while it's out of sight: behind another tab of the chat's dock, or in the collapsed dock.
+      if (beside && (!root.current || root.current.closest("[hidden]"))) return;
       if (t.isContentEditable || t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
       // The chat rail takes its own keys.
       if (t.closest?.("[data-design-chat]")) return;

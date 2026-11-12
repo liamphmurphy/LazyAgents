@@ -111,6 +111,8 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
     (a: DockAction) => {
       const { state: s, search: q } = latest.current;
       const next = dockReducer(s, a);
+      // A second key before the URL update renders works from this state, not the old one.
+      latest.current = { ...latest.current, state: next };
       if (next.hidden !== s.hidden) setHidden(next.hidden);
       if (next.open !== s.open || next.tab !== s.tab) go(setDock(new URLSearchParams(q.toString()), { tab: next.tab as DockTabId, open: next.open }));
     },

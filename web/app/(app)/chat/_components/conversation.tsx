@@ -35,6 +35,7 @@ import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
 import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
+import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { setDock } from "@/lib/chat-panels";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
@@ -428,7 +429,12 @@ function dropDraft(id: string) {
   }
 }
 
-export function Conversation({ id, onNew, actions }: { id: string; onNew: () => void; actions?: ReactNode }) {
+/**
+ * `activityInDock`: the chat page's dock (chat-panel-host) shows Activity beside the conversation
+ * on desktop, so the header has no Chat/Activity switch there. Chats embedded in an app's dock
+ * (Designs, Docs, Slides, Finance) leave it unset and keep the switch.
+ */
+export function Conversation({ id, onNew, actions, activityInDock = false }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -461,14 +467,15 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const [picked, setPicked] = useState<Selection | null>(null);
   // null keeps the chat's effort; "default" clears it.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | null>(null);
-  // Only the compact header switches the conversation for Activity; on desktop Activity is a dock tab beside it.
+  // The header switches the conversation for Activity, except on the chat page's desktop dock, where Activity is a tab beside it.
   const [tab, setTab] = useState<"chat" | "activity">("chat");
   const compact = useCompact();
-  const view = compact ? tab : "chat";
+  const dockActivity = activityInDock && !compact;
+  const view = dockActivity ? "chat" : tab;
   // "View reasoning" on a chat step: Activity opens on that step (the compact tab, or the dock's tab).
   const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
   const openStep = (key: string) => {
-    if (!compact) {
+    if (dockActivity) {
       focusActivityStep(key);
       const q = setDock(new URLSearchParams(window.location.search), { tab: "activity", open: true });
       router.replace(`${window.location.pathname}?${q.toString()}`, { scroll: false });
@@ -884,13 +891,26 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
           {c.temporary && <TemporaryBadge />}
           <span className="flex-1" />
           <ChatRunsPill chatId={c.id} />
+          {!dockActivity && (
+            <span className="flex-none">
+              <Tabs
+                label="Chat view"
+                value={tab}
+                onChange={(k) => setTab(k === "activity" ? "activity" : "chat")}
+                items={[
+                  { key: "chat", label: "Chat" },
+                  { key: "activity", label: "Activity" },
+                ]}
+              />
+            </span>
+          )}
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
         )}
         {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
-        {/* Mounted while hidden so memory notices still refresh. On desktop Activity is the dock's tab (ChatActivity). */}
-        {compact && (
+        {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
+        {!dockActivity && (
           <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
             <ActivityBody chat={c} list={list} groups={groups} focus={traceFocus} />
           </div>

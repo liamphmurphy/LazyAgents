@@ -117,6 +117,10 @@ async function openDesign(page: Page) {
   s.created = true;
   await box(page).fill(`canvas: ${D}`);
   await box(page).press("Enter");
+  // It opens by itself when the chat saw it appear; if the chat's canvases first loaded with it there, open it from its card.
+  const card = page.getByTestId("design-chat-card").first();
+  await expect(card).toBeVisible();
+  if (!(await page.getByTestId("design-panel").isVisible())) await card.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.getByTestId("design-panel")).toBeVisible();
   return s;
 }
@@ -181,4 +185,37 @@ test("⌘. hides the Vesper sidebar and the dock, and restores both without touc
   await expect(menu).toHaveAttribute("data-expanded", "true");
   await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBe("1");
+});
+
+test("a design out of sight in the dock doesn't take editing keys", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const writes: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET" && r.url().includes(`/api/v1/designs/${D}`) && !r.url().endsWith("/settings")) writes.push(`${r.method()} ${r.url()}`);
+  });
+  await openDesign(page);
+  const panel = page.getByTestId("design-panel");
+  const selectAll = async () => {
+    await panel.locator("svg").first().click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press(`${mod}+a`);
+  };
+
+  // Behind the Activity tab, Backspace with the focus on the page deletes nothing.
+  await selectAll();
+  await dockTab(page, "Activity").click();
+  await page.getByRole("log", { name: "Conversation" }).click({ position: { x: 20, y: 20 } });
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("ArrowRight");
+  // Nor in the collapsed dock.
+  await page.keyboard.press(`${mod}+Backslash`);
+  await expect(rail(page)).toBeVisible();
+  await page.keyboard.press("Backspace");
+  await page.waitForTimeout(1500);
+  expect(writes).toEqual([]);
+
+  // In sight it does (so the check above would have seen a deletion).
+  await rail(page).getByRole("button", { name: /Open Design/ }).click();
+  await selectAll();
+  await page.keyboard.press("Backspace");
+  await expect.poll(() => writes.length, { timeout: 5000 }).toBeGreaterThan(0);
 });
