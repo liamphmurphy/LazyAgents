@@ -61,6 +61,36 @@ func (q *Queries) CopyDesignAssets(ctx context.Context, arg CopyDesignAssetsPara
 	return err
 }
 
+const countDesignProposalsByCanvas = `-- name: CountDesignProposalsByCanvas :many
+SELECT canvas_id, count(*)::int AS pending FROM design_proposals
+WHERE canvas_id = ANY($1::uuid[]) AND status = 'pending' GROUP BY canvas_id
+`
+
+type CountDesignProposalsByCanvasRow struct {
+	CanvasID uuid.UUID
+	Pending  int32
+}
+
+func (q *Queries) CountDesignProposalsByCanvas(ctx context.Context, ids []uuid.UUID) ([]CountDesignProposalsByCanvasRow, error) {
+	rows, err := q.db.Query(ctx, countDesignProposalsByCanvas, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountDesignProposalsByCanvasRow{}
+	for rows.Next() {
+		var i CountDesignProposalsByCanvasRow
+		if err := rows.Scan(&i.CanvasID, &i.Pending); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createDesignAsset = `-- name: CreateDesignAsset :one
 INSERT INTO design_assets (canvas_id, id, workspace_id, user_id, blob_key, mime, width, height, size_bytes)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING canvas_id, id, workspace_id, user_id, blob_key, mime, width, height, size_bytes, created_at
@@ -187,6 +217,57 @@ func (q *Queries) DesignAssetBytes(ctx context.Context, arg DesignAssetBytesPara
 	var total int64
 	err := row.Scan(&total)
 	return total, err
+}
+
+const designFeedbackBetween = `-- name: DesignFeedbackBetween :many
+SELECT id, session_id, seq, role, body_md, harness, model, run_id, run_turn_id, context_refs, citations, usage, created_at, code_changes, persona_id FROM chat_messages
+WHERE session_id = $1 AND role = 'system' AND seq > $2 AND seq < $3
+  AND context_refs @> '[{"kind": "canvas"}]'::jsonb
+ORDER BY seq
+`
+
+type DesignFeedbackBetweenParams struct {
+	SessionID uuid.UUID
+	AfterSeq  int64
+	BeforeSeq int64
+}
+
+// The review feedback notices (system messages that carry a canvas ref) posted
+// after one user message and before another, for the later one's turn.
+func (q *Queries) DesignFeedbackBetween(ctx context.Context, arg DesignFeedbackBetweenParams) ([]ChatMessage, error) {
+	rows, err := q.db.Query(ctx, designFeedbackBetween, arg.SessionID, arg.AfterSeq, arg.BeforeSeq)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatMessage{}
+	for rows.Next() {
+		var i ChatMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.Seq,
+			&i.Role,
+			&i.BodyMd,
+			&i.Harness,
+			&i.Model,
+			&i.RunID,
+			&i.RunTurnID,
+			&i.ContextRefs,
+			&i.Citations,
+			&i.Usage,
+			&i.CreatedAt,
+			&i.CodeChanges,
+			&i.PersonaID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getDesignAsset = `-- name: GetDesignAsset :one

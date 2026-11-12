@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/design"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -43,9 +44,11 @@ type Anchor struct {
 	Prefix string `json:"prefix,omitempty"`
 	Suffix string `json:"suffix,omitempty"`
 	VID    string `json:"vid,omitempty"`
-	Tag    string `json:"tag,omitempty"`
-	Label  string `json:"label,omitempty"`
-	Point  *Point `json:"point,omitempty"`
+	// Node is a design node id; Point is where in its box (fractions 0–1).
+	Node  string `json:"node,omitempty"`
+	Tag   string `json:"tag,omitempty"`
+	Label string `json:"label,omitempty"`
+	Point *Point `json:"point,omitempty"`
 }
 
 // byteOffset converts a UTF-16 offset, or reports that it splits a character
@@ -194,6 +197,21 @@ func svgAnchor(body, vid string, p *Point) (Anchor, error) {
 	return Anchor{VID: vid, Tag: tag, Label: label, Point: p}, nil
 }
 
+// designAnchor pins a comment on a design node, at a point in its box.
+func designAnchor(body, node string, p *Point) (Anchor, error) {
+	if !design.HasNode(body, node) {
+		return Anchor{}, apperr.Invalid("anchor", "no node %q in this version", node)
+	}
+	if p != nil && (p.X < 0 || p.X > 1 || p.Y < 0 || p.Y > 1) {
+		return Anchor{}, apperr.Invalid("anchor", "point must be within the node's box (fractions 0 to 1)")
+	}
+	d, err := design.Describe(body, node)
+	if err != nil {
+		return Anchor{}, err
+	}
+	return Anchor{Node: node, Tag: d.Type, Label: d.Name, Point: p}, nil
+}
+
 // reanchor carries every comment thread on to a newly written version.
 func reanchor(ctx context.Context, q *store.Queries, c store.ChatCanvas, v store.ChatCanvasVersion) error {
 	rows, err := q.ListChatCanvasComments(ctx, c.ID)
@@ -209,7 +227,11 @@ func reanchor(ctx context.Context, q *store.Queries, c store.ChatCanvas, v store
 			return err
 		}
 		ok := false
-		if c.Kind == KindSVG {
+		if c.Kind == KindDesign {
+			if next, err := designAnchor(v.Body, a.Node, a.Point); err == nil {
+				a, ok = next, true
+			}
+		} else if c.Kind == KindSVG {
 			if next, err := svgAnchor(v.Body, a.VID, a.Point); err == nil {
 				a, ok = next, true
 			}
@@ -317,6 +339,7 @@ type NewComment struct {
 	ParentID   *uuid.UUID
 	Start, End *int
 	VID        string
+	Node       string // a design node id
 	Point      *Point
 	Body       string
 }
@@ -352,18 +375,12 @@ func addReply(ctx context.Context, q *store.Queries, c store.ChatCanvas, cur sto
 }
 
 // Decks have no comments yet (ADR: deferred); the persona's suggestions are
-// reviewed as changes instead. Designs get node-anchored comments later
-// (ADR-designs §3.6, ticket 4).
+// reviewed as changes instead. Designs take node-anchored comments.
 var errNoDeckComments = apperr.Invalid("canvas_id", "a slide deck can't take comments yet")
 
-var errNoDesignComments = apperr.Invalid("canvas_id", "a design can't take comments yet")
-
 func noComments(kind string) error {
-	switch kind {
-	case KindDeck:
+	if kind == KindDeck {
 		return errNoDeckComments
-	case KindDesign:
-		return errNoDesignComments
 	}
 	return nil
 }
@@ -390,6 +407,8 @@ func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComm
 		}
 		var a Anchor
 		switch {
+		case c.Kind == KindDesign:
+			a, err = designAnchor(cur.Body, in.Node, in.Point)
 		case c.Kind == KindSVG:
 			a, err = svgAnchor(cur.Body, in.VID, in.Point)
 		case in.Start == nil || in.End == nil:
@@ -414,6 +433,8 @@ func (s *Service) AddComment(ctx context.Context, chat, id uuid.UUID, in NewComm
 type AgentComment struct {
 	Quote      string
 	VID        string
+	Node       string // a design node id
+	Point      *Point
 	Body       string
 	Suggestion *string
 }
@@ -432,7 +453,14 @@ func (s *Service) AddAgentComment(ctx context.Context, chat, id uuid.UUID, in Ag
 		if err := noComments(c.Kind); err != nil {
 			return err
 		}
-		if c.Kind == KindSVG {
+		if c.Kind == KindDesign {
+			if in.Suggestion != nil {
+				return apperr.Invalid("suggestion", "only a text canvas takes suggestions")
+			}
+			if a, err = designAnchor(cur.Body, in.Node, in.Point); err != nil {
+				return err
+			}
+		} else if c.Kind == KindSVG {
 			if in.Suggestion != nil {
 				return apperr.Invalid("suggestion", "only a text canvas takes suggestions")
 			}
@@ -619,7 +647,11 @@ func ContextDoc(ctx context.Context, q *store.Queries, chat, id uuid.UUID) (stri
 		return "You"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Canvas %q\n\ncanvas_id: %s\nkind: %s\nversion: %d\n\n## Open comments\n\nAct on these, then answer each with canvas_reply (addressed: true once it's done).\n", c.Title, c.ID, c.Kind, v.Seq)
+	reply := "canvas_reply"
+	if c.Kind == KindDesign {
+		reply = "design_reply"
+	}
+	fmt.Fprintf(&b, "# Canvas %q\n\ncanvas_id: %s\nkind: %s\nversion: %d\n\n## Open comments\n\nAct on these, then answer each with %s (addressed: true once it's done).\n", c.Title, c.ID, c.Kind, v.Seq, reply)
 	for _, r := range rows {
 		if r.ParentID != nil || r.Status != "open" {
 			continue
@@ -632,6 +664,12 @@ func ContextDoc(ctx context.Context, q *store.Queries, chat, id uuid.UUID) (stri
 		switch {
 		case r.TargetLost:
 			b.WriteString("Its original target is no longer in this version.\n")
+		case c.Kind == KindDesign:
+			fmt.Fprintf(&b, "On node %s (%s %q)", a.Node, a.Tag, a.Label)
+			if a.Point != nil {
+				fmt.Fprintf(&b, " at %.0f%% across, %.0f%% down", a.Point.X*100, a.Point.Y*100)
+			}
+			b.WriteString(":\n")
 		case c.Kind == KindSVG:
 			fmt.Fprintf(&b, "On element data-vid=%q (<%s>):\n```xml\n%s\n```\n", a.VID, a.Tag, excerpt(v.Body, a))
 		default:
@@ -643,6 +681,10 @@ func ContextDoc(ctx context.Context, q *store.Queries, chat, id uuid.UUID) (stri
 				fmt.Fprintf(&b, "%s: %s\n", who(x), x.Body)
 			}
 		}
+	}
+	if c.Kind == KindDesign {
+		b.WriteString("\n## Current content\n\nA design is big: look at it with design_outline, design_read and design_render, and change it with design_patch.\n")
+		return c.Title, b.String(), nil
 	}
 	fmt.Fprintf(&b, "\n## Current content\n\n%s\n", v.Body)
 	return c.Title, b.String(), nil
