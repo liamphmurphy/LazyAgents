@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"math"
 	"path"
 	"regexp"
 	"slices"
@@ -1072,6 +1073,37 @@ func lastLines(s string, n int) string {
 const IdleNudge = "You ended your turn without calling complete_run, await_human or request_approval. " +
 	"If the work is done, call complete_run. If you need a person, call await_human or request_approval. Otherwise, continue."
 
+// sessionBaseline finds the session's running usage totals in the latest of
+// turns before seq that recorded them, and reports whether one did.
+func sessionBaseline(turns []store.RunTurn, seq int32, harnessName, session string) (harness.Usage, bool) {
+	for i := len(turns) - 1; i >= 0; i-- {
+		if turns[i].Seq >= seq || len(turns[i].Usage) == 0 {
+			continue
+		}
+		var usage harness.Usage
+		if json.Unmarshal(turns[i].Usage, &usage) != nil {
+			continue
+		}
+		var saved map[string]json.RawMessage
+		_ = json.Unmarshal(turns[i].Usage, &saved)
+		if _, modern := saved["cache_reported_input_tokens"]; !modern && usage.SessionInputTokens > 0 {
+			usage.SessionCacheKnown = true // legacy Codex stored explicit cached counters
+		}
+		if usage.SessionID == session {
+			return usage, true
+		}
+		// Older Codex turns stored cumulative usage without a session marker.
+		if harnessName == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
+			return harness.Usage{SessionID: session, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens, SessionCacheKnown: true}, true
+		}
+		// Older Claude turns stored the session's total_cost_usd as the turn's cost.
+		if harnessName == agentdef.HarnessClaudeCode && usage.SessionID == "" && usage.CostSource == "harness" && usage.CostUSD > 0 {
+			return harness.Usage{SessionID: session, SessionCostUSD: usage.CostUSD}, true
+		}
+	}
+	return harness.Usage{}, false
+}
+
 func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	c, err := r.load(ctx, turn.RunID)
 	if err != nil {
@@ -1147,32 +1179,19 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				log.Error("load usage baseline", "err", err)
 				return
 			}
-			for i := len(turns) - 1; i >= 0; i-- {
-				if turns[i].Seq >= turn.Seq || len(turns[i].Usage) == 0 {
-					continue
-				}
-				var usage harness.Usage
-				if json.Unmarshal(turns[i].Usage, &usage) != nil {
-					continue
-				}
-				var saved map[string]json.RawMessage
-				_ = json.Unmarshal(turns[i].Usage, &saved)
-				if _, modern := saved["cache_reported_input_tokens"]; !modern && usage.SessionInputTokens > 0 {
-					usage.SessionCacheKnown = true // legacy Codex stored explicit cached counters
-				}
-				if usage.SessionID == *c.run.HarnessSessionID {
-					baseline = usage
-					break
-				}
-				// Older Codex turns stored cumulative usage without a session marker.
-				if c.spec.Harness == agentdef.HarnessCodex && usage.SessionID == "" && usage.CostSource != "harness" && usage.InputTokens > 0 {
-					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionInputTokens: usage.InputTokens, SessionOutputTokens: usage.OutputTokens, SessionCachedTokens: usage.CachedTokens, SessionCacheKnown: true}
-					break
-				}
-				// Older Claude turns stored the session's total_cost_usd as the turn's cost.
-				if c.spec.Harness == agentdef.HarnessClaudeCode && usage.SessionID == "" && usage.CostSource == "harness" && usage.CostUSD > 0 {
-					baseline = harness.Usage{SessionID: *c.run.HarnessSessionID, SessionCostUSD: usage.CostUSD}
-					break
+			var ok bool
+			baseline, ok = sessionBaseline(turns, turn.Seq, c.spec.Harness, *c.run.HarnessSessionID)
+			// A continued delegated run resumes the earlier run's session, whose
+			// running totals are in that run's turns.
+			var contract runs.Contract
+			if !ok && len(c.run.Contract) > 0 && json.Unmarshal(c.run.Contract, &contract) == nil && contract.ContinueRunID != "" {
+				if prev, err := uuid.Parse(contract.ContinueRunID); err == nil {
+					prevTurns, err := q.ListTurns(ctx, prev)
+					if err != nil {
+						log.Error("load usage baseline", "err", err)
+						return
+					}
+					baseline, _ = sessionBaseline(prevTurns, math.MaxInt32, c.spec.Harness, *c.run.HarnessSessionID)
 				}
 			}
 		}
