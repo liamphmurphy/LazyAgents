@@ -35,6 +35,10 @@ function FileView({ a, versionId }: { a: Artifact; versionId: string }) {
       <img src={src} alt={a.title} className="max-h-[70vh] w-full rounded-xl border border-border bg-surface object-contain" />
     );
   }
+  // Only MP4 is served inline (inlineSafe in the API); other video types download.
+  if (c.content_type === "video/mp4") {
+    return <video src={src} controls preload="metadata" className="max-h-[70vh] w-full rounded-xl border border-border bg-black" aria-label={a.title} />;
+  }
   if (c.content_type === "application/pdf") {
     return <iframe src={src} title={a.title} className="h-[75vh] w-full rounded-xl border border-border bg-surface" />;
   }
