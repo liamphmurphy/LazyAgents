@@ -541,7 +541,7 @@ export function SpaceScreen({ id }: { id: string }) {
     );
   }
   return (
-    <div className="h-dvh overflow-y-auto">
+    <div className="h-app overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[1048px] flex-col pb-[48px] pl-[48px] pr-[40px] pt-[40px] max-md:px-[20px]">
         <header className="flex items-start gap-[12px]">
           {editing ? (

@@ -663,7 +663,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
   return (
-    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-dvh")}>
+    <div ref={root} data-design-beside={beside ? id : undefined} className={cx("flex flex-col", beside ? "h-full min-h-0" : "h-app")}>
       {beside ? (
         <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
           <Icon name="designs" size={16} className="flex-none text-accent" />

@@ -50,7 +50,7 @@ export function DesignsScreen() {
   const review = list.filter((d) => d.pending_proposals > 0).length;
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-app flex-col">
       <TopBar crumbs={[{ label: "Apps" }, { label: "Designs" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-6 py-6 max-sm:px-4">
