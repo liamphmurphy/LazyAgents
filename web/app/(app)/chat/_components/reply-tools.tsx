@@ -40,8 +40,12 @@ const frameFocus: Record<SendTone, string> = {
 export const composerFrameFor = (tone: SendTone = "accent") =>
   cx("flex flex-col gap-2.5 rounded-[18px] border border-border-strong bg-surface p-2.5 focus-within:ring-2", frameFocus[tone]);
 export const composerFrame = composerFrameFor();
-/** The message box inside the frame: the frame draws the border and focus, so the box doesn't. */
-export const composerInput = "!border-0 !bg-transparent !px-2 !py-1 !text-[15px] focus-visible:!outline-none";
+/**
+ * The message box inside the frame: the frame draws the border and focus, so the box doesn't.
+ * 16px on touch screens, since iOS Safari zooms in on a focused field under 16px.
+ */
+export const composerInput =
+  "!border-0 !bg-transparent !px-2 !py-1 !text-[15px] pointer-coarse:!text-[16px] focus-visible:!outline-none";
 /** A round 30px icon button in the composer's option row (add context, attach). */
 export const composerIconButton =
   "grid size-[30px] flex-none place-items-center rounded-full border border-border-strong text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
@@ -84,10 +88,13 @@ export function SendButton({ label, disabled, title, tone = "accent" }: { label:
   );
 }
 
-/** What the message box understands, under it rather than in its placeholder; children replace the usual line. */
+/**
+ * What the message box understands, under it rather than in its placeholder; children replace the usual line.
+ * Hidden on touch screens: the line describes keyboard shortcuts.
+ */
 export function ComposerHints({ commands = true, children }: { commands?: boolean; children?: ReactNode }) {
   return (
-    <p className="text-center text-xs text-fg-tertiary" data-testid="composer-hints">
+    <p className="text-center text-xs text-fg-tertiary pointer-coarse:hidden" data-testid="composer-hints">
       {children ?? `${commands ? "/ commands  ·  @ personas  ·  [[ context  ·  " : ""}Shift+Enter for a new line`}
     </p>
   );

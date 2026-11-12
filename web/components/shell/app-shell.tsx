@@ -2,7 +2,7 @@
 
 import { useRouter, useSelectedLayoutSegment } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
-import { useBootstrap, useRunnerStatus } from "@/lib/api/hooks";
+import { useBootstrap } from "@/lib/api/hooks";
 import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { ActivityOrb } from "./activity-orb";
@@ -76,8 +76,6 @@ function SectionFade({ children }: { children: ReactNode }) {
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useBootstrap();
-  // Inbox and Runs counts: SSE invalidates ["bootstrap"] and ["runner"] (live-updates.tsx).
-  const runner = useRunnerStatus();
   useShortcuts();
   return (
     <div className="flex min-h-dvh flex-wrap bg-bg text-fg">
@@ -92,11 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Suspense>
       {data ? (
         <Suspense fallback={<SidebarSkeleton />}>
-          <Sidebar
-            inboxCount={data.counts.inbox}
-            liveRuns={runner.data?.live ?? 0}
-            wikiSuggestions={data.counts.wiki_suggestions}
-          />
+          <Sidebar />
         </Suspense>
       ) : (
         <SidebarSkeleton />
