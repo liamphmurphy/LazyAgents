@@ -372,7 +372,7 @@ export function ChatScreen({ id }: { id?: string }) {
               </div>
             )}
             {id ? (
-              <Conversation key={id} id={id} onNew={conversation.start} actions={<>{compact && <PanelsButton chatId={id} live={turnRunning} onShow={() => setSheetHiddenIn(undefined)} />}<PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
+              <Conversation key={id} id={id} onNew={conversation.start} actions={compact ? <PanelsButton chatId={id} live={turnRunning} onShow={() => setSheetHiddenIn(undefined)} /> : <><PlaygroundButton chatId={id} /><CanvasButton chatId={id} live={turnRunning} /></>} />
             ) : (
               <>
                 {chats.isError ? (

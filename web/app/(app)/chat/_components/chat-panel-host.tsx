@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useCanvasComments, useChatCanvases } from "@/lib/api/canvas-hooks";
+import { useChatPlayground } from "@/lib/api/playground-hooks";
 import { useDesignProposals } from "@/lib/api/designs-hooks";
 import { activePanel, closePanel, dragCloses, openPanels, openThreads, switchPanel, type ChatPanel, type PanelLayout } from "@/lib/chat-panels";
 import { cx } from "@/lib/cx";
@@ -22,12 +23,21 @@ export function useChatPanels(chatId: string, live: boolean) {
   const search = useSearchParams();
   const canvases = useChatCanvases(chatId, live).data?.canvases ?? [];
   const designIds = canvases.filter((c) => c.kind === "design").map((c) => c.id);
+  const hasPlayground = !!useChatPlayground(chatId).data;
   const open = openPanels(search, designIds);
   const go = (q: URLSearchParams) => router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   const q = () => new URLSearchParams(search.toString());
   return {
     open,
     active: activePanel(search, open),
+    /** The panels there's something to show in, frontmost first: what the compact Panels button opens. */
+    available: (["playground", "canvas", "design"] as const).filter((p) => (p === "design" ? designIds.length > 0 : p === "canvas" ? canvases.length > 0 : hasPlayground)),
+    /** Shows `p`, already open, without touching the rest of the query. */
+    pick: (p: ChatPanel) => {
+      const next = q();
+      next.set("panel", p);
+      go(next);
+    },
     switchTo: (p: ChatPanel) => go(switchPanel(q(), p, { designId: designIds.at(-1) })),
     close: (p: ChatPanel) => go(closePanel(q(), p)),
   };
@@ -57,14 +67,26 @@ export function ChatPanelHost({ chatId, live, readOnly, agent, layout = "side", 
   return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} sheet={sheet} />;
 }
 
-/** The compact header's way back to a dismissed sheet: shown while a panel is open. */
+/**
+ * The compact header's one panels button, in place of Playground and Canvas: it brings a
+ * dismissed sheet back, or with nothing open opens the playground, else the newest canvas or design.
+ */
 export function PanelsButton({ chatId, live, onShow }: { chatId: string; live: boolean; onShow: () => void }) {
-  const { open } = useChatPanels(chatId, live);
-  if (!open.length) return null;
+  const { open, available, switchTo } = useChatPanels(chatId, live);
+  if (!open.length && !available.length) return null;
+  const go = () => {
+    onShow();
+    if (!open.length) switchTo(available[0]);
+  };
   return (
-    <button type="button" aria-label={`Panels, ${open.length} open`} onClick={onShow} className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-accent bg-accent-soft px-3 text-[13px] text-fg transition-colors hover:bg-hover">
+    <button
+      type="button"
+      aria-label={open.length ? `Panels, ${open.length} open` : "Panels"}
+      onClick={go}
+      className={cx("inline-flex h-9 flex-none items-center gap-1.5 rounded-md border px-3 text-[13px] text-fg transition-colors hover:bg-hover", open.length ? "border-accent bg-accent-soft" : "border-btn-secondary-border bg-btn-secondary")}
+    >
       Panels
-      <span className="text-fg-tertiary">{open.length}</span>
+      {open.length > 0 && <span className="text-fg-tertiary">{open.length}</span>}
     </button>
   );
 }
@@ -81,12 +103,15 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
   const hide = sheet?.hide;
   const show = sheet?.show;
 
-  // A panel opening (a card's Open, a design the persona starts) brings a dismissed sheet back.
+  // A panel opening (a card's Open, a design the persona starts) comes to the front, bringing a dismissed sheet back.
   const key = open.join(",");
   const seen = useRef(open);
   useEffect(() => {
-    if (open.some((p) => !seen.current.includes(p))) show?.();
+    const opened = open.filter((p) => !seen.current.includes(p));
     seen.current = open;
+    if (!opened.length) return;
+    show?.();
+    if (opened.at(-1) !== active) panels.pick(opened.at(-1)!);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the set of open panels changes
   }, [key]);
 
@@ -101,15 +126,26 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
     return () => window.removeEventListener("keydown", onKey);
   }, [hidden, active, hide]);
 
-  // Drag the grabber down to return to the chat.
+  // Drag the grabber down to return to the chat. Followed on the window, so the drag carries on past the grabber.
   const ref = useRef<HTMLElement>(null);
-  const drag = useRef<{ y: number; t: number; id: number } | null>(null);
   const [dy, setDy] = useState(0);
-  const end = (e: ReactPointerEvent) => {
-    const d = drag.current;
-    drag.current = null;
-    setDy(0);
-    if (d && dragCloses(e.clientY - d.y, e.timeStamp - d.t, ref.current?.clientHeight ?? 0)) hide?.();
+  const startDrag = (e: ReactPointerEvent) => {
+    if (!hide || e.button > 0 || (e.target as Element).closest("button")) return;
+    const id = e.pointerId;
+    const y0 = e.clientY;
+    const t0 = e.timeStamp;
+    const move = (m: PointerEvent) => m.pointerId === id && setDy(Math.max(0, m.clientY - y0));
+    const stop = (u: PointerEvent) => {
+      if (u.pointerId !== id) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      setDy(0);
+      if (u.type === "pointerup" && dragCloses(u.clientY - y0, u.timeStamp - t0, ref.current?.clientHeight ?? 0)) hide();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   };
 
   const designId = active === "design" ? focus : undefined;
@@ -133,14 +169,7 @@ function PanelSheet({ chatId, live, readOnly, agent, panels, sheet }: { chatId: 
       <div
         data-testid="panel-sheet-grabber"
         className="flex-none touch-none select-none border-b border-border-subtle px-3 pb-2"
-        onPointerDown={(e) => {
-          if ((e.target as Element).closest("button")) return;
-          drag.current = { y: e.clientY, t: e.timeStamp, id: e.pointerId };
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => drag.current && setDy(Math.max(0, e.clientY - drag.current.y))}
-        onPointerUp={end}
-        onPointerCancel={() => ((drag.current = null), setDy(0))}
+        onPointerDown={startDrag}
       >
         <div aria-hidden className="mx-auto mb-1.5 mt-2 h-1 w-9 rounded-full bg-border" />
         <div className="flex items-center gap-2">
