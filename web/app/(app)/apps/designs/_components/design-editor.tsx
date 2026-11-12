@@ -571,7 +571,7 @@ export function DesignEditor({ id }: { id: string }) {
   const presence = useMemo(() => (running ? presenceOf(toolCalls(events), id, true) : undefined), [events, running, id]);
   const presenceBoxes = useMemo(() => (presence && laid ? presence.nodes.flatMap((n) => laid.boxes.get(n) ?? []) : []), [presence, laid]);
   const [follow, setFollow] = useState(false);
-  const paused = !!ref.data?.settings.persona_paused;
+  const paused = !!ref.data?.settings?.persona_paused;
   const presenceKey = presenceBoxes.map((b) => `${b.x},${b.y}`).join(";");
   useEffect(() => {
     if (!follow || !presenceBoxes.length || !viewport.known) return;
@@ -647,7 +647,7 @@ export function DesignEditor({ id }: { id: string }) {
                   type="checkbox"
                   role="switch"
                   aria-label="Let personas edit directly"
-                  checked={!!ref.data.settings.direct_edit}
+                  checked={!!ref.data.settings?.direct_edit}
                   disabled={settings.isPending}
                   onChange={(e) => settings.mutate({ direct_edit: e.target.checked })}
                   className="size-[14px] accent-[var(--color-accent)]"
