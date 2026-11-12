@@ -18,7 +18,7 @@ const MOCKUP_VERSION = "dddddddd-0000-4000-8000-000000000002";
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 function items(): S["InboxItem"][] {
-  const base = { project: "WEB", resolved: false, read: false };
+  const base = { project: "WEB", resolved: false, read: false, needs_you: true };
   return [
     { ...base, id: `approval:${APPROVAL}`, kind: "approval", title: "Partition ledger entries", summary: "Run 0042_partition_ledger_entries on staging", href: "/tickets/WEB-1", ticket_key: "WEB-1", created_at: minutesAgo(12), agent: atlas, run_id: APPROVAL_RUN },
     { ...base, id: `question:${QUESTION_RUN}`, kind: "question", title: "Retry policy for payouts", summary: "Should retries cap at 5 or 8?", href: `/runs/${QUESTION_RUN}`, ticket_key: "WEB-2", created_at: minutesAgo(18), agent: quill, run_id: QUESTION_RUN },
@@ -68,7 +68,7 @@ async function installInboxApi(page: Page) {
       workspace: { id: "workspace", name: "Vesper", slug: "lazyagents" },
       me: { id: "user", name: "Liam", email: "liam@example.com", initials: "LM", role_title: "Owner" },
       users: [], agents: [], epics: [], projects: [project], labels: [],
-      counts: { inbox: open(), wiki_suggestions: 0, live_agents: 0 },
+      counts: { inbox: open(), needs_you: open(), wiki_suggestions: 0, live_agents: 0 },
     } satisfies S["Bootstrap"]);
     if (path === "/inbox") return json({ items: inbox });
     if (path === "/inbox/read" && method === "POST") {
@@ -137,7 +137,7 @@ test("triage from the keyboard: answer an await_human question, mark done, appro
   await expect(row(page, "WEB-2")).toContainText("18m");
   await expect(row(page, "WEB-3")).toContainText("Failed");
   await expect(row(page, "WEB-3")).toContainText("5h");
-  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: /^Inbox/ })).toHaveAccessibleName(/^Inbox\s*4\s*unread$/);
+  await expect(page.getByRole("button", { name: "Needs you, 4 waiting" })).toBeVisible();
 
   // The first item is selected and focused; j moves to the question.
   await expect(selectedRow(page)).toContainText("WEB-1");

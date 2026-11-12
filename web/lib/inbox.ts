@@ -13,7 +13,8 @@ export type InboxKind =
   | "review"
   | "dispatch"
   | "mention"
-  | "suggestion";
+  | "suggestion"
+  | "merged";
 
 type Item = { id: string; kind: string; created_at: string; resolved: boolean; read: boolean };
 
@@ -49,6 +50,7 @@ export const KIND: Record<string, { label: string; tone: "human" | "blocked" | "
   connector_approval: { label: "Connector", tone: "human" },
   secret_approval: { label: "Secret", tone: "human" },
   secret_expiring: { label: "Expiring", tone: "human" },
+  merged: { label: "Merged", tone: "info" },
 };
 
 export type View = "open" | "done";
@@ -103,4 +105,58 @@ export function waited(iso: string, now = Date.now()): string {
 /** Waits over an hour are shown in amber. */
 export function longWait(iso: string, now = Date.now()): boolean {
   return now - Date.parse(iso) >= 3_600_000;
+}
+
+/* ------------------------------------------------------------------ tray */
+
+/** The sidebar tray (LAZYAGENTS-162): Needs you to act on, and Updates that ask nothing. */
+export type TrayTab = "needs" | "updates";
+
+type TrayItem = Item & { needs_you: boolean };
+
+const RANK = new Map(GROUPS.flatMap((g, i) => g.kinds.map((k) => [k, i] as const)));
+
+/**
+ * Needs you: open items the server marks needs_you, in the Inbox's urgency
+ * order and longest wait first. Updates: the rest, newest first, read or not
+ * (the tab is a feed), with `unread` for the tab's dot.
+ */
+export function trayItems<T extends TrayItem>(items: readonly T[], updatesLimit = 30) {
+  const rank = (k: string) => RANK.get(k) ?? GROUPS.length;
+  const age = (i: T) => Date.parse(i.created_at);
+  const needs = items
+    .filter((i) => i.needs_you && isOpen(i))
+    .sort((a, b) => rank(a.kind) - rank(b.kind) || age(a) - age(b) || a.id.localeCompare(b.id));
+  const updates = items
+    .filter((i) => !i.needs_you)
+    .sort((a, b) => age(b) - age(a) || a.id.localeCompare(b.id))
+    .slice(0, updatesLimit);
+  return { needs, updates, unread: updates.filter(isOpen).map((i) => i.id) };
+}
+
+/** What a tray row offers inline: approve/deny, a reply box, or a labelled link. */
+export type TrayAction = { type: "approve" } | { type: "reply" } | { type: "dispatch" } | { type: "open"; label: string };
+
+export function trayAction(kind: string, hasRun = true): TrayAction {
+  if (kind === "approval") return { type: "approve" };
+  if (kind === "question" && hasRun) return { type: "reply" };
+  if (kind === "dispatch") return { type: "dispatch" };
+  const label: Record<string, string> = {
+    review: "Open review",
+    mockup: "Open review",
+    planning: "Review plan",
+    suggestion: "Review edit",
+    workflow_gate: "Review",
+    connector_approval: "Review",
+    secret_approval: "Review",
+    secret_expiring: "Replace",
+    blocked: "Open run",
+    stalled: "Open run",
+  };
+  return { type: "open", label: label[kind] ?? "Open" };
+}
+
+/** The approval's id from its inbox id ("approval:<uuid>"), for /approvals/{id}/{decision}. */
+export function approvalId(itemId: string): string | undefined {
+  return itemId.startsWith("approval:") ? itemId.slice("approval:".length) : undefined;
 }

@@ -70,7 +70,9 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   await expect(page.getByRole("link", { name: "Projects & tickets" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Chats & personas" })).toHaveCount(0);
   const work = nav(page).getByRole("group", { name: "Work" });
-  await expect(work.getByRole("link")).toHaveText(["Inbox", /^Runs/, "Tickets"]);
+  // Inbox left the menu: the Needs you pill under New chat opens the tray instead.
+  await expect(work.getByRole("link")).toHaveText([/^Runs/, "Tickets"]);
+  await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
   await expect(nav(page).getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
   await expect(nav(page).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
 
@@ -126,18 +128,20 @@ test("an archived or unknown project shows an explicit empty state with a way ba
   expect(api.unhandled).toEqual([]);
 });
 
-test("Inbox and Runs nav counts refresh on live updates", async ({ page }) => {
+test("Needs you and Runs nav counts refresh on live updates", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.goto("/tickets?layout=board&project=WEB");
-  const inbox = nav(page).getByRole("link", { name: /^Inbox/ });
+  const inbox = page.getByRole("button", { name: /^Needs you/ });
   const runs = nav(page).getByRole("link", { name: /^Runs/ });
-  await expect(inbox).toHaveAccessibleName("Inbox");
+  await expect(inbox).toHaveAccessibleName("Needs you, nothing waiting");
   await expect(runs).toHaveAccessibleName("Runs");
-  api.counts.inbox = 2;
+  // Unread Updates never reach the badge: only needs_you counts.
+  api.counts.inbox = 5;
+  api.counts.needs_you = 2;
   api.runner.busy = 1;
   api.runner.live = 1;
   await api.emit("run.started");
-  await expect(inbox).toHaveAccessibleName(/^Inbox\s*2\s*unread$/);
+  await expect(inbox).toHaveAccessibleName("Needs you, 2 waiting");
   await expect(runs).toHaveAccessibleName(/^Runs\s*1\s*running$/);
   expect(api.unhandled).toEqual([]);
 });

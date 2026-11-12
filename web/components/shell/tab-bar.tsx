@@ -3,31 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
-import { usePulse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { TABS, badgeLabel, currentTab, hidesTabBar, type Tab } from "@/lib/tab-bar";
 import { useNavCounts } from "@/lib/use-nav-counts";
 import type { NavBadge } from "@/lib/project-scope";
+import { NeedsYou } from "./needs-you";
 
 /** The bar's height above the bottom safe-area inset; keep in step with --tab-bar-h (globals.css). */
 const TAB_BAR_HEIGHT = 56;
 
 function TabBadge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, number> }) {
   const n = kind ? counts[kind] : 0;
-  const pulse = usePulse<HTMLSpanElement>(n);
   if (!kind || n <= 0) return null;
-  if (kind === "inbox") {
-    return (
-      <span
-        ref={pulse}
-        aria-hidden
-        data-testid="tab-badge"
-        className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-[10.5px] font-semibold leading-none text-approve-fg"
-      >
-        {n > 99 ? "99+" : n}
-      </span>
-    );
-  }
   if (kind === "runs") return <span aria-hidden data-testid="tab-dot" className="absolute right-1.5 top-0.5 size-1.5 rounded-full bg-state-done" />;
   return null;
 }
@@ -68,9 +55,13 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border-subtle bg-sidebar px-safe pb-safe"
     >
       <div className="flex items-stretch px-1" style={{ height: TAB_BAR_HEIGHT }}>
-        {TABS.map((t) => (
-          <TabLink key={t.key} tab={t} active={t.key === current} counts={counts} />
-        ))}
+        {TABS.map((t) =>
+          t.tray ? (
+            <NeedsYou key={t.key} variant="tab" count={counts.inbox} />
+          ) : (
+            <TabLink key={t.key} tab={t} active={t.key === current} counts={counts} />
+          ),
+        )}
       </div>
     </nav>
   );
