@@ -10,7 +10,7 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
-import { RunsTabNav } from "./runs-tabs";
+import { ReportsTabNav } from "./reports-tabs";
 
 const ranges = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "custom", label: "Custom" }] as const;
 const field = "rounded-md border border-border-strong bg-surface px-2 py-1 text-sm text-fg";
@@ -58,11 +58,11 @@ export function HighlightsScreen() {
     const next = new URLSearchParams(params.toString());
     next.set("tab", "highlights");
     for (const [key, value] of Object.entries(values)) { if (value === undefined) next.delete(key); else next.set(key, value); }
-    router.replace(`/runs?${next}`);
+    router.replace(`/reports?${next}`);
   };
 
   let body;
-  if (scope.status !== "ready") body = <ProjectScopeState base="/runs?tab=highlights" scope={scope} />;
+  if (scope.status !== "ready") body = <ProjectScopeState base="/reports?tab=highlights" scope={scope} />;
   else if (invalid) body = <Banner tone="human" title="Invalid date range">{invalid}</Banner>;
   else if (query.isError) body = <Banner tone="blocked" title="Couldn’t load highlights" actions={<Button onClick={() => query.refetch()}>Retry</Button>}>{query.error.message}</Banner>;
   else if (!query.data) body = <Skeleton className="h-80" />;
@@ -85,10 +85,10 @@ export function HighlightsScreen() {
   </>;
 
   return <>
-    <TopBar crumbs={[...projectCrumbs(project, "Runs").slice(0, -1), { label: "Runs", href: "/runs" }, { label: "Highlights" }]} />
+    <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Highlights" }]} />
     <Content><div className="flex flex-col gap-5">
-      <div><h1 className="type-display">Runs</h1><p className="mt-1 text-sm text-fg-secondary">Routing decisions across your persona chats.</p></div>
-      <div className="flex flex-wrap items-center gap-3"><RunsTabNav tab="highlights" /><ProjectPicker /></div>
+      <div><h1 className="type-display">Reports</h1><p className="mt-1 text-sm text-fg-secondary">Routing decisions across your persona chats.</p></div>
+      <div className="flex flex-wrap items-center gap-3"><ReportsTabNav tab="highlights" /><ProjectPicker /></div>
       <div className="flex flex-wrap items-center gap-3">
         <Segmented label="Date range" options={ranges} value={range} onChange={(value) => set({ range: value, from: undefined, to: undefined })} />
         {range === "custom" && <><label className="text-sm">From <input aria-label="From" type="date" className={field} value={dates.from} onChange={(e) => set({ from: e.target.value })} /></label><label className="text-sm">To <input aria-label="To" type="date" className={field} value={dates.to} onChange={(e) => set({ to: e.target.value })} /></label></>}

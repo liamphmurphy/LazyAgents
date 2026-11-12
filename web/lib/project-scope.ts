@@ -25,6 +25,8 @@ export const WORK_ITEMS: NavItem[] = [
   // No Inbox row: the Needs you pill above the menu opens the tray, and /inbox is its "Open all" page.
   { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
   { href: "/tickets", label: "Tickets", icon: "tickets" },
+  // Costs and Highlights (LAZYAGENTS-163), formerly the Runs tabs.
+  { href: "/reports", label: "Reports", icon: "dollar" },
 ];
 
 /** Apps: a full page of their own; Docs, Slides, Designs and Finance have an Ask drawer, each backed by one of the person's spaces. */

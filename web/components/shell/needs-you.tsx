@@ -292,7 +292,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
           <span><Kbd>A</Kbd> <Kbd>D</Kbd> decide</span>
           <span><Kbd>←</Kbd> <Kbd>→</Kbd> switch</span>
         </span>
-        <Link href="/inbox" onClick={onClose} className="ml-auto font-medium text-accent hover:underline">
+        <Link href="/runs#needs-you" onClick={onClose} className="ml-auto font-medium text-accent hover:underline">
           Open all →
         </Link>
       </div>

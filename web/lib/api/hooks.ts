@@ -1034,8 +1034,8 @@ export function useSearch(q:string,project?:string) {
 }
 
 // ------------------------------------------------------------- overviews
-export function useEpicOverviews() {
- return useQuery({queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
+export function useEpicOverviews(enabled = true) {
+ return useQuery({enabled,queryKey:["epics"],queryFn:()=>unwrap(api.GET("/epics")).then(d=>d.epics)});
 }
 /** Toggle an epic's "requires mockup" flag or change its status (done is gated server-side: 409). */
 export function useUpdateEpic(id: string) {
