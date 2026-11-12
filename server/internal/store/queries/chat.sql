@@ -133,11 +133,13 @@ SELECT count(*)::bigint FROM chat_messages WHERE session_id = $1 AND role IN ('u
 SELECT c.* FROM chat_sessions c LEFT JOIN projects p ON p.id = c.project_id
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archived) AND NOT c.hidden
   AND (sqlc.narg(project_key)::text IS NULL OR p.key = sqlc.narg(project_key)::text)
-  -- persona_filter: 'all', 'none' (chats without a persona) or 'id' (persona_id).
+  -- persona_filter: 'all', 'none' (chats without a persona) or 'id': chats
+  -- the persona hosts or joined (chat_participants).
   AND CASE sqlc.arg(persona_filter)::text
     WHEN 'all' THEN true
     WHEN 'none' THEN c.persona_id IS NULL
-    ELSE c.persona_id = sqlc.narg(persona_id)::uuid END
+    ELSE c.persona_id = sqlc.narg(persona_id)::uuid
+      OR EXISTS (SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.persona_id = sqlc.narg(persona_id)::uuid) END
   -- space_filter: 'none' (chats outside any space), 'id' (space_id), else all.
   AND CASE sqlc.arg(space_filter)::text
     WHEN 'none' THEN c.space_id IS NULL

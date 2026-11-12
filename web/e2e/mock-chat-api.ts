@@ -26,7 +26,8 @@ import type { components } from "../lib/api/schema";
  * default, so the built-in Assistant is the default). GET /chats honours persona_id
  * (omitted: the default persona), POST /chats takes it (omitted: the default), and
  * `updatePersona` edits one and pushes `persona.updated` like the real stream.
- * `chatPersonaFilters` records the persona_id each GET /chats asked for.
+ * `chatPersonaFilters` records the persona_id each GET /chats asked for. A chat's
+ * `guest_persona_ids` are its joined personas (payload `participants`).
  */
 
 type Harness = "claude-code" | "codex";
@@ -37,6 +38,8 @@ type Chat = {
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string;
   effort?: Effort; auto_model?: boolean;
+  // Personas that joined besides the host (chat_participants); listed by their persona filter too.
+  guest_persona_ids?: string[];
 };
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
@@ -364,8 +367,11 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   function ref(c: Chat) {
     const a = AGENTS.find((x) => x.id === c.agent_id)!;
     const p = personas.find((x) => x.id === c.persona_id);
+    const summary = (x: MockPersona) => ({ id: x.id, name: x.name, color: x.color, ...(x.avatar_url ? { avatar_url: x.avatar_url } : {}) });
+    const guests = (c.guest_persona_ids ?? []).flatMap((id) => personas.filter((x) => x.id === id && x.id !== c.persona_id));
     return {
-      ...c, agent_id: undefined, persona_id: undefined,
+      ...c, agent_id: undefined, persona_id: undefined, guest_persona_ids: undefined,
+      participants: [...(p ? [summary(p)] : []), ...guests.map(summary)],
       agent: { id: a.id, name: a.name, handle: a.handle, color_index: a.color_index },
       ...(p ? { persona: { id: p.id, name: p.name, color: p.color, ...(p.avatar_url ? { avatar_url: p.avatar_url } : {}), capabilities: p.capabilities } } : {}),
     };
@@ -663,7 +669,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       const want = pid ?? defaultPersona()?.id ?? "none";
       const list = chats
         .filter((c) => c.archived === archived)
-        .filter((c) => want === "all" || (want === "none" ? !c.persona_id : c.persona_id === want))
+        .filter((c) => want === "all" || (want === "none" ? !c.persona_id : c.persona_id === want || !!c.guest_persona_ids?.includes(want)))
         .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
       return json({ chats: list.map(ref), has_more: false });
     }
