@@ -56,6 +56,7 @@ export function Composer({
   options,
   controls = {},
   actions,
+  sheetSignal = 0,
   send,
   onCycle,
   hints,
@@ -81,6 +82,8 @@ export function Composer({
   controls?: Partial<Record<ComposerOptionId, ReactNode>>;
   /** Shown after the option actions, before Send (Stop). */
   actions?: ReactNode;
+  /** Bumped to open the compact options sheet from elsewhere (the chat menu's Repository). */
+  sheetSignal?: number;
   send: { label: string; disabled: boolean; title?: string; tone?: SendTone };
   /** Tab in a draft with no menu open: the caller switches how Send sends (back for Shift+Tab). */
   onCycle?: (back: boolean) => void;
@@ -98,6 +101,11 @@ export function Composer({
   const [commandError, setCommandError] = useState<string | null>(null);
   const compact = useCompact();
   const [sheet, setSheet] = useState(false);
+  const [seenSheetSignal, setSeenSheetSignal] = useState(sheetSignal);
+  if (sheetSignal !== seenSheetSignal) {
+    setSeenSheetSignal(sheetSignal);
+    setSheet(true);
+  }
 
   const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
     const chip = chipFromTarget(t);
