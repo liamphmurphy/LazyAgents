@@ -178,6 +178,67 @@ func TestParallelDelegationMergesBothChildren(t *testing.T) {
 	}
 }
 
+// Parallel children each pass alone; their test commands are then run on the
+// merged checkout, and a child that breaks them there is unmerged.
+func TestParallelDelegationIntegration(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testerCmd string
+		fail      bool
+	}{
+		// Passes in tester's own worktree, which lacks scribe's docs/a.txt.
+		"breaking child is unmerged": {"test ! -f docs/a.txt", true},
+		"combined tests pass":        {"test -f src/b.txt", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := setup(t)
+			sp := spy(e)
+			e.subagent("scribe")
+			e.subagent("tester")
+			t.Setenv("FAKE_HARNESS_MODE", "delegate_script")
+			t.Setenv("FAKE_HARNESS_SYNC", t.TempDir())
+			t.Setenv("FAKE_HARNESS_DELEGATIONS", script(t, []args{
+				{"agent": "scribe", "task": "Write FILE=docs/a.txt", "allowed_paths": []string{"docs/"}, "test_command": "test -f docs/a.txt"},
+				{"agent": "tester", "task": "Write FILE=src/b.txt", "allowed_paths": []string{"src/"}, "test_command": tc.testerCmd},
+			}))
+			e.dispatch("PAY-214")
+			e.until("completed", e.state("PAY-214=completed"))
+			parent := e.run("PAY-214")
+			out := deref(parent.Outcome)
+			kids := e.children(parent)
+			if len(kids) != 2 {
+				t.Fatalf("children %d\n%s", len(kids), out)
+			}
+			first, second := e.checksOf(kids[0]), e.checksOf(kids[1])
+			if !first.Passed || !second.Passed || !first.Merged || first.Integration != "" {
+				t.Fatalf("checks\n%s\n%s", kids[0].Checks, kids[1].Checks)
+			}
+			checkout := out[strings.Index(out, "=== checkout"):]
+			if !tc.fail {
+				if !second.Merged || second.Integration != "passed" || strings.Count(out, "**MERGED**") != 2 ||
+					strings.Count(out, "Integration with the other delegated runs: passed.") != 1 || !strings.Contains(checkout, "src/b.txt") {
+					t.Fatalf("checks %s\nreport:\n%s", kids[1].Checks, out)
+				}
+				return
+			}
+			if second.Merged || second.Integration != "failed" || second.IntegrationCommand != tc.testerCmd || !strings.Contains(second.MergeNote, "the merge was undone") {
+				t.Fatalf("checks %s", kids[1].Checks)
+			}
+			for _, want := range []string{"**FAILED**. `" + tc.testerCmd + "` failed", "**NOT MERGED**", second.Branch, "continue_run_id"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("report lacks %q:\n%s", want, out)
+				}
+			}
+			// The parent's HEAD is the first merge: scribe's file is there, tester's isn't.
+			if !strings.Contains(checkout, "docs/a.txt") || strings.Contains(checkout, "src/b.txt") || strings.Count(checkout, "Merge commit") != 1 {
+				t.Fatalf("parent checkout:\n%s", checkout)
+			}
+			if !strings.Contains(sp.branches, second.Branch) {
+				t.Fatalf("branch %s not kept: %q", second.Branch, sp.branches)
+			}
+		})
+	}
+}
+
 func TestFailedChecksLeaveBranchUnmerged(t *testing.T) {
 	e := setup(t)
 	sp := spy(e)
