@@ -238,6 +238,19 @@ test("runs started together get one grouped hand-off instead of one per card", a
   await page.waitForTimeout(1000);
   await page.screenshot({ path: "/tmp/chat-dispatch-handoff-group.png" });
 
+  // Once it fades, the same graphic stays instead of a card per ticket.
   await expect(group).toHaveCount(0, { timeout: 5000 });
-  await expect(page.getByTestId("ticket-run")).toHaveCount(2);
+  const tray = page.getByTestId("ticket-run-group");
+  await expect(tray.getByTestId("group-lane")).toHaveText([/@pike\s*WEB-3/, /@pike\s*WEB-4/]);
+  await expect(page.getByTestId("ticket-run")).toHaveCount(0);
+
+  // Ticket status flies out on demand, one card per run.
+  await tray.getByRole("button", { name: "Ticket status" }).click();
+  const flyout = page.getByTestId("ticket-run-flyout");
+  await expect(flyout.getByTestId("ticket-run")).toHaveCount(2);
+  await expect(flyout.getByTestId("ticket-run").nth(0)).toContainText("Fix payouts");
+  await expect(flyout.getByTestId("ticket-run").nth(1)).toContainText("Payout report");
+  await page.screenshot({ path: "/tmp/chat-dispatch-group-flyout.png" });
+  await page.keyboard.press("Escape");
+  await expect(flyout).toHaveCount(0);
 });

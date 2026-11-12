@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Dialog } from "radix-ui";
+import { Dialog, Popover } from "radix-ui";
 import { useQueries } from "@tanstack/react-query";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -287,6 +287,96 @@ export function TicketRunCard({ run, scene, onReview, handoff }: { run: TicketRu
   );
 }
 
+const DOT: Record<string, string> = { done: "bg-state-done", human: "bg-state-human", blocked: "bg-state-blocked", review: "bg-state-done" };
+
+/** A run's state as a dot, the colour of its pill; the words live in the flyout. */
+function RunDot({ run }: { run: TicketRun }) {
+  const s = RUN_STATE[run.state] ?? { tone: "neutral" as const, label: run.state };
+  const live = !runEnded(run.state);
+  return (
+    <span
+      role="img"
+      aria-label={s.label}
+      title={s.label}
+      className={cx("size-2 flex-none rounded-full", DOT[s.tone] ?? "bg-fg-tertiary", live && s.tone === "done" && "animate-pulse motion-reduce:animate-none")}
+    />
+  );
+}
+
+/**
+ * Several live runs from this chat as one graphic (the hand-off's fan-out, kept on screen)
+ * instead of a card each. "Details" flies out every run's own card, so progress, approvals,
+ * Stop and Open PR stay one click away; a run that needs the person is flagged on the button.
+ */
+function RunGroupCard({ runs, from, scene }: { runs: TicketRun[]; from?: ReactNode; scene?: SceneRenderer }) {
+  const folded = runs.length > HANDOFF_MAX_LANES ? runs.length - (HANDOFF_MAX_LANES - 1) : 0;
+  const shown = folded ? runs.slice(0, HANDOFF_MAX_LANES - 1) : runs;
+  const lanes = shown.length + (folded ? 1 : 0);
+  const height = lanes * HANDOFF_LANE_PX;
+  const agents = new Set(runs.map((r) => r.agent)).size;
+  const needsYou = runs.filter((r) => r.approval || r.state === "waiting" || r.state === "paused").length;
+  return (
+    <div data-testid="ticket-run-group" className={cx(CARD, "gap-2", needsYou > 0 && "border-state-human")}>
+      <div className="flex items-center gap-3">
+        <span className="flex-none">{from ?? <span aria-hidden className="block size-[26px] rounded-full bg-accent-soft ring-1 ring-accent" />}</span>
+        <span aria-hidden className="relative flex-none text-accent max-sm:hidden" style={{ width: HANDOFF_TRACK_PX, height }}>
+          <svg className="absolute inset-0 overflow-visible" width={HANDOFF_TRACK_PX} height={height} viewBox={`0 0 ${HANDOFF_TRACK_PX} ${height}`}>
+            {Array.from({ length: lanes }, (_, i) => (
+              <path key={i} d={laneCurve(i, lanes)} fill="none" stroke="currentColor" strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray={folded > 0 && i === lanes - 1 ? "2 2" : undefined} />
+            ))}
+          </svg>
+        </span>
+        <ul className="flex min-w-0 flex-1 flex-col">
+          {shown.map((r) => (
+            <li key={r.run_id} data-testid="group-lane" className="flex min-w-0 items-center gap-2" style={{ height: HANDOFF_LANE_PX }}>
+              <AgentAvatar name={r.agent} colorIndex={0} label={false} />
+              <span className="truncate text-[13px] text-fg">@{r.agent}</span>
+              <span className="flex-none rounded-md border border-accent bg-accent-soft px-1.5 py-px font-mono text-[10.5px] text-accent">{r.ticket}</span>
+              <RunDot run={r} />
+            </li>
+          ))}
+          {folded > 0 && (
+            <li className="flex min-w-0 items-center gap-2" style={{ height: HANDOFF_LANE_PX }}>
+              <span className="flex-none rounded-full border border-accent bg-accent-soft px-2 text-[11px] text-accent">+{folded}</span>
+              <span className="truncate text-[13px] text-fg-secondary">{folded} more tickets</span>
+            </li>
+          )}
+        </ul>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-xs text-fg-tertiary">
+          {runs.length} tickets · {agents === 1 ? `@${runs[0].agent}` : `${agents} agents`}
+        </p>
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              data-testid="ticket-run-group-details"
+              className={cx(buttonClass("outline"), "flex-none gap-1.5")}
+            >
+              Ticket status
+              {needsYou > 0 && <span className="rounded-full bg-pill-human-bg px-1.5 text-[11px] text-pill-human-fg">{needsYou} need you</span>}
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              data-testid="ticket-run-flyout"
+              align="end"
+              side="top"
+              sideOffset={8}
+              collisionPadding={12}
+              aria-label="Ticket status"
+              className="z-50 flex max-h-[min(70vh,560px)] w-[min(460px,calc(100vw-24px))] flex-col gap-2 overflow-y-auto rounded-xl border border-border-strong bg-surface-raised p-2.5 shadow-float"
+            >
+              {runs.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} />)}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+    </div>
+  );
+}
+
 /** Ticket runs still going in this chat, above the composer so they never scroll away. */
 export function ChatTicketRunTray({ chatId, scene, persona }: { chatId: string; scene?: SceneRenderer; persona?: ReactNode }) {
   const runs = useChatTicketRuns(chatId);
@@ -295,11 +385,17 @@ export function ChatTicketRunTray({ chatId, scene, persona }: { chatId: string; 
   if (live.length === 0) return null;
   // In start order, leaving out any that already ended.
   const handed = handoff.ids.flatMap((id) => live.filter((r) => r.run_id === id));
-  const grouped = handed.length > 1;
+  const handingGroup = handed.length > 1;
+  // One run keeps its own card; two or more share the graphic.
+  const grouped = live.length > 1;
   return (
-    <div data-testid="ticket-run-tray" className="relative mb-2 flex flex-col gap-2" style={grouped ? { minHeight: groupHandOffHeight(handed.length) } : undefined}>
-      {grouped && <GroupHandOff runs={handed} from={persona} leaving={handoff.leaving} />}
-      {live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} handoff={!grouped && handed.includes(r) ? { from: persona } : undefined} />)}
+    <div data-testid="ticket-run-tray" className="relative mb-2 flex flex-col gap-2" style={handingGroup ? { minHeight: groupHandOffHeight(handed.length) } : undefined}>
+      {handingGroup && <GroupHandOff runs={handed} from={persona} leaving={handoff.leaving} />}
+      {grouped ? (
+        <RunGroupCard runs={live} from={persona} scene={scene} />
+      ) : (
+        live.map((r) => <TicketRunCard key={r.run_id} run={r} scene={scene} handoff={handed.includes(r) ? { from: persona } : undefined} />)
+      )}
     </div>
   );
 }
