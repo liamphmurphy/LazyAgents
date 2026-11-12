@@ -92,23 +92,6 @@ export function CommitEmailPicker({
   );
 }
 
-/** The header chip once an address is picked; opens the picker to change it. */
-export function CommitEmailChip({ email, onClick, open }: { email: string; onClick: () => void; open: boolean }) {
-  return (
-    <button
-      type="button"
-      data-testid="commit-email-chip"
-      aria-expanded={open}
-      title={`Commits are authored as ${email}. Click to change.`}
-      onClick={onClick}
-      className="flex min-w-0 flex-none items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-fg-secondary hover:bg-hover max-md:hidden @max-[720px]:hidden"
-    >
-      <Icon name="at" size={12} className="flex-none" />
-      <span className="max-w-[180px] truncate font-mono text-xs">{email}</span>
-    </button>
-  );
-}
-
 /** A commit dot on a branch line: the commit this address would author. */
 function GraphRail({ on }: { on: boolean }) {
   return (
