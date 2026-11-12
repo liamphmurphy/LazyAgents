@@ -70,6 +70,11 @@ type Contract struct {
 	// agent's didn't, so it wasn't fast-forwarded. The runner sets both.
 	PrevHeadSHA string `json:"prev_head_sha,omitempty"`
 	Diverged    bool   `json:"diverged,omitempty"`
+	// ReproCommand is what a reviewer reported with complete_run: it runs the
+	// failing tests it committed for its blocking findings. ReproCoversAll says
+	// every blocking finding has one. Only completeChild sets them.
+	ReproCommand   string `json:"repro_command,omitempty"`
+	ReproCoversAll bool   `json:"repro_covers_all,omitempty"`
 }
 
 const (
@@ -119,11 +124,13 @@ func (c Contract) Normalize() (Contract, error) {
 	}
 	c.BaseSHA, c.BaseUncommitted, c.Branch, c.Worktree, c.ResumeSession = "", nil, "", "", false
 	c.PrevHeadSHA, c.Diverged = "", false
+	c.ReproCommand, c.ReproCoversAll = "", false
 	return c, nil
 }
 
 // region is the part of the repository an allowed path claims: the path itself
-// or, for a glob, the directory it is confined under ("" = anywhere).
+// or, for a glob, the directory it is confined under ("" = anywhere, as for a
+// glob without a "/", which matches base names in any directory).
 func region(p string) string {
 	p = strings.TrimSuffix(strings.TrimPrefix(p, "./"), "/")
 	if !strings.ContainsAny(p, "*?[") {
@@ -158,24 +165,48 @@ func PathsOverlap(a, b []string) bool {
 
 // Empty reports whether the contract adds nothing to the task.
 func (c Contract) Empty() bool {
-	return len(c.AcceptanceCriteria) == 0 && len(c.AllowedPaths) == 0 && c.TestCommand == ""
+	return len(c.AcceptanceCriteria) == 0 && len(c.AllowedPaths) == 0 && c.TestCommand == "" && c.ReproCommand == ""
 }
 
 // PathAllowed reports whether a changed file is inside the contract's
 // boundaries. A pattern matches a file exactly, as a directory prefix
 // ("internal/runs/" or "internal/runs"), or as a path.Match glob on the whole
-// path or its base name.
+// path. A glob without a "/" ("*_test.go") also matches the file's base name,
+// and a leading "**/" matches any directory ("**/testdata/*.json"). A plain
+// name without a "/" ("go.mod") stays the file or directory at the root.
 func (c Contract) PathAllowed(file string) bool {
 	if len(c.AllowedPaths) == 0 {
 		return true
 	}
+	file = strings.TrimPrefix(file, "./")
 	for _, p := range c.AllowedPaths {
+		p = strings.TrimPrefix(p, "./")
 		if file == p || strings.HasPrefix(file, strings.TrimSuffix(p, "/")+"/") {
 			return true
 		}
-		if ok, _ := path.Match(p, file); ok {
+		if globMatch(p, file) {
 			return true
 		}
+	}
+	return false
+}
+
+// globMatch is path.Match with the two extensions PathAllowed documents.
+func globMatch(p, file string) bool {
+	if rest, ok := strings.CutPrefix(p, "**/"); ok {
+		for i := 0; i < len(file); i++ {
+			if (i == 0 || file[i-1] == '/') && globMatch(rest, file[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+	if ok, _ := path.Match(p, file); ok {
+		return true
+	}
+	if !strings.Contains(p, "/") && strings.ContainsAny(p, "*?[") {
+		ok, _ := path.Match(p, path.Base(file))
+		return ok
 	}
 	return false
 }
@@ -613,6 +644,88 @@ func delegationWakeMessage(ctx context.Context, q *store.Queries, parent store.R
 	return msg, true, nil
 }
 
+// RecheckReview asks the runner to run a merged review's repro_command in the
+// main agent's checkout. The caller is parked as for a delegation and resumed
+// at once with a "delegation" turn; the runner runs the command before that
+// turn starts and appends the result. No sub agent run starts.
+func (s *Service) RecheckReview(ctx context.Context, c Caller, ticketKey, childRunID string) error {
+	if c.Agent.Kind == agents.KindSub {
+		return apperr.Conflict("only the main agent can recheck a review")
+	}
+	childID, err := uuid.Parse(strings.TrimSpace(childRunID))
+	if err != nil {
+		return apperr.Invalid("run_id", "%q isn't a run id", childRunID)
+	}
+	return s.tx(ctx, func(q *store.Queries) error {
+		run, _, err := s.running(ctx, q, c, ticketKey)
+		if err != nil {
+			return err
+		}
+		if run, err = q.LockRun(ctx, run.ID); err != nil {
+			return err
+		}
+		if run.State != "running" {
+			return apperr.Conflict("your run is no longer running")
+		}
+		if !LeadRun(run) {
+			return apperr.Conflict("recheck_review is for a main agent's ticket run")
+		}
+		kids, err := q.ChildRuns(ctx, &run.ID)
+		if err != nil {
+			return err
+		}
+		var child *store.Run
+		for i := range kids {
+			if !slices.Contains(Terminal, kids[i].State) {
+				return apperr.Conflict("a delegated run is still in progress; end your turn and wait for its report")
+			}
+			if kids[i].ID == childID {
+				child = &kids[i]
+			}
+		}
+		if child == nil {
+			return apperr.Invalid("run_id", "%s isn't a delegated run of this run", childID)
+		}
+		var contract Contract
+		var checks Checks
+		_ = json.Unmarshal(child.Contract, &contract)
+		_ = json.Unmarshal(child.Checks, &checks)
+		switch {
+		case child.State != "completed":
+			return apperr.Invalid("run_id", "that run didn't complete, so it has no tests to recheck")
+		case contract.ReproCommand == "":
+			return apperr.Invalid("run_id", "that run didn't report a repro_command; delegate a re-review instead")
+		case !checks.Merged:
+			return apperr.Invalid("run_id", "that run's tests weren't merged into your branch (see its checks), so there is nothing to recheck")
+		}
+		turns, err := q.ListTurns(ctx, run.ID)
+		if err != nil {
+			return err
+		}
+		for _, turn := range turns {
+			if turn.Status == "pending" {
+				return apperr.Conflict("your next turn is already queued; end your turn")
+			}
+		}
+		checks.RecheckRequested = true
+		raw, err := json.Marshal(checks)
+		if err != nil {
+			return err
+		}
+		if err := q.SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: raw}); err != nil {
+			return err
+		}
+		wait := "delegation"
+		if _, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "waiting", WaitReason: &wait}); err != nil {
+			return err
+		}
+		if err := q.EndOpenTurn(ctx, store.EndOpenTurnParams{RunID: run.ID, ExitCode: ptr[int32](0)}); err != nil {
+			return err
+		}
+		return resume(ctx, q, run, "delegation", "The server ran `"+contract.ReproCommand+"` from review run "+child.ID.String()+" on your branch; the result follows.")
+	})
+}
+
 // CancelChildren ends a parent's live delegated runs (the parent was cancelled
 // or failed); the runner kills their processes.
 func CancelChildren(ctx context.Context, q *store.Queries, parentID uuid.UUID, reason string) error {
@@ -652,7 +765,7 @@ func truncate(s string, n int) string {
 
 // completeChild ends a delegated run: no ticket status change, and the parent
 // is resumed with the summary.
-func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, report, verdict string) error {
+func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, report, verdict string, repro Repro) error {
 	return s.tx(ctx, func(q *store.Queries) error {
 		run, t, err := s.running(ctx, q, c, key)
 		if err != nil {
@@ -660,6 +773,23 @@ func (s *Service) completeChild(ctx context.Context, c Caller, key, outcome, rep
 		}
 		if run.ParentRunID == nil {
 			return fmt.Errorf("not a delegated run")
+		}
+		if repro.Command != "" {
+			// Recorded on the contract the runner checks the result against.
+			var contract Contract
+			if len(run.Contract) > 0 {
+				if err := json.Unmarshal(run.Contract, &contract); err != nil {
+					return err
+				}
+			}
+			contract.ReproCommand, contract.ReproCoversAll = repro.Command, repro.CoversAll
+			raw, err := json.Marshal(contract)
+			if err != nil {
+				return err
+			}
+			if _, err := q.SetRunContract(ctx, store.SetRunContractParams{ID: run.ID, Contract: raw}); err != nil {
+				return err
+			}
 		}
 		done, err := q.SetRunState(ctx, store.SetRunStateParams{ID: run.ID, State: "completed", Outcome: &outcome})
 		if err != nil {

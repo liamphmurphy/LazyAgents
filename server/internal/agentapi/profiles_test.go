@@ -22,7 +22,7 @@ func TestProfileToolsExist(t *testing.T) {
 // Board writes are lead-only (ADR Kanban board, Decision 6): chat, planning
 // and delegated runs are neither served nor allowed them.
 func TestBoardToolsLeadOnly(t *testing.T) {
-	for _, tool := range []string{"estimate_ticket", "check_epic_criterion"} {
+	for _, tool := range []string{"estimate_ticket", "check_epic_criterion", "recheck_review"} {
 		if _, ok := ByName[tool]; !ok {
 			t.Fatalf("%s isn't in Tools", tool)
 		}

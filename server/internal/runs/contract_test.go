@@ -84,3 +84,52 @@ func TestChecksEvaluateAndReport(t *testing.T) {
 		t.Errorf("failure output missing:\n%s", r)
 	}
 }
+
+func TestContractGlobs(t *testing.T) {
+	c := runs.Contract{AllowedPaths: []string{"*_test.go", "**/testdata/*.json", "docs/*.md", "./web/"}}
+	for file, want := range map[string]bool{
+		"x_test.go": true, "internal/runs/x_test.go": true, "internal/runs/x.go": false, "x_test.go.orig": false,
+		"testdata/a.json": true, "internal/runs/testdata/a.json": true, "internal/runs/testdata/sub/a.json": false, "internal/testdatax/a.json": false,
+		"docs/a.md": true, "docs/sub/a.md": false, "web/app.tsx": true, "./web/app.tsx": true,
+	} {
+		if got := c.PathAllowed(file); got != want {
+			t.Errorf("PathAllowed(%q) = %v, want %v", file, got, want)
+		}
+	}
+	// A glob without a "/" may match in any directory, so it overlaps everything;
+	// a plain root file name does not.
+	if !runs.PathsOverlap([]string{"*_test.go"}, []string{"web/"}) || !runs.PathsOverlap([]string{"**/testdata/*.json"}, []string{"docs/"}) {
+		t.Error("directory-less patterns should overlap any region")
+	}
+	if runs.PathsOverlap([]string{"docs/*.md"}, []string{"web/"}) {
+		t.Error("disjoint directories overlap")
+	}
+	if (runs.Contract{AllowedPaths: []string{"go.mod"}}).PathAllowed("sub/go.mod") || runs.PathsOverlap([]string{"go.mod"}, []string{"web/"}) {
+		t.Error("a plain name matched outside the root")
+	}
+}
+
+func TestChecksRepro(t *testing.T) {
+	zero, one := 0, 1
+	contract := runs.Contract{AllowedPaths: []string{"*_test.go"}, ReproCommand: "go test -run X"}
+	base := runs.Checks{Ran: true, ChildState: "completed", ChangedFiles: []string{"a/x_test.go"}, ReproCommand: "go test -run X"}
+	failing := base
+	failing.ReproExit, failing.ReproTail = &one, "FAIL X"
+	failing.Evaluate(contract)
+	failing.Merged = true
+	if r := failing.Report(); !failing.Passed || !strings.Contains(r, "The reviewer's failing tests are merged into your branch. `go test -run X` fails now (exit 1)") || !strings.Contains(r, "FAIL X") || !strings.Contains(r, "recheck_review") {
+		t.Fatalf("failing repro: %+v\n%s", failing, r)
+	}
+	for name, exit := range map[string]*int{"passes": &zero, "timed out": nil} {
+		k := base
+		k.ReproExit = exit
+		k.Evaluate(contract)
+		if k.Passed || !strings.Contains(k.Report(), "doesn't demonstrate the findings; the branch was not merged") {
+			t.Errorf("%s: passed=%v\n%s", name, k.Passed, k.Report())
+		}
+	}
+	// A lead can't set the reviewer's fields through delegate.
+	if c, err := contract.Normalize(); err != nil || c.ReproCommand != "" || c.ReproCoversAll {
+		t.Fatalf("normalize kept repro fields: %+v %v", c, err)
+	}
+}

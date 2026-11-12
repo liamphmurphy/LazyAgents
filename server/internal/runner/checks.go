@@ -90,8 +90,8 @@ func (r *Runner) parkDelegation(ctx context.Context, parent store.Run, turn stor
 // delegationReport checks every delegated run that ended since the parent was
 // parked, in its worktree, merges the ones that passed into the parent's
 // branch, stores the results on the runs and returns the text to append to the
-// parent's resume message. It returns "" when no finished child is waiting to be
-// checked.
+// parent's resume message, after the results of any recheck_review. It returns
+// "" when no finished child is waiting to be checked or rechecked.
 func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[string]string, reportedTurn int) string {
 	kids, err := r.q().ChildRuns(ctx, &parent.run.ID)
 	if err != nil {
@@ -107,12 +107,14 @@ func (r *Runner) delegationReport(ctx context.Context, parent runCtx, env map[st
 			ended = append(ended, k)
 		}
 	}
+	recheck := r.recheckReport(ctx, parent, kids, env, reportedTurn)
 	if len(ended) == 0 {
-		return ""
+		return recheck
 	}
 	ws := wsID(parent.run)
 	parentBranch := r.gitOut(ctx, ws, "", "lazyagents-branch-"+parent.run.ID.String(), "git symbolic-ref --short HEAD", env)
 	var report strings.Builder
+	report.WriteString(recheck)
 	var mergedCmds []string // test commands of the children merged so far in this report
 	merged := 0
 	for _, child := range ended {
@@ -352,8 +354,63 @@ func (r *Runner) checkChild(ctx context.Context, child store.Run, contract runs.
 		}
 		k.TestTail = lastLines(redact(out, env), 40)
 	}
+	if contract.ReproCommand != "" {
+		// A reviewer's failing tests: they must fail here to demonstrate its findings.
+		k.ReproCommand = contract.ReproCommand
+		k.ReproExit, k.ReproTail = r.runTimed(ctx, ws, dir, "lazyagents-repro-"+child.ID.String(), contract.ReproCommand, env)
+	}
 	k.Evaluate(contract)
 	return k
+}
+
+// runTimed runs a test-like command with testCheckTimeout and returns its exit
+// code (nil when it didn't finish) and the tail of its output.
+func (r *Runner) runTimed(ctx context.Context, ws, dir, name, cmd string, env map[string]string) (*int, string) {
+	tctx, cancel := context.WithTimeout(ctx, testCheckTimeout)
+	defer cancel()
+	out, code, err := r.execIn(tctx, ws, dir, name, cmd, env)
+	if tctx.Err() != nil {
+		out += "\n(timed out)"
+	}
+	tail := lastLines(redact(out, env), 40)
+	if err != nil || tctx.Err() != nil {
+		return nil, tail
+	}
+	return &code, tail
+}
+
+// recheckReport runs the repro_command of each review the main agent asked to
+// recheck (recheck_review) in its checkout, stores the result on the review's
+// checks and returns the "## Review recheck" sections. A turn retried after a
+// crash reports the result stored for it instead of running again.
+func (r *Runner) recheckReport(ctx context.Context, parent runCtx, kids []store.Run, env map[string]string, turn int) string {
+	ws := wsID(parent.run)
+	var b strings.Builder
+	for _, child := range kids {
+		var k runs.Checks
+		if len(child.Checks) == 0 || json.Unmarshal(child.Checks, &k) != nil {
+			continue
+		}
+		if !k.RecheckRequested && k.RecheckTurn != turn {
+			continue
+		}
+		var contract runs.Contract
+		_ = json.Unmarshal(child.Contract, &contract)
+		if k.RecheckRequested {
+			k.RecheckRequested, k.RecheckTurn = false, turn
+			k.RecheckSHA = r.gitOut(ctx, ws, "", "lazyagents-recheck-"+child.ID.String(), "git rev-parse HEAD", env)
+			k.RecheckExit, k.RecheckTail = r.runTimed(ctx, ws, "", "lazyagents-recheck-"+child.ID.String(), k.ReproCommand, env)
+			k.ReproFixed = k.RecheckExit != nil && *k.RecheckExit == 0 && k.RecheckSHA != ""
+			if raw, err := json.Marshal(k); err == nil {
+				if err := r.q().SetRunChecks(ctx, store.SetRunChecksParams{ID: child.ID, Checks: raw}); err != nil {
+					r.Log.Warn("store recheck", "run", child.ID, "err", err)
+				}
+			}
+			r.event(ctx, child.ID, "lifecycle", map[string]any{"state": "recheck", "fixed": k.ReproFixed, "head": k.RecheckSHA})
+		}
+		b.WriteString("\n\n" + k.RecheckReport(child.ID.String(), contract.ReproCoversAll))
+	}
+	return b.String()
 }
 
 // gitBrief lists the run's git state for a fresh session: the branch,

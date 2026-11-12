@@ -39,6 +39,22 @@ type Checks struct {
 	Integration        string `json:"integration,omitempty"`
 	IntegrationCommand string `json:"integration_command,omitempty"`
 	IntegrationTail    string `json:"integration_tail,omitempty"`
+	// ReproCommand is the reviewer's repro_command, run in its worktree: it
+	// must fail (ReproExit non-zero) for the branch to merge. ReproExit is nil
+	// when it didn't finish.
+	ReproCommand string `json:"repro_command,omitempty"`
+	ReproExit    *int   `json:"repro_exit,omitempty"`
+	ReproTail    string `json:"repro_tail,omitempty"`
+	// RecheckRequested is set by recheck_review until the runner has run
+	// ReproCommand in the main agent's checkout. ReproFixed says it passed there,
+	// at RecheckSHA, in the turn RecheckTurn; RecheckExit and RecheckTail are
+	// that run's result (RecheckExit nil when it didn't finish).
+	RecheckRequested bool   `json:"recheck_requested,omitempty"`
+	RecheckTurn      int    `json:"recheck_turn,omitempty"`
+	RecheckSHA       string `json:"recheck_sha,omitempty"`
+	RecheckExit      *int   `json:"recheck_exit,omitempty"`
+	RecheckTail      string `json:"recheck_tail,omitempty"`
+	ReproFixed       bool   `json:"repro_fixed,omitempty"`
 }
 
 // Evaluate fills the derived fields from the measured ones.
@@ -50,7 +66,33 @@ func (k *Checks) Evaluate(contract Contract) {
 		}
 	}
 	k.Passed = k.Ran && k.ChildState == "completed" && len(k.OutOfBounds) == 0 && len(k.Uncommitted) == 0 &&
-		k.Error == "" && (k.TestCommand == "" || (k.TestExit != nil && *k.TestExit == 0))
+		k.Error == "" && (k.TestCommand == "" || (k.TestExit != nil && *k.TestExit == 0)) &&
+		(k.ReproCommand == "" || (k.ReproExit != nil && *k.ReproExit != 0))
+}
+
+// RecheckReport is the "## Review recheck" section of the main agent's resume
+// message after recheck_review.
+// coversAll is the reviewer's repro_covers_all.
+func (k Checks) RecheckReport(runID string, coversAll bool) string {
+	var b strings.Builder
+	b.WriteString("## Review recheck\n\n")
+	switch {
+	case k.ReproFixed && coversAll:
+		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`, so the findings of review run %s are verified fixed; its changes_requested verdict no longer blocks Done.\n", k.ReproCommand, k.RecheckSHA, runID)
+	case k.ReproFixed:
+		fmt.Fprintf(&b, "**PASSED**: `%s` passes on your branch at `%s`. Review run %s didn't say its tests cover every blocking finding, so its changes_requested verdict still needs a re-review (continue_run_id) before Done.\n", k.ReproCommand, k.RecheckSHA, runID)
+	case k.RecheckExit == nil:
+		fmt.Fprintf(&b, "**FAILED**: `%s` did not finish on your branch", k.ReproCommand)
+		if k.RecheckTail != "" {
+			b.WriteString(":\n```\n" + k.RecheckTail + "\n```\n")
+		} else {
+			b.WriteString(".\n")
+		}
+		b.WriteString("Fix it, commit, and call recheck_review again.\n")
+	default:
+		fmt.Fprintf(&b, "**FAILED**: `%s` still fails on your branch at `%s` (exit %d):\n```\n%s\n```\nFix it, commit, and call recheck_review again.\n", k.ReproCommand, k.RecheckSHA, *k.RecheckExit, k.RecheckTail)
+	}
+	return b.String()
 }
 
 const maxListed = 30
@@ -106,6 +148,18 @@ func (k Checks) Report() string {
 			fmt.Fprintf(&b, "\nTest command `%s` passed.\n", k.TestCommand)
 		default:
 			fmt.Fprintf(&b, "\nTest command `%s` failed (exit %d):\n```\n%s\n```\n", k.TestCommand, *k.TestExit, k.TestTail)
+		}
+	}
+	if k.ReproCommand != "" {
+		switch {
+		case k.ReproExit == nil:
+			fmt.Fprintf(&b, "\nThe reviewer's repro `%s` did not finish, so it doesn't demonstrate the findings; the branch was not merged. Read the report.\n", k.ReproCommand)
+		case *k.ReproExit == 0:
+			fmt.Fprintf(&b, "\n`%s` already passes, so it doesn't demonstrate the findings; the branch was not merged. Read the report.\n", k.ReproCommand)
+		case k.Merged:
+			fmt.Fprintf(&b, "\nThe reviewer's failing tests are merged into your branch. `%s` fails now (exit %d):\n```\n%s\n```\nMake it pass, then call recheck_review.\n", k.ReproCommand, *k.ReproExit, k.ReproTail)
+		default:
+			fmt.Fprintf(&b, "\nThe reviewer's repro `%s` fails (exit %d), but its tests weren't merged (see below).\n", k.ReproCommand, *k.ReproExit)
 		}
 	}
 	if k.Passed {

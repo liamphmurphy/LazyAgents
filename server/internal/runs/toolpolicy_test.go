@@ -293,3 +293,62 @@ func TestToolPolicyWebAccess(t *testing.T) {
 	check("Read", map[string]any{"file_path": ".lazyagents/attachments/turn-1/1-a.pdf"}, "allow")
 	check("Bash", map[string]any{"command": "curl https://evil.example"}, "deny")
 }
+
+// A delegated run with allowed_paths is refused a write tool aimed outside
+// them before the write happens; an undeterminable target is left to the
+// check after the run.
+func TestToolPolicyAllowedPathsBeforeWrite(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.New(t)
+	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := store.New(pool)
+	me, _ := q.GetLocalUser(ctx)
+	a, _ := q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: me.WorkspaceID, Handle: "atlas"})
+	svc := &runs.Service{Pool: pool, Tracker: &tracker.Service{Pool: pool}}
+	c := agents.Caller{Agent: a, Kind: "unmanaged"}
+	run, err := svc.Claim(ctx, c, "PAY-214")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.RunID = &run.ID
+	wt := ".lazyagents/worktrees/" + run.ID.String()
+	contract, _ := json.Marshal(runs.Contract{AllowedPaths: []string{"*_test.go", "docs/"}, Worktree: wt})
+	check := func(tool string, input map[string]any, want string) {
+		t.Helper()
+		d, err := svc.CheckTool(ctx, c, runs.ToolCheck{Tool: tool, Input: input})
+		if err != nil || d.Decision != want {
+			t.Fatalf("%s %v: %+v %v, want %s", tool, input, d, err, want)
+		}
+		if want == "deny" && d.Reason != "This run may only change: *_test.go, docs/. Report anything else with complete_run." {
+			t.Fatalf("reason %q", d.Reason)
+		}
+	}
+	outside := map[string]any{"file_path": "/workspace/" + wt + "/internal/runs/service.go"}
+	// A lead run isn't bound by a contract.
+	check("Edit", outside, "allow")
+	if _, err := pool.Exec(ctx, "UPDATE runs SET parent_run_id=$1, contract=$2 WHERE id=$1", run.ID, contract); err != nil {
+		t.Fatal(err)
+	}
+	abs := func(p string) map[string]any { return map[string]any{"file_path": "/workspace/" + wt + "/" + p} }
+	check("Edit", outside, "deny")
+	check("Write", abs("internal/runs/x_test.go"), "allow")
+	check("Write", abs("docs/a.md"), "allow")
+	check("Write", map[string]any{"file_path": "internal/runs/x_test.go"}, "allow") // relative to the worktree
+	check("Write", map[string]any{"file_path": "docs/../main.go"}, "deny")
+	check("Write", map[string]any{"file_path": "/workspace/main.go"}, "deny") // the main agent's checkout
+	check("NotebookEdit", map[string]any{"notebook_path": "/workspace/" + wt + "/nb.ipynb"}, "deny")
+	check("Write", map[string]any{"content": "x"}, "allow") // no target: the check after the run applies
+	check("Read", abs("internal/runs/service.go"), "allow")
+	patch := func(files ...string) map[string]any {
+		s := "*** Begin Patch\n"
+		for _, f := range files {
+			s += f + "\n@@\n+x\n"
+		}
+		return map[string]any{"input": s + "*** End Patch\n"}
+	}
+	check("apply_patch", patch("*** Add File: internal/runs/x_test.go", "*** Update File: docs/a.md"), "allow")
+	check("apply_patch", patch("*** Update File: internal/runs/x_test.go", "*** Delete File: main.go"), "deny")
+	check("apply_patch", map[string]any{"input": "garbled"}, "allow")
+}
