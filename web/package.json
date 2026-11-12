@@ -12,7 +12,8 @@
     "e2e": "playwright test",
     "e2e:stack": "bash e2e-stack/run.sh",
     "test:unit": "node --experimental-strip-types --test lib/*.test.mjs",
-    "gen:inter-metrics": "node --experimental-strip-types scripts/gen-inter-metrics.mjs"
+    "gen:inter-metrics": "node --experimental-strip-types scripts/gen-inter-metrics.mjs",
+    "gen:design-tokens": "node --experimental-strip-types scripts/gen-design-tokens.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",
