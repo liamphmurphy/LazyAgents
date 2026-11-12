@@ -255,7 +255,6 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
               {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
             </Banner>
           )}
-          {fullPersona?.capabilities.code && <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} />}
           {repo && emails.length > 1 && (
             <CommitEmailPicker emails={emails} name={boot.data?.me.name ?? ""} repo={repo} value={commitEmail} onPick={setCommitEmail} disabled={locked} required />
           )}
@@ -276,6 +275,9 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             placeholder={arrived ? `Message ${persona.name}…` : name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
             options={
               <>
+                {fullPersona?.capabilities.code && (
+                  <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} personaName={persona.name} personaRepos={repos} />
+                )}
                 <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                 <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
               </>

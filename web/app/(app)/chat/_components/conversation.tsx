@@ -701,7 +701,6 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </span>
             </span>
           )}
-          {(c.speaker ?? c.persona)?.capabilities?.code && <RepositoryPicker value={c.repo_url} pending={c.pending_repo_url} onPick={(r) => selectRepo.mutate(r)} disabled={c.archived || selectRepo.isPending} error={selectRepo.error} signal={repoSignal} />}
           {c.workspace_path && <WorkspaceFolderChip path={c.workspace_path} className="max-md:hidden @max-[720px]:hidden" />}
           <SecretsChip chatId={c.id} />
           {c.repo_url && c.commit_email && myEmails.length > 1 && (
@@ -1000,6 +999,18 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               }
               options={
                 <>
+                  {(c.speaker ?? c.persona)?.capabilities?.code && (
+                    <RepositoryPicker
+                      value={c.repo_url}
+                      pending={c.pending_repo_url}
+                      onPick={(r) => selectRepo.mutate(r)}
+                      disabled={c.archived || selectRepo.isPending}
+                      error={selectRepo.error}
+                      signal={repoSignal}
+                      personaName={speaker.name}
+                      personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
+                    />
+                  )}
                   {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
                   {running && (
                     <SendModeSwitch

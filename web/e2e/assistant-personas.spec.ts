@@ -237,7 +237,7 @@ test("a coding persona's new chat works in its first repo and shows it in the he
   const chip = page.getByTestId("repository-picker").first();
   await expect(chip).toContainText("acme/api");
   // No branch until the persona pushes one for a change.
-  await expect(chip).toContainText("Repository: acme/api");
+  await expect(chip.getByRole("button", { name: "Repository: acme/api" })).toBeVisible();
   await expect(page.getByTestId("image-hint")).toHaveCount(0);
   expect(mock.created[0]).toMatchObject({ persona_id: mock.personas[0].id, repo_url: repos[0] });
   expect(mock.unhandled).toEqual([]);
