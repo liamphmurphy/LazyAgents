@@ -3,22 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Popover } from "radix-ui";
-import { useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from "react";
+import { useState, type CSSProperties, type KeyboardEvent } from "react";
 import { cx } from "@/lib/cx";
+import { useMediaQuery } from "@/lib/viewport";
 import { APP_ITEMS, TOOL_ITEMS, inAppsMenu, isActive, type NavBadge, type NavItem } from "@/lib/project-scope";
 import { Icon } from "@/components/ui/icon";
 
-const WIDE = "(min-width: 800px)";
-
-function subscribeWide(onChange: () => void) {
-  const mq = window.matchMedia(WIDE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
-}
-
-/** Below 800px the expanded menu fills the screen, with no room to its right: the grid opens under the row. */
+/**
+ * Below 800px the expanded menu fills the screen, with no room to its right: the grid opens under the row.
+ * This follows the expanded sidebar's 800px rule, not COMPACT.
+ */
 function useWide(): boolean {
-  return useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => true);
+  return useMediaQuery("(min-width: 800px)", true);
 }
 
 /**
