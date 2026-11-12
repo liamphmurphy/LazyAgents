@@ -485,6 +485,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("design-view", "rendering a design");
     case "design_comments":
       return status("design-view", "reading comments on a design");
+    case "design_create":
+      return status("design", "starting a design");
     case "design_patch":
       return status("design", "suggesting design changes");
     case "design_comment":
@@ -714,6 +716,8 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Commenting on", known(o.canvas_id));
     case "design_flows":
       return named("Tracing the flow of", known(o.canvas_id));
+    case "design_create":
+      return named("Starting the design", o.title);
     case "read_workflow":
       return named("Looking over", known(o.workflow_id));
     case "propose_workflow_edit":
