@@ -112,6 +112,11 @@ test("Repository in the chat menu opens the composer's repository picker", async
   await openEmptyChat(page);
   await header(page).getByRole("button", { name: "Chat menu" }).click();
   await page.getByRole("menuitem", { name: /Repository/ }).click();
+  // The compact composer keeps the repository picker in its options sheet, which the menu opens.
+  const sheet = page.getByTestId("composer-sheet");
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: /^Repository/ }).click();
+  await page.getByRole("button", { name: "Other repository…" }).click();
   const box = page.getByRole("textbox", { name: "Repository name or GitHub URL" });
   await expect(box).toBeVisible();
   await box.fill("https://github.com/acme/app");

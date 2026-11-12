@@ -408,6 +408,8 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const create = useCreateChat();
   const selectRepo = useSetChatRepository(id);
   const [repoSignal, setRepoSignal] = useState(0);
+  // The compact composer keeps the repository picker in its options sheet: the chat menu opens that.
+  const [sheetSignal, setSheetSignal] = useState(0);
   const savedRepos = useRepositories();
   const discard = useDeleteChat();
   const qc = useQueryClient();
@@ -797,7 +799,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             onTab={setTab}
             running={running}
             canCode={!!(c.speaker ?? c.persona)?.capabilities?.code}
-            onRepository={() => { setTab("chat"); setRepoSignal((n) => n + 1); }}
+            onRepository={() => { setTab("chat"); setSheetSignal((n) => n + 1); }}
             onRestored={restored}
           />
         ) : (
@@ -1065,6 +1067,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </div>
             )}
             <Composer
+              sheetSignal={sheetSignal}
               text={text}
               onText={setText}
               inputRef={area}
