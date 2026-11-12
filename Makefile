@@ -68,7 +68,8 @@ dev: dev-infra stop-dev ## Infra in Docker, API (hot reload) + Next dev on the h
 	  wait
 
 api: ## Run the API (hot reload if air is installed: go install github.com/air-verse/air@latest)
-	cd server && export PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000} WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)}; \
+	cd server && export PUBLIC_URL=$${PUBLIC_URL:-http://localhost:8000} WEB_URL=$${WEB_URL:-http://localhost:$(WEB_PORT)} \
+	  DESIGN_WORKER_TOKEN=$${DESIGN_WORKER_TOKEN:-vesper-local-design-worker} DESIGN_WORKER_URL=$${DESIGN_WORKER_URL:-http://localhost:$(WEB_PORT)/internal/designs}; \
 	  if command -v air >/dev/null; then air; else go run ./cmd/vesper serve; fi
 
 runner: stop-host-runners ## Run dispatched tickets in hardened containers; replaces any runner already running
@@ -90,7 +91,7 @@ $(WEB_DEPS): web/package-lock.json
 web-deps: $(WEB_DEPS) ## Install web dependencies if the lockfile changed
 
 web: web-deps ## Run Next dev server
-	cd web && npm run dev
+	cd web && DESIGN_WORKER_TOKEN=$${DESIGN_WORKER_TOKEN:-vesper-local-design-worker} npm run dev
 
 gen: web-deps ## Regenerate API code (Go + TS) and sqlc queries. Needs sqlc 1.31+ on PATH.
 	cd server && go generate ./...

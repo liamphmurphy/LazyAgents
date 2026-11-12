@@ -12,14 +12,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/canvas"
 	"github.com/liamphmurphy/vesper/server/internal/design"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -30,9 +33,19 @@ import (
 // AppName marks the Designs app's space in chat_spaces.app.
 const AppName = "designs"
 
-// SpaceInstructions reach every chat the Designs app starts. The design_*
-// tools and their guidance arrive with ticket 4 (ADR §3.9).
-const SpaceInstructions = `This chat belongs to one design in the person's Designs app: the design canvas in this chat. They see it in an editor and talk to you from a panel beside it. Your changes arrive as suggestions the person accepts or rejects one by one, unless they let you edit directly. Give every change a specific why, use the design's tokens rather than hex, and never paste the design's JSON into your reply. Keep replies short, saying what you changed.`
+// SpaceInstructions reach every chat the Designs app starts (ADR §3.9).
+const SpaceInstructions = `This chat belongs to one design in the person's Designs app: the design canvas in this chat (find its canvas_id with design_list). They see it in an editor and talk to you from a panel beside it.
+
+How to work on it:
+- Outline first: call design_outline to see the pages and nodes, then design_read the nodes you will change before you touch them. Never guess ids.
+- Change it with design_patch, against the version you read. Your changes arrive as suggestions the person accepts or rejects one by one, unless they let you edit directly; after a patch, say in a sentence what you suggested and wait for their review. Don't patch the same thing again while it is pending.
+- Use the design's tokens ("$name"), not hex, for colours; design_read shows each token's value. Use auto layout (auto_layout, hug and fill sizing) for UI, not hand-placed coordinates.
+- Give every op a specific why, for example "Make the button stand out" rather than "Update button". The person reads it in the review.
+- Never paste the design's JSON into the chat. Refer to nodes by name.
+- After a large patch has been accepted, design_render the frame to check your work.
+- When the person says "this" or "these", they mean the nodes selected in their editor, which arrive with their message. If a message tells you what they rejected and why, take it on board and don't suggest it again.
+- Comments on nodes are in design_comments; answer them with design_reply (addressed once done), or flag something yourself with design_comment.
+Keep replies short.`
 
 // UntitledTitle names a design started without a title.
 const UntitledTitle = "Untitled design"
@@ -48,6 +61,11 @@ const (
 type Service struct {
 	Pool *pgxpool.Pool
 	Runs *runs.Service
+	// Worker renders designs; Blobs and Bucket hold their images, which go to
+	// the worker as data URIs. Any may be nil: rendering is then unavailable.
+	Worker *Worker
+	Blobs  *blob.Store
+	Bucket string
 }
 
 func (s *Service) canvases() *canvas.Service { return &canvas.Service{Pool: s.Pool} }
@@ -330,6 +348,8 @@ type Resolved struct {
 // win. Accepting an op that needs another the person rejected is refused.
 func (s *Service) Resolve(ctx context.Context, cv store.GetMyCanvasRow, ws, user, id uuid.UUID, decisions []Decision) (Resolved, error) {
 	var out Resolved
+	var feedbackOps []design.Op
+	var feedbackStates []Decision
 	err := s.canvases().Locked(ctx, cv.ChatID, cv.ID, func(q *store.Queries, c store.ChatCanvas, cur store.ChatCanvasVersion) error {
 		p, err := q.LockDesignProposal(ctx, store.LockDesignProposalParams{ID: id, CanvasID: c.ID})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -386,9 +406,76 @@ func (s *Service) Resolve(ctx context.Context, cv store.GetMyCanvasRow, ws, user
 			return err
 		}
 		out.Proposal, err = q.ResolveDesignProposal(ctx, store.ResolveDesignProposalParams{ID: p.ID, Decisions: raw, ResultSeq: resultSeq})
-		return err
+		if err != nil {
+			return err
+		}
+		ops = append([]design.Op(nil), ops...)
+		feedbackOps, feedbackStates = ops, states
+		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	// The resolution is saved; telling the persona is best effort.
+	if msg := feedbackText(s.personName(ctx, ws, user), out.Proposal.Summary, feedbackOps, feedbackStates); msg != "" && out.Proposal.ChatID != nil {
+		if err := s.postFeedback(ctx, *out.Proposal.ChatID, cv.ID, msg); err != nil {
+			slog.Default().Error("posting design review feedback", "canvas", cv.ID, "err", err)
+		}
+	}
+	return out, nil
+}
+
+func (s *Service) personName(ctx context.Context, ws, user uuid.UUID) string {
+	if u, err := store.New(s.Pool).GetUser(ctx, store.GetUserParams{ID: user, WorkspaceID: ws}); err == nil && strings.TrimSpace(u.Name) != "" {
+		return strings.TrimSpace(u.Name)
+	}
+	return "The person"
+}
+
+// feedbackText words what the persona should hear after a review: each
+// rejected op with its why and the person's reason, and each stale op. It's
+// empty when everything was accepted.
+func feedbackText(who, summary string, ops []design.Op, states []Decision) string {
+	var lines []string
+	why := func(i int) string {
+		w, _ := ops[i]["why"].(string)
+		return strings.TrimSpace(w)
+	}
+	for i, d := range states {
+		switch d.State {
+		case Rejected:
+			l := fmt.Sprintf("%s rejected '%s'", who, why(i))
+			if d.Reason != "" {
+				l += ": " + d.Reason
+			}
+			lines = append(lines, l)
+		case Stale:
+			lines = append(lines, fmt.Sprintf("'%s' was accepted but no longer applied (what it changed is gone), so it was skipped", why(i)))
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Review of your design suggestion \"%s\":\n- %s", summary, strings.Join(lines, "\n- "))
+}
+
+// postFeedback records the notice as a system message in the design's chat,
+// carrying a canvas ref so the next turn's prompt includes it
+// (runner.ChatTurnContext). It starts no turn. Concurrent appenders to a chat
+// collide on the message seq, so it retries.
+func (s *Service) postFeedback(ctx context.Context, chat, canvasID uuid.UUID, body string) error {
+	refs, err := json.Marshal([]runs.ChatContextRef{{Kind: "canvas", ID: &canvasID}})
+	if err != nil {
+		return err
+	}
+	q := store.New(s.Pool)
+	for attempt := 0; ; attempt++ {
+		_, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat, Role: "system", BodyMd: body, ContextRefs: refs, Citations: []byte("[]")})
+		var pg *pgconn.PgError
+		if err == nil || attempt >= 3 || !errors.As(err, &pg) || pg.Code != "23505" {
+			return err
+		}
+	}
 }
 
 // checkDecisions wants exactly one accepted or rejected decision per op, so a

@@ -24,6 +24,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/connectors"
+	"github.com/liamphmurphy/vesper/server/internal/designs"
 	"github.com/liamphmurphy/vesper/server/internal/realtime"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
@@ -56,6 +57,8 @@ type Server struct {
 	PublicURL      string
 	Blobs          *blob.Store
 	ArtifactBucket string
+	// DesignWorker renders designs; nil leaves renders unavailable.
+	DesignWorker *designs.Worker
 	// Usage keeps harness plan-usage readings for the activity orb; nil
 	// leaves the orb without usage.
 	Usage *usage.Service
@@ -92,7 +95,7 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	// Agent API (docs/dev/plan.md §5.2): bearer agent tokens, not the local user.
-	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki, Connectors: s.connectors(), Secrets: s.userSecrets()}
+	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki, Connectors: s.connectors(), Secrets: s.userSecrets(), Designs: s.designs()}
 	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
 	mux.Handle("/mcp/connectors/{slug}", agentapi.ConnectorHandler(deps, s.Version))
 	// More specific than {slug}, so it wins; no connector slug can contain "_".

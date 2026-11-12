@@ -15,6 +15,19 @@
 //	                    slide per top-level outline line to the chat's deck with canvas_patch
 //	                    (see fakeOutlineDraft). The Welcome Wizard's "(Vesper setup)" prompts
 //	                    (web/lib/onboarding.ts) propose a persona (see fakeSetupPersona)
+//	design-review       chat turn in a Designs chat (UI e2e, written against this script).
+//	                    First turn: design_list, design_outline, then one design_patch of
+//	                    exactly 3 ops on the first frame of a design made from the mobile-flow
+//	                    starter: add_node (a text "Promo code", why "Add a promo code field"),
+//	                    set_node (recolour its shape named "Button", why "Make the button
+//	                    stand out") and remove_node (its second text, why "Remove the
+//	                    placeholder copy"), summary "Tidy the Start screen"; replies "I
+//	                    suggested 3 changes." A turn whose message carries a design selection
+//	                    (a canvas ref with a selection: its context file lists "- n_…" nodes)
+//	                    replies "You selected <ids>" and design_patches a set_node (opacity) on
+//	                    the first selected node, why "Acting on your selection". A turn whose
+//	                    prompt carries the person's review feedback ("reviewed your design
+//	                    suggestions") replies "Noted: " plus its lines, patching nothing.
 //	idle                end the turn without saying what's next
 //	crash               exit 3 with an error result
 //	chat-image          chat turn on Claude; a prompt "image: <text>" calls generate_image
@@ -622,6 +635,12 @@ func main() {
 		result(false, reply)
 		return
 	}
+	if os.Getenv("FAKE_HARNESS_MODE") == "design-review" {
+		answer := fakeDesignReview(call, prompt)
+		text(answer)
+		result(false, answer)
+		return
+	}
 	// chat-read: a prompt of "read <artifact id> [section]" reads it through MCP; any other prompt reads nothing.
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-read" {
 		latest := prompt
@@ -1010,4 +1029,90 @@ func fakeSetupPersona(call func(string, map[string]any) map[string]any, prompt s
 		"instructions": "You reproduce a bug before fixing it. You lead with the answer. You push back with alternatives.",
 		"reason":       "An engineering partner to pair with."})
 	return "Here's my draft of " + name + "."
+}
+
+// fakeDesignReview plays the persona in the Designs UI e2e (see the header's
+// design-review mode).
+func fakeDesignReview(call func(string, map[string]any) map[string]any, prompt string) string {
+	if _, fb, ok := strings.Cut(prompt, "Review of your design suggestion"); ok {
+		var notes []string
+		for _, l := range strings.Split(fb, "\n") {
+			if t, ok := strings.CutPrefix(strings.TrimSpace(l), "- "); ok && !strings.HasPrefix(t, "`") {
+				notes = append(notes, t)
+			}
+		}
+		return "Noted: " + strings.Join(notes, "; ")
+	}
+	var designID string
+	var version float64
+	list, _ := call("design_list", map[string]any{})["designs"].([]any)
+	if len(list) > 0 {
+		m, _ := list[0].(map[string]any)
+		designID, _ = m["canvas_id"].(string)
+		version, _ = m["version"].(float64)
+	}
+	if designID == "" {
+		return "I can't find a design in this chat."
+	}
+	patch := func(summary string, ops []any) {
+		call("design_patch", map[string]any{"canvas_id": designID, "base_version": int(version), "summary": summary, "ops": ops})
+	}
+	// A selection: the ref's context file lists the nodes as "- n_…: type name box…".
+	var selected []string
+	for _, m := range regexp.MustCompile("`(\\.lazyagents/context/[^`]+)`: canvas").FindAllStringSubmatch(prompt, -1) {
+		raw, err := os.ReadFile(m[1])
+		if err != nil || !strings.Contains(string(raw), "## Selected nodes") {
+			continue
+		}
+		_, nodes, _ := strings.Cut(string(raw), "## Selected nodes")
+		for _, id := range regexp.MustCompile(`(?m)^- (n_[a-z0-9_]+):`).FindAllStringSubmatch(nodes, -1) {
+			selected = append(selected, id[1])
+		}
+	}
+	if len(selected) > 0 {
+		patch("Adjust the selection", []any{map[string]any{"op": "set_node", "id": selected[0], "fields": map[string]any{"opacity": 0.8}, "why": "Acting on your selection"}})
+		return "You selected " + strings.Join(selected, ", ")
+	}
+	outline := call("design_outline", map[string]any{"canvas_id": designID, "depth": 3})
+	raw, _ := json.Marshal(outline)
+	var o struct {
+		Pages []struct {
+			Children []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Children []struct {
+					ID   string `json:"id"`
+					Type string `json:"type"`
+					Name string `json:"name"`
+				} `json:"children"`
+			} `json:"children"`
+		} `json:"pages"`
+	}
+	if err := json.Unmarshal(raw, &o); err != nil || len(o.Pages) == 0 || len(o.Pages[0].Children) == 0 {
+		return "The design is empty."
+	}
+	frame := o.Pages[0].Children[0]
+	var button, secondText string
+	texts := 0
+	for _, c := range frame.Children {
+		switch {
+		case c.Type == "shape" && c.Name == "Button":
+			button = c.ID
+		case c.Type == "text":
+			if texts++; texts == 2 {
+				secondText = c.ID
+			}
+		}
+	}
+	if button == "" || secondText == "" {
+		return "This isn't the mobile-flow starter."
+	}
+	patch("Tidy the Start screen", []any{
+		map[string]any{"op": "add_node", "parent": frame.ID, "why": "Add a promo code field", "node": map[string]any{
+			"type": "text", "name": "Promo code", "x": 0, "y": 0, "w": 345, "h": 19.2, "sizing": map[string]any{"h": "hug"},
+			"paragraphs": []any{map[string]any{"runs": []any{map[string]any{"text": "Promo code", "size": 16}}}}}},
+		map[string]any{"op": "set_node", "id": button, "fields": map[string]any{"fill": "#2F6BFF"}, "why": "Make the button stand out"},
+		map[string]any{"op": "remove_node", "id": secondText, "why": "Remove the placeholder copy"},
+	})
+	return "I suggested 3 changes."
 }

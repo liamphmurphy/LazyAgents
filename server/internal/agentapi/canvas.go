@@ -98,8 +98,8 @@ func canvasPatch(ctx context.Context, d Deps, c agents.Caller, in CanvasPatchIn)
 	}
 	if cv.Kind == canvas.KindDesign {
 		// A persona's design edits are held for the person's review
-		// (ADR-designs §3.7), which canvas_patch would bypass.
-		return nil, apperr.Invalid("canvas_id", "this is a design; persona edits to designs go through design_patch, which isn't available yet")
+		// (ADR-designs §3.7); this takes the same route as design_patch.
+		return designCanvasPatch(ctx, d, c, s, in)
 	}
 	if cv.Kind == canvas.KindDeck {
 		if err := resolveSavedThemes(ctx, d, s.ChatID, in.Ops); err != nil {
