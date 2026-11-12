@@ -155,6 +155,8 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
   const events = useChatRunEvents(chat?.current_run_id, live && !!designId).data;
   const designBusy = useMemo(() => !!designId && live && !!presenceOf(toolCalls(events), designId, true)?.busy, [designId, live, events]);
   const pgBusy = !!pg && (pg.state === "starting" || !!pg.action);
+  // The open design's suggestions waiting for review, as a count on its tab (its header's Review opens them).
+  const pending = useDesignProposals(designId ?? "", !!designId).data?.length ?? 0;
 
   const sigOf = (id?: string) => {
     const c = id ? canvases?.find((x) => x.id === id) : undefined;
@@ -184,7 +186,9 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
     icon: ICONS[id],
     busy: busy[id],
     unread: unread.has(id),
-    wide: id !== "activity",
+    badge: id === "design" && pending > 0 ? <span data-testid="design-tab-pending" title={`${pending} to review`} className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{pending}</span> : undefined,
+    // A design under review needs its canvas and the list of changes side by side.
+    wide: id === "design" && canvasPanel.reviewing ? "max" : id !== "activity",
     content: content[id],
   }));
 

@@ -121,7 +121,10 @@ function useLaidPage(design: Design | undefined, pageId: string | undefined): { 
  * after a quiet moment; a version from elsewhere merges per node, and
  * overlapping changes ask the person.
  */
-export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: () => void } }) {
+/** Beside the chat: closing, and the review in place, whose open state the chat keeps in its URL (review=1). */
+type Beside = { onClose: () => void; reviewing?: boolean; onReview?: (on: boolean) => void };
+
+export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const router = useRouter();
   const search = useSearchParams();
   const ref = useDesign(id);
@@ -317,8 +320,10 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
 
   // ---- Review (a persona's suggestions as a diff): After and Diff show a preview, so nothing is editable there.
   const proposals = useDesignProposals(id, !!ref.data).data;
-  // ?review=1 (the chat's panel sheet sends it) opens straight into the review.
-  const [reviewOpen, setReviewing] = useState(() => search.get("review") === "1");
+  // ?review=1 (the chat's panel sheet sends it) opens straight into the review. Beside the chat, the chat's URL holds it.
+  const [reviewState, setReviewState] = useState(() => search.get("review") === "1");
+  const reviewOpen = beside ? !!beside.reviewing : reviewState;
+  const setReviewing = (on: boolean) => (beside ? beside.onReview?.(on) : setReviewState(on));
   const reviewing = reviewOpen && !!proposals?.length;
   const [mode, setMode] = useState<ReviewMode>("diff");
   const [resolving, setResolving] = useState(false);
@@ -867,16 +872,32 @@ export function DesignEditor({ id, beside }: { id: string; beside?: { onClose: (
         <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
           <Icon name="designs" size={16} className="flex-none text-accent" />
           <h2 className="min-w-0 truncate text-[14px] font-semibold text-fg">{title}</h2>
-          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}</span>
+          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}{reviewing ? " · Reviewing" : ""}</span>
           <span className="flex-1" />
           {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-[9px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
           {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-[11.5px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
-          <Button variant="secondary" title={proposalCount ? `Review ${suggestions} in Designs` : undefined} onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}${proposalCount ? "?review=1" : ""}`))}>Open in Designs</Button>
+          {proposalCount > 0 && !reviewing && (
+            // Compact: the panel sheet's bottom bar has the Review.
+            <Button variant="approve" className="max-md:hidden" title={`Review ${suggestions} here`} onClick={() => setReviewing(true)}>
+              Review {proposalCount}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => void flush().catch(() => undefined).then(() => router.push(`/apps/designs/${id}${reviewing ? "?review=1" : ""}`))}>Open in Designs</Button>
           <button type="button" aria-label="Close the design" onClick={beside.onClose} className="grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
             <Icon name="x" size={14} />
           </button>
         </div>
-        {failed ?? (canvas ? <div className="relative flex min-h-0 flex-1">{canvas}</div> : (
+        {failed ?? (canvas ? (
+          <div className="relative flex min-h-0 flex-1 max-md:flex-col">
+            {canvas}
+            {/* The same review as in Designs (docs/design/designs-review.svg): the canvas with its pill, the changes beside it. */}
+            {reviewing && review && shown && (
+              <aside aria-label="Changes" data-testid="beside-review" className="flex min-h-0 flex-none flex-col border-border-subtle bg-surface max-md:max-h-[50%] max-md:border-t md:w-[304px] md:border-l">
+                <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} onDone={() => void finishReview()} />
+              </aside>
+            )}
+          </div>
+        ) : (
           <div aria-busy="true" className="flex min-h-0 flex-1 gap-3 p-3">
             <Skeleton className="flex-1" />
           </div>

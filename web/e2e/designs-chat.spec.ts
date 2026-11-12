@@ -15,7 +15,7 @@ const acceptance = readFileSync(join(__dirname, "../../docs/design/fixtures/acce
 const PNG = readFileSync(join(__dirname, "../../docs/design/fixtures/landscape.png"));
 
 async function install(page: Page) {
-  const s = { created: false, pending: 2, paused: false, settings: [] as Record<string, unknown>[] };
+  const s = { created: false, pending: 2, paused: false, settings: [] as Record<string, unknown>[], proposals: [] as unknown[], resolved: [] as unknown[] };
   await installChatApi(page, { replyDelayMs: 10 });
   const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
   await page.route(/\/api\/v1\/chats\/[^/]+\/canvases(\/|\?|$)/, (route) =>
@@ -26,7 +26,15 @@ async function install(page: Page) {
     const p = new URL(req.url()).pathname.replace(`/api/v1/designs/${D}`, "");
     if (p === "/render") return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
     if (p === "/versions/1") return json(route, { seq: 1, note: "", author_type: "agent", created_at: at, body: acceptance });
-    if (p === "/proposals") return json(route, { proposals: [] });
+    if (p === "/proposals") return json(route, { proposals: s.proposals });
+    const resolve = p.match(/^\/proposals\/([^/]+)\/resolve$/);
+    if (resolve && req.method() === "POST") {
+      s.resolved.push(req.postDataJSON());
+      const done = s.proposals.find((x) => (x as { id: string }).id === resolve[1]);
+      s.proposals = s.proposals.filter((x) => x !== done);
+      s.pending = s.proposals.length;
+      return json(route, { proposal: { ...(done as object), status: "resolved" } });
+    }
     if (p === "/settings") {
       const b = req.postDataJSON() as { persona_paused?: boolean };
       s.settings.push(b);
@@ -218,4 +226,76 @@ test("a design out of sight in the dock doesn't take editing keys", async ({ pag
   await selectAll();
   await page.keyboard.press("Backspace");
   await expect.poll(() => writes.length, { timeout: 5000 }).toBeGreaterThan(0);
+});
+
+// A suggestion is reviewed in the chat's dock, not the Designs app (LAZYAGENTS-170).
+test("Review on the Design card reviews the suggestion in the dock, survives a reload, and Done resolves it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const s = await install(page);
+  s.pending = 1;
+  s.proposals = [
+    {
+      id: "55555555-5555-4555-8555-555555555555",
+      agent_id: "a",
+      base_seq: 1,
+      summary: "Tighter cart",
+      status: "pending",
+      decisions: [],
+      created_at: at,
+      ops: [
+        { op: "set_text", id: "n_cart_title", text: "Your cart", why: "Says whose cart it is" },
+        { op: "remove_node", id: "n_ship_rule", why: "The spacing already separates them" },
+      ],
+    },
+  ];
+  await box(page).fill("Now sketch onboarding");
+  await box(page).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[^/?]+/);
+  s.created = true;
+  await box(page).fill(`canvas: ${D}`);
+  await box(page).press("Enter");
+  const card = page.getByTestId("design-chat-card").first();
+  await expect(card.getByTestId("design-card-review")).toHaveText("1 to review");
+
+  // Review opens the review in the dock's Design tab, without leaving the chat.
+  await card.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/[^/?]+\?.*review=1/);
+  const panel = page.getByTestId("design-panel");
+  await expect(dockTab(page, "Design")).toHaveAttribute("aria-selected", "true");
+  await expect(panel.getByTestId("review-pill")).toBeVisible();
+  // The dock widens for the canvas and the changes side by side, leaving the conversation 400px.
+  expect((await dock(page).boundingBox())!.width).toBeGreaterThan(600);
+  const changes = panel.getByTestId("beside-review");
+  await expect(changes.getByTestId("review-status")).toContainText("2 of 2 left");
+
+  // The pill: Before / After / Diff and ‹ n of m ›.
+  const pill = panel.getByTestId("review-pill");
+  for (const v of ["Before", "After", "Diff"]) {
+    await pill.getByRole("button", { name: v }).click();
+    await expect(pill.getByRole("button", { name: v })).toHaveAttribute("aria-pressed", "true");
+  }
+  await expect(pill.getByTestId("review-step")).toHaveText("2 changes");
+  await pill.getByRole("button", { name: "Next change" }).click();
+  await expect(pill.getByTestId("review-step")).toHaveText("1 of 2");
+  await pill.getByRole("button", { name: "Next change" }).click();
+  await expect(pill.getByTestId("review-step")).toHaveText("2 of 2");
+
+  // A reload keeps the review open.
+  await page.reload();
+  await expect(page.getByTestId("design-panel").getByTestId("review-pill")).toBeVisible();
+  await expect(page).toHaveURL(/review=1/);
+
+  // Accept one, reject the other with a reason, then Done: one resolve, rejections with their reason.
+  await changes.getByTestId("review-change-1").getByRole("button", { name: "Accept", exact: true }).click();
+  await changes.getByTestId("review-change-2").getByRole("button", { name: "Reject", exact: true }).click();
+  await changes.getByRole("textbox", { name: /Why reject change 2/ }).fill("Keep the divider");
+  await changes.getByTestId("review-change-2").getByRole("button", { name: "Reject", exact: true }).click();
+  await expect(changes.getByTestId("review-status")).toContainText("0 of 2 left");
+  await changes.getByRole("button", { name: "Done" }).click();
+  await expect.poll(() => s.resolved).toEqual([{ decisions: [{ i: 0, state: "accepted" }, { i: 1, state: "rejected", reason: "Keep the divider" }] }]);
+  // The last suggestion ends the review: the design stays open in the dock, and the URL drops review=1.
+  await expect(panel.getByTestId("review-pill")).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await expect(page).not.toHaveURL(/review=1/);
+  await expect(page).toHaveURL(/\/chat\//);
 });
