@@ -13,6 +13,12 @@ test("the acceptance design and the shared minimal body are valid", () => {
   }
 });
 
+test("a link whose target frame is gone is kept as broken; one to a non-frame is refused", () => {
+  const body = read("../../docs/design/fixtures/acceptance-design.json");
+  assert.equal(problem(body.replace('"to": "n_done"', '"to": "n_gone"')), null);
+  assert.match(problem(body.replace('"to": "n_done"', '"to": "n_pay_btn"')) ?? "", /isn't a top-level frame/);
+});
+
 test("normalising matches the server byte for byte", () => {
   // server/internal/design writes this golden file (go test -run Golden -update).
   assert.equal(normalize(read("../../docs/design/fixtures/acceptance-design.json")).json, read(shared + "acceptance.normalized.json"));

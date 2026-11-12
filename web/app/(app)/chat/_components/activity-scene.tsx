@@ -65,6 +65,7 @@ const LABELS: Record<ChatStatusKind, string> = {
   image: "Creating an image",
   "image-view": "Looking at an image",
   canvas: "Working on a canvas",
+  "design-view": "Looking at a design",
   "canvas-comment": "Commenting on a canvas",
   playground: "Spinning up a playground",
   runs: "Checking on runs",
@@ -157,7 +158,7 @@ const shelfTile = (x: number, y: number, thumb: ReactNode) => (
 );
 
 /** Kinds split off a broader one keep its scene: the step rail's glyph is what tells them apart. */
-type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save";
+type SplitKind = "searching-code" | "web-page" | "image-view" | "memory-save" | "design-view";
 
 const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
   thinking: (
@@ -821,6 +822,8 @@ const SCENE_OF: Record<SplitKind, Exclude<ChatStatusKind, SplitKind>> = {
   "web-page": "web",
   "image-view": "image",
   "memory-save": "memory",
+  // Until the Designs scene lands (ADR-designs §3.9), design reads share the canvas one.
+  "design-view": "canvas",
 };
 
 const sceneOf = (kind: ChatStatusKind) => (kind in SCENE_OF ? SCENE_OF[kind as SplitKind] : (kind as Exclude<ChatStatusKind, SplitKind>));

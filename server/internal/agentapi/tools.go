@@ -960,6 +960,7 @@ var Tools = []Tool{
 	define("canvas_comment", "Comment on a passage or element of a canvas, to flag something for the person. On a text canvas you can include suggested replacement text, which they can apply with one click.", canvasComment),
 	define("canvas_reply", "Answer a comment thread on a canvas. Set addressed once you have made the change it asked for.", canvasReply),
 	define("canvas_list", "List this chat's canvases and their current versions.", canvasList),
+	define("design_flows", "A design's prototype: its frames and the links between them (hotspot, trigger, transition) as JSON, plus a Mermaid flowchart LR of the flow. Links whose target frame was removed are listed as broken_links.", designFlows),
 	define("finance_summary", "The person's finances from their imported bank statements: cash flow per month (money in and out, transfers between their accounts left out), net worth, savings rate, spending by category for a month against the months before, and their accounts. Only in the Finance app's Ask chat.", financeSummary),
 	define("finance_query", "Find the person's transactions by month or dates, category, words in the description, direction or account; returns up to 50, newest first, with the count and total of every match. Only in the Finance app's Ask chat.", financeQuery),
 	define("finance_recurring", "The person's monthly recurring charges (subscriptions, rent, memberships): the latest amount, price changes and which are new. Only in the Finance app's Ask chat.", financeRecurring),

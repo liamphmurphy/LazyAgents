@@ -145,7 +145,7 @@ Asset      { mime: "image/png"|"image/jpeg", w, h, alt? }    // bytes in the blo
   - instances point at a `component`, and their overrides at the main's descendants;
   - a component can't contain an instance of itself;
   - connectors join two non-connector nodes on the same page and never sit in a group;
-  - links go to a top-level frame, and `after-delay` needs `delay_ms`.
+  - links go to a top-level frame, and `after-delay` needs `delay_ms`. A link whose target no longer exists (a merge removed the frame) stays valid but **broken**: the Prototype tab flags it, Present and `design_flows` skip it ([[LAZYAGENTS-149]]). A target that exists but isn't a top-level frame is still refused.
 - **Shared test cases:** the Go and TS validators run the same table of invalid bodies (the §5.1 list, kept as `web/lib/designs/fixtures/invalid/*.json`).
 
 **Caps** (one constant each, in `server/internal/design`; `canvas.maxBodyFor(kind)` is the single place the body cap is applied):
@@ -570,7 +570,7 @@ The fixture's token snapshot hash equals the current `tokens.css` (`tokensInSync
 | Apps entry; Home (starters, recent, filters); editor shell; `web/lib/designs` display list + `<DesignSvg>`; pan/zoom with culling; frames + presets; shapes; paths (vector pen); text in Inter; images; groups; auto layout + constraints; pages; layers; inspector Design tab; selection, multi-select and shortcuts; autosave, undo/redo, conflicts | 3 [[LAZYAGENTS-147]] |
 | `design_list/outline/read/render/patch/comments/comment/reply`; design worker (render, layout); `canvas_*` on designs; proposals; Review overlay; direct-edit switch; presence; selection context; activity kinds | 4 [[LAZYAGENTS-148]] |
 | `design_create`; + menu and `/design`; Design card; beside-chat panel with Pause; `design` scene | 5 [[LAZYAGENTS-151]] |
-| Prototype tab, links and wires; Present mode; transitions (smart animate tweens same-named nodes and dissolves the rest); `design_flows` | 6 [[LAZYAGENTS-149]] |
+| Prototype tab, links and wires; Present mode; transitions (smart animate dissolves for now; tweening same-named nodes is a follow-up); `design_flows` | 6 [[LAZYAGENTS-149]] |
 | Connectors with orthogonal routing and re-routing; stickies; sections; `design_import` (Mermaid; SVG where the mapping is clear); `connect`/`add_sticky` ops | 7 [[LAZYAGENTS-152]] |
 | Components, instances, overrides and detach; token snapshots and the sync badge; per-design token sets; `design_components/tokens/inspect/link_ticket`; Inspect tab; Send to ticket; frames in run context | 8 [[LAZYAGENTS-153]] |
 | Export menu: PNG 1/2/3× (server), SVG (text + embedded Inter), PDF (one page per frame); download or Library; comparison test | 9 [[LAZYAGENTS-150]] |

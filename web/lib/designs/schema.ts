@@ -664,7 +664,8 @@ export function validate(input: unknown) {
   const top = new Set(d.pages.flatMap((p) => p.children.filter((n) => n.type === "frame").map((n) => n.id)));
   for (const l of d.links) {
     if (!ids.has(l.from)) fail(`body: link ${l.id}: from ${l.from} doesn't exist`);
-    if (!top.has(l.to)) fail(`body: link ${l.id}: to ${l.to} isn't a top-level frame`);
+    // A missing target is a broken link (kept, shown as broken, skipped by Present); a non-frame one is refused.
+    if (ids.has(l.to) && !top.has(l.to)) fail(`body: link ${l.id}: to ${l.to} isn't a top-level frame`);
     if (l.trigger === "after-delay" && l.delay_ms === undefined) fail(`body: link ${l.id}: after-delay needs delay_ms`);
   }
 }
