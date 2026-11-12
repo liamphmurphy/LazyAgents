@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"math"
 	"regexp"
 	"strings"
 	"unicode/utf16"
@@ -687,5 +688,99 @@ func ContextDoc(ctx context.Context, q *store.Queries, chat, id uuid.UUID) (stri
 		return c.Title, b.String(), nil
 	}
 	fmt.Fprintf(&b, "\n## Current content\n\n%s\n", v.Body)
+	return c.Title, b.String(), nil
+}
+
+// Viewport is the part of a design page the person was looking at.
+type Viewport struct {
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+	W    float64 `json:"w"`
+	H    float64 `json:"h"`
+	Zoom float64 `json:"zoom"`
+}
+
+// Selection is what a person had selected in a design when they sent a
+// message (ADR-designs §3.7): the page, the node ids and the viewport.
+type Selection struct {
+	Page     string   `json:"page"`
+	Nodes    []string `json:"nodes"`
+	Viewport Viewport `json:"viewport"`
+}
+
+// MaxSelectedNodes bounds a selection.
+const MaxSelectedNodes = 100
+
+var reSelectedNode = regexp.MustCompile(`^n_[a-z0-9_]{1,40}$`)
+
+// Check validates a selection's shape (not that it exists).
+func (s Selection) Check() error {
+	bad := func(format string, args ...any) error {
+		return apperr.Invalid("context_refs", "selection: "+format, args...)
+	}
+	if !regexp.MustCompile(`^p_[a-z0-9_]{1,40}$`).MatchString(s.Page) {
+		return bad("page must be a page id")
+	}
+	if len(s.Nodes) > MaxSelectedNodes {
+		return bad("select at most %d nodes", MaxSelectedNodes)
+	}
+	for _, n := range s.Nodes {
+		if !reSelectedNode.MatchString(n) {
+			return bad("%q isn't a node id", n)
+		}
+	}
+	v := s.Viewport
+	for _, f := range []float64{v.X, v.Y, v.W, v.H, v.Zoom} {
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return bad("viewport numbers must be finite")
+		}
+	}
+	if v.W < 0 || v.H < 0 || v.Zoom <= 0 {
+		return bad("viewport needs a size and a positive zoom")
+	}
+	return nil
+}
+
+// ErrNotDesign says a selection was attached to something that isn't a design.
+var ErrNotDesign = apperr.Invalid("context_refs", "a selection can only be attached to a design canvas")
+
+// SelectionDoc is the context a turn gets for a design with a selection: short,
+// naming the design, page, viewport and each selected node, not the body.
+func SelectionDoc(ctx context.Context, q *store.Queries, chat, id uuid.UUID, sel Selection) (string, string, error) {
+	c, err := q.GetChatCanvas(ctx, store.GetChatCanvasParams{ID: id, SessionID: chat})
+	if err != nil {
+		return "", "", err
+	}
+	if c.Kind != KindDesign {
+		return "", "", ErrNotDesign
+	}
+	v, err := q.LatestChatCanvasVersion(ctx, c.ID)
+	if err != nil {
+		return "", "", err
+	}
+	if !design.HasPage(v.Body, sel.Page) {
+		return "", "", apperr.Invalid("context_refs", "selection: page %s isn't in this design", sel.Page)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Design %q\n\ncanvas_id: %s\nversion: %d\npage: %s\nviewport: x=%g y=%g w=%g h=%g zoom=%g\n\n## Selected nodes\n\n", c.Title, c.ID, v.Seq, sel.Page, sel.Viewport.X, sel.Viewport.Y, sel.Viewport.W, sel.Viewport.H, sel.Viewport.Zoom)
+	if len(sel.Nodes) == 0 {
+		b.WriteString("Nothing is selected.\n")
+	}
+	for _, id := range sel.Nodes {
+		n, err := design.Describe(v.Body, id)
+		if err != nil {
+			return "", "", err
+		}
+		if !n.Found {
+			fmt.Fprintf(&b, "- %s: no longer in this design\n", id)
+			continue
+		}
+		fmt.Fprintf(&b, "- %s: %s %q", n.ID, n.Type, n.Name)
+		if n.Box != nil {
+			fmt.Fprintf(&b, " box x=%g y=%g w=%g h=%g", n.Box.X, n.Box.Y, n.Box.W, n.Box.H)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\nWhen the person says this/these, they mean the selected nodes. Look at them with design_read (node_ids) or design_render; this note doesn't include the design.\n")
 	return c.Title, b.String(), nil
 }

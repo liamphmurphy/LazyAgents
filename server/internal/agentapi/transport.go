@@ -125,6 +125,10 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 					if err != nil {
 						return nil, nil, toolError(d, name, c, err)
 					}
+					if img, ok := out.(*imageResult); ok {
+						res, err := img.mcpResult()
+						return res, nil, err
+					}
 					return nil, out, nil
 				})
 		},
@@ -203,7 +207,7 @@ var subagentTools = []string{"get_ticket", "read_artifact", "create_artifact", "
 // leadHidden are the tools a managed ticket run never needs: usage is reported
 // by the runner, the ticket is already assigned, and personal memory belongs
 // to chats with a person.
-var leadHidden = []string{"submit_outline", "submit_lesson", "submit_review", "submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "list_tickets", "list_projects", "list_runs", "get_run", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "save_link", "search_library", "read_library_item", "list_inbox", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "list_connectors", "list_secret_names", "create_space", "create_scheduled_task", "list_scheduled_tasks", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "list_learning_modules", "get_learning_progress"}
+var leadHidden = []string{"submit_outline", "submit_lesson", "submit_review", "submit_workflow_output", "list_workflows", "read_workflow", "propose_workflow_edit", "submit_findings", "submit_research_report", "report_usage", "next_ticket", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "list_tickets", "list_projects", "list_runs", "get_run", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "save_link", "search_library", "read_library_item", "list_inbox", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_comments", "design_comment", "design_reply", "list_connectors", "list_secret_names", "create_space", "create_scheduled_task", "list_scheduled_tasks", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "list_learning_modules", "get_learning_progress"}
 
 // profileFor must stay consistent with the checks in define().
 func profileFor(run store.Run) string {

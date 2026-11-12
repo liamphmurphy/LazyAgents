@@ -34,6 +34,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/config"
 	"github.com/liamphmurphy/vesper/server/internal/db"
+	"github.com/liamphmurphy/vesper/server/internal/designs"
 	"github.com/liamphmurphy/vesper/server/internal/httpapi"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
 	"github.com/liamphmurphy/vesper/server/internal/metrics"
@@ -180,6 +181,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 		PublicURL:      cfg.PublicURL,
 		Blobs:          blobs,
 		ArtifactBucket: cfg.S3.ArtifactBucket,
+		DesignWorker:   &designs.Worker{URL: cfg.DesignWorkerURL, Token: cfg.DesignWorkerToken},
 		Log:            log,
 		Usage:          &usage.Service{Q: q, Log: log},
 	}
