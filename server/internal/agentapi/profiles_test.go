@@ -3,6 +3,8 @@ package agentapi
 import (
 	"slices"
 	"testing"
+
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // A renamed tool must not silently drop out of a profile.
@@ -41,6 +43,51 @@ func TestBoardToolsLeadOnly(t *testing.T) {
 	for name, list := range map[string][]string{"chat": chatTools, "planning": planningTools, "subagent": subagentTools} {
 		if !slices.Contains(list, "get_ticket") {
 			t.Errorf("%s profile lost get_ticket", name)
+		}
+	}
+}
+
+// asideRefused are the chat tools that change something. Every chat tool is
+// either one of these or readable in an aside, so a new chat tool has to be
+// classified before an aside can be given it.
+var asideRefused = []string{"create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "update_epic", "reply_to_run",
+	"write_note", "save_memory", "update_memory", "forget_memory", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video",
+	"start_playground", "playground_status", "stop_playground", "set_playground_openapi", "propose_persona", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv",
+	"submit_research_report", "canvas_create", "canvas_patch", "canvas_comment", "canvas_reply", "propose_workflow_edit", "propose_connector", "propose_secret",
+	"create_space", "create_scheduled_task", "create_learning_module"}
+
+func TestAsideToolsOnlyRead(t *testing.T) {
+	for _, n := range asideTools {
+		if !slices.Contains(chatTools, n) {
+			t.Errorf("aside tool %q isn't a chat tool", n)
+		}
+		if slices.Contains(asideRefused, n) {
+			t.Errorf("aside tool %q changes something", n)
+		}
+	}
+	for _, n := range chatTools {
+		if !slices.Contains(asideTools, n) && !slices.Contains(asideRefused, n) {
+			t.Errorf("chat tool %q is neither readable in an aside nor refused there", n)
+		}
+	}
+}
+
+// A chat run whose spec marks an aside gets the aside's tools; any other chat
+// run keeps the chat's, and an unreadable spec fails closed.
+func TestAsideProfile(t *testing.T) {
+	run := func(spec string) store.Run { return store.Run{Purpose: "chat", ResolvedSpec: []byte(spec)} }
+	if got := profileFor(run(`{"harness_options":{"aside":"true"}}`)); got != profileAside {
+		t.Fatalf("aside run profile %q", got)
+	}
+	if got := profileFor(run(`{"harness_options":{"sandbox":"read-only"}}`)); got != profileChat {
+		t.Fatalf("chat run profile %q", got)
+	}
+	if got := profileFor(run(`not json`)); got != profileAside {
+		t.Fatalf("unreadable spec profile %q", got)
+	}
+	for _, tl := range profileTools(profileAside) {
+		if !slices.Contains(asideTools, tl.Name) {
+			t.Errorf("aside profile serves %s", tl.Name)
 		}
 	}
 }

@@ -59,6 +59,9 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 				if !slices.Contains(chatTools, name) {
 					return nil, apperr.Conflict("%s isn't available in chats", name)
 				}
+				if !slices.Contains(asideTools, name) && isAsideRun(run) {
+					return nil, apperr.Conflict("%s isn't available in an aside, which only reads", name)
+				}
 				if slices.Contains([]string{"completed", "failed", "cancelled"}, run.State) {
 					return nil, apperr.Conflict("chat run is %s", run.State)
 				}
@@ -168,7 +171,9 @@ func verifier(d Deps) auth.TokenVerifier {
 // sub agents and planners don't pay tokens for tools and bookkeeping they
 // must not use.
 const (
-	profileChat     = "chat"
+	profileChat = "chat"
+	// An aside reads, and changes nothing (runs.ChatCaps.Aside).
+	profileAside    = "aside"
 	profilePlanning = "planning"
 	profileResearch = "research"
 	profileLearning = "learning"
@@ -204,6 +209,9 @@ var leadHidden = []string{"submit_outline", "submit_lesson", "submit_review", "s
 func profileFor(run store.Run) string {
 	switch {
 	case run.Purpose == "chat":
+		if isAsideRun(run) {
+			return profileAside
+		}
 		return profileChat
 	case run.Purpose == runs.PurposeResearch:
 		return profileResearch
@@ -229,6 +237,8 @@ func profileTools(profile string) []Tool {
 		switch profile {
 		case profileChat:
 			ok = slices.Contains(chatTools, t.Name)
+		case profileAside:
+			ok = slices.Contains(asideTools, t.Name)
 		case profilePlanning:
 			ok = slices.Contains(planningTools, t.Name)
 		case profileResearch:
@@ -259,6 +269,7 @@ var profileInstructions = map[string]string{
 	profileWorkflow:    `You are one step of a Vesper workflow. Your task and AGENTS.md are your instructions; report through submit_workflow_output.`,
 	profileWorkflowWeb: `You are one step of a Vesper workflow. Your task and AGENTS.md are your instructions; report through submit_workflow_output.`,
 	profileChat:        `You are answering a person in a Vesper chat. Your instructions are in AGENTS.md. Use the Vesper tools to look up project context and manage tickets when asked.`,
+	profileAside:       `You are answering an aside in a Vesper chat: one question about a reply that is still running. Use the Vesper tools only to read; you can't change anything here.`,
 	profilePlanning:    `This is a Vesper planning run. Follow the planner instructions returned by whoami: read context and finish with propose_tickets; do not claim a ticket.`,
 	profileSubagent: `You are a sub agent: a main agent delegated one task to you through Vesper. Your task brief and AGENTS.md are your instructions; don't call claim_ticket.
 Call get_ticket only if the brief lacks context you need. Scopes marked requires_approval need request_approval first; brokered ones run via run_gated after approval.

@@ -12,14 +12,21 @@ import {
   useBootstrap,
   useCancelChat,
   useChat,
+  useChatAsides,
   useChatMessages,
   useEditLastChatMessage,
   useChatModels,
   useCreateChat,
   useDeleteChat,
+  useQueueFollowup,
   useSendChatMessage,
   useSetChatCommitEmail,
+  useStartAside,
 } from "@/lib/api/hooks";
+import { asidesInWindow, commandSendMode, cycleSendMode, SEND_MODE_ENTER, SEND_MODE_HINT, sendModeAction, sendModePlaceholder, type SendMode } from "@/lib/send-mode";
+import { SEND_TONE, SendModeSwitch } from "./send-modes";
+import { FollowupTray } from "./followups";
+import { LiveAsides, ReplyAsides } from "./asides";
 import { RepositoryPicker } from "./repository-picker";
 import { useRepositories, useSetChatRepository } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
@@ -106,7 +113,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[] }) {
+function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -184,6 +191,7 @@ function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable,
         </div>
       )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
+      {!mine && asides}
       {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
       {!mine && saveable && m.body_md.trim() && (
         <div className={cx("flex flex-wrap items-center gap-1.5", REVEAL)} data-testid="reply-actions">
@@ -273,6 +281,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   const edit = useEditLastChatMessage(id);
   const models = useChatModels();
   const send = useSendChatMessage(id);
+  const queue = useQueueFollowup(id);
+  const aside = useStartAside(id);
+  const asideList = useChatAsides(id).data;
+  // While a reply runs, how Send sends: queue a follow-up (the default), ask an aside, or interrupt.
+  const [sendMode, setSendMode] = useState<SendMode>("followup");
+  const [modeError, setModeError] = useState<string | null>(null);
   const [players] = useState(() => new Map<string, (seconds: number) => void>());
   const cancel = useCancelChat(id);
   const boot = useBootstrap();
@@ -338,7 +352,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // and the next reply answers both, picking up from what the stopped one had done.
   const locked = send.isPending || create.isPending;
   const groups: Groups = models.data;
-  const current: Selection | undefined = c && { harness: c.harness, model: c.model };
+  const current: Selection | undefined = c && { harness: c.harness, model: c.model, auto: !!c.auto_model };
   const selection = picked ?? current;
   const pending = !!(picked && current && !sameSelection(picked, current));
   const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
@@ -349,7 +363,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The next message would start a run on a harness that can't run: say why before sending.
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
   const nextRunSettings = {
-    ...(pending && picked ? { harness: picked.harness, model: picked.model } : {}),
+    ...(pending && picked ? (picked.auto ? { model: "auto" } : { harness: picked.harness, model: picked.model }) : {}),
     ...(effortPending ? { effort: effort ?? ("default" as const) } : {}),
   };
   const list = messages.data?.messages;
@@ -486,6 +500,21 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     );
   }
 
+  // Queues the message, or asks it as an aside, without stopping the reply; Interrupt
+  // sends it as usual. Neither of the first two carries context, files or research.
+  function sendWhileRunning(mode: SendMode, body: string): string | void {
+    if (mode === "interrupt") return submit(body);
+    if (!body.trim() || locked || queue.isPending || aside.isPending) return;
+    if (chips.length || files.ids.length || files.pending || research) {
+      const what = mode === "aside" ? "An aside" : "A follow-up";
+      return `${what} is text only: remove the context and files, or pick Interrupt to send them now.`;
+    }
+    setModeError(null);
+    pinned.current = true;
+    if (mode === "aside") aside.mutate(body, { onSuccess: () => setText("") });
+    else queue.mutate(body, { onSuccess: () => setText("") });
+  }
+
   // A card's button or a choice: goes to the persona that wrote the reply. A mention
   // is only needed when someone else would answer next.
   function askAuthor(messageId: string, body: string) {
@@ -516,7 +545,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
     if (!c) return;
     const old = c;
     create.mutate(
-      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
+      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.auto_model ? "auto" : old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
@@ -549,7 +578,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       </div>
     );
   }
-  const actionError = send.error ?? edit.error ?? cancel.error ?? create.error ?? setCommitEmail.error;
+  const actionError = send.error ?? queue.error ?? aside.error ?? edit.error ?? cancel.error ?? create.error ?? setCommitEmail.error;
   // A chat without a persona, or whose persona was deleted, is the built-in Assistant.
   const persona = personaLook(c.persona);
   const full = personas.data?.personas.find((p) => p.id === c.persona?.id);
@@ -611,9 +640,12 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
       case "workflow":
         return published.map((w) => ({ name: w.name, run: () => setStartingWorkflow(w) }));
       case "model":
-        return (groups ?? [])
-          .filter((g) => g.available)
-          .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => whileIdle("model", () => pick({ harness: g.harness, model: m.id })) })));
+        return [
+          ...(current ? [{ name: "Auto", run: () => whileIdle("model", () => pick({ ...current, auto: true })) }] : []),
+          ...(groups ?? [])
+            .filter((g) => g.available)
+            .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => whileIdle("model", () => pick({ harness: g.harness, model: m.id })) }))),
+        ];
       case "effort":
         return [undefined, ...offered.efforts].map((e) => ({ name: effortLabel(e).toLowerCase(), run: () => whileIdle("effort", () => setPickedEffort(e ?? "default")) }));
       case "persona":
@@ -688,6 +720,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
             {current && (
               <span className="truncate font-mono text-xs text-fg-tertiary">
                 {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
+                {current.auto && " (auto)"}
                 {c.effort && ` · ${effortLabel(c.effort)} effort`}
               </span>
             )}
@@ -762,14 +795,22 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   onEdit={(body) => { pinned.current = true; edit.mutate(body); }}
                   onRetry={!running && !edit.isPending && !c.archived && lastUser && m.id === list.at(-1)?.id ? () => { pinned.current = true; edit.mutate(lastUser.body_md); } : undefined}
                   summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
-                  videos={videosByMessage.get(m.id)} />
+                  videos={videosByMessage.get(m.id)}
+                  asides={(() => {
+                    // The last reply's window stays open while the next turn runs: that turn's asides are live, below.
+                    const t = turns.get(m.id);
+                    const asked = t && asidesInWindow(asideList, t.since, t.until ?? (running ? since : undefined));
+                    return asked?.length ? <ReplyAsides asides={asked} name={speaker.name} /> : null;
+                  })()} />
               ))}
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
               <SecretRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
-                  {`Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
+                  {selection.auto
+                    ? "Next message will pick its model automatically"
+                    : `Next message will use ${modelLabel(groups, selection).harness} · ${modelLabel(groups, selection).model}`}
                 </Divider>
               )}
               {effortPending && (
@@ -780,6 +821,17 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <ChatStatus runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
+                  <LiveAsides
+                    asides={asidesInWindow(asideList, since)}
+                    actions={{
+                      onQueue: (question) => queue.mutate(question),
+                      onSteer: (question) => {
+                        pinned.current = true;
+                        send.mutate({ body: question });
+                      },
+                      disabled: locked || queue.isPending,
+                    }}
+                  />
                 </li>
               )}
               <li ref={end} aria-hidden />
@@ -827,6 +879,11 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
             </Banner>
           )}
+          {modeError && (
+            <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
+              {modeError}
+            </p>
+          )}
           {actionError && (
             <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
               {actionError instanceof ApiError && actionError.status === 409
@@ -859,6 +916,22 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               </div>
             )}
             <ChatWorkflowTray chatId={c.id} />
+            <FollowupTray
+              chatId={c.id}
+              name={speaker.name}
+              running={running}
+              held={!running && list?.at(-1)?.role !== "assistant"}
+              disabled={locked}
+              onSendNow={(body, done) => {
+                pinned.current = true;
+                send.mutate({ body }, { onSuccess: done });
+              }}
+              onEdit={(body) => {
+                setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
+                setSendMode("followup");
+                area.current?.focus();
+              }}
+            />
             <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />
             {workflowCard && (
               <div className="mb-2">
@@ -872,8 +945,28 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
               files={files}
               chips={chips}
               onChips={setChips}
-              onSubmit={submit}
+              onSubmit={(body) => {
+                const problem = running ? sendWhileRunning(sendMode, body) : submit(body);
+                setModeError(problem || null);
+              }}
+              onCycle={running ? (back) => setSendMode((m) => cycleSendMode(m, back)) : undefined}
+              hints={
+                running
+                  ? `Enter ${SEND_MODE_ENTER[sendMode]}  ·  Tab switches mode  ·  /aside  ·  /queue  ·  Shift+Enter for a new line`
+                  : undefined
+              }
               commands={{ plain: plainCommands, options: commandOptions,
+              free: Object.fromEntries(
+                (["aside", "queue"] as const).map((name) => [
+                  name,
+                  (body: string) => {
+                    const mode = commandSendMode(name)!;
+                    if (running) return sendWhileRunning(mode, body);
+                    if (mode === "aside") return `Nothing is running, so there's nothing to ask about on the side: send it as a message.`;
+                    submit(body);
+                  },
+                ]),
+              ),
               repository: (arg) => { if (!(c.speaker ?? c.persona)?.capabilities?.code) return "This persona cannot write code."; if (arg) selectRepo.mutate(arg); else setRepoSignal((n) => n + 1); }, hasWorkflows: published.length > 0 }}
               personas={personas.data?.personas ?? []}
               inChat={(personaId) => participants.some((x) => x.id === personaId)}
@@ -882,12 +975,23 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 locked
                   ? "Sending…"
                   : running
-                    ? `${c.speaker || c.persona ? speaker.name : "Your assistant"} is replying. Send a message to steer it.`
+                    ? sendModePlaceholder(sendMode, c.speaker || c.persona ? speaker.name : "your assistant")
                     : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…`
               }
               options={
                 <>
                   {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
+                  {running && (
+                    <SendModeSwitch
+                      value={sendMode}
+                      onChange={(m) => {
+                        setSendMode(m);
+                        setModeError(null);
+                        area.current?.focus();
+                      }}
+                      disabled={locked}
+                    />
+                  )}
                   <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
                   {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
                 </>
@@ -913,13 +1017,10 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                 </>
               }
               send={{
-                label: running ? "Interrupt" : research ? "Plan it" : "Send",
-                disabled: locked || !!unavailable || files.pending || !text.trim() || commitPickRequired,
-                title: commitPickRequired
-                  ? "Pick which email commits use first"
-                  : running
-                    ? "Stop the reply and answer this together with your last message"
-                    : undefined,
+                label: running ? sendModeAction(sendMode) : research ? "Plan it" : "Send",
+                disabled: locked || !!unavailable || files.pending || !text.trim() || commitPickRequired || queue.isPending || aside.isPending,
+                title: commitPickRequired ? "Pick which email commits use first" : running ? SEND_MODE_HINT[sendMode] : undefined,
+                tone: running ? SEND_TONE[sendMode] : "accent",
               }}
             />
             </>

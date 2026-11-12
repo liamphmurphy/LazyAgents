@@ -231,6 +231,13 @@ type ChatCanvasVersion struct {
 	CreatedAt  time.Time
 }
 
+type ChatFollowup struct {
+	ID        uuid.UUID
+	SessionID uuid.UUID
+	Body      string
+	CreatedAt time.Time
+}
+
 type ChatImageJob struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
@@ -316,6 +323,8 @@ type ChatSession struct {
 	SecretIds          []uuid.UUID
 	Temporary          bool
 	PendingRepoUrl     *string
+	ParentChatID       *uuid.UUID
+	AutoModel          bool
 }
 
 type ChatSpace struct {
@@ -1264,6 +1273,9 @@ type User struct {
 	AvatarKey         *string
 	AvatarContentType *string
 	ExtraEmails       []string
+	Login             *string
+	PasswordSetAt     *time.Time
+	ClaimedAt         *time.Time
 	OnboardedAt       *time.Time
 }
 

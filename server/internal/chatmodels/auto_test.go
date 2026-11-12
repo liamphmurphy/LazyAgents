@@ -56,3 +56,43 @@ func TestAutoEffort(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoModel(t *testing.T) {
+	ws := uuid.New()
+	if got := AutoModel(ws, "claude-code", "default", "xhigh", true); got != "default" {
+		t.Fatalf("unlisted catalog gave %q", got)
+	}
+	rememberOffered(ws, []Harness{
+		{Harness: "claude-code", Models: []Model{
+			{ID: "default", Label: "Default (recommended)", Default: true},
+			{ID: "opus", Label: "Opus 5.5"},
+			{ID: "fable", Label: "Fable 5.2"},
+			{ID: "haiku", Label: "Haiku 5.5"},
+		}},
+		{Harness: "codex", Models: []Model{
+			{ID: "gpt-6-codex", Default: true},
+			{ID: "gpt-6-codex-mini"},
+		}},
+	})
+	for _, c := range []struct {
+		name, harness, current, level string
+		fresh                         bool
+		want                          string
+	}{
+		{"fresh light turn starts small", "claude-code", "default", "low", true, "haiku"},
+		{"fresh ordinary turn starts on the default", "claude-code", "haiku", "high", true, "default"},
+		{"fresh deep turn starts large", "claude-code", "default", "xhigh", true, "fable"},
+		{"ongoing never steps down", "claude-code", "fable", "low", false, "fable"},
+		{"ongoing default stays for a light turn", "claude-code", "default", "low", false, "default"},
+		{"ongoing small moves up", "claude-code", "haiku", "medium", false, "default"},
+		{"ongoing moves up to large", "claude-code", "default", "xhigh", false, "fable"},
+		{"a named standard model counts as standard", "claude-code", "opus", "high", false, "opus"},
+		{"missing large tier keeps the default", "codex", "gpt-6-codex", "xhigh", false, "gpt-6-codex"},
+		{"missing large tier, small moves to the default", "codex", "gpt-6-codex-mini", "xhigh", false, "gpt-6-codex"},
+		{"codex mini is small", "codex", "gpt-6-codex", "low", true, "gpt-6-codex-mini"},
+	} {
+		if got := AutoModel(ws, c.harness, c.current, c.level, c.fresh); got != c.want {
+			t.Errorf("%s: AutoModel(%s, %s, fresh=%v) = %q, want %q", c.name, c.current, c.level, c.fresh, got, c.want)
+		}
+	}
+}

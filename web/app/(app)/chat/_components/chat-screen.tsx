@@ -137,12 +137,14 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
   const locked = disabled || start.isPending || create.isPending;
   const drop = useFileDrop(files.add, !locked);
 
-  // The model and effort, as in a chat: what the chat would start on until the person picks, and
-  // only a pick is sent, so the server's choice stands when the picker's guess is off.
+  // The model and effort, as in a chat. A new chat routes its model automatically until the person
+  // picks one (null is Auto); the guess only says which harness and efforts Auto starts from.
   const groups = models.data;
   const [pickedModel, setPickedModel] = useState<Selection | null>(null);
   const [pickedEffort, setPickedEffort] = useState<Effort | null>(null);
-  const selection = pickedModel ?? newChatSelection(groups, boot.data?.agents ?? []);
+  const guess = newChatSelection(groups, boot.data?.agents ?? []);
+  const selection = pickedModel ?? (guess && { ...guess, auto: true });
+  const pickModel = (s: Selection) => setPickedModel(s.auto ? null : s);
   const offered = selection ? modelEfforts(groups, selection) : { efforts: [] };
   const effort = pickedEffort && offered.efforts.includes(pickedEffort) ? pickedEffort : undefined;
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
@@ -162,7 +164,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
         message: {
           body,
           ...(research ? { research: true } : {}),
-          ...(pickedModel ? { harness: pickedModel.harness, model: pickedModel.model } : {}),
+          ...(pickedModel ? { harness: pickedModel.harness, model: pickedModel.model } : { model: "auto" }),
           ...(effort ? { effort } : {}),
           ...(context_refs ? { context_refs } : {}),
           ...(files.ids.length ? { attachment_ids: files.ids } : {}),
@@ -189,9 +191,12 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             },
           }));
         case "model":
-          return (groups ?? [])
-            .filter((g) => g.available)
-            .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => setPickedModel({ harness: g.harness, model: m.id }) })));
+          return [
+            { name: "Auto", run: () => setPickedModel(null) },
+            ...(groups ?? [])
+              .filter((g) => g.available)
+              .flatMap((g) => g.models.map((m) => ({ name: `${g.label} ${m.label}`, run: () => setPickedModel({ harness: g.harness, model: m.id }) }))),
+          ];
         case "effort":
           return [undefined, ...offered.efforts].map((e) => ({ name: effortLabel(e).toLowerCase(), run: () => setPickedEffort(e ?? null) }));
         case "persona":
@@ -265,7 +270,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
                 <ModelEffortPicker
                   groups={groups}
                   value={selection}
-                  onChange={setPickedModel}
+                  onChange={pickModel}
                   efforts={offered.efforts}
                   effort={effort}
                   onEffort={(e) => setPickedEffort(e ?? null)}

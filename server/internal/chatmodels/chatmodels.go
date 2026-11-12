@@ -220,9 +220,11 @@ func (c Catalog) harness(ctx context.Context, q *store.Queries, ws uuid.UUID, na
 }
 
 // Selection is a chat's harness, model and reasoning effort ("" is
-// automatic: AutoEffort picks one each turn).
+// automatic: AutoEffort picks one each turn). AutoModel routes the model per
+// turn (AutoModel); Model is then the one the next turn starts on.
 type Selection struct {
 	Harness, Model, Effort string
+	AutoModel              bool
 }
 
 // Resolve validates a requested selection against the catalog. Empty fields
@@ -230,7 +232,10 @@ type Selection struct {
 // model keeps the current one unless the harness changes, in which case it is
 // the new harness's default. An empty effort keeps the current one when the
 // selected model offers it (otherwise the harness default), and
-// EffortDefault clears it. Errors are 422s with field harness, model or effort.
+// EffortDefault clears it. ModelAuto turns automatic routing on, starting from
+// the harness's current model (its default when the harness changes); any
+// other harness or model turns it off. Errors are 422s with field harness,
+// model or effort.
 func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cur, req Selection) (Selection, error) {
 	if req.Harness == "" && req.Model == "" && req.Effort == "" {
 		return cur, nil
@@ -239,11 +244,19 @@ func (c Catalog) Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, cu
 	if err != nil {
 		return Selection{}, err
 	}
-	h, m, err := resolveModel(list, cur.Harness, cur.Model, req.Harness, req.Model)
+	auto := cur.AutoModel
+	reqModel := req.Model
+	switch {
+	case reqModel == ModelAuto:
+		auto, reqModel = true, ""
+	case reqModel != "" || req.Harness != "":
+		auto = false
+	}
+	h, m, err := resolveModel(list, cur.Harness, cur.Model, req.Harness, reqModel)
 	if err != nil {
 		return Selection{}, err
 	}
-	out := Selection{Harness: h.Harness, Model: m, Effort: cur.Effort}
+	out := Selection{Harness: h.Harness, Model: m, Effort: cur.Effort, AutoModel: auto}
 	// A model the catalog doesn't list (the definition's alias) may take any
 	// effort the harness supports.
 	efforts := fallbackEfforts[h.Harness]

@@ -372,3 +372,26 @@ func TestCanvasToolsTakeStringIDsOverMCP(t *testing.T) {
 		}
 	}
 }
+
+// A chat with no default project saves its canvases outside any project, as
+// the same artifact types (a mockup stays a mockup, so it still renders).
+func TestPromoteCanvasWithoutProject(t *testing.T) {
+	e := newChatEnv(t)
+	chat := uuid.MustParse(e.newChat(map[string]any{"project": ""})["id"].(string))
+	token := e.canvasToken(chat)
+	for kind, want := range map[string]string{"text": "design", "svg": "mockup"} {
+		body := "Archive after 30 days."
+		if kind == "svg" {
+			body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>`
+		}
+		code, out := e.tool(token, "canvas_create", map[string]any{"kind": kind, "title": "Loose " + kind, "body": body})
+		if code != 200 {
+			t.Fatalf("create %s = %d %v", kind, code, out)
+		}
+		id := e.want("POST", "/chats/"+chat.String()+"/canvases/"+out["canvas_id"].(string)+"/promote", nil, 200)["artifact_id"].(string)
+		a := e.want("GET", "/artifacts/"+id, nil, 200)
+		if a["type"] != want || a["project"] != nil {
+			t.Errorf("%s canvas saved as %v in project %v, want %s with none", kind, a["type"], a["project"], want)
+		}
+	}
+}

@@ -2,7 +2,10 @@ package chatmodels
 
 import (
 	"bytes"
+	"context"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -85,5 +88,29 @@ func TestLocalModelsReportEfforts(t *testing.T) {
 	models, err = ListOverStdio(agentdef.HarnessCodex, &bytes.Buffer{}, strings.NewReader(codex))
 	if err != nil || len(models) != 1 || !slices.Equal(models[0].Efforts, []string{"low", "medium", "max"}) || models[0].DefaultEffort != "medium" {
 		t.Fatalf("codex models=%+v err=%v", models, err)
+	}
+}
+
+// The API only ever asks a stand-in harness for models on the host; with no
+// RUNNER_*_BIN it must not fall through to a real, logged-in CLI on PATH.
+func TestDiscoverLocalRefusesWithoutFakeBinary(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"claude", "codex"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n: >\"$0.ran\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("RUNNER_CLAUDE_BIN", "")
+	t.Setenv("RUNNER_CODEX_BIN", "")
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
+		if _, err := DiscoverLocal(context.Background(), h, ""); err == nil {
+			t.Errorf("%s: discovered without a fake binary", h)
+		}
+	}
+	for _, name := range []string{"claude", "codex"} {
+		if _, err := os.Stat(filepath.Join(dir, name+".ran")); err == nil {
+			t.Errorf("%s on PATH ran", name)
+		}
 	}
 }

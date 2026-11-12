@@ -15,24 +15,20 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
-// DiscoverLocal uses only the harness control protocol, with the same CLI login
-// and binary overrides as the local runner. It never sends a user prompt or
-// starts model inference, and never reads or exports login credentials.
+// DiscoverLocal lists models through the fake backend's stand-in binary
+// (RUNNER_CLAUDE_BIN, RUNNER_CODEX_BIN), over the harness control protocol.
+// Without one it refuses: the API never runs a real CLI on the host. It never
+// sends a user prompt or starts model inference.
 func DiscoverLocal(ctx context.Context, name, _ string) ([]Model, error) {
 	argv, err := DiscoveryArgv(name)
 	if err != nil {
 		return nil, err
 	}
-	bin, args := argv[0], argv[1:]
-	switch name {
-	case agentdef.HarnessClaudeCode:
-		if v := os.Getenv("RUNNER_CLAUDE_BIN"); v != "" {
-			bin = v
-		}
-	case agentdef.HarnessCodex:
-		if v := os.Getenv("RUNNER_CODEX_BIN"); v != "" {
-			bin = v
-		}
+	args := argv[1:]
+	override := map[string]string{agentdef.HarnessClaudeCode: "RUNNER_CLAUDE_BIN", agentdef.HarnessCodex: "RUNNER_CODEX_BIN"}[name]
+	bin := os.Getenv(override)
+	if bin == "" {
+		return nil, fmt.Errorf("chatmodels: %s is not set; only a fake harness is asked for models on the host", override)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()

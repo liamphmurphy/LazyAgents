@@ -2,11 +2,16 @@ package usage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
 var now = time.Date(2026, 11, 9, 18, 0, 0, 0, time.UTC)
@@ -215,5 +220,29 @@ func TestProbeEnv(t *testing.T) {
 	env := probeEnv([]string{"PATH=/bin", "CLAUDECODE=1", "CLAUDE_CODE_ENTRYPOINT=cli", "HOME=/h"})
 	if strings.Join(env, " ") != "PATH=/bin HOME=/h DISABLE_AUTOUPDATER=1" {
 		t.Fatalf("env = %v", env)
+	}
+}
+
+// The API only ever checks a stand-in harness on the host; with no
+// RUNNER_*_BIN it must not fall through to a real, logged-in CLI on PATH.
+func TestProbeRefusesWithoutFakeBinary(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"claude", "codex"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n: >\"$0.ran\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("RUNNER_CLAUDE_BIN", "")
+	t.Setenv("RUNNER_CODEX_BIN", "")
+	for _, h := range []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex} {
+		if _, err := Probe(context.Background(), h); err == nil {
+			t.Errorf("%s: probed without a fake binary", h)
+		}
+	}
+	for _, name := range []string{"claude", "codex"} {
+		if _, err := os.Stat(filepath.Join(dir, name+".ran")); err == nil {
+			t.Errorf("%s on PATH ran", name)
+		}
 	}
 }

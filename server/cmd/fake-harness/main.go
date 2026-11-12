@@ -52,7 +52,8 @@
 // appends one JSON line per invocation (cwd, resume session, first prompt line);
 // FAKE_HARNESS_SYNC=<dir> makes delegated runs wait until FAKE_HARNESS_SYNC_N (2) of
 // them are running at once; FAKE_HARNESS_HOLD=<file> writes <file>.started and waits
-// for <file> before working; FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
+// for <file> before working (in chat mode, a reply to the prompt "held" does,
+// after saying it's working); FAKE_HARNESS_REJECT_RESUME fails a --resume like a CLI
 // that lost the session. The log line also names the harness (claude or codex).
 //
 // Resumed turns (--resume) finish the run with complete_run, unless
@@ -361,6 +362,16 @@ func main() {
 			emit(map[string]any{"type": "assistant", "message": map[string]any{"role": "assistant", "content": []any{
 				map[string]any{"type": "tool_use", "id": "toolu_partial", "name": "mcp__lazyagents__read_page", "input": map[string]any{"page": "Ledger"}}}}})
 			time.Sleep(60 * time.Second)
+		}
+		if hold := os.Getenv("FAKE_HARNESS_HOLD"); prompt == "held" && hold != "" {
+			// Test hook: a reply that works until <hold> exists, while the
+			// person queues follow-ups or asks asides about it.
+			text("Working on it.")
+			_ = os.WriteFile(hold+".started", nil, 0o644)
+			if !waitFor(func() bool { _, err := os.Stat(hold); return err == nil }) {
+				result(true, "never released")
+				os.Exit(2)
+			}
 		}
 		if prompt == "quota" {
 			result(true, "You have hit your usage limit")

@@ -93,3 +93,31 @@ func LibraryFilename(title string) string {
 	}
 	return name[:min(len(name), 200)] + ".md"
 }
+
+// wikiUnsafe are the characters a wiki path can't hold without breaking
+// [[links]] to it (artifacts.ValidNotePath), plus "/", which would file a
+// title like "Q3 / Q4 plan" under a folder.
+var wikiUnsafe = regexp.MustCompile(`[\[\]#|^/]+`)
+
+// WikiPath is where a promoted document goes: the path the person gave, else
+// the document's title made safe for a page name.
+func WikiPath(requested, title string) string {
+	if p := strings.TrimSpace(requested); p != "" {
+		return p
+	}
+	name := strings.Join(strings.Fields(wikiUnsafe.ReplaceAllString(title, " ")), " ")
+	if name == "" {
+		name = UntitledTitle
+	}
+	if r := []rune(name); len(r) > 300 {
+		name = string(r[:300])
+	}
+	return name
+}
+
+// WikiBody is the page a promoted document becomes: the text as it is, then
+// a line naming the document it came from, so a reader can tell it began as
+// a draft.
+func WikiBody(body, title, date string) string {
+	return strings.TrimRight(body, "\n") + "\n\n---\n\n_Promoted from the Doc “" + strings.TrimSpace(title) + "” on " + date + "._\n"
+}

@@ -127,8 +127,8 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		// and the agent is told to use request_approval.
 		"--permission-prompts", "none",
 		"--settings", ".lazyagents/claude-settings.json",
-		// Skip the host's user settings: on the local runner HOME is the
-		// person's own, and a user-level "agent", plugins or permissions would
+		// Skip the host's user settings: on the fake runner HOME is the
+		// host's, and a user-level "agent", plugins or permissions would
 		// replace this run's tools and prompt. Login isn't a setting source.
 		"--setting-sources", "project,local",
 		"--allowedTools", strings.Join(allow, ","),

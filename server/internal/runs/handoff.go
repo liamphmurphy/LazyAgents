@@ -28,8 +28,11 @@ type HandoffMessage struct {
 
 const handoffClip = "\n[…message clipped]"
 
+// handoffLead opens a handoff's header; an aside replaces it with its own.
+const handoffLead = "This conversation continues from earlier turns answered by a different harness or model."
+
 func handoffHeader(omitted int) string {
-	h := "This conversation continues from earlier turns answered by a different harness or model. Their messages are below, oldest first, as context only."
+	h := handoffLead + " Their messages are below, oldest first, as context only."
 	if omitted > 0 {
 		h += fmt.Sprintf(" %d earlier message(s) were omitted to fit.", omitted)
 	}

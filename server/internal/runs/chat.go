@@ -40,6 +40,9 @@ type ChatCaps struct {
 	// Secrets is whether the persona may use any of the person's API secrets
 	// here; their values stay in Vesper (agentapi.SecretsHandler).
 	Secrets bool
+	// Aside is a chat answering a question about its parent's running reply:
+	// it reads, and changes nothing (see chat_asides.go).
+	Aside bool
 }
 
 // Coding reports whether the chat may write and run code in its workspace.
@@ -52,8 +55,17 @@ func (c ChatCaps) RepoCoding() bool { return c.Code && c.RepoURL != "" }
 // codeScopes are what a coding chat is granted; every other scope stays denied.
 var codeScopes = []string{"repo:read", "repo:write", "tests:run"}
 
+func scopeModes(r agentdef.Resolved) map[string]agentdef.Mode {
+	m := map[string]agentdef.Mode{}
+	for _, s := range r.Scopes {
+		m[s.Scope] = s.Mode
+	}
+	return m
+}
+
 // ChatSpec freezes a conversation's capabilities after project overrides.
 func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
+	wikiMode, wikiSet := agentdef.ModeFor(scopeModes(r), "wiki:write")
 	r.Scopes = append([]agentdef.ResolvedScope{}, r.Scopes...)
 	for i := range r.Scopes {
 		r.Scopes[i].Mode = agentdef.Denied
@@ -71,6 +83,17 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 		for _, scope := range codeScopes {
 			r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: scope, Mode: agentdef.Allowed, Source: agentdef.FromPersona})
 		}
+	}
+	if !wikiSet || wikiMode != agentdef.Denied {
+		// write_note is a chat tool, but a chat never publishes to the shared
+		// wiki: what the persona may write becomes a suggestion the person
+		// accepts or rejects. A persona that doesn't mention wiki:write gets
+		// suggestions too (wiki.Decide); only an explicit denial keeps it out.
+		r.Scopes = slices.DeleteFunc(r.Scopes, func(s agentdef.ResolvedScope) bool {
+			_, covers := agentdef.ModeFor(map[string]agentdef.Mode{s.Scope: agentdef.Denied}, "wiki:write")
+			return covers
+		})
+		r.Scopes = append(r.Scopes, agentdef.ResolvedScope{Scope: "wiki:write", Mode: agentdef.RequiresApproval, Source: agentdef.FromPersona})
 	}
 	r.Services = nil
 	r.Setup = []string{}
@@ -96,6 +119,9 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 	if images {
 		r.HarnessOptions[agentdef.OptionImageGeneration] = "true"
 	}
+	if caps.Aside {
+		r.HarnessOptions[agentdef.OptionAside] = "true"
+	}
 	r.Repository = nil
 	r.Fallbacks = nil // A chat segment never switches harness or model implicitly.
 	// Every chat is the Personal Assistant, whichever agent it was started with.
@@ -107,6 +133,11 @@ func ChatSpec(r agentdef.Resolved, caps ChatCaps) agentdef.Resolved {
 // speaker, else its host), which must belong to the chat's creator (a deleted
 // persona gives none).
 func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (ChatCaps, error) {
+	if chat.ParentChatID != nil {
+		// None of the persona's capabilities: no shell, images, connectors or
+		// secrets, whatever the persona answering the parent may use.
+		return ChatCaps{Aside: true}, nil
+	}
 	id := ChatSpeakerID(chat)
 	if id == nil {
 		return ChatCaps{}, nil
@@ -137,7 +168,7 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 }
 
 // sameCapabilities reports whether two chat specs grant the same persona
-// capabilities: the modes of the scopes a coding chat is granted, and the
+// capabilities: the modes of wiki:write and the scopes a coding chat is granted, and the
 // sandbox, read-only, image generation and web search options. Instructions
 // and the rest of the assistant's definition are left out on purpose, so
 // editing them never ends a segment, and neither does the persona pushing a
@@ -145,11 +176,11 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 func sameCapabilities(a, b agentdef.Resolved) bool {
 	key := func(r agentdef.Resolved) string {
 		modes := map[string]agentdef.Mode{}
-		for _, scope := range codeScopes {
+		for _, scope := range append([]string{"wiki:write"}, codeScopes...) {
 			modes[scope] = r.Mode(scope)
 		}
 		opts := map[string]string{}
-		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch} {
+		for _, k := range []string{"sandbox", "readonly", agentdef.OptionImageGeneration, agentdef.OptionWebSearch, agentdef.OptionAside} {
 			opts[k] = r.HarnessOptions[k]
 		}
 		connectors := []string{}
@@ -218,6 +249,9 @@ type ChatMessageInput struct {
 	AttachmentIDs []uuid.UUID
 	// Research asks for a plan to approve instead of an answer.
 	Research bool
+	// preamble goes ahead of Body in the turn's prompt only; the stored
+	// message is what the person wrote. Set by Vesper, never by a request.
+	preamble string
 }
 
 // ChatCatalog is the harness/model catalog chats validate against.
@@ -313,7 +347,7 @@ func (s *Service) startChat(ctx context.Context, q *store.Queries, ws, user uuid
 		if title == "" && in.Message != nil {
 			title = firstLine(in.Message.Body, 80)
 		}
-		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, PersonaID: personaID, Hidden: in.Hidden, SpaceID: space, Temporary: in.Temporary})
+		out, err = q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: ws, ProjectID: projectID, Title: title, CreatedBy: user, AgentID: a.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, AutoModel: sel.AutoModel, PersonaID: personaID, Hidden: in.Hidden, SpaceID: space, Temporary: in.Temporary})
 		if err != nil {
 			return err
 		}
@@ -442,7 +476,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 	}
 	// Validate the selection and the refs before anything is written; a 422
 	// leaves the stored selection unchanged (the whole transaction rolls back).
-	cur := chatmodels.Selection{Harness: chat.Harness, Model: chat.Model, Effort: chat.Effort}
+	cur := chatmodels.Selection{Harness: chat.Harness, Model: chat.Model, Effort: chat.Effort, AutoModel: chat.AutoModel}
 	sel, err := cat.Resolve(ctx, q, chat.WorkspaceID, cur, chatmodels.Selection{Harness: in.Harness, Model: in.Model, Effort: in.Effort})
 	if err != nil {
 		return chat, msg, err
@@ -469,7 +503,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 		return chat, msg, err
 	}
 	if sel != cur {
-		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort}); err != nil {
+		if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: sel.Harness, Model: sel.Model, Effort: sel.Effort, AutoModel: sel.AutoModel}); err != nil {
 			return chat, msg, err
 		}
 	}
@@ -485,7 +519,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 			}
 		}
 	}
-	prompt := body
+	prompt := in.preamble + body
 	if interrupt {
 		var stopped bool
 		var dropped *store.RunTurn
@@ -512,7 +546,7 @@ func postChatMessage(ctx context.Context, q *store.Queries, cat chatmodels.Catal
 				return chat, msg, err
 			}
 		}
-		prompt = note + body
+		prompt = note + prompt
 	} else if chat.InterruptMessageID != nil {
 		// Left by a stop or failure that never resumed it.
 		if chat, err = q.SetChatInterrupt(ctx, store.SetChatInterruptParams{ID: chat.ID}); err != nil {
@@ -584,6 +618,15 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 	}
 	prompt := body
 	fresh := chat.CurrentRunID == nil
+	if chat.AutoModel {
+		// Only a chat with no live segment may step down: see AutoModel.
+		if m := chatmodels.AutoModel(chat.WorkspaceID, chat.Harness, chat.Model, level, fresh); m != chat.Model {
+			var err error
+			if chat, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: chat.ID, Harness: chat.Harness, Model: m, Effort: chat.Effort, AutoModel: true}); err != nil {
+				return chat, run, turn, err
+			}
+		}
+	}
 	effort := chat.Effort
 	if effort == "" {
 		effort = chatmodels.AutoEffort(chat.WorkspaceID, chat.Harness, chat.Model, level)
@@ -698,7 +741,8 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 		if err != nil {
 			return chat, run, turn, err
 		}
-		if total == 0 && !relay {
+		// An aside is named for its question and never retitled.
+		if total == 0 && !relay && chat.ParentChatID == nil {
 			prompt += firstTurnNote
 		}
 		if total > 0 {
@@ -1061,6 +1105,19 @@ func (s *Service) DeleteIdleTemporaryChat(ctx context.Context, ws, id uuid.UUID,
 
 // deleteChat removes a locked chat; see DeleteChat.
 func deleteChat(ctx context.Context, q *store.Queries, chat store.ChatSession) error {
+	// Its asides go with it, each stopping its own reply first.
+	asides, err := q.ListChatAsides(ctx, &chat.ID)
+	if err != nil {
+		return err
+	}
+	for _, a := range asides {
+		if a, err = q.LockChatSessionByID(ctx, a.ID); err != nil {
+			return err
+		}
+		if err = deleteChat(ctx, q, a); err != nil {
+			return err
+		}
+	}
 	if err := q.ClearChatSuggestions(ctx, store.ClearChatSuggestionsParams{WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy}); err != nil {
 		return err
 	}

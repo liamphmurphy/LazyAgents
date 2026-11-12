@@ -36,7 +36,7 @@ type Chat = {
   id: string; project?: string; title: string; agent_id: string; harness: Harness; model: string; state: State;
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string;
-  effort?: Effort;
+  effort?: Effort; auto_model?: boolean;
 };
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
@@ -532,6 +532,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return json(t);
     }
     if (/^\/chats\/[^/]+\/workflows$/.test(path) && method === "GET") return json({ runs: [] });
+    // Settings → Sign-in: an install already set up with a password.
+    if (path === "/auth/status") return json({ claimed: true, password_set: true, signed_in: true });
     if (path === "/runner") return json({ online: true, runners: [], slots: 1, busy: 0, live: 0, queued: 0 });
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
     if (path === "/secrets") return json({ key_configured: true, known: [], secrets: ["harness:anthropic", "harness:openai"].map((name, i) => ({ id: `secret-${i}`, name, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" })) });
@@ -766,7 +768,10 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (c.archived) return fail(err(409, "conflict", "This chat is archived."));
         if (!text.trim()) return fail(err(422, "invalid", "Message is empty", "body"));
         const harness = (b.harness as Harness | undefined) ?? c.harness;
-        const model = (b.model as string | undefined) ?? (harness === c.harness ? c.model : catalog(true).find((g) => g.harness === harness)!.models[0].id);
+        // "auto" routes the model per turn on the server; here it just keeps the current one.
+        const auto = b.model === "auto" ? true : b.model !== undefined || b.harness !== undefined ? false : !!c.auto_model;
+        const picked = b.model === "auto" ? undefined : (b.model as string | undefined);
+        const model = picked ?? (harness === c.harness ? c.model : catalog(true).find((g) => g.harness === harness)!.models[0].id);
         const g = catalog(codexAvailable).find((x) => x.harness === harness);
         if (!g || !g.models.some((x) => x.id === model) || !g.available) {
           return fail(err(422, "invalid", "Unknown or unavailable harness/model", "model"));
@@ -782,6 +787,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
           c.model = model;
           add(c, "system", `Switched to ${label(harness, model)}`);
         }
+        c.auto_model = auto || undefined;
         if (!c.title) c.title = text.slice(0, 40);
         posted.push({ chat: c.id, body: b });
         const refs = (b.context_refs as Array<{ key?: string }> | undefined) ?? [];

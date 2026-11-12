@@ -154,6 +154,7 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		if c.Temporary {
 			item.Temporary = &c.Temporary
 		}
+		item.ParentChatId = c.ParentChatID
 		if c.RepoUrl != nil {
 			item.WorkBranches = &c.WorkBranches
 			// Only while it is still one of the creator's addresses (chats are
@@ -167,6 +168,9 @@ func (s *Server) toChats(ctx context.Context, chats []store.ChatSession) ([]api.
 		if c.Effort != "" {
 			e := api.ChatEffort(c.Effort)
 			item.Effort = &e
+		}
+		if c.AutoModel {
+			item.AutoModel = &c.AutoModel
 		}
 		if c.ProjectID != nil {
 			if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.ID == *c.ProjectID }); i >= 0 {

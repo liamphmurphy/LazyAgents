@@ -1,0 +1,66 @@
+// While a reply runs, the composer sends in one of three ways: queue the message
+// for when the reply ends, ask a side instance about the reply without
+// stopping it, or interrupt it. Pure helpers; the components live in
+// app/(app)/chat/_components (send-modes.tsx, followups.tsx, asides.tsx).
+
+export type SendMode = "followup" | "aside" | "interrupt";
+
+/** In switcher order. Follow-up comes first: Enter never throws away work in progress unless asked to. */
+export const SEND_MODES: SendMode[] = ["followup", "aside", "interrupt"];
+
+export const SEND_MODE_LABEL: Record<SendMode, string> = { followup: "Follow-up", aside: "Aside", interrupt: "Interrupt" };
+
+/** What each mode does, for its title and the Send button's. */
+export const SEND_MODE_HINT: Record<SendMode, string> = {
+  followup: "Send this once the current reply ends",
+  aside: "Ask about the current reply without stopping it",
+  interrupt: "Stop the reply and answer this together with your last message",
+};
+
+/** Tab moves to the next mode, Shift+Tab to the previous one. */
+export function cycleSendMode(mode: SendMode, back = false): SendMode {
+  const i = SEND_MODES.indexOf(mode);
+  return SEND_MODES[(i + (back ? SEND_MODES.length - 1 : 1)) % SEND_MODES.length];
+}
+
+/** The Send button's name: what pressing it does. */
+export function sendModeAction(mode: SendMode): string {
+  return mode === "followup" ? "Queue" : mode === "aside" ? "Ask aside" : "Interrupt";
+}
+
+/** What Enter does in each mode, for the hint under the box. */
+export const SEND_MODE_ENTER: Record<SendMode, string> = { followup: "queues it", aside: "asks it on the side", interrupt: "interrupts" };
+
+export function sendModePlaceholder(mode: SendMode, name: string): string {
+  switch (mode) {
+    case "followup":
+      return `Queue a follow-up for when ${name} finishes…`;
+    case "aside":
+      return `Ask on the side. ${name} keeps working…`;
+    case "interrupt":
+      return `Stop ${name} and steer it…`;
+  }
+}
+
+/** /aside and /queue send their text in that mode, whichever one is picked. */
+export function commandSendMode(name: string): SendMode | null {
+  return name === "aside" ? "aside" : name === "queue" ? "followup" : null;
+}
+
+type Dated = { created_at: string };
+
+/** The asides asked during a turn: from its start up to (not including) the next turn's. */
+export function asidesInWindow<T extends Dated>(asides: T[] | undefined, since?: string, until?: string): T[] {
+  if (!asides?.length || !since) return [];
+  const from = Date.parse(since);
+  const to = until ? Date.parse(until) : Infinity;
+  return asides.filter((a) => {
+    const at = Date.parse(a.created_at);
+    return at >= from && at < to;
+  });
+}
+
+/** "2 asides", "1 aside". */
+export function asideCount(n: number): string {
+  return `${n} aside${n === 1 ? "" : "s"}`;
+}

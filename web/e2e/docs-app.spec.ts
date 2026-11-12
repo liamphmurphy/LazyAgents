@@ -24,6 +24,7 @@ async function install(page: Page, first = "# Trip plan\n\nFly to **Lisbon** on 
     saves: [] as { base_seq: number; body: string; note?: string }[],
     reviewedPosts: [] as number[],
     library: 0,
+    wiki: [] as { replace?: boolean }[],
     comments: [] as Record<string, unknown>[],
     sent: [] as Record<string, unknown>[],
   };
@@ -38,6 +39,13 @@ async function install(page: Page, first = "# Trip plan\n\nFly to **Lisbon** on 
       s.reviewedPosts.push(seq);
       s.reviewed = Math.max(s.reviewed, seq);
       return json({ reviewed_seq: s.reviewed });
+    }
+    if (p.endsWith("/wiki")) {
+      const body = req.postDataJSON() as { replace?: boolean };
+      s.wiki.push(body);
+      // The first publish finds the page taken; replacing it works.
+      if (!body.replace) return json({ code: "conflict", message: 'a wiki page called "Trip plan" already exists: choose another path, or replace it' }, 409);
+      return json({ path: "Trip plan", created: false }, 201);
     }
     if (p.endsWith("/library")) {
       s.library++;
@@ -254,6 +262,14 @@ test("exports to PDF, Word and Markdown, copies rich text, and saves to the Libr
   await menu("Save to Library");
   await expect(page.getByRole("status").filter({ hasText: "Saved to your Library" })).toBeVisible();
   expect(s.library).toBe(1);
+
+  // Promoting asks before replacing a page that exists, then links to the page.
+  page.once("dialog", (d) => void d.accept());
+  await menu("Promote to wiki");
+  const published = page.getByRole("status").filter({ hasText: "Published to the wiki as Trip plan" });
+  await expect(published).toBeVisible();
+  await expect(published.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/wiki/Trip%20plan");
+  expect(s.wiki).toEqual([{ replace: false }, { replace: true }]);
 });
 
 test("Markdown the editor can't keep opens as source instead", async ({ page }) => {

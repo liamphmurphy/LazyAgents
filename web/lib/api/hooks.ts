@@ -1334,6 +1334,58 @@ export function useCancelChat(id: string) {
   });
 }
 
+// ---- Follow-ups and asides: sending while a reply runs, without interrupting it.
+// Both live under ["chats"], so SSE chat.updated (the server bumps the chat) refreshes them.
+
+const followupsKey = (id: string) => ["chats", "followups", id] as const;
+const asidesKey = (id: string) => ["chats", "asides", id] as const;
+
+/** Messages queued behind the running reply, next to send first. */
+export function useChatFollowups(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: followupsKey(id ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/followups", { params: { path: { id: id! } } })).then((d) => d.followups),
+  });
+}
+
+export function useQueueFollowup(id: string) {
+  const done = useChatInvalidate();
+  return useMutation({
+    mutationFn: (body: string) => unwrap(api.POST("/chats/{id}/followups", { params: { path: { id } }, body: { body } })),
+    onSettled: done,
+  });
+}
+
+export function useDeleteFollowup(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (followupId: string) => {
+      const { error, response } = await api.DELETE("/chats/{id}/followups/{followupId}", { params: { path: { id, followupId } } });
+      if (error || !response.ok) throw error ?? new Error(`Remove failed (${response.status})`);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: followupsKey(id) }),
+  });
+}
+
+/** The chat's asides (hidden chats of their own), oldest first; followed while one is answering. */
+export function useChatAsides(id?: string) {
+  return useQuery({
+    enabled: !!id,
+    queryKey: asidesKey(id ?? ""),
+    queryFn: () => unwrap(api.GET("/chats/{id}/asides", { params: { path: { id: id! } } })).then((d) => d.asides),
+    refetchInterval: (q) => (q.state.data?.some((a) => a.state === "running") ? CHAT_POLL_MS : false),
+  });
+}
+
+export function useStartAside(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => unwrap(api.POST("/chats/{id}/asides", { params: { path: { id } }, body: { body } })),
+    onSettled: () => qc.invalidateQueries({ queryKey: asidesKey(id) }),
+  });
+}
+
 /** The current turn's tool calls/results, read from the segment run's events. */
 export function useChatRunEvents(runId?: string, enabled = true, poll = true) {
   return useQuery({

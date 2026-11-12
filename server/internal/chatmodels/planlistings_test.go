@@ -343,15 +343,15 @@ func TestCatalogPlanModelsListsModels(t *testing.T) {
 	}
 }
 
-func TestCatalogLocalIgnoresPlanModels(t *testing.T) {
-	// No Discover: the local backend lists through the CLI binaries, which
+func TestCatalogFakeIgnoresPlanModels(t *testing.T) {
+	// No Discover: the fake backend lists through the CLI binaries, which
 	// don't exist here, and must never ask a runner.
 	t.Setenv("RUNNER_CLAUDE_BIN", "/nonexistent/claude")
 	t.Setenv("RUNNER_CODEX_BIN", "/nonexistent/codex")
 	cat := Catalog{
 		RequireKey: false,
 		PlanModels: func(context.Context, uuid.UUID, string, bool) ([]Model, error) {
-			t.Error("PlanModels used by the local backend")
+			t.Error("PlanModels used by the fake backend")
 			return nil, nil
 		}}
 	list, err := cat.List(context.Background(), nil, uuid.New())
