@@ -261,9 +261,27 @@ test("filter tokens narrow the list and round-trip through the URL", async ({ pa
   // Opening a filtered link shows its filters as tokens.
   await page.goto("/tickets?project=WEB&epic=epic-1&status=todo");
   await expect(box).toHaveValue('epic:"Kanban board" status:todo');
-  await box.fill("project:ops");
+  // project: moves the picker and leaves the box, so it can't reset the picker later.
+  await box.fill("project:ops bug");
   await expect(page).toHaveURL(/project=OPS/);
+  await expect(box).toHaveValue("bug");
   expect(api.unhandled).toEqual([]);
+});
+
+test("Back to a filter the box applied shows it again", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
+  const api = await installBoardApi(page);
+  api.savedViews.push({ id: "sv-plain", name: "Plain", query: "view=active", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" });
+  await page.goto("/tickets?project=WEB");
+  const box = page.getByLabel("Filter tickets");
+  await box.fill("status:done");
+  await expect(page).toHaveURL(/status=done/);
+  await page.getByRole("group", { name: "Saved views" }).getByRole("link", { name: "Plain" }).click();
+  await expect(page).toHaveURL(/sv=sv-plain/);
+  await expect(box).toHaveValue("");
+  await page.goBack();
+  await expect(page).toHaveURL(/status=done/);
+  await expect(box).toHaveValue("status:done");
 });
 
 test.describe("on a touch screen", () => {

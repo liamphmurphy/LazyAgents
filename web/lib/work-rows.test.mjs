@@ -10,6 +10,7 @@ import {
   startReady,
   stateText,
   weekStart,
+  withoutProjectToken,
   workGroups,
 } from "./work-rows.ts";
 
@@ -89,6 +90,10 @@ test("resolveFilter maps tokens to URL filters and reports unknown ones", () => 
     unknown: [], q: "login", project: "LA", epic: "e2", assignee: "atlas", status: "in_review",
   });
   assert.deepEqual(resolveFilter("epic:nope status:zzz", look), { unknown: ["epic:nope", "status:zzz"] });
+  // Same name in two projects with All projects: the URL's epic wins.
+  assert.equal(resolveFilter('epic:"Mobile UI"', { ...look, currentEpic: "e2" }).epic, "e2");
+  assert.equal(resolveFilter('epic:"Mobile UI"', look).epic, "e1");
+  assert.equal(withoutProjectToken('project:OPS epic:"A b" project:"Lazy Agents" bug'), 'epic:"A b" bug');
 });
 
 test("epicProgress and startReady", () => {

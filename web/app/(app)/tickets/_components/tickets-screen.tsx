@@ -7,7 +7,7 @@ import { cx } from "@/lib/cx";
 import { useCompact } from "@/lib/viewport";
 import type { TicketStatus, TicketSummary } from "@/lib/api/client";
 import { useBulkEach, useBootstrap, useInbox, useSavedViews, useTickets, type TicketView } from "@/lib/api/hooks";
-import { filterText, needsYouByTicket, resolveFilter, workGroups, type WorkGroup } from "@/lib/work-rows";
+import { filterText, needsYouByTicket, resolveFilter, withoutProjectToken, workGroups, type WorkGroup } from "@/lib/work-rows";
 import {
   GROUPS,
   GROUP_NAME,
@@ -166,12 +166,18 @@ export function TicketsScreen() {
   // Opening a saved view (or Discard) changes the URL from outside the box; the
   // box's own debounced writes (pushedText) must not overwrite what's typed since.
   const [seenText, setSeenText] = useState(urlText);
-  const [pushedText, setPushedText] = useState(urlText);
+  // Matches once: after the URL catches up, a later return to the same text (Back) must reset the box.
+  const [pushedText, setPushedText] = useState<string | null>(null);
   if (urlText !== seenText) {
     setSeenText(urlText);
     if (urlText !== pushedText) setSearch(urlText);
+    setPushedText(null);
   }
-  const lookups = useMemo(() => ({ projects: boot.data?.projects ?? [], epics: boot.data?.epics ?? [], agents: boot.data?.agents ?? [] }), [boot.data]);
+  const lookups = useMemo(
+    () => ({ projects: boot.data?.projects ?? [], epics: boot.data?.epics ?? [], agents: boot.data?.agents ?? [], currentEpic: epic }),
+    [boot.data, epic],
+  );
+  const bootReady = !!boot.data;
   const resolved = useMemo(() => resolveFilter(search, lookups), [search, lookups]);
   const each = useBulkEach();
   // No ?project= resolves to the remembered project; "All projects" leaves it empty.
@@ -182,11 +188,13 @@ export function TicketsScreen() {
 
   // Debounced box → URL, so views are shareable. Tokens that match nothing aren't applied.
   useEffect(() => {
-    if (search === urlText || !boot.data) return;
+    if (search === urlText || !bootReady) return;
     const id = setTimeout(() => {
       const r = resolveFilter(search, lookups);
       const epicName = r.epic && lookups.epics.find((e) => e.id === r.epic)?.name;
       setPushedText(filterText({ epic: epicName, agent: r.assignee, status: r.status, q: r.q }));
+      // project: moves the picker, which then shows it; the token leaves the box so it can't reapply later.
+      if (r.project) setSearch(withoutProjectToken(search));
       replaceParams((next) => {
         if (r.project) next.set("project", r.project);
         for (const [k, v] of [["epic", r.epic], ["assignee", r.assignee], ["status", r.status], ["q", r.q]] as const) {
@@ -197,7 +205,7 @@ export function TicketsScreen() {
     }, 250);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, boot.data]);
+  }, [search, bootReady]);
 
   function replaceParams(edit: (p: URLSearchParams) => void) {
     const next = new URLSearchParams(params);

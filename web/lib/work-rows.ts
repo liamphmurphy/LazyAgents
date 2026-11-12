@@ -138,7 +138,13 @@ export function parseFilterText(text: string): { tokens: FilterToken[]; text: st
   return { tokens, text: free.replace(/\s+/g, " ").trim() };
 }
 
-const quote = (v: string) => (/\s/.test(v) ? `"${v}"` : v);
+// Values can't contain a double quote inside quotes; drop it rather than break the token.
+const quote = (v: string) => (/\s/.test(v) ? `"${v.replace(/"/g, "")}"` : v);
+
+/** The box's text without its project: token, once the project picker has taken it. */
+export function withoutProjectToken(text: string): string {
+  return text.replace(/(^|\s)project:(?:"[^"]*"?|\S*)/gi, " ").replace(/\s+/g, " ").trim();
+}
 
 /** The box's text for the list's current filters. */
 export function filterText(f: { project?: string; epic?: string; agent?: string; status?: string; q?: string }): string {
@@ -157,6 +163,8 @@ export type FilterLookups = {
   projects: ReadonlyArray<{ id: string; key: string; name: string }>;
   epics: ReadonlyArray<{ id: string; name: string; project_id: string }>;
   agents: ReadonlyArray<{ handle: string; name: string }>;
+  /** The URL's epic id: wins when several epics share the token's name. */
+  currentEpic?: string;
 };
 
 export type ResolvedFilter = { project?: string; epic?: string; assignee?: string; status?: TicketStatus; q?: string; unknown: string[] };
@@ -183,7 +191,7 @@ export function resolveFilter(text: string, look: FilterLookups): ResolvedFilter
   if (ev) {
     const proj = out.project ? look.projects.find((p) => p.key === out.project) : undefined;
     const named = look.epics.filter((e) => e.id === ev || norm(e.name) === norm(ev));
-    const e = named.find((x) => !proj || x.project_id === proj.id) ?? named[0];
+    const e = named.find((x) => x.id === look.currentEpic) ?? named.find((x) => !proj || x.project_id === proj.id) ?? named[0];
     if (e) out.epic = e.id;
     else out.unknown.push(`epic:${ev}`);
   }
