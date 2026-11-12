@@ -140,7 +140,7 @@ export function ChatWorkflowTray({ chatId }: { chatId: string }) {
   const runs = useChatWorkflowRuns(chatId);
   const live = (runs.data?.runs ?? []).filter((r) => runActive(r.state));
   if (live.length === 0) return null;
-  return <div className="mb-2 flex flex-col gap-2">{live.map((r) => <WorkflowRunSummary key={r.id} run={r} />)}</div>;
+  return <div className="flex flex-col gap-2">{live.map((r) => <WorkflowRunSummary key={r.id} run={r} />)}</div>;
 }
 
 /** ```workflow-run: a persona's suggestion, confirmed here. Once started it points at the run. */

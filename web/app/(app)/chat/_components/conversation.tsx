@@ -14,6 +14,8 @@ import {
   useCancelChat,
   useChat,
   useChatAsides,
+  useChatFollowups,
+  useChatTicketRuns,
   useChatMessages,
   useEditLastChatMessage,
   useChatModels,
@@ -31,7 +33,10 @@ import { LiveAsides, ReplyAsides } from "./asides";
 import { RepositoryPicker } from "./repository-picker";
 import { useRepositories, useSetChatRepository } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
-import { useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { useChatWorkflowRuns, useWorkflows, type Workflow } from "@/lib/api/workflow-hooks";
+import { runActive } from "@/lib/workflows";
+import { runEnded } from "@/lib/chat-dispatch";
+import { StatusSlot, type StatusItem } from "./status-slot";
 import { ChatWorkflowTray, WorkflowStartCard } from "@/components/domain/workflow-cards";
 import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-cards";
 import { ActivityScene } from "./activity-scene";
@@ -506,6 +511,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
   const [startingWorkflow, setStartingWorkflow] = useState<Workflow | null>(null);
   const setCommitEmail = useSetChatCommitEmail();
   const [commitPickerOpen, setCommitPickerOpen] = useState(false);
+  // What the trays above the composer hold, so the status slot can rank them (the queries are shared with the trays).
+  const ticketRuns = (useChatTicketRuns(id).data?.runs ?? []).filter((r) => !runEnded(r.state));
+  const workflowRuns = (useChatWorkflowRuns(id).data?.runs ?? []).filter((r) => runActive(r.state));
+  const followups = useChatFollowups(id).data ?? [];
 
   const c = chat.data;
   const loaded = !!c;
@@ -1006,46 +1015,157 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
           )}
         </div>
         <div className="mx-auto flex w-full max-w-[816px] flex-col gap-2 px-6 pb-3">
-          {c.state === "failed" && (
-            <Banner
-              tone="blocked"
-              title="The last turn failed"
-              actions={
-                lastUser && (
-                  <Button variant="outline" icon="refresh" disabled={locked || !!unavailable} onClick={() => submit(lastUser.body_md)}>
-                    Retry
-                  </Button>
-                )
-              }
-            >
-              {c.error ?? "No error details were recorded."}
-            </Banner>
-          )}
-          {unavailable && !c.archived && (
-            <Banner
-              tone="human"
-              title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
-              actions={
-                !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
-                  Add the key →
-                </Link>
-              }
-            >
-              {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
-            </Banner>
-          )}
-          {modeError && (
-            <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
-              {modeError}
-            </p>
-          )}
-          {actionError && (
-            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
-              {actionError instanceof ApiError && actionError.status === 409
-                ? `Can’t do that right now: ${actionError.message}`
-                : errorText(actionError)}
-            </p>
-          )}
+          {(() => {
+            // Everything above the composer goes through one slot, ranked by STATUS_PRIORITY (lib/chat-status-slot).
+            // The trays stay mounted while empty (present: false) so they see their first item arrive.
+            const status: StatusItem[] = [];
+            if (c.repo_url && (askCommitEmail || commitPickerOpen) && !c.archived) {
+              status.push({
+                key: "commit-email",
+                kind: commitPickRequired ? "blocking" : "needs-you",
+                label: "Commit email",
+                pinned: commitPickerOpen,
+                node: (
+                  <CommitEmailPicker
+                    emails={myEmails}
+                    name={boot.data?.me.name ?? ""}
+                    repo={c.repo_url}
+                    value={askCommitEmail ? undefined : c.commit_email}
+                    required={commitPickRequired}
+                    disabled={setCommitEmail.isPending}
+                    onPick={(email) => {
+                      setCommitEmail.reset();
+                      setCommitEmail.mutate({ id: c.id, email }, { onSuccess: () => setCommitPickerOpen(false) });
+                    }}
+                    onClose={() => setCommitPickerOpen(false)}
+                  />
+                ),
+              });
+            }
+            if (unavailable && !c.archived) {
+              status.push({
+                key: "model-unavailable",
+                kind: "blocking",
+                label: `${unavailable.label} unavailable`,
+                node: (
+                  <Banner
+                    tone="human"
+                    title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
+                    actions={
+                      !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                        Add the key →
+                      </Link>
+                    }
+                  >
+                    {unavailable.checking ? "This updates automatically when the model list is ready." : `${unavailableReason(unavailable)}. Pick another model or add the key.`}
+                  </Banner>
+                ),
+              });
+            }
+            if (!c.archived && workflowCard) {
+              status.push({
+                key: "workflow-start",
+                kind: "needs-you",
+                label: `Start ${workflowCard.name}`,
+                node: <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />,
+              });
+            }
+            if (c.state === "failed") {
+              status.push({
+                key: "failed-turn",
+                kind: "failed-turn",
+                label: "Last turn failed",
+                node: (
+                  <Banner
+                    tone="blocked"
+                    title="The last turn failed"
+                    actions={
+                      lastUser && (
+                        <Button variant="outline" icon="refresh" disabled={locked || !!unavailable} onClick={() => submit(lastUser.body_md)}>
+                          Retry
+                        </Button>
+                      )
+                    }
+                  >
+                    {c.error ?? "No error details were recorded."}
+                  </Banner>
+                ),
+              });
+            }
+            if (modeError) {
+              status.push({
+                key: "send-mode-error",
+                kind: "error",
+                label: "Couldn’t send",
+                node: (
+                  <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
+                    {modeError}
+                  </p>
+                ),
+              });
+            }
+            if (actionError) {
+              status.push({
+                key: "action-error",
+                kind: "error",
+                label: "Something failed",
+                node: (
+                  <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
+                    {actionError instanceof ApiError && actionError.status === 409
+                      ? `Can’t do that right now: ${actionError.message}`
+                      : errorText(actionError)}
+                  </p>
+                ),
+              });
+            }
+            if (!c.archived) {
+              const needsYou = ticketRuns.some((r) => r.approval || r.state === "waiting" || r.state === "paused");
+              status.push({
+                key: "ticket-runs",
+                present: ticketRuns.length > 0,
+                kind: needsYou ? "needs-you" : "live",
+                label: needsYou ? "Run needs you" : `${ticketRuns.length} ${ticketRuns.length === 1 ? "run" : "runs"} active`,
+                node: <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />,
+              });
+            }
+            if (!c.archived) {
+              const gate = workflowRuns.some((r) => r.state === "waiting");
+              status.push({
+                key: "workflow-runs",
+                present: workflowRuns.length > 0,
+                kind: gate ? "needs-you" : "live",
+                label: gate ? "Workflow needs you" : `${workflowRuns.length} ${workflowRuns.length === 1 ? "workflow" : "workflows"} running`,
+                node: <ChatWorkflowTray chatId={c.id} />,
+              });
+            }
+            if (!c.archived) {
+              status.push({
+                key: "followups",
+                present: followups.length > 0,
+                kind: "live",
+                label: `${followups.length} queued`,
+                node: (
+                  <FollowupTray
+                    chatId={c.id}
+                    name={speaker.name}
+                    running={running}
+                    held={!running && list?.at(-1)?.role !== "assistant"}
+                    disabled={locked}
+                    onSendNow={(body, done) => {
+                      pinned.current = true;
+                      send.mutate({ body }, { onSuccess: done });
+                    }}
+                    onEdit={(body) => {
+                      setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
+                      setSendMode("followup");
+                      area.current?.focus();
+                    }}
+                  />
+                ),
+              });
+            }
+            return <StatusSlot items={status} />;
+          })()}
           {c.archived ? (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
               <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
@@ -1053,46 +1173,6 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
             </div>
           ) : (
             <>
-            {c.repo_url && (askCommitEmail || commitPickerOpen) && (
-              <div className="mb-2">
-                <CommitEmailPicker
-                  emails={myEmails}
-                  name={boot.data?.me.name ?? ""}
-                  repo={c.repo_url}
-                  value={askCommitEmail ? undefined : c.commit_email}
-                  required={commitPickRequired}
-                  disabled={setCommitEmail.isPending}
-                  onPick={(email) => {
-                    setCommitEmail.reset();
-                    setCommitEmail.mutate({ id: c.id, email }, { onSuccess: () => setCommitPickerOpen(false) });
-                  }}
-                  onClose={() => setCommitPickerOpen(false)}
-                />
-              </div>
-            )}
-            <ChatWorkflowTray chatId={c.id} />
-            <FollowupTray
-              chatId={c.id}
-              name={speaker.name}
-              running={running}
-              held={!running && list?.at(-1)?.role !== "assistant"}
-              disabled={locked}
-              onSendNow={(body, done) => {
-                pinned.current = true;
-                send.mutate({ body }, { onSuccess: done });
-              }}
-              onEdit={(body) => {
-                setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
-                setSendMode("followup");
-                area.current?.focus();
-              }}
-            />
-            <ChatTicketRunTray chatId={c.id} scene={(kind) => <ActivityScene current={kind} />} persona={<PersonaAvatar persona={persona} size={26} />} />
-            {workflowCard && (
-              <div className="mb-2">
-                <WorkflowStartCard workflow={workflowCard} chatId={c.id} onDone={closeWorkflow} onDismiss={closeWorkflow} />
-              </div>
-            )}
             <Composer
               sheetSignal={sheetSignal}
               text={text}
