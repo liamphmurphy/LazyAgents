@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useBootstrap, useChat, useChatModels, useChatSuggestions, useChats, useCreateChat, useInbox, usePersonaDock, useStartChat } from "@/lib/api/hooks";
 import { useWorkflows } from "@/lib/api/workflow-hooks";
 import { RepositoryPicker } from "./repository-picker";
+import { composerOptions } from "@/lib/composer-options";
 import { useRepositories } from "@/lib/api/repository-hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { newestChat } from "@/lib/chat-ui";
@@ -22,7 +23,7 @@ import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { Conversation } from "./conversation";
 import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
 import { Composer, type CommandRun, type ComposerCommands } from "./composer";
-import { ModelEffortPicker, effortLabel, modelEfforts, type Effort, type Selection } from "./model-picker";
+import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
 import { CanvasButton, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { DesignPanel } from "./design-panel";
@@ -273,17 +274,18 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             rows={2}
             disabled={locked}
             placeholder={arrived ? `Message ${persona.name}…` : name ? `What’s on your mind, ${name}?` : "What’s on your mind?"}
-            options={
-              <>
-                {fullPersona?.capabilities.code && (
-                  <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} personaName={persona.name} personaRepos={repos} />
-                )}
-                <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-                <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />
-              </>
-            }
-            actions={
-              selection && (
+            options={composerOptions({
+              code: !!fullPersona?.capabilities.code,
+              repo,
+              research,
+              temporary,
+              model: selection ? modelEffortSummary(groups, selection, offered.efforts.length > 0, effort).text : undefined,
+            })}
+            controls={{
+              repository: <RepositoryPicker value={repo} onPick={setRepoPicked} disabled={locked} signal={repoSignal} personaName={persona.name} personaRepos={repos} />,
+              research: <ResearchToggle on={research} onChange={setResearch} disabled={locked} />,
+              temporary: <TemporaryToggle on={temporary} onChange={setTemporary} disabled={locked} />,
+              model: selection && (
                 <ModelEffortPicker
                   groups={groups}
                   value={selection}
@@ -293,8 +295,8 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
                   onEffort={(e) => setPickedEffort(e ?? null)}
                   disabled={locked}
                 />
-              )
-            }
+              ),
+            }}
             send={{
               label: start.isPending ? "Starting…" : research ? "Plan it" : "Send",
               disabled: locked || !!unavailable || files.pending || !text.trim() || askCommitEmail,

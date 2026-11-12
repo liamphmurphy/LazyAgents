@@ -24,7 +24,7 @@ import {
   useSetChatCommitEmail,
   useStartAside,
 } from "@/lib/api/hooks";
-import { asidesInWindow, commandSendMode, cycleSendMode, SEND_MODE_ENTER, SEND_MODE_HINT, sendModeAction, sendModePlaceholder, type SendMode } from "@/lib/send-mode";
+import { asidesInWindow, commandSendMode, cycleSendMode, SEND_MODE_ENTER, SEND_MODE_HINT, SEND_MODE_LABEL, sendModeAction, sendModePlaceholder, type SendMode } from "@/lib/send-mode";
 import { SEND_TONE, SendModeSwitch } from "./send-modes";
 import { FollowupTray } from "./followups";
 import { LiveAsides, ReplyAsides } from "./asides";
@@ -59,7 +59,7 @@ import { CiteContext } from "@/components/domain/cite-marker";
 import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { timelineTime } from "@/lib/format";
-import { ModelEffortPicker, effortLabel, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
+import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
@@ -75,6 +75,7 @@ import { SecretsChip } from "./secrets-chip";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
 import { ChatProjectPicker } from "./chat-project";
+import { composerOptions } from "@/lib/composer-options";
 import { CommitEmailChip, CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
@@ -469,6 +470,7 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
   // The effort the next message runs at; one the selected model lacks falls back to automatic, as on the server.
   const wanted = pickedEffort === null ? c?.effort : pickedEffort === "default" ? undefined : pickedEffort;
   const effort = wanted && offered.efforts.includes(wanted) ? wanted : undefined;
+  const modelSummary = selection ? modelEffortSummary(groups, selection, offered.efforts.length > 0, effort).text : undefined;
   const effortPending = !!c && effort !== c.effort;
   // The next message would start a run on a harness that can't run: say why before sending.
   const unavailable = selection && groups?.find((g) => g.harness === selection.harness && !g.available);
@@ -766,6 +768,17 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
         return [];
     }
   };
+  const composerList = composerOptions({
+    code: !!(c.speaker ?? c.persona)?.capabilities?.code,
+    repo: c.repo_url,
+    pendingRepo: c.pending_repo_url,
+    persona: fresh ? (c.persona?.name ?? speaker.name) : undefined,
+    sendMode: running ? SEND_MODE_LABEL[sendMode] : undefined,
+    research,
+    temporary: fresh ? !!c.temporary : undefined,
+    model: modelSummary,
+    project: c.space ? undefined : { name: boot.data?.projects.find((p) => p.key === c.project)?.name },
+  });
   return (
     <Tooltip.Provider delayDuration={200}>
       <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
@@ -1079,55 +1092,52 @@ export function Conversation({ id, onNew, actions }: { id: string; onNew: () => 
                     ? sendModePlaceholder(sendMode, c.speaker || c.persona ? speaker.name : "your assistant")
                     : `Message ${c.speaker || c.persona ? speaker.name : "your assistant"}${c.space ? ` in ${c.space.name}` : ""}…`
               }
-              options={
-                <>
-                  {(c.speaker ?? c.persona)?.capabilities?.code && (
-                    <RepositoryPicker
-                      value={c.repo_url}
-                      pending={c.pending_repo_url}
-                      onPick={(r) => selectRepo.mutate(r)}
-                      disabled={c.archived || selectRepo.isPending}
-                      error={selectRepo.error}
-                      signal={repoSignal}
-                      personaName={speaker.name}
-                      personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
-                    />
-                  )}
-                  {fresh && <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />}
-                  {running && (
-                    <SendModeSwitch
-                      value={sendMode}
-                      onChange={(m) => {
-                        setSendMode(m);
-                        setModeError(null);
-                        area.current?.focus();
-                      }}
-                      disabled={locked}
-                    />
-                  )}
-                  <ResearchToggle on={research} onChange={setResearch} disabled={locked} />
-                  {fresh && <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />}
-                </>
-              }
+              options={composerList}
+              controls={{
+                repository: (
+                  <RepositoryPicker
+                    value={c.repo_url}
+                    pending={c.pending_repo_url}
+                    onPick={(r) => selectRepo.mutate(r)}
+                    disabled={c.archived || selectRepo.isPending}
+                    error={selectRepo.error}
+                    signal={repoSignal}
+                    personaName={speaker.name}
+                    personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
+                  />
+                ),
+                persona: <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />,
+                "send-mode": (
+                  <SendModeSwitch
+                    value={sendMode}
+                    onChange={(m) => {
+                      setSendMode(m);
+                      setModeError(null);
+                      area.current?.focus();
+                    }}
+                    disabled={locked}
+                  />
+                ),
+                research: <ResearchToggle on={research} onChange={setResearch} disabled={locked} />,
+                temporary: <TemporaryToggle on={!!c.temporary} onChange={switchTemporary} disabled={locked || create.isPending} />,
+                model: selection && (
+                  <ModelEffortPicker
+                    groups={groups}
+                    value={selection}
+                    onChange={pick}
+                    efforts={offered.efforts}
+                    effort={effort}
+                    onEffort={(e) => setPickedEffort(e ?? "default")}
+                    disabled={locked || running}
+                  />
+                ),
+              }}
               actions={
-                <>
-                  {selection && (
-                    <ModelEffortPicker
-                      groups={groups}
-                      value={selection}
-                      onChange={pick}
-                      efforts={offered.efforts}
-                      effort={effort}
-                      onEffort={(e) => setPickedEffort(e ?? "default")}
-                      disabled={locked || running}
-                    />
-                  )}
-                  {running && (
-                    <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
-                      {stopping ? "Stopping…" : "Stop"}
-                    </Button>
-                  )}
-                </>
+                running && (
+                  <Button variant="outline" icon="pause" disabled={stopping} onClick={() => cancel.mutate()}>
+                    {stopping ? "Stopping…" : "Stop"}
+                  </Button>
+                )
               }
               send={{
                 label: running ? sendModeAction(sendMode) : research ? "Plan it" : "Send",
