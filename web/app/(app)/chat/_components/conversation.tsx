@@ -44,7 +44,7 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { setDock } from "@/lib/chat-panels";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
-import { chatTitle, needsSwitchConfirm, runningSince, turnWindows, type TurnWindow } from "@/lib/chat-ui";
+import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -67,7 +67,7 @@ import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { timelineTime } from "@/lib/format";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
-import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
+import { ChatStatus, InterimReply, OpenTurnStep, RunActivity, TurnSteps, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { useSnippets } from "./snippets";
@@ -129,7 +129,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
+const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -141,18 +141,30 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, s
     for (const l of parts.listed) if (l.n !== undefined) titles.set(l.n, l.title || l.ref || hostOf(l.url));
     return { numbers: [...titles.keys()], value: { titles, focus: (n: number) => setCiteFocus((f) => ({ n, tick: (f?.tick ?? 0) + 1 })) } };
   }, [parts.listed]);
+  // A turn that ended without a reply keeps its steps: under the failure, or under the unanswered message.
+  const endedSteps = ended && (
+    <li className="flex flex-col items-start gap-1.5" data-testid="ended-turn">
+      <span className="flex items-center gap-2 text-xs text-fg-tertiary">
+        <PersonaAvatar persona={persona} size={22} />
+        <PersonaName persona={persona} className="text-[13px]" />
+      </span>
+      <TurnSteps runId={m.run_id} outcome={ended.outcome} since={ended.since} until={ended.until} end={ended.end} />
+    </li>
+  );
   if (m.role === "system") {
     // A turn that failed keeps the videos it started, so what went wrong stays visible.
-    return videos?.length ? (
+    return (
       <>
-        <li className="flex flex-col items-start"><VideoCards chatId={chat.id} videos={videos} messageId={m.id} /></li>
+        {endedSteps}
+        {videos?.length ? <li className="flex flex-col items-start"><VideoCards chatId={chat.id} videos={videos} messageId={m.id} /></li> : null}
         <Divider testId="system-message">{m.body_md}</Divider>
       </>
-    ) : <Divider testId="system-message">{m.body_md}</Divider>;
+    );
   }
   const mine = m.role === "user";
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
+    <>
     <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
       {/* Your messages need no name: the bubble on the right is you. */}
       {mine ? null : (
@@ -165,6 +177,8 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, s
           <time dateTime={m.created_at}>{timelineTime(m.created_at)}</time>
         </span>
       )}
+      {/* The live card's steps, folded to a line once the turn ended. Its events all precede the reply. */}
+      {!mine && turn && <TurnSteps runId={m.run_id} outcome="done" since={turn.since} until={m.created_at} end={Date.parse(m.created_at)} replyId={m.id} />}
       {!mine && videos?.length ? <VideoCards chatId={chat.id} videos={videos} messageId={m.id} /> : null}
       {/* Replies read as prose on the page; only real objects (canvases, runs, sources) get a card. */}
       <div
@@ -222,6 +236,8 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, s
         </div>
       )}
     </li>
+    {mine && endedSteps}
+    </>
   );
 });
 
@@ -273,11 +289,12 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
     }
     return out;
   }, [turns, asideList, running, since, speakerName]);
+  const ended = useMemo(() => endedTurns(list, running), [list, running]);
   const canEdit = !running && !locked && !editPending && !archived;
   const canRetry = !running && !editPending && !archived && !!lastUser;
   const lastId = list.at(-1)?.id;
   return list.map((m, i) => (
-    <Bubble key={m.id} m={m} chat={chat} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} highlighted={highlight === m.id}
+    <Bubble key={m.id} m={m} chat={chat} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} ended={ended.get(m.id)} highlighted={highlight === m.id}
       editable={canEdit && m.id === lastUser?.id}
       onEdit={onEdit}
       onRetry={canRetry && m.id === lastId ? onRetry : undefined}
@@ -359,7 +376,7 @@ function ActivityLog({ list, turns, groups, running, runId, since, focus }: { li
               <span className="min-w-0 flex-1 truncate text-fg-secondary">{snippet(prompt.get(m.id) ?? "")}</span>
               <Tag groups={groups} m={m} />
             </span>
-            <TurnToolCalls runId={m.run_id} since={t.since} until={t.until} />
+            <TurnToolCalls runId={m.run_id} since={t.since} until={t.until} replyId={m.id} focus={focus} />
             <WebSearchPill runId={m.run_id} since={t.since} until={t.until} />
             <MemoryNotices runId={m.run_id} since={t.since} until={t.until} />
           </li>
@@ -493,6 +510,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
   const view = dockActivity ? "chat" : tab;
   // "View reasoning" on a chat step: Activity opens on that step (the compact tab, or the dock's tab).
   const [traceFocus, setTraceFocus] = useState<{ key: string; at: number }>();
+  // The same for a finished turn's step in the conversation, kept stable so replies don't re-render.
+  const openStepRef = useRef<(key: string) => void>(undefined);
+  const openTurnStep = useCallback((key: string) => openStepRef.current?.(key), []);
   const openStep = (key: string) => {
     if (dockActivity) {
       focusActivityStep(key);
@@ -503,6 +523,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     setTab("activity");
     setTraceFocus({ key, at: Date.now() });
   };
+  useEffect(() => {
+    openStepRef.current = openStep;
+  });
   // A pick on another harness waits here until the person confirms what the switch loses.
   const [confirming, setConfirming] = useState<Selection | null>(null);
   const router = useRouter();
@@ -988,6 +1011,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             <>
             <VideoPlayers.Provider value={players}>
             <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
+            <OpenTurnStep.Provider value={openTurnStep}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               <BubbleList list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
@@ -1028,6 +1052,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               )}
               <li ref={end} aria-hidden />
             </ol>
+            </OpenTurnStep.Provider>
             </ReplyActions>
             </VideoPlayers.Provider>
             {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}

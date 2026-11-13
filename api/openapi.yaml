@@ -9106,7 +9106,7 @@ components:
         harness: { $ref: "#/components/schemas/Harness" }
         model: { type: string }
         run_id: { type: string, format: uuid }
-        turn_seq: { type: integer, description: The run turn that produced an assistant message }
+        turn_seq: { type: integer, description: "The run turn that produced an assistant message, or that a system message ended (the turn failed)" }
         context_refs: { type: array, items: { $ref: "#/components/schemas/ChatContextRef" } }
         citations: { type: array, items: { $ref: "#/components/schemas/ChatCitation" } }
         attachments: { type: array, items: { $ref: "#/components/schemas/ChatAttachment" }, description: "Files the person attached to a user message, or files (images) the assistant generated in an assistant message" }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, formatSpan, NEXT_STEP_AFTER_MS, NEXT_STEP_KEY, QUIET_AFTER_MS, QUIET_RUNNING_MS, quietFor, turnClock, turnPulse, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId, rowMark } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, formatSpan, NEXT_STEP_AFTER_MS, NEXT_STEP_KEY, QUIET_AFTER_MS, QUIET_RUNNING_MS, quietFor, turnClock, turnPulse, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, finishedTurn, endedTurns, groupByDay, catalogModelLabel, readableModelId, rowMark } from "./chat-ui.ts";
 
 test("rowMark shows an unread dot until the chat is read or opened, and running wins", () => {
   assert.equal(rowMark({ state: "idle", unread: 0 }), null);
@@ -720,4 +720,51 @@ test("formatSpan and quietFor read at a glance", () => {
   assert.equal(quietFor(2 * 60_000), "2 minutes");
   assert.equal(quietFor(3 * 60_000 + 59_000), "3 minutes");
   assert.equal(quietFor(61 * 60_000), "over an hour");
+});
+
+test("a finished turn keeps the live card's steps, none still under way", () => {
+  const events = [
+    say(0, "Let me look."),
+    call(1, "Read", { file_path: "a.go" }), result(2, "c1"),
+    say(3, "Surprise: the build passes without agy."),
+    call(4, "Bash", { command: "go test ./..." }), result(5, "c4"),
+  ];
+  const done = finishedTurn(events, "done", "2026-11-09T10:00:00Z", undefined, at(9));
+  assert.deepEqual(done.steps.map((s) => s.state), ["done", "done"]);
+  assert.equal(done.steps[1].tag, "surprise");
+  assert.equal(done.duration, 9000);
+  // A failed turn failed at its last step; a stopped one ran until its last event.
+  assert.deepEqual(finishedTurn(events, "failed", "2026-11-09T10:00:00Z").steps.map((s) => s.state), ["done", "failed"]);
+  assert.equal(finishedTurn(events, "stopped", "2026-11-09T10:00:00Z").duration, 5000);
+  // The window bounds the turn: a later turn's calls stay out.
+  assert.equal(finishedTurn(events, "done", "2026-11-09T10:00:00Z", "2026-11-09T10:00:02Z").steps.length, 1);
+});
+
+test("a turn with only bookkeeping and reply blocks gets no strip", () => {
+  const events = [call(1, "set_chat_title"), result(2, "c1"), ev(3, "lifecycle", { state: "reply_block", kind: "choices" })];
+  assert.deepEqual(finishedTurn(events, "done").steps, []);
+  assert.deepEqual(finishedTurn(undefined, "done").steps, []);
+});
+
+test("turns that ended without a reply keep a strip under their failure or unanswered message", () => {
+  const t = (s) => `2026-11-09T10:00:${String(s).padStart(2, "0")}Z`;
+  const list = [
+    { id: "u1", role: "user", created_at: t(0), run_id: "r" },
+    { id: "a1", role: "assistant", created_at: t(1), run_id: "r", turn_seq: 1 },
+    { id: "u2", role: "user", created_at: t(2), run_id: "r" },
+    { id: "f2", role: "system", created_at: t(3), run_id: "r", turn_seq: 2 },
+    { id: "n", role: "system", created_at: t(4) },
+    { id: "u3", role: "user", created_at: t(5), run_id: "r" },
+    { id: "u4", role: "user", created_at: t(6), run_id: "r" },
+  ];
+  const ended = endedTurns(list, false);
+  assert.deepEqual([...ended.keys()], ["f2", "u3", "u4"]);
+  assert.deepEqual(ended.get("f2"), { outcome: "failed", since: t(2), until: t(3), end: Date.parse(t(3)) });
+  // Interrupted by the next message, or stopped with nothing after it.
+  assert.deepEqual(ended.get("u3"), { outcome: "stopped", since: t(5), until: t(6) });
+  assert.deepEqual(ended.get("u4"), { outcome: "stopped", since: t(6) });
+  // While a turn runs, the newest message is that turn: the live card shows it.
+  assert.equal(endedTurns(list, true).has("u4"), false);
+  // A system note without a turn (a switch, a persona joining) isn't a failure.
+  assert.equal(endedTurns([list[0], list[4]], false).get("u1")?.outcome, "stopped");
 });

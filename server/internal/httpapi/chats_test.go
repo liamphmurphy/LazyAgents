@@ -915,3 +915,47 @@ func testChatModels(_ context.Context, harness, _ string) ([]chatmodels.Model, e
 	}
 	return models, nil
 }
+
+// A turn that failed ends in a system message bound to that turn, which carries
+// its turn_seq so the chat can keep the turn's steps beside it; a system note
+// with no turn (a switch, a persona joining) has none, and neither has effort.
+func TestFailedTurnSystemMessageCarriesItsTurn(t *testing.T) {
+	e := newChatEnv(t)
+	id := e.newChat(map[string]any{"harness": "claude-code", "model": "opus-5.5"})["id"].(string)
+	e.want("POST", "/chats/"+id+"/messages", map[string]any{"body": "hi"}, http.StatusAccepted)
+	e.want("POST", "/chats/"+id+"/cancel", nil, 200)
+	var runID, turnID uuid.UUID
+	var seq int
+	if err := e.pool.QueryRow(t.Context(), `SELECT t.run_id, t.id, t.seq FROM run_turns t JOIN chat_sessions c ON c.current_run_id = t.run_id
+		WHERE c.id = $1 ORDER BY t.seq DESC LIMIT 1`, id).Scan(&runID, &turnID, &seq); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []store.AppendChatMessageParams{
+		{SessionID: uuid.MustParse(id), Role: "system", BodyMd: "The chat turn stopped (exit 1).", RunID: &runID, RunTurnID: &turnID},
+		{SessionID: uuid.MustParse(id), Role: "system", BodyMd: "Switched model.", RunID: &runID},
+	} {
+		p.ContextRefs, p.Citations = []byte("[]"), []byte("[]")
+		if _, err := e.q.AppendChatMessage(t.Context(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var system []map[string]any
+	for _, m := range e.want("GET", "/chats/"+id+"/messages", nil, 200)["messages"].([]any) {
+		if m := m.(map[string]any); m["role"] == "system" {
+			system = append(system, m)
+		}
+	}
+	if len(system) < 2 {
+		t.Fatalf("system messages %v", system)
+	}
+	failed, note := system[len(system)-2], system[len(system)-1]
+	if failed["turn_seq"] != float64(seq) {
+		t.Errorf("failed turn's message turn_seq = %v, want %d", failed["turn_seq"], seq)
+	}
+	if _, ok := failed["effort"]; ok {
+		t.Errorf("a system message has no effort: %v", failed)
+	}
+	if _, ok := note["turn_seq"]; ok {
+		t.Errorf("a note without a turn has no turn_seq: %v", note)
+	}
+}
