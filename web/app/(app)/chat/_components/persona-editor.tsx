@@ -330,7 +330,7 @@ function Toggle({ id, checked, onChange, title, hint }: { id: string; checked: b
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; imageEngine: string; personas: boolean; svg: boolean; workflows: boolean; connectors: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; imageEngine: string; personas: boolean; svg: boolean; workflows: boolean; connectors: boolean; ticketsUnasked: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -344,6 +344,7 @@ const draftOf = (p?: Persona): Draft => ({
   svg: p?.capabilities.svg ?? false,
   workflows: p?.capabilities.workflows ?? false,
   connectors: p?.capabilities.connectors ?? false,
+  ticketsUnasked: p?.capabilities.ticket_edits === "allow",
   repos: p?.repos ?? [],
 });
 
@@ -409,7 +410,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors },
+          capabilities: { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors, ticket_edits: draft.ticketsUnasked ? "allow" : "ask" },
           repos: draft.repos,
         });
       } else {
@@ -427,9 +428,10 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           draft.svg !== (p.capabilities.svg ?? false) ||
           draft.workflows !== (p.capabilities.workflows ?? false) ||
           draft.connectors !== (p.capabilities.connectors ?? false) ||
+          draft.ticketsUnasked !== (p.capabilities.ticket_edits === "allow") ||
           !sameList(draft.repos, p.repos)
         ) {
-          patch.capabilities = { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors };
+          patch.capabilities = { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors, ticket_edits: draft.ticketsUnasked ? "allow" : "ask" };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -617,6 +619,13 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     onChange={(v) => set({ connectors: v })}
                     title="Request connectors and secrets"
                     hint="Can propose MCP connectors and ask for API secrets in a chat. Each one is added only after you review it; you enter secret values yourself."
+                  />
+                  <Toggle
+                    id="persona-ticket-edits"
+                    checked={draft.ticketsUnasked}
+                    onChange={(v) => set({ ticketsUnasked: v })}
+                    title="Edit tickets without asking"
+                    hint="Changes tickets, comments and blockers right away. Off, each edit waits as a card in the chat for you to apply or decline. Canceling a ticket always asks."
                   />
                 </fieldset>
               </div>
