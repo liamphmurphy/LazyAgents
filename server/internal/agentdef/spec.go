@@ -205,11 +205,11 @@ const OptionNoTools = "no_tools"
 // sets it, and the MCP surface it gets is read-only.
 const OptionAside = "aside"
 
-// OptionExplorer ("true") gives a Claude Code lead ticket run one read-only
-// sub agent, "explorer", that searches and reads code on a cheap model and
-// returns conclusions, keeping that output out of the lead's context.
-// OptionExplorerModel picks its model (default DefaultExplorerModel). See
-// ExplorerOn for when it applies.
+// OptionExplorer gives a Claude Code lead ticket run one read-only sub agent,
+// "explorer", that searches and reads code on a cheap model and returns
+// conclusions, keeping that output out of the lead's context. It is on unless
+// set to "false". OptionExplorerModel picks its model (default
+// DefaultExplorerModel). See ExplorerOn for when it applies.
 const (
 	OptionExplorer       = "explorer"
 	OptionExplorerModel  = "explorer_model"
@@ -218,12 +218,13 @@ const (
 	ExplorerAgent = "explorer"
 )
 
-// ExplorerOn reports whether a run gets the explorer sub agent: the option is
-// "true", the harness is Claude Code, the run is a lead (an undelegated ticket
-// run), and the spec is neither readonly nor no_tools.
+// ExplorerOn reports whether a run gets the explorer sub agent: the option
+// isn't "false", the harness is Claude Code, the run is a lead (an undelegated
+// ticket run), and the spec is neither readonly nor no_tools. Only main agents
+// run leads, so sub agents and chats never get it.
 func ExplorerOn(spec Resolved, lead bool) bool {
 	o := spec.HarnessOptions
-	return lead && spec.Harness == HarnessClaudeCode && o[OptionExplorer] == "true" &&
+	return lead && spec.Harness == HarnessClaudeCode && o[OptionExplorer] != "false" &&
 		o["readonly"] != "true" && o[OptionNoTools] != "true"
 }
 

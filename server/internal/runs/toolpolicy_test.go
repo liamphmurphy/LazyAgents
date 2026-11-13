@@ -185,7 +185,12 @@ func TestToolPolicyExplorerSubagent(t *testing.T) {
 			t.Fatalf("reason %q", d.Reason)
 		}
 	}
-	// Off: no sub agent at all, though the run has tests:run.
+	// Default (no option): the explorer is on for a Claude Code lead, and
+	// it's the only sub agent.
+	check("Agent", "explorer", "allow")
+	check("Agent", "general-purpose", "deny")
+	// explorer: "false": no sub agent at all, though the run has tests:run.
+	setOption("false")
 	check("Agent", "explorer", "deny")
 	check("Agent", "general-purpose", "deny")
 	setOption("true")
@@ -221,7 +226,16 @@ func TestToolPolicyExplorerSubagent(t *testing.T) {
 	check("Agent", "explorer", "allow")
 	setOption("false")
 	check("Agent", "explorer", "deny")
-	setOption("true")
+	// The default (option unset) never reaches sub agents or chats either.
+	delete(spec.HarnessOptions, agentdef.OptionExplorer)
+	raw, _ := json.Marshal(spec)
+	if _, err := pool.Exec(ctx, "UPDATE runs SET resolved_spec=$2 WHERE id=$1", run.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	check("Agent", "explorer", "allow")
+	exec("UPDATE runs SET parent_run_id=$1 WHERE id=$1")
+	check("Agent", "explorer", "deny")
+	exec("UPDATE runs SET parent_run_id=NULL WHERE id=$1")
 	exec("UPDATE runs SET purpose='chat', ticket_id=NULL WHERE id=$1")
 	check("Agent", "explorer", "deny")
 }
