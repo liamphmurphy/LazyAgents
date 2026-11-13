@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,7 +15,7 @@ import (
 
 const addAlias = `-- name: AddAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path) VALUES ($1, $2, $3)
-ON CONFLICT (workspace_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, created_at = now()
+ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now()
 `
 
 type AddAliasParams struct {
@@ -28,9 +29,44 @@ func (q *Queries) AddAlias(ctx context.Context, arg AddAliasParams) error {
 	return err
 }
 
-const agentsByIDs = `-- name: AgentsByIDs :many
-SELECT id, name, handle, color_index FROM agents WHERE id = ANY($1::uuid[])
+const addPageTags = `-- name: AddPageTags :exec
+INSERT INTO page_tags (artifact_id, tag) SELECT $1::uuid, unnest($2::text[]) ON CONFLICT DO NOTHING
 `
+
+type AddPageTagsParams struct {
+	ArtifactID uuid.UUID
+	Tags       []string
+}
+
+func (q *Queries) AddPageTags(ctx context.Context, arg AddPageTagsParams) error {
+	_, err := q.db.Exec(ctx, addPageTags, arg.ArtifactID, arg.Tags)
+	return err
+}
+
+const addPropertyAlias = `-- name: AddPropertyAlias :exec
+INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
+ON CONFLICT (artifact_id, path) DO NOTHING
+`
+
+type AddPropertyAliasParams struct {
+	WorkspaceID uuid.UUID
+	ArtifactID  uuid.UUID
+	Path        string
+}
+
+func (q *Queries) AddPropertyAlias(ctx context.Context, arg AddPropertyAliasParams) error {
+	_, err := q.db.Exec(ctx, addPropertyAlias, arg.WorkspaceID, arg.ArtifactID, arg.Path)
+	return err
+}
+
+const agentsByIDs = `-- name: AgentsByIDs :many
+SELECT id, name, handle, color_index FROM agents WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type AgentsByIDsParams struct {
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
 
 type AgentsByIDsRow struct {
 	ID         uuid.UUID
@@ -39,8 +75,8 @@ type AgentsByIDsRow struct {
 	ColorIndex int32
 }
 
-func (q *Queries) AgentsByIDs(ctx context.Context, ids []uuid.UUID) ([]AgentsByIDsRow, error) {
-	rows, err := q.db.Query(ctx, agentsByIDs, ids)
+func (q *Queries) AgentsByIDs(ctx context.Context, arg AgentsByIDsParams) ([]AgentsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, agentsByIDs, arg.WorkspaceID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +101,15 @@ func (q *Queries) AgentsByIDs(ctx context.Context, ids []uuid.UUID) ([]AgentsByI
 }
 
 const artifactsByIDs = `-- name: ArtifactsByIDs :many
-SELECT id, type, title, path, number FROM artifacts WHERE id = ANY($1::uuid[])
+SELECT id, type, title, path, number FROM artifacts WHERE workspace_id = $1 AND artifact_visible(audience, owner_user_id, $2::uuid) AND ($3::boolean OR audience <> 'agent') AND id = ANY($4::uuid[])
 `
+
+type ArtifactsByIDsParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	Ids          []uuid.UUID
+}
 
 type ArtifactsByIDsRow struct {
 	ID     uuid.UUID
@@ -76,8 +119,13 @@ type ArtifactsByIDsRow struct {
 	Number *int32
 }
 
-func (q *Queries) ArtifactsByIDs(ctx context.Context, ids []uuid.UUID) ([]ArtifactsByIDsRow, error) {
-	rows, err := q.db.Query(ctx, artifactsByIDs, ids)
+func (q *Queries) ArtifactsByIDs(ctx context.Context, arg ArtifactsByIDsParams) ([]ArtifactsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, artifactsByIDs,
+		arg.WorkspaceID,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.Ids,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -111,14 +159,17 @@ FROM knowledge_links l
 LEFT JOIN artifacts ar ON l.source_kind = 'artifact' AND ar.id = l.source_id
 LEFT JOIN tickets t ON t.id = l.source_ticket_id
 LEFT JOIN comments c ON l.source_kind = 'comment' AND c.id = l.source_id
-WHERE l.workspace_id = $1
-  AND l.target_id = $2
-  AND (l.target_kind = $3 OR ($3 = 'artifact' AND l.target_kind = 'section'))
+WHERE (l.source_kind <> 'artifact' OR (artifact_visible(ar.audience, ar.owner_user_id, $1::uuid)))
+  AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid)))
+  AND l.workspace_id = $2
+  AND l.target_id = $3
+  AND (l.target_kind = $4 OR ($4 = 'artifact' AND l.target_kind = 'section'))
 ORDER BY l.created_at DESC, l.position
 LIMIT 200
 `
 
 type BacklinksParams struct {
+	Viewer      *uuid.UUID
 	WorkspaceID uuid.UUID
 	TargetID    *uuid.UUID
 	TargetKind  string
@@ -146,7 +197,12 @@ type BacklinksRow struct {
 // Links to a target (an artifact's sections count as the artifact), with
 // what the UI needs to name the source.
 func (q *Queries) Backlinks(ctx context.Context, arg BacklinksParams) ([]BacklinksRow, error) {
-	rows, err := q.db.Query(ctx, backlinks, arg.WorkspaceID, arg.TargetID, arg.TargetKind)
+	rows, err := q.db.Query(ctx, backlinks,
+		arg.Viewer,
+		arg.WorkspaceID,
+		arg.TargetID,
+		arg.TargetKind,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +239,17 @@ func (q *Queries) Backlinks(ctx context.Context, arg BacklinksParams) ([]Backlin
 }
 
 const countBacklinks = `-- name: CountBacklinks :one
-SELECT count(DISTINCT (source_kind, source_id))::int FROM knowledge_links
-WHERE target_id = $1 AND target_kind IN ('artifact', 'section')
+SELECT count(DISTINCT (source_kind, source_id))::int FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid))) AND target_id = $2 AND target_kind IN ('artifact', 'section')
 `
 
-func (q *Queries) CountBacklinks(ctx context.Context, targetID *uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countBacklinks, targetID)
+type CountBacklinksParams struct {
+	Viewer   *uuid.UUID
+	TargetID *uuid.UUID
+}
+
+func (q *Queries) CountBacklinks(ctx context.Context, arg CountBacklinksParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countBacklinks, arg.Viewer, arg.TargetID)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -196,11 +257,16 @@ func (q *Queries) CountBacklinks(ctx context.Context, targetID *uuid.UUID) (int3
 
 const countSuggestions = `-- name: CountSuggestions :one
 SELECT count(*)::int FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ar.workspace_id = $1 AND v.state = 'suggested'
 `
 
-func (q *Queries) CountSuggestions(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countSuggestions, workspaceID)
+type CountSuggestionsParams struct {
+	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
+}
+
+func (q *Queries) CountSuggestions(ctx context.Context, arg CountSuggestionsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countSuggestions, arg.WorkspaceID, arg.Viewer)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -222,16 +288,17 @@ func (q *Queries) DecideVersion(ctx context.Context, arg DecideVersionParams) er
 }
 
 const deleteAlias = `-- name: DeleteAlias :exec
-DELETE FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower($2)
+DELETE FROM artifact_aliases WHERE workspace_id = $1 AND artifact_id=$2 AND lower(path) = lower($3) AND kind='moved'
 `
 
 type DeleteAliasParams struct {
 	WorkspaceID uuid.UUID
+	ArtifactID  uuid.UUID
 	Path        string
 }
 
 func (q *Queries) DeleteAlias(ctx context.Context, arg DeleteAliasParams) error {
-	_, err := q.db.Exec(ctx, deleteAlias, arg.WorkspaceID, arg.Path)
+	_, err := q.db.Exec(ctx, deleteAlias, arg.WorkspaceID, arg.ArtifactID, arg.Path)
 	return err
 }
 
@@ -263,17 +330,40 @@ func (q *Queries) DeleteLinksFromSource(ctx context.Context, arg DeleteLinksFrom
 	return err
 }
 
-const epicsByIDs = `-- name: EpicsByIDs :many
-SELECT id, name FROM epics WHERE id = ANY($1::uuid[])
+const deletePageTags = `-- name: DeletePageTags :exec
+DELETE FROM page_tags WHERE artifact_id = $1
 `
+
+func (q *Queries) DeletePageTags(ctx context.Context, artifactID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePageTags, artifactID)
+	return err
+}
+
+const deletePropertyAliases = `-- name: DeletePropertyAliases :exec
+DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias'
+`
+
+func (q *Queries) DeletePropertyAliases(ctx context.Context, artifactID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePropertyAliases, artifactID)
+	return err
+}
+
+const epicsByIDs = `-- name: EpicsByIDs :many
+SELECT id, name FROM epics WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type EpicsByIDsParams struct {
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
 
 type EpicsByIDsRow struct {
 	ID   uuid.UUID
 	Name string
 }
 
-func (q *Queries) EpicsByIDs(ctx context.Context, ids []uuid.UUID) ([]EpicsByIDsRow, error) {
-	rows, err := q.db.Query(ctx, epicsByIDs, ids)
+func (q *Queries) EpicsByIDs(ctx context.Context, arg EpicsByIDsParams) ([]EpicsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, epicsByIDs, arg.WorkspaceID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}
@@ -293,28 +383,35 @@ func (q *Queries) EpicsByIDs(ctx context.Context, ids []uuid.UUID) ([]EpicsByIDs
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
-WHERE ar.workspace_id = $1 AND ar.type = 'note'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ar.workspace_id = $1 AND ar.type = 'note'
 ORDER BY lower(ar.path)
 `
+
+type ExportNotesParams struct {
+	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
+}
 
 type ExportNotesRow struct {
 	ID         uuid.UUID
 	Path       *string
 	Title      string
+	Audience   string
 	AuthorType string
 	AuthorID   uuid.UUID
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	BodyMd     *string
+	Properties json.RawMessage
 	ProjectKey *string
 }
 
-func (q *Queries) ExportNotes(ctx context.Context, workspaceID uuid.UUID) ([]ExportNotesRow, error) {
-	rows, err := q.db.Query(ctx, exportNotes, workspaceID)
+func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]ExportNotesRow, error) {
+	rows, err := q.db.Query(ctx, exportNotes, arg.WorkspaceID, arg.Viewer)
 	if err != nil {
 		return nil, err
 	}
@@ -326,11 +423,13 @@ func (q *Queries) ExportNotes(ctx context.Context, workspaceID uuid.UUID) ([]Exp
 			&i.ID,
 			&i.Path,
 			&i.Title,
+			&i.Audience,
 			&i.AuthorType,
 			&i.AuthorID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BodyMd,
+			&i.Properties,
 			&i.ProjectKey,
 		); err != nil {
 			return nil, err
@@ -344,17 +443,18 @@ func (q *Queries) ExportNotes(ctx context.Context, workspaceID uuid.UUID) ([]Exp
 }
 
 const findArtifactByTitle = `-- name: FindArtifactByTitle :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type <> 'note' AND lower(title) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type <> 'note' AND lower(title) = lower($3)
 ORDER BY updated_at DESC LIMIT 1
 `
 
 type FindArtifactByTitleParams struct {
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 	Title       string
 }
 
 func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTitleParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, findArtifactByTitle, arg.WorkspaceID, arg.Title)
+	row := q.db.QueryRow(ctx, findArtifactByTitle, arg.WorkspaceID, arg.Viewer, arg.Title)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -373,6 +473,11 @@ func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTit
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -409,18 +514,19 @@ func (q *Queries) FindEpicByName(ctx context.Context, arg FindEpicByNameParams) 
 }
 
 const findNoteByAlias = `-- name: FindNoteByAlias :one
-SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
-WHERE al.workspace_id = $1 AND lower(al.path) = lower($2)
-ORDER BY al.created_at DESC LIMIT 1
+SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path, ar.audience, ar.owner_user_id, ar.persona_direct, ar.persona_paused, ar.chat_session_id FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND al.workspace_id = $1 AND lower(al.path) = lower($3)
+ORDER BY (ar.audience = 'private') DESC, al.created_at DESC LIMIT 1
 `
 
 type FindNoteByAliasParams struct {
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 	Path        string
 }
 
 func (q *Queries) FindNoteByAlias(ctx context.Context, arg FindNoteByAliasParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, findNoteByAlias, arg.WorkspaceID, arg.Path)
+	row := q.db.QueryRow(ctx, findNoteByAlias, arg.WorkspaceID, arg.Viewer, arg.Path)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -439,24 +545,30 @@ func (q *Queries) FindNoteByAlias(ctx context.Context, arg FindNoteByAliasParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const findNotesByTitle = `-- name: FindNotesByTitle :many
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(title) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(title) = lower($3)
   AND current_version_id IS NOT NULL
-ORDER BY length(path), path
+ORDER BY (audience = 'private') DESC, length(path), path
 `
 
 type FindNotesByTitleParams struct {
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 	Title       string
 }
 
 // Several notes can share a title in different folders; the shortest path wins.
 func (q *Queries) FindNotesByTitle(ctx context.Context, arg FindNotesByTitleParams) ([]Artifact, error) {
-	rows, err := q.db.Query(ctx, findNotesByTitle, arg.WorkspaceID, arg.Title)
+	rows, err := q.db.Query(ctx, findNotesByTitle, arg.WorkspaceID, arg.Viewer, arg.Title)
 	if err != nil {
 		return nil, err
 	}
@@ -481,6 +593,11 @@ func (q *Queries) FindNotesByTitle(ctx context.Context, arg FindNotesByTitlePara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Path,
+			&i.Audience,
+			&i.OwnerUserID,
+			&i.PersonaDirect,
+			&i.PersonaPaused,
+			&i.ChatSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -497,12 +614,12 @@ WITH cand AS (
   SELECT ar.id, ar.title, ar.path, ar.search, ar.search_text, v.body_md,
     lower(ar.title) AS ltitle,
     lower(coalesce(substring(v.body_md FROM '(?im)^tags:[ \t]*(.*)$'), '')) AS ltags,
-    lower($2::text) AS lq,
-    websearch_to_tsquery('english', $2::text) AS tsq
+    lower($4::text) AS lq,
+    websearch_to_tsquery('english', $4::text) AS tsq
   FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-  WHERE ar.workspace_id = $3 AND ar.type = 'note' AND v.body_md IS NOT NULL
+  WHERE artifact_visible(ar.audience, ar.owner_user_id, $1::uuid) AND ar.workspace_id = $5 AND ar.type = 'note' AND v.body_md IS NOT NULL
     AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
-    AND ($4::text IS NULL OR lower(split_part(ar.path, '/', 2)) = lower($4::text))
+    AND ($6::text IS NULL OR lower(split_part(ar.path, '/', 2)) = lower($6::text))
 ), scored AS (
   SELECT c.id, c.title, c.path, c.search, c.search_text, c.body_md, c.ltitle, c.ltags, c.lq, c.tsq,
     greatest(word_similarity(c.lq, c.ltitle), similarity(c.lq, c.ltitle),
@@ -515,19 +632,21 @@ SELECT s.id, s.title, s.path, s.body_md,
   CASE WHEN s.lq = '' THEN '' ELSE ts_headline('english', s.search_text, s.tsq,
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»') END::text AS snippet,
   ((s.sim + s.fts + CASE WHEN s.exact THEN 0.5 ELSE 0 END) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid) AND ($2::boolean OR src.audience <> 'agent'))) AND l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
 FROM scored s
 WHERE s.lq = '' OR s.exact OR s.sim >= 0.3
 ORDER BY score DESC, lower(split_part(s.path, '/', 2)), s.ltitle
-LIMIT $1
+LIMIT $3
 `
 
 type FindPatternsParams struct {
-	Lim         int32
-	Q           string
-	WorkspaceID uuid.UUID
-	Topic       *string
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	Lim          int32
+	Q            string
+	WorkspaceID  uuid.UUID
+	Topic        *string
 }
 
 type FindPatternsRow struct {
@@ -545,6 +664,8 @@ type FindPatternsRow struct {
 // then title.
 func (q *Queries) FindPatterns(ctx context.Context, arg FindPatternsParams) ([]FindPatternsRow, error) {
 	rows, err := q.db.Query(ctx, findPatterns,
+		arg.Viewer,
+		arg.IncludeAgent,
 		arg.Lim,
 		arg.Q,
 		arg.WorkspaceID,
@@ -577,17 +698,18 @@ func (q *Queries) FindPatterns(ctx context.Context, arg FindPatternsParams) ([]F
 
 const getNoteByPath = `-- name: GetNoteByPath :one
 
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(path) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(path) = lower($3) ORDER BY (audience = 'private') DESC LIMIT 1
 `
 
 type GetNoteByPathParams struct {
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 	Path        string
 }
 
 // Wiki pages, [[links]] and backlinks (docs/dev/plan.md §12).
 func (q *Queries) GetNoteByPath(ctx context.Context, arg GetNoteByPathParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, getNoteByPath, arg.WorkspaceID, arg.Path)
+	row := q.db.QueryRow(ctx, getNoteByPath, arg.WorkspaceID, arg.Viewer, arg.Path)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -606,6 +728,11 @@ func (q *Queries) GetNoteByPath(ctx context.Context, arg GetNoteByPathParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -617,16 +744,20 @@ SELECT DISTINCT
   CASE WHEN l.target_kind = 'section' THEN 'artifact' ELSE l.target_kind END::text AS target_kind,
   l.target_id::uuid AS target_id
 FROM knowledge_links l
-WHERE l.workspace_id = $1 AND l.target_kind <> 'unresolved'
+WHERE (l.source_kind <> 'artifact' OR EXISTS (SELECT 1 FROM artifacts src WHERE src.id = l.source_id AND artifact_visible(src.audience, src.owner_user_id, $1::uuid) AND ($2::boolean OR src.audience <> 'agent')))
+ AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid) AND ($2::boolean OR dst.audience <> 'agent')))
+ AND l.workspace_id = $3 AND l.target_kind <> 'unresolved'
   AND (
-    (CASE WHEN l.source_kind = 'artifact' THEN l.source_id ELSE l.source_ticket_id END) = ANY($2::uuid[])
-    OR l.target_id = ANY($2::uuid[])
+    (CASE WHEN l.source_kind = 'artifact' THEN l.source_id ELSE l.source_ticket_id END) = ANY($4::uuid[])
+    OR l.target_id = ANY($4::uuid[])
   )
 `
 
 type GraphEdgesParams struct {
-	WorkspaceID uuid.UUID
-	Ids         []uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	WorkspaceID  uuid.UUID
+	Ids          []uuid.UUID
 }
 
 type GraphEdgesRow struct {
@@ -639,7 +770,12 @@ type GraphEdgesRow struct {
 // Resolved links among artifacts, tickets, epics and agents: (source, target)
 // pairs for the local graph. Comment links count as their ticket's.
 func (q *Queries) GraphEdges(ctx context.Context, arg GraphEdgesParams) ([]GraphEdgesRow, error) {
-	rows, err := q.db.Query(ctx, graphEdges, arg.WorkspaceID, arg.Ids)
+	rows, err := q.db.Query(ctx, graphEdges,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.WorkspaceID,
+		arg.Ids,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -789,12 +925,18 @@ func (q *Queries) LinksFromTicket(ctx context.Context, sourceTicketID *uuid.UUID
 const listADRDocs = `-- name: ListADRDocs :many
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.updated_at, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND v.body_md IS NOT NULL
   AND (ar.type = 'adr'
        OR (ar.type = 'note' AND ar.title ~* '^adr([^a-z]|$)'
            AND lower(ar.path) NOT LIKE 'agents/%' AND lower(ar.path) NOT LIKE 'patterns/%'))
 ORDER BY ar.updated_at DESC
 `
+
+type ListADRDocsParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+}
 
 type ListADRDocsRow struct {
 	ID        uuid.UUID
@@ -808,8 +950,8 @@ type ListADRDocsRow struct {
 
 // ADR documents and published wiki pages titled "ADR …" (outside agent
 // memory and Patterns/), with their current body for status parsing.
-func (q *Queries) ListADRDocs(ctx context.Context, workspaceID uuid.UUID) ([]ListADRDocsRow, error) {
-	rows, err := q.db.Query(ctx, listADRDocs, workspaceID)
+func (q *Queries) ListADRDocs(ctx context.Context, arg ListADRDocsParams) ([]ListADRDocsRow, error) {
+	rows, err := q.db.Query(ctx, listADRDocs, arg.WorkspaceID, arg.Viewer, arg.IncludeAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -961,18 +1103,27 @@ func (q *Queries) ListArtifactUnlinkedReaders(ctx context.Context, artifactID uu
 }
 
 const listNotes = `-- name: ListNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
+SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
   (ar.current_version_id IS NOT NULL)::bool AS published,
   (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
 FROM artifacts ar
-WHERE ar.workspace_id = $1 AND ar.type = 'note'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note'
+  AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower($4)))
 ORDER BY lower(ar.path)
 `
+
+type ListNotesParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	Tag          *string
+}
 
 type ListNotesRow struct {
 	ID          uuid.UUID
 	Path        *string
 	Title       string
+	Audience    string
 	AuthorType  string
 	AuthorID    uuid.UUID
 	UpdatedAt   time.Time
@@ -981,8 +1132,13 @@ type ListNotesRow struct {
 	Suggestions int32
 }
 
-func (q *Queries) ListNotes(ctx context.Context, workspaceID uuid.UUID) ([]ListNotesRow, error) {
-	rows, err := q.db.Query(ctx, listNotes, workspaceID)
+func (q *Queries) ListNotes(ctx context.Context, arg ListNotesParams) ([]ListNotesRow, error) {
+	rows, err := q.db.Query(ctx, listNotes,
+		arg.WorkspaceID,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.Tag,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -994,6 +1150,7 @@ func (q *Queries) ListNotes(ctx context.Context, workspaceID uuid.UUID) ([]ListN
 			&i.ID,
 			&i.Path,
 			&i.Title,
+			&i.Audience,
 			&i.AuthorType,
 			&i.AuthorID,
 			&i.UpdatedAt,
@@ -1015,13 +1172,14 @@ const listSuggestions = `-- name: ListSuggestions :many
 SELECT v.id, v.artifact_id, v.label, v.note, v.body_md, v.created_by_type, v.created_by_id, v.created_at,
   v.based_on_version_id, ar.path, ar.title, ar.current_version_id
 FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
-  AND ($2::uuid IS NULL OR v.artifact_id = $2)
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ar.workspace_id = $1 AND v.state = 'suggested'
+  AND ($3::uuid IS NULL OR v.artifact_id = $3)
 ORDER BY v.created_at
 `
 
 type ListSuggestionsParams struct {
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 	ArtifactID  *uuid.UUID
 }
 
@@ -1042,7 +1200,7 @@ type ListSuggestionsRow struct {
 
 // Pending agent edits to shared notes, oldest first.
 func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams) ([]ListSuggestionsRow, error) {
-	rows, err := q.db.Query(ctx, listSuggestions, arg.WorkspaceID, arg.ArtifactID)
+	rows, err := q.db.Query(ctx, listSuggestions, arg.WorkspaceID, arg.Viewer, arg.ArtifactID)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,18 +1232,28 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 	return items, nil
 }
 
+const lockNotePaths = `-- name: LockNotePaths :exec
+SELECT pg_advisory_xact_lock(hashtextextended('note-paths:' || $1::uuid::text, 0))
+`
+
+func (q *Queries) LockNotePaths(ctx context.Context, dollar_1 uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockNotePaths, dollar_1)
+	return err
+}
+
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties, v.changes, v.source_canvas_version_id FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $3::uuid) AND v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
 type LockSuggestionParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 }
 
 func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) (ArtifactVersion, error) {
-	row := q.db.QueryRow(ctx, lockSuggestion, arg.ID, arg.WorkspaceID)
+	row := q.db.QueryRow(ctx, lockSuggestion, arg.ID, arg.WorkspaceID, arg.Viewer)
 	var i ArtifactVersion
 	err := row.Scan(
 		&i.ID,
@@ -1110,6 +1278,9 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
+		&i.Changes,
+		&i.SourceCanvasVersionID,
 	)
 	return i, err
 }
@@ -1117,15 +1288,17 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 const mentionCandidatesArtifacts = `-- name: MentionCandidatesArtifacts :many
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> $2
-  AND (ar.search @@ phraseto_tsquery('english', $3) OR v.body_md ILIKE '%' || $3 || '%')
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> $4
+  AND (ar.search @@ phraseto_tsquery('english', $5) OR v.body_md ILIKE '%' || $5 || '%')
 LIMIT 50
 `
 
 type MentionCandidatesArtifactsParams struct {
-	WorkspaceID uuid.UUID
-	ExcludeID   uuid.UUID
-	Phrase      string
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	ExcludeID    uuid.UUID
+	Phrase       string
 }
 
 type MentionCandidatesArtifactsRow struct {
@@ -1139,7 +1312,13 @@ type MentionCandidatesArtifactsRow struct {
 
 // Markdown artifacts whose text mentions a phrase (for unlinked mentions).
 func (q *Queries) MentionCandidatesArtifacts(ctx context.Context, arg MentionCandidatesArtifactsParams) ([]MentionCandidatesArtifactsRow, error) {
-	rows, err := q.db.Query(ctx, mentionCandidatesArtifacts, arg.WorkspaceID, arg.ExcludeID, arg.Phrase)
+	rows, err := q.db.Query(ctx, mentionCandidatesArtifacts,
+		arg.WorkspaceID,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.ExcludeID,
+		arg.Phrase,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1227,6 +1406,83 @@ func (q *Queries) NoteLinksTo(ctx context.Context, arg NoteLinksToParams) (bool,
 	return column_1, err
 }
 
+const notePathTaken = `-- name: NotePathTaken :one
+SELECT EXISTS (SELECT 1 FROM artifacts a
+ WHERE a.workspace_id=$1 AND a.type='note' AND lower(a.path)=lower($2)
+ AND artifact_visible(a.audience, a.owner_user_id, $3::uuid)
+ AND (($4::text='private' AND a.audience='private' AND a.owner_user_id=$3::uuid)
+      OR ($4::text<>'private' AND a.audience<>'private'))
+ AND ($5::uuid IS NULL OR a.id<>$5))::bool
+`
+
+type NotePathTakenParams struct {
+	WorkspaceID uuid.UUID
+	Path        string
+	Viewer      *uuid.UUID
+	Audience    string
+	ExcludeID   *uuid.UUID
+}
+
+// A path is unique within its audience scope, not across private/shared pages.
+func (q *Queries) NotePathTaken(ctx context.Context, arg NotePathTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, notePathTaken,
+		arg.WorkspaceID,
+		arg.Path,
+		arg.Viewer,
+		arg.Audience,
+		arg.ExcludeID,
+	)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const pageTags = `-- name: PageTags :many
+SELECT pt.tag FROM page_tags pt JOIN artifacts a ON a.id=pt.artifact_id WHERE pt.artifact_id = $1 AND artifact_visible(a.audience,a.owner_user_id,$2::uuid) ORDER BY pt.tag
+`
+
+type PageTagsParams struct {
+	ArtifactID uuid.UUID
+	Viewer     *uuid.UUID
+}
+
+func (q *Queries) PageTags(ctx context.Context, arg PageTagsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, pageTags, arg.ArtifactID, arg.Viewer)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		items = append(items, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const propertyAliasTaken = `-- name: PropertyAliasTaken :one
+SELECT EXISTS (SELECT 1 FROM artifact_aliases al JOIN artifacts a ON a.id=al.artifact_id WHERE al.workspace_id = $1 AND lower(al.path) = lower($2) AND al.kind = 'alias' AND artifact_visible(a.audience,a.owner_user_id,$3::uuid))
+`
+
+type PropertyAliasTakenParams struct {
+	WorkspaceID uuid.UUID
+	Path        string
+	Viewer      *uuid.UUID
+}
+
+func (q *Queries) PropertyAliasTaken(ctx context.Context, arg PropertyAliasTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, propertyAliasTaken, arg.WorkspaceID, arg.Path, arg.Viewer)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const relabelVersion = `-- name: RelabelVersion :exec
 UPDATE artifact_versions SET label = $2 WHERE id = $1
 `
@@ -1246,13 +1502,13 @@ WITH cand AS (
   SELECT ar.id, ar.title, ar.path, ar.search,
     to_tsvector('english', ar.title || ' ' || coalesce(substring(v.body_md FROM '(?im)^tags:[ \t]*(.*)$'), '')) AS head
   FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-  WHERE ar.workspace_id = $2 AND ar.type = 'note' AND v.body_md IS NOT NULL
+  WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ar.workspace_id = $3 AND ar.type = 'note' AND v.body_md IS NOT NULL
     AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
 ), hits AS (
   SELECT c.id, c.title, c.path, w.word,
     (c.head @@ plainto_tsquery('english', w.word)) AS in_head,
     (c.search @@ plainto_tsquery('english', w.word)) AS in_any
-  FROM cand c CROSS JOIN unnest($3::text[]) AS w(word)
+  FROM cand c CROSS JOIN unnest($4::text[]) AS w(word)
 )
 SELECT h.id, h.title, h.path,
   (3 * count(*) FILTER (WHERE h.in_head) + count(*) FILTER (WHERE h.in_any AND NOT h.in_head))::float8 AS score
@@ -1266,6 +1522,7 @@ LIMIT $1
 
 type RelevantPatternsParams struct {
 	Lim         int32
+	Viewer      *uuid.UUID
 	WorkspaceID uuid.UUID
 	Words       []string
 }
@@ -1282,7 +1539,12 @@ type RelevantPatternsRow struct {
 // only: no trigram fuzziness and no link-count boost. Title/tag matches weigh
 // 3, body-only matches 1.
 func (q *Queries) RelevantPatterns(ctx context.Context, arg RelevantPatternsParams) ([]RelevantPatternsRow, error) {
-	rows, err := q.db.Query(ctx, relevantPatterns, arg.Lim, arg.WorkspaceID, arg.Words)
+	rows, err := q.db.Query(ctx, relevantPatterns,
+		arg.Lim,
+		arg.Viewer,
+		arg.WorkspaceID,
+		arg.Words,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1310,7 +1572,14 @@ const resolveLinks = `-- name: ResolveLinks :execrows
 UPDATE knowledge_links SET
   target_kind = CASE WHEN target_anchor <> '' AND $2::text = 'artifact' THEN 'section' ELSE $2::text END,
   target_id = $3
-WHERE workspace_id = $1 AND target_kind = 'unresolved' AND lower(target_text) = lower($4)
+WHERE knowledge_links.workspace_id = $1 AND knowledge_links.target_kind = 'unresolved' AND lower(knowledge_links.target_text) = lower($4)
+  AND ($2::text NOT IN ('artifact', 'section') OR EXISTS (
+    SELECT 1 FROM artifacts dst WHERE dst.id = $3
+      AND (dst.audience <> 'private' OR EXISTS (
+        SELECT 1 FROM artifacts src WHERE knowledge_links.source_kind = 'artifact'
+          AND src.id = knowledge_links.source_id AND src.owner_user_id = dst.owner_user_id
+      ))
+  ))
 `
 
 type ResolveLinksParams struct {
@@ -1339,26 +1608,28 @@ SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, 
   ts_headline('english', ar.search_text, websearch_to_tsquery('english', $1),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   (ts_rank(ar.search, websearch_to_tsquery('english', $1)) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
-   + CASE WHEN $2::boolean THEN word_similarity(lower($1), lower(ar.title)) ELSE 0 END)::float8 AS score
+    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $2::uuid) AND ($3::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+   + CASE WHEN $4::boolean THEN word_similarity(lower($1), lower(ar.title)) ELSE 0 END)::float8 AS score
 FROM artifacts ar
-WHERE ar.workspace_id = $3 AND ar.current_version_id IS NOT NULL
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $5 AND ar.current_version_id IS NOT NULL
   AND (ar.search @@ websearch_to_tsquery('english', $1) OR ar.title ILIKE '%' || $1 || '%'
-       OR ($2::boolean AND word_similarity(lower($1), lower(ar.title)) >= 0.3))
-  AND ($4::text[] IS NULL OR ar.type = ANY($4::text[]))
-  AND ($5::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $5)
+       OR ($4::boolean AND word_similarity(lower($1), lower(ar.title)) >= 0.3))
+  AND ($6::text[] IS NULL OR ar.type = ANY($6::text[]))
+  AND ($7::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $7)
 ORDER BY score DESC, ar.updated_at DESC
-LIMIT $6
+LIMIT $8
 `
 
 type SearchKnowledgeArtifactsParams struct {
-	Q           string
-	Fuzzy       bool
-	WorkspaceID uuid.UUID
-	Types       []string
-	ProjectID   *uuid.UUID
-	Lim         int32
+	Q            string
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	Fuzzy        bool
+	WorkspaceID  uuid.UUID
+	Types        []string
+	ProjectID    *uuid.UUID
+	Lim          int32
 }
 
 type SearchKnowledgeArtifactsRow struct {
@@ -1378,6 +1649,8 @@ type SearchKnowledgeArtifactsRow struct {
 func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowledgeArtifactsParams) ([]SearchKnowledgeArtifactsRow, error) {
 	rows, err := q.db.Query(ctx, searchKnowledgeArtifacts,
 		arg.Q,
+		arg.Viewer,
+		arg.IncludeAgent,
 		arg.Fuzzy,
 		arg.WorkspaceID,
 		arg.Types,
@@ -1483,7 +1756,7 @@ func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledg
 }
 
 const setNotePath = `-- name: SetNotePath :one
-UPDATE artifacts SET path = $2, title = $3 WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path
+UPDATE artifacts SET path = $2, title = $3, audience = CASE WHEN lower($2::text) LIKE 'agents/%' OR lower($2::text) LIKE 'patterns/proposed/%' THEN 'agent' WHEN audience = 'agent' THEN 'shared' ELSE audience END WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id
 `
 
 type SetNotePathParams struct {
@@ -1512,6 +1785,11 @@ func (q *Queries) SetNotePath(ctx context.Context, arg SetNotePathParams) (Artif
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -1533,32 +1811,34 @@ func (q *Queries) SetTicketDescription(ctx context.Context, arg SetTicketDescrip
 const suggestTargets = `-- name: SuggestTargets :many
 SELECT kind, id, label, sub, sort FROM (
   SELECT 'note'::text AS kind, ar.id, ar.title AS label, ar.path AS sub, 0 AS sort, ar.updated_at AS at
-    FROM artifacts ar WHERE ar.workspace_id = $1 AND ar.type = 'note' AND ar.current_version_id IS NOT NULL
-      AND (ar.path ILIKE '%' || $2 || '%')
+    FROM artifacts ar WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note' AND ar.current_version_id IS NOT NULL
+      AND (ar.path ILIKE '%' || $4 || '%')
   UNION ALL
   SELECT ar.type, ar.id, CASE WHEN ar.type = 'adr' THEN 'ADR-' || lpad(ar.number::text, 3, '0') ELSE ar.title END,
          CASE WHEN ar.type = 'adr' THEN ar.title ELSE upper(ar.type) END, 1, ar.updated_at
-    FROM artifacts ar WHERE ar.workspace_id = $1 AND ar.type <> 'note' AND ar.current_version_id IS NOT NULL
-      AND (ar.title ILIKE '%' || $2 || '%'
-           OR (ar.type = 'adr' AND ('ADR-' || lpad(ar.number::text, 3, '0')) ILIKE '%' || $2 || '%'))
+    FROM artifacts ar WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type <> 'note' AND ar.current_version_id IS NOT NULL
+      AND (ar.title ILIKE '%' || $4 || '%'
+           OR (ar.type = 'adr' AND ('ADR-' || lpad(ar.number::text, 3, '0')) ILIKE '%' || $4 || '%'))
   UNION ALL
   SELECT 'ticket', t.id, t.key, t.title, 2, t.updated_at
-    FROM tickets t WHERE t.workspace_id = $1 AND (t.key ILIKE $2 || '%' OR t.title ILIKE '%' || $2 || '%')
+    FROM tickets t WHERE t.workspace_id = $1 AND (t.key ILIKE $4 || '%' OR t.title ILIKE '%' || $4 || '%')
   UNION ALL
   SELECT 'epic', e.id, e.name, 'Epic', 3, e.created_at
-    FROM epics e WHERE e.workspace_id = $1 AND e.name ILIKE '%' || $2 || '%'
+    FROM epics e WHERE e.workspace_id = $1 AND e.name ILIKE '%' || $4 || '%'
   UNION ALL
   SELECT 'agent', a.id, '@' || a.handle, a.name, 4, a.created_at
-    FROM agents a WHERE a.workspace_id = $1 AND a.archived_at IS NULL AND (a.handle ILIKE $2 || '%' OR a.name ILIKE $2 || '%'
-                                                 OR ('@' || a.handle) ILIKE $2 || '%')
+    FROM agents a WHERE a.workspace_id = $1 AND a.archived_at IS NULL AND (a.handle ILIKE $4 || '%' OR a.name ILIKE $4 || '%'
+                                                 OR ('@' || a.handle) ILIKE $4 || '%')
 ) s
-ORDER BY (lower(label) LIKE lower($2) || '%') DESC, sort, at DESC
+ORDER BY (lower(label) LIKE lower($4) || '%') DESC, sort, at DESC
 LIMIT 12
 `
 
 type SuggestTargetsParams struct {
-	WorkspaceID uuid.UUID
-	Q           *string
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	Q            *string
 }
 
 type SuggestTargetsRow struct {
@@ -1571,7 +1851,12 @@ type SuggestTargetsRow struct {
 
 // [[ autocomplete: notes, artifacts, tickets, epics and agents by prefix or substring.
 func (q *Queries) SuggestTargets(ctx context.Context, arg SuggestTargetsParams) ([]SuggestTargetsRow, error) {
-	rows, err := q.db.Query(ctx, suggestTargets, arg.WorkspaceID, arg.Q)
+	rows, err := q.db.Query(ctx, suggestTargets,
+		arg.WorkspaceID,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.Q,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1621,8 +1906,13 @@ func (q *Queries) TicketArtifactIDs(ctx context.Context, ticketID uuid.UUID) ([]
 }
 
 const ticketsByIDs = `-- name: TicketsByIDs :many
-SELECT id, key, title, status FROM tickets WHERE id = ANY($1::uuid[])
+SELECT id, key, title, status FROM tickets WHERE workspace_id = $1 AND id = ANY($2::uuid[])
 `
+
+type TicketsByIDsParams struct {
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
 
 type TicketsByIDsRow struct {
 	ID     uuid.UUID
@@ -1631,8 +1921,8 @@ type TicketsByIDsRow struct {
 	Status string
 }
 
-func (q *Queries) TicketsByIDs(ctx context.Context, ids []uuid.UUID) ([]TicketsByIDsRow, error) {
-	rows, err := q.db.Query(ctx, ticketsByIDs, ids)
+func (q *Queries) TicketsByIDs(ctx context.Context, arg TicketsByIDsParams) ([]TicketsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, ticketsByIDs, arg.WorkspaceID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}

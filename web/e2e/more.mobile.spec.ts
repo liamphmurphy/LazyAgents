@@ -13,10 +13,10 @@ test("More lists the apps, tools and your pages with the nav badges", async ({ p
   await page.goto("/more");
 
   const apps = main(page).getByRole("region", { name: "Apps" });
-  await expect(apps.getByRole("link")).toHaveText(["Docs", "Slides", "Designs", "Finance", "Library"]);
+  await expect(apps.getByRole("link")).toHaveText(["Knowledge2", "Slides", "Designs", "Finance", "Library"]);
+  await expect(apps.getByRole("link", { name: "Knowledge, 2 suggested edits to review" })).toBeVisible();
   const tools = main(page).getByRole("region", { name: "Tools" });
-  await expect(tools.getByRole("link")).toHaveText(["Workflows", "Scheduled", "Learn", "Wiki2"]);
-  await expect(tools.getByRole("link", { name: "Wiki, 2 suggested edits to review" })).toBeVisible();
+  await expect(tools.getByRole("link")).toHaveText(["Workflows", "Scheduled", "Learn"]);
   const you = main(page).getByRole("region", { name: "You" });
   await expect(you.getByRole("link", { name: "Customization" })).toBeVisible();
   await expect(you.getByRole("link", { name: "Settings: a setting runs need is missing" }).getByTestId("more-dot")).toBeVisible();
@@ -26,11 +26,11 @@ test("More lists the apps, tools and your pages with the nav badges", async ({ p
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
-test("Wiki and Settings open from More, which stays the current tab", async ({ page }) => {
+test("Knowledge and Settings open from More, which stays the current tab", async ({ page }) => {
   await installBoardApi(page);
   await page.goto("/more");
-  await main(page).getByRole("link", { name: /^Wiki/ }).tap();
-  await expect(page).toHaveURL(/\/wiki$/);
+  await main(page).getByRole("link", { name: /^Knowledge/ }).tap();
+  await expect(page).toHaveURL(/\/knowledge$/);
   await expect(bar(page).locator('[aria-current="page"]')).toHaveText("More");
 
   await bar(page).getByRole("link", { name: "More" }).tap();
@@ -55,8 +55,8 @@ test("the search field opens the command menu full screen, usable by touch", asy
   await expect(dialog).toHaveCount(0);
 
   await main(page).getByRole("button", { name: "Search" }).tap();
-  await dialog.getByRole("combobox", { name: "Search everything" }).fill("wiki");
-  const option = dialog.getByRole("option", { name: /^Go to Wiki/ });
+  await dialog.getByRole("combobox", { name: "Search everything" }).fill("knowledge");
+  const option = dialog.getByRole("option", { name: /^Go to Knowledge/ });
   expect(Math.round((await option.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
   await option.tap();
   await expect(page).toHaveURL(/\/wiki/);

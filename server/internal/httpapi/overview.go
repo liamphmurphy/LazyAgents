@@ -11,6 +11,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/links"
 	"github.com/liamphmurphy/vesper/server/internal/metrics"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -174,7 +175,7 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 	if err != nil {
 		return out, err
 	}
-	docs, err := s.Q.OverviewArtifacts(ctx, ws)
+	docs, err := s.Q.OverviewArtifacts(ctx, store.OverviewArtifactsParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return out, err
 	}

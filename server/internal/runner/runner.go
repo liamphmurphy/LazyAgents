@@ -28,6 +28,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/harness"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/slides"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -1554,7 +1555,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			now = turn.StartedAt.Add(-time.Millisecond)
 		}
 		for _, f := range ctxFiles {
-			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID}); err == nil {
+			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID, Viewer: pageview.From(ctx).UserID}); err == nil {
 				if f.VersionID != nil {
 					a.CurrentVersionID = f.VersionID
 				}

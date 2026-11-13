@@ -12,6 +12,8 @@ import (
 
 // Ref is one [[link]] as written.
 type Ref struct {
+	Start   int // byte offset within its source line
+	End     int
 	Raw     string // the whole [[…]] (with "!" for embeds)
 	Target  string // before "#" and "|", trimmed
 	Anchor  string // heading text after "#", as written
@@ -73,6 +75,7 @@ func Parse(md string) []Ref {
 				continue
 			}
 			r.Raw = line[m[0]:m[1]]
+			r.Start, r.End = m[0], m[1]
 			r.Embed = m[3] > m[2]
 			r.Line = i
 			r.Snippet = snippet(line, m[0], m[1])
@@ -166,4 +169,17 @@ func Slug(s string) string {
 		return "section"
 	}
 	return b.String()
+}
+
+// RewriteRefs rewrites only parsed wikilinks, preserving identical spellings
+// inside code spans and fences and every other byte of the Markdown.
+func RewriteRefs(md string, replace func(Ref) string) string {
+	refs := Parse(md)
+	lines := strings.Split(md, "\n")
+	for i := len(refs) - 1; i >= 0; i-- {
+		r := refs[i]
+		line := lines[r.Line]
+		lines[r.Line] = line[:r.Start] + replace(r) + line[r.End:]
+	}
+	return strings.Join(lines, "\n")
 }

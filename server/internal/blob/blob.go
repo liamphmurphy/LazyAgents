@@ -187,3 +187,13 @@ func (s *Store) EnsureBucket(ctx context.Context, bucket string) error {
 	}
 	return nil
 }
+
+// Open streams an object to services which need only the content. Keeping
+// this interface in terms of io avoids coupling domain packages to S3 config.
+func (s *Store) Open(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	o, err := s.Get(ctx, bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	return o.Body, nil
+}

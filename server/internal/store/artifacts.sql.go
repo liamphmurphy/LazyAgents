@@ -50,18 +50,20 @@ func (q *Queries) AttachArtifact(ctx context.Context, arg AttachArtifactParams) 
 
 const countArtifactsByType = `-- name: CountArtifactsByType :many
 SELECT type, count(*)::int AS n FROM artifacts
-WHERE workspace_id = $1 AND current_version_id IS NOT NULL
-  AND ($2::uuid IS NULL OR project_id = $2)
-  AND ($3::text IS NULL
-       OR search @@ websearch_to_tsquery('english', $3)
-       OR title ILIKE '%' || $3 || '%')
+WHERE artifact_visible(audience, owner_user_id, $1::uuid) AND ($2::boolean OR audience <> 'agent') AND workspace_id = $3 AND current_version_id IS NOT NULL
+  AND ($4::uuid IS NULL OR project_id = $4)
+  AND ($5::text IS NULL
+       OR search @@ websearch_to_tsquery('english', $5)
+       OR title ILIKE '%' || $5 || '%')
 GROUP BY type
 `
 
 type CountArtifactsByTypeParams struct {
-	WorkspaceID uuid.UUID
-	ProjectID   *uuid.UUID
-	Q           *string
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	WorkspaceID  uuid.UUID
+	ProjectID    *uuid.UUID
+	Q            *string
 }
 
 type CountArtifactsByTypeRow struct {
@@ -70,7 +72,13 @@ type CountArtifactsByTypeRow struct {
 }
 
 func (q *Queries) CountArtifactsByType(ctx context.Context, arg CountArtifactsByTypeParams) ([]CountArtifactsByTypeRow, error) {
-	rows, err := q.db.Query(ctx, countArtifactsByType, arg.WorkspaceID, arg.ProjectID, arg.Q)
+	rows, err := q.db.Query(ctx, countArtifactsByType,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.Q,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +98,7 @@ func (q *Queries) CountArtifactsByType(ctx context.Context, arg CountArtifactsBy
 }
 
 const countPublishedVersions = `-- name: CountPublishedVersions :one
-SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published'
+SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' AND label <> 'suggestion'
 `
 
 func (q *Queries) CountPublishedVersions(ctx context.Context, artifactID uuid.UUID) (int32, error) {
@@ -101,9 +109,9 @@ func (q *Queries) CountPublishedVersions(ctx context.Context, artifactID uuid.UU
 }
 
 const createArtifact = `-- name: CreateArtifact :one
-INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, path)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path
+INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, path, audience, owner_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id
 `
 
 type CreateArtifactParams struct {
@@ -117,6 +125,8 @@ type CreateArtifactParams struct {
 	AuthorType  string
 	AuthorID    uuid.UUID
 	Path        *string
+	Audience    string
+	OwnerUserID *uuid.UUID
 }
 
 func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) (Artifact, error) {
@@ -131,6 +141,8 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 		arg.AuthorType,
 		arg.AuthorID,
 		arg.Path,
+		arg.Audience,
+		arg.OwnerUserID,
 	)
 	var i Artifact
 	err := row.Scan(
@@ -150,14 +162,19 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const createArtifactVersion = `-- name: CreateArtifactVersion :one
-INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
+INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state, properties)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, coalesce($14::jsonb, '{}'::jsonb))
+RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins, properties, changes, source_canvas_version_id
 `
 
 type CreateArtifactVersionParams struct {
@@ -174,6 +191,7 @@ type CreateArtifactVersionParams struct {
 	State            string
 	BasedOnVersionID *uuid.UUID
 	ReviewState      *string
+	Properties       []byte
 }
 
 func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactVersionParams) (ArtifactVersion, error) {
@@ -191,6 +209,7 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		arg.State,
 		arg.BasedOnVersionID,
 		arg.ReviewState,
+		arg.Properties,
 	)
 	var i ArtifactVersion
 	err := row.Scan(
@@ -216,6 +235,9 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
+		&i.Changes,
+		&i.SourceCanvasVersionID,
 	)
 	return i, err
 }
@@ -238,16 +260,17 @@ func (q *Queries) DetachArtifact(ctx context.Context, arg DetachArtifactParams) 
 }
 
 const getADRByNumber = `-- name: GetADRByNumber :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $3::uuid) AND workspace_id = $1 AND type = 'adr' AND number = $2
 `
 
 type GetADRByNumberParams struct {
 	WorkspaceID uuid.UUID
 	Number      *int32
+	Viewer      *uuid.UUID
 }
 
 func (q *Queries) GetADRByNumber(ctx context.Context, arg GetADRByNumberParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, getADRByNumber, arg.WorkspaceID, arg.Number)
+	row := q.db.QueryRow(ctx, getADRByNumber, arg.WorkspaceID, arg.Number, arg.Viewer)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -266,21 +289,27 @@ func (q *Queries) GetADRByNumber(ctx context.Context, arg GetADRByNumberParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const getArtifact = `-- name: GetArtifact :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $3::uuid) AND id = $1 AND workspace_id = $2
 `
 
 type GetArtifactParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 }
 
 func (q *Queries) GetArtifact(ctx context.Context, arg GetArtifactParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, getArtifact, arg.ID, arg.WorkspaceID)
+	row := q.db.QueryRow(ctx, getArtifact, arg.ID, arg.WorkspaceID, arg.Viewer)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -299,23 +328,34 @@ func (q *Queries) GetArtifact(ctx context.Context, arg GetArtifactParams) (Artif
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const getArtifactVersion = `-- name: GetArtifactVersion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
-WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties, v.changes, v.source_canvas_version_id FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
+WHERE artifact_visible(a.audience, a.owner_user_id, $4::uuid) AND v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3
 `
 
 type GetArtifactVersionParams struct {
 	ID          uuid.UUID
 	ArtifactID  uuid.UUID
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 }
 
 func (q *Queries) GetArtifactVersion(ctx context.Context, arg GetArtifactVersionParams) (ArtifactVersion, error) {
-	row := q.db.QueryRow(ctx, getArtifactVersion, arg.ID, arg.ArtifactID, arg.WorkspaceID)
+	row := q.db.QueryRow(ctx, getArtifactVersion,
+		arg.ID,
+		arg.ArtifactID,
+		arg.WorkspaceID,
+		arg.Viewer,
+	)
 	var i ArtifactVersion
 	err := row.Scan(
 		&i.ID,
@@ -340,6 +380,9 @@ func (q *Queries) GetArtifactVersion(ctx context.Context, arg GetArtifactVersion
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
+		&i.Changes,
+		&i.SourceCanvasVersionID,
 	)
 	return i, err
 }
@@ -501,8 +544,13 @@ func (q *Queries) ListArtifactTickets(ctx context.Context, artifactID uuid.UUID)
 const listArtifactVersions = `-- name: ListArtifactVersions :many
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
   review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
-FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC
+FROM artifact_versions WHERE artifact_id = $1 AND EXISTS (SELECT 1 FROM artifacts a WHERE a.id = artifact_id AND artifact_visible(a.audience, a.owner_user_id, $2::uuid)) AND state = 'published' AND label <> 'suggestion' ORDER BY seq DESC
 `
+
+type ListArtifactVersionsParams struct {
+	ArtifactID uuid.UUID
+	Viewer     *uuid.UUID
+}
 
 type ListArtifactVersionsRow struct {
 	ID               uuid.UUID
@@ -523,8 +571,8 @@ type ListArtifactVersionsRow struct {
 	ReviewPins       json.RawMessage
 }
 
-func (q *Queries) ListArtifactVersions(ctx context.Context, artifactID uuid.UUID) ([]ListArtifactVersionsRow, error) {
-	rows, err := q.db.Query(ctx, listArtifactVersions, artifactID)
+func (q *Queries) ListArtifactVersions(ctx context.Context, arg ListArtifactVersionsParams) ([]ListArtifactVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listArtifactVersions, arg.ArtifactID, arg.Viewer)
 	if err != nil {
 		return nil, err
 	}
@@ -573,22 +621,24 @@ FROM artifacts ar
 LEFT JOIN projects p ON p.id = ar.project_id
 LEFT JOIN epics e ON e.id = ar.epic_id
 JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $1::uuid) AND ($2::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $3
   -- Notes have their own tab and stay out of "All".
-  AND (CASE WHEN $2::text IS NULL THEN ar.type <> 'note' ELSE ar.type = $2 END)
-  AND ($3::uuid IS NULL OR ar.project_id = $3)
-  AND ($4::text IS NULL
-       OR ar.search @@ websearch_to_tsquery('english', $4)
-       OR ar.title ILIKE '%' || $4 || '%')
+  AND (CASE WHEN $4::text IS NULL THEN ar.type <> 'note' ELSE ar.type = $4 END)
+  AND ($5::uuid IS NULL OR ar.project_id = $5)
+  AND ($6::text IS NULL
+       OR ar.search @@ websearch_to_tsquery('english', $6)
+       OR ar.title ILIKE '%' || $6 || '%')
 ORDER BY ar.updated_at DESC
 LIMIT 500
 `
 
 type ListArtifactsParams struct {
-	WorkspaceID uuid.UUID
-	Type        *string
-	ProjectID   *uuid.UUID
-	Q           *string
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+	WorkspaceID  uuid.UUID
+	Type         *string
+	ProjectID    *uuid.UUID
+	Q            *string
 }
 
 type ListArtifactsRow struct {
@@ -620,6 +670,8 @@ type ListArtifactsRow struct {
 
 func (q *Queries) ListArtifacts(ctx context.Context, arg ListArtifactsParams) ([]ListArtifactsRow, error) {
 	rows, err := q.db.Query(ctx, listArtifacts,
+		arg.Viewer,
+		arg.IncludeAgent,
 		arg.WorkspaceID,
 		arg.Type,
 		arg.ProjectID,
@@ -675,12 +727,13 @@ SELECT s.id, s.position, s.level, s.anchor, s.heading,
      JOIN artifact_versions v2 ON v2.id = s2.version_id
    WHERE v2.artifact_id = $1 AND s2.anchor = s.anchor)::int AS citations
 FROM artifact_sections s
-WHERE s.version_id = $2
+WHERE EXISTS (SELECT 1 FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id WHERE v.id = s.version_id AND artifact_visible(a.audience, a.owner_user_id, $2::uuid)) AND s.version_id = $3
 ORDER BY s.position
 `
 
 type ListSectionsWithCitationsParams struct {
 	ArtifactID uuid.UUID
+	Viewer     *uuid.UUID
 	VersionID  uuid.UUID
 }
 
@@ -696,7 +749,7 @@ type ListSectionsWithCitationsRow struct {
 // Citations count reads of a section by anchor across all versions, so
 // history isn't lost when a new version re-extracts the outline.
 func (q *Queries) ListSectionsWithCitations(ctx context.Context, arg ListSectionsWithCitationsParams) ([]ListSectionsWithCitationsRow, error) {
-	rows, err := q.db.Query(ctx, listSectionsWithCitations, arg.ArtifactID, arg.VersionID)
+	rows, err := q.db.Query(ctx, listSectionsWithCitations, arg.ArtifactID, arg.Viewer, arg.VersionID)
 	if err != nil {
 		return nil, err
 	}
@@ -732,12 +785,13 @@ SELECT ar.id, ar.type, ar.title, ar.number, ar.author_type, ar.author_id, ta.rel
 FROM ticket_artifacts ta
 JOIN artifacts ar ON ar.id = ta.artifact_id
 LEFT JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ta.ticket_id = $2
+WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ta.ticket_id = $3
 ORDER BY ta.relation, ta.created_at
 `
 
 type ListTicketArtifactsParams struct {
 	AssigneeAgentID *uuid.UUID
+	Viewer          *uuid.UUID
 	TicketID        uuid.UUID
 }
 
@@ -756,7 +810,7 @@ type ListTicketArtifactsRow struct {
 
 // Doc cards on a ticket. read_by_assignee: has the ticket's agent read any version?
 func (q *Queries) ListTicketArtifacts(ctx context.Context, arg ListTicketArtifactsParams) ([]ListTicketArtifactsRow, error) {
-	rows, err := q.db.Query(ctx, listTicketArtifacts, arg.AssigneeAgentID, arg.TicketID)
+	rows, err := q.db.Query(ctx, listTicketArtifacts, arg.AssigneeAgentID, arg.Viewer, arg.TicketID)
 	if err != nil {
 		return nil, err
 	}
@@ -836,16 +890,17 @@ func (q *Queries) ListTicketsGatedByMockup(ctx context.Context, arg ListTicketsG
 }
 
 const lockArtifact = `-- name: LockArtifact :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE id = $1 AND workspace_id = $2 FOR UPDATE
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE id = $1 AND workspace_id = $2 AND artifact_visible(audience, owner_user_id, $3::uuid) FOR UPDATE
 `
 
 type LockArtifactParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
 }
 
 func (q *Queries) LockArtifact(ctx context.Context, arg LockArtifactParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, lockArtifact, arg.ID, arg.WorkspaceID)
+	row := q.db.QueryRow(ctx, lockArtifact, arg.ID, arg.WorkspaceID, arg.Viewer)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,
@@ -864,6 +919,11 @@ func (q *Queries) LockArtifact(ctx context.Context, arg LockArtifactParams) (Art
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -1002,7 +1062,7 @@ func (q *Queries) NextADRNumber(ctx context.Context, workspaceID uuid.UUID) (int
 
 const reviewArtifactVersion = `-- name: ReviewArtifactVersion :one
 UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4, review_pins = $5
-WHERE id = $1 RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
+WHERE id = $1 RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins, properties, changes, source_canvas_version_id
 `
 
 type ReviewArtifactVersionParams struct {
@@ -1045,6 +1105,9 @@ func (q *Queries) ReviewArtifactVersion(ctx context.Context, arg ReviewArtifactV
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
+		&i.Changes,
+		&i.SourceCanvasVersionID,
 	)
 	return i, err
 }
@@ -1070,8 +1133,60 @@ func (q *Queries) SetArtifactCurrentVersion(ctx context.Context, arg SetArtifact
 	return err
 }
 
+const setPageAudience = `-- name: SetPageAudience :one
+UPDATE artifacts SET audience=$1, owner_user_id=$2
+WHERE id=$3 AND workspace_id=$4
+ AND $5::uuid IS NOT NULL AND audience <> 'agent'
+ AND artifact_visible(audience, owner_user_id, $5::uuid)
+RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id
+`
+
+type SetPageAudienceParams struct {
+	Audience    string
+	OwnerUserID *uuid.UUID
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Viewer      *uuid.UUID
+}
+
+// Person-only service; the lock above serializes edits with audience changes.
+func (q *Queries) SetPageAudience(ctx context.Context, arg SetPageAudienceParams) (Artifact, error) {
+	row := q.db.QueryRow(ctx, setPageAudience,
+		arg.Audience,
+		arg.OwnerUserID,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Viewer,
+	)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Type,
+		&i.Title,
+		&i.Number,
+		&i.Summary,
+		&i.AuthorType,
+		&i.AuthorID,
+		&i.CurrentVersionID,
+		&i.SearchText,
+		&i.Search,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
+	)
+	return i, err
+}
+
 const updateArtifactMeta = `-- name: UpdateArtifactMeta :one
-UPDATE artifacts SET title = $2, summary = $3, epic_id = $4 WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path
+UPDATE artifacts SET title = $2, summary = $3, epic_id = $4 WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id
 `
 
 type UpdateArtifactMetaParams struct {
@@ -1106,6 +1221,11 @@ func (q *Queries) UpdateArtifactMeta(ctx context.Context, arg UpdateArtifactMeta
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.Audience,
+		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }

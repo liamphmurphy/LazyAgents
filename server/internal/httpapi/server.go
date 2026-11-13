@@ -82,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 		s.Log = slog.Default()
 	}
 	mux := http.NewServeMux()
+	s.knowledgeRoutes(mux)
 	if s.Events != nil {
 		mux.Handle("GET /events", s.Events)
 	}

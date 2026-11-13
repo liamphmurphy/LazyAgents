@@ -1,10 +1,6 @@
-import { Suspense } from "react";
-import { WikiScreen } from "./_components/wiki-screen";
+import { redirect } from "next/navigation";
 
+// The wiki is part of Knowledge; its agent pages are the Agent knowledge view.
 export default function WikiPage() {
-  return (
-    <Suspense>
-      <WikiScreen path="" />
-    </Suspense>
-  );
+  redirect("/knowledge");
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/connectors"
 	"github.com/liamphmurphy/vesper/server/internal/designs"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
@@ -224,7 +225,7 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 	for i, cr := range crit {
 		criteria[i] = map[string]any{"n": i + 1, "text": cr.Text, "done": cr.Done}
 	}
-	docs, err := d.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &c.Agent.ID})
+	docs, err := d.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &c.Agent.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +299,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	var a store.Artifact
 	ref := strings.TrimSpace(in.Artifact)
 	if id, err := uuid.Parse(ref); err == nil {
-		a, err = d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+		a, err = d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return nil, apperr.Invalid("artifact", "no artifact %s", ref)
 		}
@@ -310,7 +311,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 			}
 			num = num*10 + int32(ch-'0')
 		}
-		a, err = d.Q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num})
+		a, err = d.Q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return nil, apperr.Invalid("artifact", "no %s", ref)
 		}
@@ -320,7 +321,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("artifact", "has no content")
 	}
-	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -510,10 +511,14 @@ type DelegateIn struct {
 }
 
 type SearchIn struct {
-	Q       string   `json:"q" jsonschema:"What to look for; web-search syntax (quotes, OR, -word)"`
-	Kinds   []string `json:"kinds,omitempty" jsonschema:"Limit to note, prd, spec, adr, report, design or ticket"`
-	Project string   `json:"project,omitempty" jsonschema:"Project key; notes without a project always match"`
-	Limit   int      `json:"limit,omitempty" jsonschema:"Up to 50, default 10"`
+	Folder     string               `json:"folder,omitempty"`
+	Tag        string               `json:"tag,omitempty"`
+	Audience   string               `json:"audience,omitempty"`
+	Properties artifacts.Properties `json:"properties,omitempty"`
+	Q          string               `json:"q" jsonschema:"What to look for; web-search syntax (quotes, OR, -word)"`
+	Kinds      []string             `json:"kinds,omitempty" jsonschema:"Limit to note, prd, spec, adr, report, design or ticket"`
+	Project    string               `json:"project,omitempty" jsonschema:"Project key; notes without a project always match"`
+	Limit      int                  `json:"limit,omitempty" jsonschema:"Up to 50, default 10"`
 }
 
 type PageIn struct {
@@ -524,10 +529,12 @@ type PageIn struct {
 
 type WriteNoteIn struct {
 	TicketArg
-	Path string `json:"path" jsonschema:"Page path, e.g. agents/atlas/Partition gotchas (a durable lesson in your memory) or Payments/Rollback runbook (shared)"`
-	Body string `json:"body" jsonschema:"Markdown. Link what it's about with [[PAY-214]], [[ADR-012]], [[Page title]] or [[Page#Section]]."`
-	Mode string `json:"mode,omitempty" jsonschema:"create, replace (default) or append"`
-	Note string `json:"note,omitempty" jsonschema:"One line on what changed"`
+	BaseVersion *uuid.UUID           `json:"base_version_id,omitempty"`
+	Properties  artifacts.Properties `json:"properties,omitempty"`
+	Path        string               `json:"path" jsonschema:"Page path, e.g. agents/atlas/Partition gotchas (a durable lesson in your memory) or Payments/Rollback runbook (shared)"`
+	Body        string               `json:"body" jsonschema:"Markdown. Link what it's about with [[PAY-214]], [[ADR-012]], [[Page title]] or [[Page#Section]]."`
+	Mode        string               `json:"mode,omitempty" jsonschema:"create, replace (default) or append"`
+	Note        string               `json:"note,omitempty" jsonschema:"One line on what changed"`
 }
 
 type FindPatternIn struct {
@@ -585,6 +592,9 @@ func scopesFor(ctx context.Context, d Deps, c agents.Caller, ticket string) (map
 }
 
 func searchKnowledge(ctx context.Context, d Deps, c agents.Caller, in SearchIn) (any, error) {
+	if in.Folder != "" || in.Tag != "" || in.Audience != "" || len(in.Properties) > 0 {
+		return filteredSearch(ctx, d, c, in)
+	}
 	if strings.TrimSpace(in.Q) == "" {
 		return nil, apperr.Invalid("q", "is required")
 	}
@@ -615,14 +625,14 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	if ref.Kind != "artifact" {
 		return map[string]any{"kind": ref.Kind, "title": t.Title, "message": "Not a page. get_backlinks shows what links to it."}, nil
 	}
-	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
+	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("ref", "%q is only a suggestion so far", in.Ref)
 	}
-	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -636,6 +646,9 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	anchor := t.Anchor
 	if in.Section != "" {
 		anchor = artifacts.Slug(in.Section)
+		if strings.HasPrefix(in.Section, "^") {
+			anchor = in.Section
+		}
 	}
 	if anchor != "" {
 		sec, ok := artifacts.SectionText(body, anchor)
@@ -662,7 +675,7 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 			linksOut = append(linksOut, l.RawText)
 		}
 	}
-	out := map[string]any{"title": a.Title, "type": a.Type, "version": v.Label, "markdown": body, "outline": outline, "links": linksOut}
+	out := map[string]any{"id": a.ID, "version_id": v.ID, "properties": artifacts.DecodeProperties(v.Properties), "title": a.Title, "type": a.Type, "version": v.Label, "markdown": body, "outline": outline, "links": linksOut}
 	if a.Path != nil {
 		out["path"] = *a.Path
 	}
@@ -677,7 +690,10 @@ func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (an
 	if err != nil {
 		return nil, err
 	}
-	res, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note})
+	if strings.TrimSpace(in.Body) == "" {
+		return nil, apperr.Invalid("body", "is empty; to clear a page's text, ask the person")
+	}
+	res, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note, BaseID: in.BaseVersion, Properties: in.Properties})
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +714,7 @@ func findPattern(ctx context.Context, d Deps, c agents.Caller, in FindPatternIn)
 	if strings.TrimSpace(in.Q) != "" && len(ps) > 0 {
 		runID := readRunID(ctx, d, c, in.Ticket)
 		for _, p := range ps {
-			a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: p.ID, WorkspaceID: ws})
+			a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: p.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return nil, err
 			}
@@ -1200,6 +1216,16 @@ var Tools = []Tool{
 	define("publish_pattern", "Publish a proposed pattern to Patterns/<Topic>/<Title>, optionally with an edited title, topic or body; the proposal is removed. Only for agents whose wiki:write scope is allowed. Fails if that page exists: merge into it with write_note (mode replace) and reject_pattern.", publishPattern),
 	define("reject_pattern", "Reject and remove a proposed pattern, giving the reason to relay to the proposer. Only for agents whose wiki:write scope is allowed.", rejectPattern),
 	define("read_page", "Read a wiki page or any document by title, path, ADR id or [[Page#Section]]. Lists the page's outgoing [[links]]; reads count as citations.", readPage),
+	define("librarian_pass", "Propose links for a folder/tag or all pages, and report orphans and unresolved links. Always creates suggestions; suitable for an existing scheduled task whose final result goes to Needs you.", librarianPass),
+	define("daily_note", "Open the person's daily Knowledge note; create it from a template on first use. Imported daily notes are reused.", dailyNote),
+	define("import_vault", "Start an Obsidian vault dry run from a chat attachment. Never confirms the import; the person reviews the report.", importVault),
+	define("list_pages", "Find pages by folder, tag, property, date or audience. Returns summaries and version IDs; read only the sections you need.", listPages),
+	define("page_outline", "Page headings, properties, current version ID and link/review counts, without its body.", pageOutline),
+	define("patch_page", "Propose 1–100 anchored text replacements against base_version. Always reviewed before applying; each change has a reason.", patchPage),
+	define("set_properties", "Propose property/tag/alias edits against base_version. Null deletes a key. Cannot change audience.", setProperties),
+	define("create_page", "Create a Knowledge page, optionally using a template or recording a literature source. Private in a person's chat; shared for runs.", createPage),
+	define("capture_note", "Capture a fleeting note in the person's Knowledge inbox.", captureNote),
+	define("suggest_links", "Find unlinked mentions and related pages; submit chosen changes with patch_page for review.", suggestLinks),
 	define("write_note", "Write a wiki note. Under agents/<your handle>/ (always writable) keep only durable lessons that would help a future run on this codebase, not a log of what you did. General, reusable lessons go through propose_pattern; project decisions go in ADR/Architecture notes. Other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),
 	define("get_backlinks", "What links to a page, document, ticket, epic or agent, with the sentence around each link.", getBacklinks),
 	define("list_subagents", "Sub agents you can delegate part of a ticket to with delegate: handle, role, specialty, model and what each may do (can_write, can_run_tests). A sub agent that can't write can't take allowed_paths; ask it for findings in its report. Main agents only.",

@@ -374,6 +374,16 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "search_knowledge":
     case "find_pattern":
       return status("wiki", "looking through the wiki");
+    case "librarian_pass":
+    case "daily_note":
+    case "import_vault":
+    case "list_pages":
+    case "page_outline":
+    case "patch_page":
+    case "set_properties":
+    case "create_page":
+    case "capture_note":
+    case "suggest_links":
     case "write_note":
       return status("wiki", "writing a wiki note");
     case "get_ticket":

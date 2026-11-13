@@ -114,6 +114,11 @@ type Artifact struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	Path             *string
+	Audience         string
+	OwnerUserID      *uuid.UUID
+	PersonaDirect    bool
+	PersonaPaused    bool
+	ChatSessionID    *uuid.UUID
 }
 
 type ArtifactAlias struct {
@@ -121,6 +126,7 @@ type ArtifactAlias struct {
 	ArtifactID  uuid.UUID
 	Path        string
 	CreatedAt   time.Time
+	Kind        string
 }
 
 type ArtifactRead struct {
@@ -142,28 +148,31 @@ type ArtifactSection struct {
 }
 
 type ArtifactVersion struct {
-	ID               uuid.UUID
-	ArtifactID       uuid.UUID
-	Seq              int32
-	Label            string
-	BodyMd           *string
-	BlobKey          *string
-	Filename         *string
-	ContentType      string
-	SizeBytes        int64
-	Note             string
-	CreatedByType    string
-	CreatedByID      uuid.UUID
-	CreatedAt        time.Time
-	State            string
-	BasedOnVersionID *uuid.UUID
-	DecidedByID      *uuid.UUID
-	DecidedAt        *time.Time
-	ReviewState      *string
-	ReviewedByUserID *uuid.UUID
-	ReviewedAt       *time.Time
-	ReviewNote       string
-	ReviewPins       json.RawMessage
+	ID                    uuid.UUID
+	ArtifactID            uuid.UUID
+	Seq                   int32
+	Label                 string
+	BodyMd                *string
+	BlobKey               *string
+	Filename              *string
+	ContentType           string
+	SizeBytes             int64
+	Note                  string
+	CreatedByType         string
+	CreatedByID           uuid.UUID
+	CreatedAt             time.Time
+	State                 string
+	BasedOnVersionID      *uuid.UUID
+	DecidedByID           *uuid.UUID
+	DecidedAt             *time.Time
+	ReviewState           *string
+	ReviewedByUserID      *uuid.UUID
+	ReviewedAt            *time.Time
+	ReviewNote            string
+	ReviewPins            json.RawMessage
+	Properties            json.RawMessage
+	Changes               json.RawMessage
+	SourceCanvasVersionID *uuid.UUID
 }
 
 type BrowserSession struct {
@@ -579,6 +588,19 @@ type DesignSetting struct {
 	UpdatedAt     time.Time
 }
 
+type DocPageRedirect struct {
+	CanvasID           uuid.UUID
+	ArtifactID         uuid.UUID
+	Merged             bool
+	SeqShift           int32
+	MigrationSeq       int32
+	OriginalHeadID     *uuid.UUID
+	DivergentVersionID *uuid.UUID
+	CleanupVersionID   *uuid.UUID
+	Warning            string
+	Indexed            bool
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
@@ -718,6 +740,67 @@ type InboxRead struct {
 	UserID uuid.UUID
 	ItemID string
 	ReadAt time.Time
+}
+
+type KnowledgeAsset struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	OwnerUserID uuid.UUID
+	ContentHash string
+	BlobKey     string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	CreatedAt   time.Time
+}
+
+type KnowledgeAssetDeletion struct {
+	BlobKey   string
+	CreatedAt time.Time
+}
+
+type KnowledgeImport struct {
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	UserID         uuid.UUID
+	BlobKey        string
+	Folder         string
+	Policy         string
+	State          string
+	Plan           json.RawMessage
+	Report         json.RawMessage
+	Error          string
+	FilesDone      int32
+	LeaseID        *uuid.UUID
+	LeaseUntil     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	ArchiveDeleted bool
+}
+
+type KnowledgeImportFile struct {
+	ImportID     uuid.UUID
+	SourcePath   string
+	ArtifactID   *uuid.UUID
+	BeforeID     *uuid.UUID
+	AppliedID    *uuid.UUID
+	AssetID      *uuid.UUID
+	Created      bool
+	Status       string
+	AppliedAt    time.Time
+	BeforeTitle  *string
+	BeforePath   *string
+	AppliedTitle *string
+	AppliedPath  *string
+}
+
+type KnowledgeImportSource struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Folder      string
+	SourcePath  string
+	ArtifactID  uuid.UUID
+	VersionID   *uuid.UUID
 }
 
 type KnowledgeLink struct {
@@ -894,6 +977,33 @@ type MetricSnapshot struct {
 	Range       string
 	Payload     json.RawMessage
 	GeneratedAt time.Time
+}
+
+type PageAssetRef struct {
+	VersionID uuid.UUID
+	AssetID   uuid.UUID
+}
+
+type PageComment struct {
+	ID              uuid.UUID
+	ArtifactID      uuid.UUID
+	ParentID        *uuid.UUID
+	Seq             int32
+	AuthorType      string
+	AuthorID        uuid.UUID
+	Body            string
+	Anchor          json.RawMessage
+	TargetLost      bool
+	Status          string
+	Suggestion      *string
+	SentInMessageID *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type PageTag struct {
+	ArtifactID uuid.UUID
+	Tag        string
 }
 
 type Persona struct {

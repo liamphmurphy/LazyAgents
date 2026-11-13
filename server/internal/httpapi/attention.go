@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
@@ -91,6 +92,7 @@ func (s *Server) ReadInboxItem(ctx context.Context, req api.ReadInboxItemRequest
 	return api.ReadInboxItem204Response{}, nil
 }
 func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.SearchResponseObject, error) {
+	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	u, _, ws := me(ctx)
 	out := api.Search200JSONResponse{Hits: []api.SearchHit{}}
 	text := strings.TrimSpace(req.Params.Q)

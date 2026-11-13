@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -296,7 +297,7 @@ func seedArtifacts(ctx context.Context, svc *artifacts.Service, q *store.Queries
 
 	// Reload so CurrentVersionID reflects the last version written.
 	for title, a := range byTitle {
-		fresh, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+		fresh, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return err
 		}

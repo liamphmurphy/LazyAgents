@@ -14,6 +14,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/runner"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
@@ -109,7 +110,7 @@ func TestPlanningWorkflow(t *testing.T) {
 		t.Fatalf("unsafe planning snapshot: %+v", spec)
 	}
 	// A queued run reads its pinned source, not a newly published version.
-	old, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *plan.SourceVersionId, ArtifactID: source, WorkspaceID: me.WorkspaceID})
+	old, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *plan.SourceVersionId, ArtifactID: source, WorkspaceID: me.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +230,7 @@ func TestPlanningWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	cr, _ := q.ListCriteria(ctx, tk.ID)
-	docs, _ := q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: tk.ID})
+	docs, _ := q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: tk.ID, Viewer: pageview.From(ctx).UserID})
 	if tk.Title != proposals[0].Title || tk.Status != "backlog" || tk.AssigneeAgentID == nil || *tk.AssigneeAgentID != a.ID || len(cr) != 1 || len(docs) != 1 || docs[0].ID != source {
 		t.Fatalf("ticket context lost: %+v, criteria=%v docs=%v", tk, cr, docs)
 	}
