@@ -153,6 +153,8 @@ test("reduced motion holds all three characters still and opens the drawer witho
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installFooter(page, { dock: { personas: [], harnesses: harnesses({ agy: { running: 1 } }) } });
   await page.goto("/board?project=WEB");
+  // evaluateAll does not wait, so let the dock's data reach the footer first.
+  await expect(footer(page).getByRole("button", { name: /Antigravity, working/ })).toBeVisible();
   const animations = await footer(page).locator(".harness-character svg *").evaluateAll((els) => els.map((e) => getComputedStyle(e).animationName));
   expect(animations.length).toBeGreaterThan(0);
   expect(new Set(animations)).toEqual(new Set(["none"]));
