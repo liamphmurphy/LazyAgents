@@ -35,6 +35,7 @@ function apply() {
     if (root.style.getPropertyValue(`--${key}`) !== value) root.style.setProperty(`--${key}`, value);
   }
   root.dataset.palette = printing ? "dusk" : settings.palette;
+  root.dataset.harnessActivity = settings.showHarnessActivity === false ? "hidden" : "visible";
 }
 
 function notify() { listeners.forEach((l) => l()); }

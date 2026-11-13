@@ -36,6 +36,17 @@ test("corrupt, oversized, unknown and CSS injection preferences fall back safely
   assert.equal(parseAppearance('{"version":1,"palette":"unknown"}').palette, "dusk");
 });
 
+test("harness activity is on for existing preferences and off only for an explicit false", () => {
+  assert.equal(DEFAULT_APPEARANCE.showHarnessActivity, true);
+  for (const value of [undefined, null, 0, "false", true, {}, []]) {
+    assert.equal(parseAppearance(JSON.stringify({ version: 1, palette: "nord", showHarnessActivity: value })).showHarnessActivity, true);
+  }
+  const disabled = parseAppearance(JSON.stringify({ version: 1, palette: "nord", showHarnessActivity: false }));
+  assert.equal(disabled.showHarnessActivity, false);
+  assert.equal(parseAppearance(JSON.stringify(disabled)).showHarnessActivity, false);
+  assert.equal(paletteTokens(disabled, "dark").bg, PALETTES.find((p) => p.id === "nord").dark.bg);
+});
+
 test("custom colors are independent by mode and explicit advanced colors win", () => {
   const custom = { version: 1, palette: "custom", custom: { base: "nord", dark: { surface: "#182128", accent: "#aabbcc", "state-human": "#aabbcc", "viz-panel": "#123456" }, light: { bg: "#fff0ee" } } };
   const dark = paletteTokens(custom, "dark"), light = paletteTokens(custom, "light");
