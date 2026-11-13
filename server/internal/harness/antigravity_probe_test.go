@@ -5,26 +5,32 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
-// TestAgyProbe drives the real `agy` CLI without spending anything, as the wiki
-// pattern "Verify harness adapters against the real CLI safely" asks: env -i, a
-// temp HOME, a fake API key and every proxy pointed at a dead port, so the turn
-// fails at the network and nothing reaches Google. It checks the parts of the
-// contract docs/contracts/antigravity.md marks unverified that can be checked
-// without a model: the stream's shape, that our settings file loads, and that a
-// failure reaches the parser as an error.
+// TestAgyProbe drives the real `agy` CLI through Vesper's own launcher, settings
+// and policy hook, with nothing reaching Google, as the wiki pattern "Verify
+// harness adapters against the real CLI safely" asks: env -i, a temp HOME, a
+// fake API key, every proxy pointed at a dead port, and GOOGLE_GEMINI_BASE_URL
+// pointed at a local stub that scripts the model's replies. Stubs also stand in
+// for Vesper's MCP endpoint and tool policy, so the test sees what agy sends
+// them. It is the evidence behind docs/contracts/antigravity.md.
 //
-// Opt-in: AGY_PROBE=1 AGY_BIN=/path/to/agy. AGY_RECORD=<dir> also writes what
-// agy printed to <dir>/antigravity-error.jsonl, to replace the synthetic fixture.
+// Opt-in: AGY_PROBE=1 AGY_BIN=/path/to/agy (needs python3). AGY_RECORD=<dir>
+// also writes what agy printed to <dir>/antigravity-{turn,error}.jsonl, the
+// fixtures in testdata.
 func TestAgyProbe(t *testing.T) {
 	bin := os.Getenv("AGY_BIN")
 	if os.Getenv("AGY_PROBE") != "1" || bin == "" {
@@ -33,58 +39,165 @@ func TestAgyProbe(t *testing.T) {
 	if _, err := os.Stat(bin); err != nil {
 		t.Skipf("no agy at %s", bin)
 	}
-	home := t.TempDir()
-	ws := t.TempDir()
-	// The settings our launcher writes for a read-only chat: the CLI must accept them.
-	inv, err := (Antigravity{}).Invocation(Workspace{Dir: ws, MCPURL: "http://127.0.0.1:9/mcp", Token: "probe", TokenEnv: "LAZYAGENTS_TOKEN", ContainerSandbox: true},
-		Turn{Spec: probeSpec(), Prompt: "Reply with the single word ok."})
-	if err != nil {
-		t.Fatal(err)
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
 	}
-	var cfg agyConfig
-	if err := json.Unmarshal(inv.Files[agyConfigPath], &cfg); err != nil {
-		t.Fatal(err)
-	}
-	write := func(rel string, v any) {
-		p := filepath.Join(home, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		b, _ := json.Marshal(v)
-		if err := os.WriteFile(p, b, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(".gemini/antigravity-cli/settings.json", cfg.Settings)
-	write(".gemini/config/mcp_config.json", map[string]any{"mcpServers": cfg.MCPServers})
-
-	env := []string{"HOME=" + home, "PATH=/usr/bin:/bin", "GEMINI_API_KEY=AIzaProbeNotARealKey", "NO_COLOR=1",
-		"HTTPS_PROXY=http://127.0.0.1:9", "HTTP_PROXY=http://127.0.0.1:9", "ALL_PROXY=http://127.0.0.1:9", "NO_PROXY="}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if out, err := exec.CommandContext(ctx, bin, "--version").CombinedOutput(); err != nil {
+	if out, err := exec.Command(bin, "--version").CombinedOutput(); err != nil {
 		t.Fatalf("agy --version: %v\n%s", err, out)
 	} else {
 		t.Logf("agy --version: %s", strings.TrimSpace(string(out)))
 	}
 
-	cmd := exec.CommandContext(ctx, bin, "-p", "Reply with the single word ok.", "--output-format", "stream-json")
-	cmd.Dir, cmd.Env = ws, env
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	runErr := cmd.Run()
-	t.Logf("exit: %v\nstderr: %s", runErr, stderr.String())
-	if dir := os.Getenv("AGY_RECORD"); dir != "" {
-		if err := os.WriteFile(filepath.Join(dir, "antigravity-error.jsonl"), stdout.Bytes(), 0o644); err != nil {
+	t.Run("turn", func(t *testing.T) {
+		p := newAgyProbe(t, bin)
+		file := filepath.Join(p.ws, "notes.txt")
+		p.gemini.script(
+			agyReply{text: "I'll check the tickets.", call: agyCall("call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "list_tickets", "Arguments": map[string]any{"q": "probe"}})},
+			agyReply{call: agyCall("read_file", map[string]any{"Path": file})},
+			agyReply{call: agyCall("run_command", map[string]any{"CommandLine": "go test ./...", "toolSummary": "Run tests", "WaitMsBeforeAsync": 500})},
+			// The policy allows this write: the static deny rule must stop it.
+			agyReply{call: agyCall("write_file", map[string]any{"Path": filepath.Join(p.ws, "new.txt"), "Content": "x"})},
+			agyReply{call: agyCall("invoke_subagent", map[string]any{"TypeName": "general", "Role": "helper", "Prompt": "run ls"})},
+			agyReply{text: "Done."},
+		)
+		p.policy.deny("Bash", "Agent")
+		out := p.run(t, readOnlyChat(), "antigravity-turn.jsonl")
+
+		if got := p.policy.tools(); strings.Join(got, " ") != "mcp__lazyagents__list_tickets Read Bash Write Agent" {
+			t.Errorf("the hook must send Vesper's tool names, got %v", got)
+		}
+		if p.mcp.calls("tools/call") != 1 || !p.mcp.bearer("probe-token") {
+			t.Errorf("Vesper's MCP tool must be called once with the run token")
+		}
+		if _, err := os.Stat(filepath.Join(p.ws, "new.txt")); err == nil {
+			t.Error("a read-only chat wrote a file")
+		}
+		evs, res := out.events, out.res
+		want := "lifecycle message tool_call:list_tickets tool_result:list_tickets tool_call:Read tool_result:Read tool_call:Bash tool_result:Bash tool_call:Write tool_result:Write tool_call:Agent tool_result:Agent message usage"
+		if got := types(evs); got != want {
+			t.Errorf("events:\n got %s\nwant %s", got, want)
+		}
+		failed := map[string]string{}
+		for _, e := range evs {
+			if e.Type == "tool_result" && e.Payload["is_error"] == true {
+				failed[e.Payload["tool"].(string)] = e.Payload["output"].(string)
+			}
+		}
+		if !strings.Contains(failed["Bash"], "denied by pre-tool hook: probe policy") || !strings.Contains(failed["Write"], "Matches user-configured deny rule") || failed["Agent"] == "" || len(failed) != 3 {
+			t.Errorf("failed tools: %v", failed)
+		}
+		if res.IsError || res.Final != "Done.\n" || res.SessionID == "" {
+			t.Errorf("result = %+v", res)
+		}
+		// Six requests, each 1200 prompt tokens (1000 cached) and 30 + 7 thinking out.
+		if u := res.Usage; u.InputTokens != 7200 || u.CachedTokens != 6000 || u.OutputTokens != 222 || u.ToolCalls != 5 {
+			t.Errorf("usage = %+v", u)
+		}
+	})
+
+	t.Run("quota", func(t *testing.T) {
+		p := newAgyProbe(t, bin)
+		p.gemini.script(agyReply{status: 429, body: `{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"41s"}]}}`})
+		out := p.run(t, readOnlyChat(), "antigravity-error.jsonl")
+		if !out.res.IsError || !out.res.UsageLimited {
+			t.Errorf("a 429 must end the turn as a usage limit: %+v", out.res)
+		}
+		if _, ok := LimitReset(out.res.Error, time.Now()); !ok {
+			t.Errorf("no reset time in %q", out.res.Error)
+		}
+		if out.exit == 0 {
+			t.Errorf("agy exits non-zero on a failed turn")
+		}
+	})
+}
+
+func readOnlyChat() (s agentdef.Resolved) {
+	s.Harness = agentdef.HarnessAntigravity
+	s.HarnessOptions = map[string]string{"readonly": "true"}
+	return s
+}
+
+type agyProbe struct {
+	bin, home, ws string
+	gemini        *agyGemini
+	policy        *agyPolicyStub
+	mcp           *agyMCPStub
+	vesperURL     string
+}
+
+func newAgyProbe(t *testing.T, bin string) *agyProbe {
+	p := &agyProbe{bin: bin, home: t.TempDir(), ws: t.TempDir(), gemini: &agyGemini{}, policy: &agyPolicyStub{}, mcp: &agyMCPStub{}}
+	if err := os.WriteFile(filepath.Join(p.ws, "notes.txt"), []byte("hello from the workspace\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := httptest.NewServer(p.gemini)
+	t.Cleanup(g.Close)
+	p.gemini.url = g.URL
+	mux := http.NewServeMux()
+	mux.Handle("/api/v1/agent/tool-policy", p.policy)
+	mux.Handle("/mcp", p.mcp)
+	v := httptest.NewServer(mux)
+	t.Cleanup(v.Close)
+	p.vesperURL = v.URL
+	return p
+}
+
+type agyOutcome struct {
+	events []Event
+	res    Result
+	exit   int
+}
+
+func (p *agyProbe) run(t *testing.T, spec agentdef.Resolved, record string) agyOutcome {
+	t.Helper()
+	inv, err := (Antigravity{}).Invocation(Workspace{Dir: p.ws, MCPURL: p.vesperURL + "/mcp", Token: "probe-token", TokenEnv: "LAZYAGENTS_TOKEN", ContainerSandbox: true},
+		Turn{Spec: spec, Prompt: "Do the probe task."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rel, body := range inv.Files {
+		path := filepath.Join(p.ws, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, body, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-
-	p := (Antigravity{}).NewParser("")
-	events := map[string]int{}
+	// argv[2] is "agy", found on PATH as it is in the turn container.
+	binDir := t.TempDir()
+	if err := os.Symlink(p.bin, filepath.Join(binDir, "agy")); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"HOME=" + p.home, "PATH=" + binDir + ":/usr/bin:/bin", "NO_COLOR=1",
+		"GEMINI_API_KEY=AIzaProbeNotARealKey", "GOOGLE_GEMINI_BASE_URL=" + p.gemini.url,
+		"HTTPS_PROXY=http://127.0.0.1:9", "HTTP_PROXY=http://127.0.0.1:9", "ALL_PROXY=http://127.0.0.1:9", "NO_PROXY=127.0.0.1,localhost"}
+	for k, v := range inv.Env {
+		env = append(env, k+"="+v)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, inv.Argv[0], inv.Argv[1:]...)
+	cmd.Dir, cmd.Env = p.ws, env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	runErr := cmd.Run()
+	exit := cmd.ProcessState.ExitCode()
+	if ctx.Err() != nil {
+		t.Fatalf("agy did not finish: %v\nstderr: %s", runErr, stderr.String())
+	}
+	t.Logf("exit %d, stderr: %s", exit, stderr.String())
+	if dir := os.Getenv("AGY_RECORD"); dir != "" {
+		rec := bytes.ReplaceAll(stdout.Bytes(), []byte(p.ws), []byte("/workspace"))
+		if err := os.WriteFile(filepath.Join(dir, record), rec, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	parser := (Antigravity{}).NewParser("")
+	var evs []Event
 	sc := bufio.NewScanner(&stdout)
 	sc.Buffer(make([]byte, 1<<20), 8<<20)
+	results := 0
 	for sc.Scan() {
 		var l struct {
 			Event string `json:"event"`
@@ -93,20 +206,160 @@ func TestAgyProbe(t *testing.T) {
 			t.Errorf("stdout line without an event field: %q", sc.Text())
 			continue
 		}
-		events[l.Event]++
-		p.Line(sc.Bytes())
+		if l.Event == "result" {
+			results++
+		}
+		evs = append(evs, parser.Line(sc.Bytes())...)
 	}
-	t.Logf("events seen: %v", events)
-	if events["init"] != 1 || events["result"] != 1 {
-		t.Errorf("want one init and one result, got %v (the docs say each appears once)", events)
+	if results != 1 {
+		t.Errorf("want exactly one result line, got %d", results)
 	}
-	if res := p.Result(); !res.IsError {
-		t.Errorf("a turn with no network must reach the parser as a failure: %+v", res)
-	}
+	return agyOutcome{events: evs, res: parser.Result(), exit: exit}
 }
 
-func probeSpec() (s agentdef.Resolved) {
-	s.Harness, s.Model = "antigravity", ""
-	s.HarnessOptions = map[string]string{"readonly": "true"}
-	return s
+// ---------------------------------------------------------------- stubs
+
+type agyReply struct {
+	text   string
+	call   map[string]any
+	status int
+	body   string
+}
+
+func agyCall(name string, args map[string]any) map[string]any {
+	return map[string]any{"name": name, "args": args}
+}
+
+// agyGemini answers streamGenerateContent with the scripted replies in order,
+// then "done". Usage is fixed so token accounting can be checked exactly.
+type agyGemini struct {
+	url     string
+	mu      sync.Mutex
+	replies []agyReply
+}
+
+func (g *agyGemini) script(r ...agyReply) { g.replies = r }
+
+func (g *agyGemini) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	_, _ = io.Copy(io.Discard, r.Body)
+	g.mu.Lock()
+	reply := agyReply{text: "done"}
+	if len(g.replies) > 0 {
+		reply, g.replies = g.replies[0], g.replies[1:]
+	}
+	g.mu.Unlock()
+	if reply.status != 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(reply.status)
+		_, _ = io.WriteString(w, reply.body)
+		return
+	}
+	var parts []map[string]any
+	if reply.text != "" {
+		parts = append(parts, map[string]any{"text": reply.text})
+	}
+	if reply.call != nil {
+		parts = append(parts, map[string]any{"functionCall": reply.call})
+	}
+	chunk, _ := json.Marshal(map[string]any{
+		"candidates":    []any{map[string]any{"content": map[string]any{"role": "model", "parts": parts}, "finishReason": "STOP", "index": 0}},
+		"usageMetadata": map[string]any{"promptTokenCount": 1200, "cachedContentTokenCount": 1000, "candidatesTokenCount": 30, "thoughtsTokenCount": 7, "totalTokenCount": 1237},
+	})
+	w.Header().Set("Content-Type", "text/event-stream")
+	fmt.Fprintf(w, "data: %s\r\n\r\n", chunk)
+}
+
+// agyPolicyStub is Vesper's tool-policy endpoint: allow unless the tool is denied.
+type agyPolicyStub struct {
+	mu     sync.Mutex
+	denied []string
+	seen   []string
+}
+
+func (s *agyPolicyStub) deny(tools ...string) { s.denied = tools }
+
+func (s *agyPolicyStub) tools() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.seen...)
+}
+
+func (s *agyPolicyStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Tool string `json:"tool"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	s.mu.Lock()
+	s.seen = append(s.seen, in.Tool)
+	s.mu.Unlock()
+	decision := map[string]string{"decision": "allow"}
+	for _, d := range s.denied {
+		if d == in.Tool {
+			decision = map[string]string{"decision": "deny", "reason": "probe policy"}
+		}
+	}
+	_ = json.NewEncoder(w).Encode(decision)
+}
+
+// agyMCPStub is a Streamable HTTP MCP server with one tool, list_tickets.
+type agyMCPStub struct {
+	mu      sync.Mutex
+	methods []string
+	auth    []string
+}
+
+func (s *agyMCPStub) calls(method string) (n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.methods {
+		if m == method {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *agyMCPStub) bearer(token string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range s.auth {
+		if a != "Bearer "+token {
+			return false
+		}
+	}
+	return len(s.auth) > 0
+}
+
+func (s *agyMCPStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var msg struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+		Params struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		} `json:"params"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&msg)
+	s.mu.Lock()
+	s.methods = append(s.methods, msg.Method)
+	s.auth = append(s.auth, r.Header.Get("Authorization"))
+	s.mu.Unlock()
+	if msg.ID == nil {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	var result any = map[string]any{}
+	switch msg.Method {
+	case "initialize":
+		result = map[string]any{"protocolVersion": msg.Params.ProtocolVersion, "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "probe", "version": "1"}}
+	case "tools/list":
+		result = map[string]any{"tools": []any{map[string]any{"name": "list_tickets", "description": "List tickets", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}}}}}}
+	case "tools/call":
+		result = map[string]any{"content": []any{map[string]any{"type": "text", "text": "LAZYAGENTS-1 probe ticket"}}}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
 }

@@ -9,7 +9,11 @@ the recorded ones; the tool lines follow each CLI's documented stream
 shapes. Re-record them from a real run with keys when convenient (docs/dev/plan.md §10
 nightly smoke test).
 
-`antigravity-*.jsonl` are NOT recorded: no `agy` binary was available when they
-were written. They follow the stream-json shapes in Google's headless docs
-(docs/contracts/antigravity.md). Replace them with recordings from a real
-run (the opt-in probe in antigravity_probe_test.go) before relying on them.
+`antigravity-*.jsonl` were recorded from the real `agy` 1.5.8 (linux arm64) by
+the opt-in probe in antigravity_probe_test.go: `agy` ran headless with the
+configuration Vesper's launcher installs, a fake API key, and
+`GOOGLE_GEMINI_BASE_URL` pointed at a local stub that scripted the model's
+replies (text, tool calls, a 429 with a RetryInfo). Everything agy printed is
+its own; only the model's words and the token counts are the stub's. The
+workspace path was rewritten to `/workspace`. `antigravity-turn.jsonl` is a
+read-only chat whose policy denied `Bash` and `Agent`.

@@ -28,7 +28,11 @@ var (
 )
 
 func agyLine(event string, payload map[string]any) {
-	b, _ := json.Marshal(map[string]any{"event": event, event: payload})
+	line := map[string]any{"event": event, event: payload}
+	if event == "init" {
+		line["conversation_id"] = session // agy 1.5.8 puts it beside init
+	}
+	b, _ := json.Marshal(line)
 	fmt.Println(string(b))
 }
 
@@ -40,12 +44,13 @@ func agyStepUpdate(state, typ string, extra map[string]any) {
 	agyLine("step_update", s)
 }
 
-// agyName renames a Claude-style MCP tool to agy's mcp_<server>_<tool>.
-func agyName(name string) string {
+// agyCall renames a Claude-style tool call to agy's: every MCP tool goes
+// through call_mcp_tool.
+func agyCall(name string, input any) (string, any) {
 	if rest, ok := strings.CutPrefix(name, "mcp__lazyagents__"); ok {
-		return "mcp_lazyagents_" + rest
+		return "call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": rest, "Arguments": input}
 	}
-	return name
+	return name, input
 }
 
 // translateToAgy prints one Claude-style line the way agy would.
@@ -67,7 +72,8 @@ func translateToAgy(v map[string]any) {
 				name, _ := b["name"].(string)
 				id, _ := b["id"].(string)
 				agyTools[id] = agyStep
-				agyStepUpdate("ACTIVE", "tool", map[string]any{"tool_name": agyName(name), "tool_info": map[string]any{"name": agyName(name), "parameters": b["input"]}})
+				name, params := agyCall(name, b["input"])
+				agyStepUpdate("ACTIVE", "tool", map[string]any{"tool_name": name, "tool_info": map[string]any{"name": name, "parameters": params}})
 			}
 		}
 	case "user":
@@ -80,11 +86,11 @@ func translateToAgy(v map[string]any) {
 			if !ok {
 				continue
 			}
-			info := map[string]any{"output": b["content"]}
+			info, state := map[string]any{"output": b["content"]}, "DONE"
 			if isErr, _ := b["is_error"].(bool); isErr {
-				info = map[string]any{"error": map[string]any{"type": "tool_error", "message": b["content"]}}
+				info, state = map[string]any{"error": map[string]any{"type": "TOOL_ERROR", "message": b["content"]}}, "ERROR"
 			}
-			s := map[string]any{"conversation_id": session, "step_index": idx, "state": "DONE", "step_type": "tool", "tool_info": info}
+			s := map[string]any{"conversation_id": session, "step_index": idx, "state": state, "step_type": "tool", "tool_info": info}
 			agyLine("step_update", s)
 		}
 	case "result":
@@ -94,7 +100,12 @@ func translateToAgy(v map[string]any) {
 			delete(env, "response")
 		}
 		if u, ok := v["usage"].(map[string]any); ok {
-			env["usage"] = map[string]any{"input_tokens": u["input_tokens"], "output_tokens": u["output_tokens"], "cache_read_tokens": u["cache_read_input_tokens"]}
+			// agy reports usage per request on its agent_response steps (and a
+			// conversation total on result); one closing step carries it here.
+			usage := map[string]any{"input_tokens": u["input_tokens"], "output_tokens": u["output_tokens"], "cache_read_tokens": u["cache_read_input_tokens"]}
+			agyStep++
+			agyStepUpdate("DONE", "agent_response", map[string]any{"usage": usage})
+			env["usage"] = usage
 		}
 		agyLine("result", env)
 	}
