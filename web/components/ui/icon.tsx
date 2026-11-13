@@ -97,11 +97,4 @@ export function Icon({
   );
 }
 
-/** Shared Vesper brand asset, also used in the README and browser icon. */
-export function Mark({ size = 22 }: { size?: number }) {
-  return (
-    // A plain image keeps the small vector mark identical on every surface.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/logo.svg" alt="" aria-hidden width={size} height={size} className="flex-none" />
-  );
-}
+export { Mark } from "./mark";
