@@ -37,9 +37,10 @@ UPDATE chat_sessions SET work_branches = (
 WHERE id = @id AND repo_url IS NOT NULL;
 
 -- name: ListChatSessions :many
-SELECT * FROM chat_sessions
-WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived AND NOT hidden
-ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
+SELECT c.* FROM chat_sessions c
+WHERE c.workspace_id = $1 AND c.project_id = $2 AND c.created_by = $3 AND NOT c.archived AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT $4;
 
 -- name: GetChatSession :one
@@ -140,11 +141,12 @@ WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = sqlc.arg(archiv
     WHEN 'none' THEN c.persona_id IS NULL
     ELSE c.persona_id = sqlc.narg(persona_id)::uuid
       OR EXISTS (SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.persona_id = sqlc.narg(persona_id)::uuid) END
-  -- space_filter: 'none' (chats outside any space), 'id' (space_id), else all.
+  -- App conversations are listed only by their app's explicit space id.
+  -- space_filter: 'none' (outside any space), 'id' (space_id), else all personal chats.
   AND CASE sqlc.arg(space_filter)::text
     WHEN 'none' THEN c.space_id IS NULL
     WHEN 'id' THEN c.space_id = sqlc.narg(space_id)::uuid
-    ELSE true END
+    ELSE NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL) END
 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
@@ -391,6 +393,7 @@ CROSS JOIN LATERAL (SELECT coalesce(EXISTS(SELECT 1 FROM persona_proposals pp WH
     WHERE ctr.chat_id = c.id AND r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval')), false)::bool AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
 ORDER BY last_activity_at DESC;
 
@@ -414,6 +417,7 @@ hits AS (
   JOIN chat_sessions c ON c.id = m.session_id
   CROSS JOIN q
   WHERE c.workspace_id = sqlc.arg(workspace_id) AND c.created_by = sqlc.arg(user_id) AND NOT c.hidden AND NOT c.temporary
+    AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
     AND m.role IN ('user', 'assistant')
     AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
   ORDER BY rank DESC, m.created_at DESC

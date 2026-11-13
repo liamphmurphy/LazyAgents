@@ -1555,9 +1555,10 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 }
 
 const listChatSessions = `-- name: ListChatSessions :many
-SELECT id, workspace_id, project_id, title, created_by, agent_id, harness, model, current_run_id, state, archived, revision, created_at, updated_at, last_message_at, persona_id, repo_url, effort, speaker_persona_id, queued_persona_ids, relay_turns, relay_limit, interrupt_message_id, last_read_seq, hidden, connector_ids, space_id, work_branches, commit_email, secret_ids, temporary, pending_repo_url, parent_chat_id, auto_model FROM chat_sessions
-WHERE workspace_id = $1 AND project_id = $2 AND created_by = $3 AND NOT archived AND NOT hidden
-ORDER BY COALESCE(last_message_at, created_at) DESC, id DESC
+SELECT c.id, c.workspace_id, c.project_id, c.title, c.created_by, c.agent_id, c.harness, c.model, c.current_run_id, c.state, c.archived, c.revision, c.created_at, c.updated_at, c.last_message_at, c.persona_id, c.repo_url, c.effort, c.speaker_persona_id, c.queued_persona_ids, c.relay_turns, c.relay_limit, c.interrupt_message_id, c.last_read_seq, c.hidden, c.connector_ids, c.space_id, c.work_branches, c.commit_email, c.secret_ids, c.temporary, c.pending_repo_url, c.parent_chat_id, c.auto_model FROM chat_sessions c
+WHERE c.workspace_id = $1 AND c.project_id = $2 AND c.created_by = $3 AND NOT c.archived AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT $4
 `
 
@@ -1728,11 +1729,12 @@ WHERE c.workspace_id = $1 AND c.created_by = $2 AND c.archived = $3 AND NOT c.hi
     WHEN 'none' THEN c.persona_id IS NULL
     ELSE c.persona_id = $6::uuid
       OR EXISTS (SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.persona_id = $6::uuid) END
-  -- space_filter: 'none' (chats outside any space), 'id' (space_id), else all.
+  -- App conversations are listed only by their app's explicit space id.
+  -- space_filter: 'none' (outside any space), 'id' (space_id), else all personal chats.
   AND CASE $7::text
     WHEN 'none' THEN c.space_id IS NULL
     WHEN 'id' THEN c.space_id = $8::uuid
-    ELSE true END
+    ELSE NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL) END
 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.id DESC
 LIMIT $10 OFFSET $9
 `
@@ -2232,6 +2234,7 @@ CROSS JOIN LATERAL (SELECT coalesce(EXISTS(SELECT 1 FROM persona_proposals pp WH
     WHERE ctr.chat_id = c.id AND r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval')), false)::bool AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
 WHERE c.workspace_id = $1 AND c.created_by = $2 AND NOT c.archived AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
   AND (c.state = 'running' OR u.unread > 0 OR p.waiting_approval)
 ORDER BY last_activity_at DESC
 `
@@ -2574,6 +2577,7 @@ hits AS (
   JOIN chat_sessions c ON c.id = m.session_id
   CROSS JOIN q
   WHERE c.workspace_id = $2 AND c.created_by = $3 AND NOT c.hidden AND NOT c.temporary
+    AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
     AND m.role IN ('user', 'assistant')
     AND to_tsvector('english', left(m.body_md, 200000)) @@ q.tsq
   ORDER BY rank DESC, m.created_at DESC
