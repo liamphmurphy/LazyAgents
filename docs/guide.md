@@ -217,6 +217,15 @@ set the harness option `explorer` to `"false"` in an agent's definition to turn
 it off. Sub agent runs, chats, `readonly` or `no_tools` agents, and Codex or
 Antigravity runs never get it.
 
+Context rollover continues a main agent in a fresh session, briefed from the
+ticket, its plan, git and the delegation report, so a long run stops re-reading
+its whole history on every call. It fires only when a lead's delegations finish
+(the agent is woken with their results) and its last reported context is at
+least `ROLLOVER_CONTEXT_TOKENS`; a run that never delegates never rolls over,
+and Codex runs, which don't report context, never do. The compose files default
+it to `150000`, chosen from measured runs; set it to `0` in `.env` to turn
+rollover off (outside compose the default is `0`).
+
 Managed `claim_ticket` responses include the ticket (`ticket_details`, same as `get_ticket`) but no longer repeat instructions and memory already
 available in the workspace. Agents are instructed to read only relevant context
 and reuse it on resume. New definitions default to **Selective** memory: at most
