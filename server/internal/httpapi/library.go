@@ -53,6 +53,12 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 			out.Peaks = &peaks
 		}
 	}
+	if (l.Kind == "file" || l.Kind == "export") && l.Detail != "" {
+		out.Detail = &l.Detail
+	}
+	if l.Kind == "export" {
+		out.ExportSource = exportSourceOf(l)
+	}
 	source := api.LibraryItemSource(l.Source)
 	out.Source = &source
 	// A persona reference whose persona was deleted stands for nobody.
@@ -95,7 +101,8 @@ func (s *Server) GetLibraryItemContent(ctx context.Context, req api.GetLibraryIt
 	} else if err != nil {
 		return nil, err
 	}
-	download := req.Params.Download != nil && *req.Params.Download
+	// A file is only ever downloaded: its type describes it, it is never shown in the page.
+	download := (req.Params.Download != nil && *req.Params.Download) || l.Kind == "file"
 	if l.Kind == "video" || l.Kind == "audio" {
 		// Players seek with byte ranges.
 		resp, err := s.serveRanged(ctx, l.BlobKey, l.ContentType, l.SizeBytes, l.Filename, !download, req.Params.Range)
@@ -159,6 +166,9 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 	if runs.AudioNameType(name) != "" {
 		return s.uploadLibraryAudio(ctx, u.ID, ws, f, name)
 	}
+	if !isImageName(name) {
+		return s.uploadLibraryFile(ctx, u.ID, ws, f, name, head[:n])
+	}
 	ct, err := runs.ChatAttachmentType(name, f.file.Size, head[:n])
 	if err != nil {
 		return nil, err
@@ -193,6 +203,24 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 	source := api.LibraryItemSource(l.Source)
 	return api.UploadLibraryItem201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
 		Source: &source, CreatedAt: l.CreatedAt}, nil
+}
+
+// isImageName reports whether name claims to be one of the image types the Library keeps as images.
+func isImageName(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		return true
+	}
+	return false
+}
+
+// uploadLibraryFile stores any other file the person added, as a file.
+func (s *Server) uploadLibraryFile(ctx context.Context, userID, ws uuid.UUID, f *form, name string, head []byte) (api.UploadLibraryItemResponseObject, error) {
+	l, err := s.keepFile(ctx, userID, ws, f.tmp, f.file.Size, name, head, fileOrigin{source: "upload"})
+	if err != nil {
+		return nil, err
+	}
+	return api.UploadLibraryItem201JSONResponse(toLibraryItem(libraryRow(l))), nil
 }
 
 // uploadLibraryAudio stores an audio file the person added. The file is read
@@ -391,5 +419,6 @@ func libraryRow(l store.LibraryItem) store.ListLibraryItemsRow {
 	return store.ListLibraryItemsRow{ID: l.ID, WorkspaceID: l.WorkspaceID, UserID: l.UserID, Kind: l.Kind, Title: l.Title, Filename: l.Filename, ContentType: l.ContentType,
 		SizeBytes: l.SizeBytes, BlobKey: l.BlobKey, ChatID: l.ChatID, MessageID: l.MessageID, PersonaID: l.PersonaID, CreatedAt: l.CreatedAt, Reference: l.Reference,
 		ReferencePersonaID: l.ReferencePersonaID, Source: l.Source, Url: l.Url, Note: l.Note, Site: l.Site, VideoID: l.VideoID, LinkStatus: l.LinkStatus, Summary: l.Summary,
-		DurationMs: l.DurationMs, Width: l.Width, Height: l.Height, PosterKey: l.PosterKey, Peaks: l.Peaks, Method: l.Method}
+		DurationMs: l.DurationMs, Width: l.Width, Height: l.Height, PosterKey: l.PosterKey, Peaks: l.Peaks, Method: l.Method,
+		Detail: l.Detail, SourceID: l.SourceID, SourceStamp: l.SourceStamp}
 }

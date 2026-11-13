@@ -90,7 +90,7 @@ func TestSaveDocToLibrary(t *testing.T) {
 	id, chat := doc["id"].(string), doc["chat_id"].(string)
 
 	first := e.want("POST", "/docs/"+id+"/library", nil, http.StatusCreated)
-	if first["kind"] != "document" || first["title"] != "Trip / plan" || first["filename"] != "Trip plan.md" || first["chat_id"] != chat {
+	if first["kind"] != "export" || first["title"] != "Trip / plan" || first["filename"] != "Trip plan.md" || first["chat_id"] != chat {
 		t.Fatalf("saved %v", first)
 	}
 	if again := e.want("POST", "/docs/"+id+"/library", nil, http.StatusCreated); again["id"] != first["id"] {
@@ -101,7 +101,7 @@ func TestSaveDocToLibrary(t *testing.T) {
 		t.Fatal("an edited document reused the old copy")
 	}
 	var bodies []string
-	for _, k := range fake.keys(avatarBucket + "/library-docs/") {
+	for _, k := range fake.keys(avatarBucket + "/library-exports/") {
 		bodies = append(bodies, string(fake.objs[k].body))
 	}
 	if len(bodies) != 2 || !slices.Contains(bodies, "# Trip / plan\n") || !slices.Contains(bodies, "# Trip / plan\n\nDay one.\n") {

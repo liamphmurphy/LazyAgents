@@ -37,6 +37,8 @@ type Deps struct {
 	Tracker    *tracker.Service
 	Wiki       *wiki.Service
 	Designs    *designs.Service
+	// Files keeps a file in the person's Library (save_file); nil where there is no object store.
+	Files FileKeeper
 }
 
 // Tool is one Agent API operation, independent of transport.
@@ -983,6 +985,7 @@ var Tools = []Tool{
 	define("update_video", "Move a video on: stage stills once its stills are in place (with the checks you made on them), render as the full render starts, encode once every frame is done.", updateVideo),
 	define("finish_video", "Save the finished video once its file is written; Vesper stores it in the chat and the person's Library.", finishVideo),
 	define("fail_video", "End a video that can't be finished, with what went wrong and the failing command's log tail. The card keeps the stills and shows the error.", failVideo),
+	define("save_file", "Keep a file you made in the person's Library under Files: a script, a zip, a spreadsheet, a CSV. Give its text, or base64 data for a binary, at most 25 MB. Executables and disk images are refused. It is only kept, never run.", saveFile),
 	define("start_audio", "Start audio you'll render with code in this chat's workspace (MIDI through a soundfont, a synth script, ffmpeg). The chat shows a card that follows its stages; returns the audio_id and where the renderer writes its progress and the finished file. You can't hear audio: say so, and check numbers instead.", startAudio),
 	define("update_audio", "Move audio on: stage render as the renderer starts, check once the file is written (with the numbers you measured on it).", updateAudio),
 	define("finish_audio", "Save the finished audio once its file is written; Vesper stores it in the chat and the person's Library.", finishAudio),

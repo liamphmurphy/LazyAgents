@@ -130,12 +130,12 @@ func extOf(name string) string {
 // ---------------------------------------------------------- conversions ---
 
 func contentOf(isMarkdown bool, ct *string, size *int64, filename *string, sections int32) api.ArtifactContent {
-	c := api.ArtifactContent{Kind: api.File, ContentType: deref(ct), SizeBytes: deref(size), Filename: filename, Sections: int(sections)}
+	c := api.ArtifactContent{Kind: api.ArtifactContentKindFile, ContentType: deref(ct), SizeBytes: deref(size), Filename: filename, Sections: int(sections)}
 	switch {
 	case isMarkdown && deref(ct) == artifacts.MockupContentType:
-		c.Kind = api.Svg
+		c.Kind = api.ArtifactContentKindSvg
 	case isMarkdown:
-		c.Kind = api.Markdown
+		c.Kind = api.ArtifactContentKindMarkdown
 	}
 	return c
 }

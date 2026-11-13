@@ -25,8 +25,10 @@ SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_ke
 -- name: ListLibraryItems :many
 -- The caller's own items, newest first, with where each came from (the chat's
 -- title and the persona's name, while they still exist).
-SELECT l.*, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name
+SELECT l.*, c.title AS chat_title, p.name AS persona_name, pr.key AS project_key, rp.name AS reference_persona_name,
+  sc.title AS source_title, sc.kind AS source_kind, sc.updated_at AS source_updated_at
 FROM library_items l
+LEFT JOIN chat_canvases sc ON sc.id = l.source_id
 LEFT JOIN chat_sessions c ON c.id = l.chat_id
 LEFT JOIN personas p ON p.id = l.persona_id
 LEFT JOIN personas rp ON rp.id = l.reference_persona_id
@@ -149,3 +151,18 @@ VALUES ($1, $2, 'audio', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RE
 -- Renames one of the caller's items.
 UPDATE library_items SET title = sqlc.arg(title) WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
+
+-- name: CreateLibraryFile :one
+-- A file the person uploaded or a persona handed over. detail is the tile's
+-- one-line summary, worked out when the file is stored.
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, source, chat_id, message_id, persona_id, detail)
+VALUES ($1, $2, 'file', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+
+-- name: CreateLibraryExport :one
+-- A frozen copy of what an app exported, linked to its source canvas. Saving
+-- the same content again returns the row it already made.
+INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, detail, source_id, source_stamp)
+VALUES ($1, $2, 'export', $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
+
+-- name: GetLibraryExportByBlob :one
+SELECT * FROM library_items WHERE workspace_id = $1 AND user_id = $2 AND blob_key = $3 AND kind = 'export';

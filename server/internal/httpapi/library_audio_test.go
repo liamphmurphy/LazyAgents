@@ -96,9 +96,6 @@ func TestLibraryAudioUploadChecksTheFile(t *testing.T) {
 	if code, _ := e.uploadLibrary("empty.wav", nil); code != http.StatusUnprocessableEntity {
 		t.Fatalf("empty file: %d", code)
 	}
-	if code, _ := e.uploadLibrary("notes.txt", []byte("hello")); code != http.StatusUnprocessableEntity {
-		t.Fatalf("text file: %d", code)
-	}
 	code, item := e.uploadLibrary("field.ogg", append([]byte("OggS"), make([]byte, 64)...))
 	if code != http.StatusCreated || item["content_type"] != "audio/ogg" || item["peaks"] != nil || item["duration_ms"] != nil {
 		t.Fatalf("ogg upload %d %v", code, item)

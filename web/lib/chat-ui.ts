@@ -466,6 +466,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("saved-links", "saving a link");
     case "search_library":
       return status("library", "looking through your Library");
+    case "save_file":
+      return status("library", "saving a file to your Library");
     case "read_library_item":
       return status("library", "opening something from your Library");
     case "list_inbox":
@@ -905,6 +907,8 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
       return named("Changing", known(o.task_id));
     case "save_link":
       return named("Saving", o.title || hostOf(str(o.url)));
+    case "save_file":
+      return named("Saving", o.title || str(o.filename));
     case "search_library":
       return o.q ? `Searching “${clip(str(o.q))}”` : general;
     case "read_library_item":

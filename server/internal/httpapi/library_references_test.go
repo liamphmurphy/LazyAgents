@@ -79,7 +79,8 @@ func TestLibraryUploadAndReferences(t *testing.T) {
 		t.Fatalf("stored %v", keys)
 	}
 	_, other := e.uploadLibrary("other.jpg", avatarJPEG(t))
-	if code, out := e.uploadLibrary("notes.txt", []byte("hello")); code != http.StatusUnprocessableEntity || out["field"] != "file" {
+	// Anything that isn't an image or audio is kept as a file, never as an image.
+	if code, out := e.uploadLibrary("notes.txt", []byte("hello")); code != http.StatusCreated || out["kind"] != "file" {
 		t.Fatalf("text upload %d %v", code, out)
 	}
 	if code, out := e.uploadLibrary("fake.png", []byte("not an image")); code != http.StatusUnprocessableEntity {
@@ -130,7 +131,7 @@ func TestLibraryUploadAndReferences(t *testing.T) {
 	// Clearing keeps the image; deleting the persona unlinks its reference.
 	e.want("DELETE", "/library/"+otherID+"/reference", nil, http.StatusNoContent)
 	e.want("DELETE", "/personas/"+gwenID, nil, http.StatusNoContent)
-	if refs := e.libraryRefs(); len(refs) != 3 || refs[otherID] != "" || refs[thirdID] != "" {
+	if refs := e.libraryRefs(); len(refs) != 4 || refs[otherID] != "" || refs[thirdID] != "" {
 		t.Fatalf("after clearing %v", refs)
 	}
 	e.want("DELETE", "/library/"+uuid.NewString()+"/reference", nil, http.StatusNotFound)

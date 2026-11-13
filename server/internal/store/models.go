@@ -980,6 +980,9 @@ type LibraryItem struct {
 	PosterKey          *string
 	Peaks              []byte
 	Method             string
+	Detail             string
+	SourceID           *uuid.UUID
+	SourceStamp        *time.Time
 }
 
 type LinkPreview struct {
