@@ -47,7 +47,7 @@ import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type 
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
 import { CodeChanges } from "./code-changes";
@@ -76,7 +76,7 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, personaLook, type PersonaLook } from "./persona";
+import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, personaLook, toneLabel, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
@@ -468,7 +468,15 @@ export type ConversationContext = {
   /** Queues and asides accept text only, so the host supplies a snapshot. */
   prepareText: (body: string) => Promise<string>;
   onSent: () => void;
+  /**
+   * An empty chat's welcome in a narrow app dock: a one-line greeting and the host's own starters,
+   * in place of the full-page greeting and the person's general suggestions, which are about other work.
+   */
+  welcome?: DockWelcome;
 };
+
+export type DockStarter = { icon: IconName; title: string; prompt: string };
+export type DockWelcome = { where: string; intro: string; label: string; starters: DockStarter[] };
 
 export function Conversation({ id, onNew, actions, activityInDock = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
   const chat = useChat(id);
@@ -995,6 +1003,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                 Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do.
               </EmptyState>
             ) : (
+              context?.welcome ? (
+                <DockGreeting persona={persona} tone={full?.tone} welcome={context.welcome} onPick={submit} disabled={locked || !!unavailable || !!text.trim()} />
+              ) : (
               <>
               <PersonaGreeting
                 persona={persona}
@@ -1006,6 +1017,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               {/* Picking one sends it, which would drop a half-written message. */}
               {!text.trim() && <ChatSuggestions onPick={submit} disabled={locked || !!unavailable} />}
               </>
+              )
             )
           ) : (
             <>
@@ -1348,5 +1360,45 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
         )}
       </section>
     </Tooltip.Provider>
+  );
+}
+
+/** The welcome of an empty chat in an app dock: who you're talking to on one line, then starters about where you are. */
+function DockGreeting({ persona, tone, welcome, onPick, disabled }: { persona: PersonaLook; tone?: Schemas["PersonaTone"]; welcome: DockWelcome; onPick: (prompt: string) => void; disabled: boolean }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2.5">
+        <PersonaAvatar persona={persona} size={28} />
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-fg">{persona.id ? persona.name : "Your assistant"}</span>
+          <span className="block truncate text-xs text-fg-tertiary">{welcome.where}{persona.id ? ` · ${toneLabel(tone)}` : ""}</span>
+        </span>
+      </div>
+      <p className="text-[13px] text-fg-secondary">{welcome.intro}</p>
+      {welcome.starters.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">{welcome.label}</h3>
+          <ul aria-label="Conversation starters" className="flex flex-col gap-1.5">
+            {welcome.starters.map((s) => (
+              <li key={s.title}>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  title={s.prompt}
+                  onClick={() => onPick(s.prompt)}
+                  className="flex w-full items-start gap-2.5 rounded-md border border-border bg-surface-raised p-2.5 text-left hover:bg-hover disabled:opacity-60"
+                >
+                  <Icon name={s.icon} size={15} className="mt-px flex-none text-fg-secondary" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-medium text-fg">{s.title}</span>
+                    <span className="line-clamp-2 block text-xs text-fg-secondary">{s.prompt}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

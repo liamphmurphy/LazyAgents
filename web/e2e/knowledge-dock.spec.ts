@@ -87,13 +87,13 @@ test("a remembered general chat that no longer exists falls back to Start a chat
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("vesper.knowledge.chat"))).toBeNull();
 });
 
-test("on a page the dock holds that page's chat, and ⌘J opens it, with the page's own sidebar free of a Chat tab", async ({ page }) => {
+test("on a page the dock holds that page's chat, and ⌘J opens it", async ({ page }) => {
   const s = await install(page);
   await page.goto(`/knowledge/${P}`);
   await expect(dock(page)).toHaveCount(0);
   await expect(rail(page)).toBeVisible();
-  // The page's own sidebar no longer carries a Chat tab.
-  await expect(page.getByRole("complementary", { name: "Page sidebar" }).getByRole("tab", { name: "Chat" })).toHaveCount(0);
+  // One right sidebar: the page's panels are the dock's, not a second aside beside it.
+  await expect(page.getByRole("complementary", { name: "Page sidebar" })).toHaveCount(0);
 
   await page.keyboard.press(`${mod}+j`);
   await expect(dock(page)).toBeVisible();
@@ -326,4 +326,121 @@ test("the dock keeps every Knowledge chat: New starts another in place and the s
   await expect.poll(stored).not.toBe(firstId);
   await items.filter({ hasText: /ago|just now/ }).last().click();
   await expect.poll(stored).toBe(firstId);
+});
+
+test("the shell fits the viewport: a long tree and an open chat leave the composer and explorer footer on screen", async ({ page }) => {
+  const s = await install(page);
+  // Enough pages that the explorer tree is taller than the window.
+  const many = Array.from({ length: 60 }, (_, i) => ({ ...s.page, id: `77777777-7777-4777-8777-${String(i).padStart(12, "0")}`, title: `Note ${i}`, path: `Note ${i}` }));
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => json(route, { columns: [], rows: [s.page, ...many], total: many.length + 1, has_more: false }));
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  const composer = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(composer).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("button", { name: /Quick capture/ })).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+});
+
+const general = ["Tune PR #387", "Sheets engine", "Deploy plan", "Fix the error"].map((title) => ({ title, prompt: `${title}, please`, icon: "msg" }));
+
+test("an empty Knowledge chat offers starters about the notes, not the person's general suggestions, under one header", async ({ page }) => {
+  const s = await install(page, { suggestions: general });
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  const starters = dock(page).getByRole("list", { name: "Conversation starters" });
+  await expect(starters.getByRole("button", { name: /File my inbox/ })).toBeVisible();
+  await expect(dock(page).getByText("Tune PR #387")).toHaveCount(0);
+  // One header: the switcher sits in the conversation's header, not a bar of its own above it.
+  await expect(dock(page).getByTestId("dock-chat-switcher")).toHaveCount(1);
+  await expect(dock(page).getByRole("button", { name: /^Switch chat/ })).toHaveCount(1);
+  await expect(dock(page).getByRole("button", { name: "New chat", exact: true })).toBeVisible();
+
+  // Picking one sends its prompt.
+  await starters.getByRole("button", { name: /File my inbox/ }).click();
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.body).toContain("captures in my Inbox");
+});
+
+test("on a page the starters are about that page", async ({ page }) => {
+  await install(page, { suggestions: general });
+  await page.goto(`/knowledge/${P}`);
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const starters = dock(page).getByRole("list", { name: "Conversation starters" });
+  await expect(starters.getByRole("button", { name: /Summarise this page/ })).toBeVisible();
+  await expect(dock(page).getByText(/on “Reading list”/)).toBeVisible();
+  await expect(dock(page).getByText("Tune PR #387")).toHaveCount(0);
+});
+
+test("a page's Links, Outline, Calendar and History are dock tabs beside Chat, and the edit-mode pill opens History", async ({ page }) => {
+  await install(page);
+  await page.goto(`/knowledge/${P}`);
+  for (const name of ["Links", "Outline", "Calendar and inbox", "History"]) await expect(rail(page).getByRole("button", { name: `Open ${name}` })).toBeVisible();
+  await rail(page).getByRole("button", { name: "Open Links" }).click();
+  await expect(dock(page).getByRole("tab", { name: "Links" })).toHaveAttribute("aria-selected", "true");
+  await dock(page).getByRole("tab", { name: /Chat/ }).click();
+  await expect(dock(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("button", { name: /suggests changes|edits directly|paused/ }).click();
+  await expect(dock(page).getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+
+  // Off a page there is only Chat.
+  await page.goto("/knowledge");
+  await expect(rail(page).getByRole("button", { name: "Open Links" })).toHaveCount(0);
+});
+
+test("the explorer pins pages to the top, caps long folders with + N more, and collapses every folder", async ({ page }) => {
+  const s = await install(page);
+  const folder = Array.from({ length: 12 }, (_, i) => ({ ...s.page, id: `99999999-9999-4999-8999-${String(i).padStart(12, "0")}`, title: `Creator ${String(i).padStart(2, "0")}`, path: `People/Creator ${String(i).padStart(2, "0")}` }));
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => json(route, { columns: [], rows: [s.page, ...folder], total: folder.length + 1, has_more: false }));
+  await page.goto("/knowledge");
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  await explorer.getByRole("button", { name: "People" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(8);
+  await explorer.getByRole("button", { name: "+ 4 more" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(12);
+
+  await explorer.getByRole("link", { name: "Reading list" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Pin to top" }).click();
+  await expect(explorer.getByRole("region", { name: "Pinned" }).getByRole("link", { name: "Reading list" })).toBeVisible();
+
+  await explorer.getByRole("button", { name: "Collapse all folders" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(0);
+  // Pins survive a reload.
+  await page.reload();
+  await expect(explorer.getByRole("region", { name: "Pinned" }).getByRole("link", { name: "Reading list" })).toBeVisible();
+});
+
+test("Home leads with what needs you, then where you left off, and tells untitled pages apart", async ({ page }) => {
+  const s = await install(page);
+  const at = new Date().toISOString();
+  const rows = [
+    { ...s.page, title: "Reading list", summary: "Books for the winter", updated_at: at, pending: 2 },
+    { ...s.page, id: Q, title: "Untitled", path: "Docs/Untitled", summary: "Ideas for the theme picker", updated_at: at, pending: 0 },
+    { ...s.page, id: F1, title: "Untitled", path: "Docs/Untitled 2", summary: "", updated_at: at, pending: 0 },
+  ];
+  const capture = { ...s.page, id: F2, title: "A thought", path: "Inbox/A thought", summary: "", updated_at: at, pending: 0 };
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => {
+    const q = route.request().postDataJSON() as { folder?: string };
+    if (q.folder === "Inbox") return json(route, { columns: [], rows: [capture], has_more: false });
+    if (q.folder === "Patterns/Proposed") return json(route, { columns: [], rows: [], has_more: false });
+    return json(route, { columns: [], rows, has_more: false });
+  });
+  await page.goto("/knowledge");
+  const needs = page.getByRole("region", { name: "Needs you" });
+  await expect(needs.getByRole("button", { name: /1\s*page with suggestions to review/ })).toBeVisible();
+  await expect(needs.getByRole("button", { name: /1\s*inbox captures to file/ })).toBeVisible();
+  await expect(needs.getByRole("button", { name: /agent pattern proposals/ })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Pick up where you left off" })).toContainText("Reading list");
+  await expect(page.getByText("Untitled · “Ideas for the theme picker”")).toBeVisible();
+  await expect(page.getByText(/Docs · empty/)).toBeVisible();
+  // The four quick-action cards are gone: the explorer and shortcuts already do them.
+  await expect(page.getByRole("button", { name: "Today's note" })).toHaveCount(0);
+
+  // Filing the inbox asks a persona with the Inbox attached.
+  await needs.getByRole("button", { name: /inbox captures/ }).click();
+  await expect(dock(page)).toBeVisible();
+  await expect(dock(page).getByRole("button", { name: "Remove folder Inbox" })).toBeVisible();
 });

@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ago, pageHref } from "@/lib/knowledge";
-import { useCreatePage, usePages } from "@/lib/api/knowledge-hooks";
+import { useAllPages, usePages, type PageRow } from "@/lib/api/knowledge-hooks";
+import { cx } from "@/lib/cx";
 import { useBootstrap } from "@/lib/api/hooks";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
 import { AUDIENCE, StatusBar, useToday } from "./kit";
 import { useKnowledge, useKnowledgeTab } from "./shell";
+import { useKnowledgeChat } from "./chat-context";
 
 const HOME_TAB = { id: "home", title: "New tab", kind: "home" as const };
 
@@ -18,51 +20,83 @@ function greeting(d: Date | null) {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-/** A new tab: quick ways in, what you touched last, the inbox, and the vault import. */
+/** A new tab: what needs you, where you left off, and what you touched last. */
 export function KnowledgeHome() {
   useKnowledgeTab(HOME_TAB);
   const k = useKnowledge();
+  const chat = useKnowledgeChat();
   const today = useToday();
   const router = useRouter();
   const me = useBootstrap().data?.me;
-  const recent = usePages({ limit: 8, include_agent: k.view === "agent", audience: k.view === "agent" ? "agent" : undefined });
-  const inbox = usePages({ folder: "Inbox", limit: 3 });
-  const create = useCreatePage();
-  const newPage = () => create.mutate({ title: "Untitled", body_md: "" }, { onSuccess: (p) => router.push(pageHref(p.id, p.title)) });
-  const actions: [IconName, string, string, string, () => void][] = [
-    ["clock", "Today's note", "⌘D", "text-state-progress", k.openToday],
-    ["edit", "New page", "", "text-accent", newPage],
-    ["inbox", "Quick capture", "⌥⌘N", "text-[#3FC1B0]", k.openCapture],
-    ["search", "Go to page", "⌘O", "text-state-review", k.openSwitcher],
-  ];
+  const agent = k.view === "agent";
+  const recent = usePages({ limit: 8, include_agent: agent, audience: agent ? "agent" : undefined });
+  // The explorer's own query, so this costs nothing extra: rows carry how many persona changes wait for review.
+  const all = useAllPages(false);
+  const inbox = usePages({ folder: "Inbox", limit: 50 });
+  const proposals = usePages({ folder: "Patterns/Proposed", include_agent: true, audience: "agent", limit: 50 });
+  const toReview = (all.data ?? []).filter((r) => r.pending > 0);
   const name = me?.name?.split(/\s+/)[0];
+  const [latest, ...rest] = recent.data?.rows ?? [];
+
+  const needs: { key: string; count: number; more?: boolean; label: string; action: string; go: () => void; hot?: boolean }[] = [
+    { key: "review", count: toReview.length, label: toReview.length === 1 ? "page with suggestions to review" : "pages with suggestions to review", action: "Review", hot: true,
+      go: () => router.push(pageHref(toReview[0].id, toReview[0].title)) },
+    { key: "inbox", count: inbox.data?.rows.length ?? 0, more: inbox.data?.has_more, label: "inbox captures to file", action: "File with a persona",
+      go: () => chat.askFolder({ path: "Inbox", pages: (inbox.data?.rows ?? []).map((r) => r.path), count: inbox.data?.rows.length ?? 0 }) },
+    { key: "proposals", count: proposals.data?.rows.length ?? 0, more: proposals.data?.has_more, label: "agent pattern proposals", action: "Review",
+      go: () => { const first = proposals.data!.rows[0]; k.setView("agent"); router.push(pageHref(first.id, first.title)); } },
+  ];
+  const waiting = needs.filter((n) => n.count > 0);
+  const loaded = all.data && inbox.data && proposals.data;
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* relative: the rows' sr-only labels are absolutely placed, and would otherwise escape this scroller and stretch the page. */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[760px] px-6 pb-12 pt-14">
           <h1 className="text-[28px] font-bold tracking-[-0.02em] text-fg">
             {greeting(today)}
             {/* Only once on the client: the name comes from data the server render doesn't have. */}
             {today && name ? `, ${name}` : ""}
           </h1>
-          <p className="mt-1 text-sm text-fg-tertiary">
-            {today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}
-            {inbox.data && inbox.data.rows.length > 0 && ` · ${inbox.data.has_more ? "3+" : inbox.data.rows.length} in your inbox`}
-          </p>
-          <div className="mt-8 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {actions.map(([icon, label, key, cls, fn]) => (
-              <button key={label} onClick={fn} className="flex h-[92px] flex-col justify-between rounded-xl border border-border bg-surface p-4 text-left hover:border-border-strong hover:bg-hover">
-                <span className="flex items-start justify-between">
-                  <Icon name={icon} size={19} className={cls} />
-                  {key && <Kbd>{key}</Kbd>}
-                </span>
-                <span className="text-sm font-semibold text-fg">{label}</span>
-              </button>
-            ))}
-          </div>
+          <p className="mt-1 text-sm text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}</p>
 
-          <div className="mt-9 flex items-baseline justify-between">
+          {!agent && (
+            <section aria-label="Needs you" className="mt-8">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Needs you</h2>
+              {!loaded ? (
+                <Skeleton className="mt-2 h-[84px] w-full" />
+              ) : waiting.length === 0 ? (
+                <p className="mt-2 text-[13px] text-fg-tertiary">Nothing to review or file.</p>
+              ) : (
+                <div className="mt-2 grid gap-2.5 sm:grid-cols-3">
+                  {waiting.map((n) => (
+                    <button key={n.key} onClick={n.go} className={cx("flex flex-col items-start rounded-xl border bg-surface p-3.5 text-left hover:bg-hover", n.hot ? "border-accent/40" : "border-border")}>
+                      <span className={cx("text-[22px] font-bold leading-none", n.hot ? "text-accent" : "text-fg")}>{n.count}{n.more ? "+" : ""}</span>
+                      <span className="mt-1.5 text-[13px] text-fg">{n.label}</span>
+                      <span className="mt-1 text-xs font-medium text-accent">{n.action} →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {latest && (
+            <section aria-label="Pick up where you left off" className="mt-8">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pick up where you left off</h2>
+              <Link href={pageHref(latest.id, latest.title)} className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-surface p-4 hover:bg-hover">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-fg">{displayTitle(latest)}</span>
+                  <span className="mt-0.5 block truncate text-xs text-fg-secondary">{latest.summary || "Empty page"}</span>
+                  <span className="mt-0.5 block text-[11px] text-fg-tertiary">{folderOf(latest.path)} · edited {ago(latest.updated_at)}</span>
+                </span>
+                <Icon name="chevr" size={14} className="flex-none text-accent" />
+              </Link>
+            </section>
+          )}
+
+          <div className="mt-8 flex items-baseline justify-between">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Recent</h2>
             <button onClick={k.openSwitcher} className="text-xs font-medium text-accent hover:underline">
               Find a page
@@ -75,52 +109,40 @@ export function KnowledgeHome() {
                   <Skeleton className="h-4 w-2/3" />
                 </li>
               ))}
-            {recent.data?.rows.map((r) => (
+            {rest.map((r) => (
               <li key={r.id} className="border-b border-border-row">
-                <Link href={pageHref(r.id, r.title)} className="grid h-[46px] grid-cols-[20px_1fr_1fr_90px_80px] items-center gap-3 rounded-md px-2 hover:bg-hover">
+                <Link href={pageHref(r.id, r.title)} className="grid grid-cols-[20px_1fr_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-hover">
                   <Icon name={r.properties?.query ? "board" : "artifacts"} size={14} className="text-fg-tertiary" />
-                  <span className="truncate text-sm font-medium text-fg">{r.title}</span>
-                  <span className="truncate text-[13px] text-fg-tertiary">{r.path.split("/").slice(0, -1).join(" / ") || "Top level"}</span>
-                  <span className="flex items-center gap-1.5 text-xs text-fg-secondary">
-                    <Icon name={AUDIENCE[r.audience].icon} size={12} />
-                    {AUDIENCE[r.audience].label}
+                  <span className="min-w-0">
+                    <span className={cx("block truncate text-sm font-medium", isUntitled(r) ? "italic text-fg-secondary" : "text-fg")}>{displayTitle(r)}</span>
+                    <span className="block truncate text-xs text-fg-tertiary">
+                      {folderOf(r.path)}
+                      {r.summary && !isUntitled(r) ? ` · ${r.summary}` : !r.summary ? " · empty" : ""}
+                    </span>
                   </span>
-                  <span className="text-right text-xs text-fg-tertiary">{ago(r.updated_at)}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" title={AUDIENCE[r.audience].label}>
+                    <Icon name={AUDIENCE[r.audience].icon} size={12} />
+                    <span className="sr-only">{AUDIENCE[r.audience].label} · </span>
+                    {ago(r.updated_at)}
+                  </span>
                 </Link>
               </li>
             ))}
-            {recent.data && recent.data.rows.length === 0 && <li className="py-6 text-center text-[13px] text-fg-tertiary">No pages yet.</li>}
+            {recent.data && recent.data.rows.length === 0 && <li className="py-6 text-center text-[13px] text-fg-tertiary">No pages yet. Capture a thought with ⌥⌘N or import your Obsidian vault from the explorer.</li>}
           </ul>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <Icon name="inbox" size={15} className="text-[#3FC1B0]" /> Inbox
-              </p>
-              <ul className="mt-2 space-y-1 text-[13px] text-fg-secondary">
-                {inbox.data?.rows.map((r) => (
-                  <li key={r.id}>
-                    <Link href={pageHref(r.id, r.title)} className="hover:text-fg hover:underline">
-                      {r.title}
-                    </Link>
-                  </li>
-                ))}
-                {inbox.data && !inbox.data.rows.length && <li>Nothing to file. Capture with ⌥⌘N.</li>}
-              </ul>
-            </div>
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <Icon name="upload" size={15} className="text-accent" /> Bring your Obsidian vault
-              </p>
-              <p className="mt-2 text-[13px] text-fg-secondary">Upload a zip. You see a dry run before anything is written, and can undo it.</p>
-              <button onClick={k.openImport} className="mt-2 text-xs font-medium text-accent hover:underline">
-                Import vault →
-              </button>
-            </div>
-          </div>
+          <p className="mt-8 text-center text-xs text-fg-tertiary">
+            <Kbd>⌘D</Kbd> today · <Kbd>⌘O</Kbd> go to page · <Kbd>⌥⌘N</Kbd> capture · <Kbd>⌘J</Kbd> ask a persona
+          </p>
         </div>
       </div>
-      <StatusBar left={k.view === "agent" ? "Agent knowledge · written by runs" : "Your knowledge · private by default"} right="Online over Tailscale" />
+      <StatusBar left={agent ? "Agent knowledge · written by runs" : "Your knowledge · private by default"} right="Online over Tailscale" />
     </>
   );
 }
+
+const UNTITLED = /^untitled( document)?( [0-9a-z]+)?$/i;
+const isUntitled = (r: PageRow) => UNTITLED.test(r.title.trim());
+/** An untitled page goes by its first line, so two of them can be told apart. */
+const displayTitle = (r: PageRow) => (isUntitled(r) && r.summary ? `Untitled · “${r.summary}”` : r.title);
+const folderOf = (path: string) => path.split("/").slice(0, -1).join(" / ") || "Top level";

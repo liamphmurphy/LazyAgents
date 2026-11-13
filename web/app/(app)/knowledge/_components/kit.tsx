@@ -62,7 +62,7 @@ export function Modal({
 
 export const AUDIENCE: Record<Audience, { label: string; icon: IconName; cls: string; detail: string }> = {
   private: { label: "Private", icon: "lock", cls: "bg-accent-soft text-accent", detail: "You and your personas. Never reaches ticket or epic runs." },
-  shared: { label: "Shared", icon: "upload", cls: "bg-pill-review-bg text-pill-review-fg", detail: "Also ticket and epic runs. Linked private pages stay private." },
+  shared: { label: "Shared", icon: "users", cls: "bg-pill-review-bg text-pill-review-fg", detail: "Also ticket and epic runs. Linked private pages stay private." },
   agent: { label: "Agent", icon: "agents", cls: "bg-pill-human-bg text-pill-human-fg", detail: "Agent memory and proposed patterns. Hidden from your views." },
 };
 

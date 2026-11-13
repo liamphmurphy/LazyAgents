@@ -57,6 +57,7 @@ export function useKnowledgeTab(tab: Tab | undefined) {
 const TABS_KEY = "vesper.knowledge.tabs";
 const OPEN_KEY = "vesper.knowledge.open";
 const VIEW_KEY = "vesper.knowledge.view";
+const PINNED_KEY = "vesper.knowledge.pinned";
 
 /**
  * A value kept in localStorage and read with useSyncExternalStore: the server
@@ -95,10 +96,14 @@ function useStore<T>(s: ReturnType<typeof localStore<T>>): T {
 }
 
 const NO_TABS: Tab[] = [];
-const DEFAULT_OPEN = ["Campaign", "Daily"];
+const DEFAULT_OPEN = ["Daily"];
 const tabsStore = localStore<Tab[]>(TABS_KEY, NO_TABS);
 const viewStore = localStore<View>(VIEW_KEY, "yours");
 const openStore = localStore<string[]>(OPEN_KEY, DEFAULT_OPEN);
+const NO_PINS: string[] = [];
+const pinnedStore = localStore<string[]>(PINNED_KEY, NO_PINS);
+// A folder lists this many pages until "+ N more", so one big folder can't bury the rest of the tree.
+const FOLDER_PAGES = 8;
 
 /** The tab a Knowledge address shows. */
 function activeTab(pathname: string): string | undefined {
@@ -206,7 +211,8 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={shell}>
       <KnowledgeChatProvider>
-      <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 bg-bg md:h-dvh">
+      {/* flex-none, as in EditorLayout: in the app shell's column a flex-1 child grows to its content and ignores h-dvh. */}
+      <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
           <TabStrip tabs={tabs} active={active} onClose={close} />
@@ -280,6 +286,9 @@ function pagePaths(folder: TreeFolder, limit: number): string[] {
   return out;
 }
 
+/** A fresh page name in a folder, unique enough not to collide with the last one made there. */
+const untitledName = () => `Untitled ${Date.now().toString(36)}`;
+
 const pageIdOf = (pathname: string) => /^\/knowledge\/([0-9a-f-]{36})/.exec(pathname)?.[1];
 
 function Explorer({ pathname }: { pathname: string }) {
@@ -294,6 +303,17 @@ function Explorer({ pathname }: { pathname: string }) {
   const create = useCreatePage();
   const tree = useMemo(() => buildTree((pages.data ?? []) as TreeRow[]), [pages.data]);
   const stored = useStore(openStore);
+  const pinnedIds = useStore(pinnedStore);
+  const pinned = useMemo(() => {
+    const byId = new Map((pages.data ?? []).map((p) => [p.id, p as TreeRow]));
+    return pinnedIds.flatMap((id) => byId.get(id) ?? []);
+  }, [pinnedIds, pages.data]);
+  const togglePin = (id: string) => pinnedStore.set(pinnedIds.includes(id) ? pinnedIds.filter((p) => p !== id) : [...pinnedIds, id]);
+  // Folds every folder; the open page's own path stays open, as it does on arrival.
+  const collapseAll = () => {
+    openStore.set([]);
+    setClosed(new Set());
+  };
   // The folders down to the page you're on are open too, until you close one.
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const open = useMemo(() => new Set([...stored, ...ancestors(current?.path).filter((f) => !closed.has(f))]), [stored, current?.path, closed]);
@@ -321,7 +341,7 @@ function Explorer({ pathname }: { pathname: string }) {
   };
   const newPageIn = (folder: string) => {
     create.mutate(
-      { title: "Untitled", path: folder ? `${folder}/Untitled ${Date.now().toString(36)}` : undefined, body_md: "" },
+      { title: "Untitled", path: folder ? `${folder}/${untitledName()}` : undefined, body_md: "" },
       {
         onSuccess: (p) => {
           reveal(folder);
@@ -431,6 +451,7 @@ function Explorer({ pathname }: { pathname: string }) {
     renameFolder,
     pageMenu: (p) => [
       { icon: "msg", label: "Ask a Persona", onSelect: () => chat.ask(p) },
+      { icon: "bookmark", label: pinnedIds.includes(p.id) ? "Unpin" : "Pin to top", onSelect: () => togglePin(p.id) },
       "separator",
       { icon: "edit", label: "Rename", onSelect: () => startRename(`p:${p.id}`) },
       { icon: "folder", label: "Move to…", onSelect: () => openDialog({ kind: "move", target: { kind: "page", page: p } }) },
@@ -461,6 +482,7 @@ function Explorer({ pathname }: { pathname: string }) {
         <ExplorerButton icon="edit" label="New page" onClick={newPage} />
         <ExplorerButton icon="graph" label="Graph view" href="/knowledge/graph" />
         <ExplorerButton icon="link" label="Keep notes connected" href="/knowledge/connect" />
+        <ExplorerButton icon="shrink" label="Collapse all folders" onClick={collapseAll} />
       </div>
       <div role="radiogroup" aria-label="Which knowledge" className="mx-3 flex h-7 flex-none rounded-md border border-border-subtle bg-surface-sunken p-0.5">
         {(
@@ -500,6 +522,21 @@ function Explorer({ pathname }: { pathname: string }) {
           <p className="px-2 py-3 text-xs leading-relaxed text-fg-tertiary">{agent ? "No agent knowledge yet. Runs write their memory and proposed patterns here." : "No pages yet. Create one, capture a thought, or import your Obsidian vault."}</p>
         ) : (
           <ExplorerMenu entries={blankMenu} className="min-h-full">
+            {pinned.length > 0 && (
+              <section aria-label="Pinned" className="mb-3">
+                <h3 className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pinned</h3>
+                <ul className="space-y-px">
+                  {pinned.map((p) => (
+                    <li key={p.id}>
+                      <ExplorerMenu entries={actions.pageMenu(p)} className={menuRow}>
+                        <TreeLink href={pageHref(p.id, p.title)} icon="bookmark" label={p.title} depth={-1} active={p.id === activeId} />
+                      </ExplorerMenu>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="px-2 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Folders</h3>
+              </section>
+            )}
             <FolderItems folder={tree} depth={0} open={open} toggle={toggle} activeId={activeId} actions={actions} />
           </ExplorerMenu>
         )}
@@ -572,6 +609,10 @@ function ExplorerButton({ icon, label, onClick, href }: { icon: IconName; label:
 }
 
 function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folder: TreeFolder; depth: number; open: Set<string>; toggle: (p: string) => void; activeId?: string; actions: TreeActions }) {
+  const [all, setAll] = useState(false);
+  // The open page always shows, even past the cut.
+  const cut = all ? folder.pages : folder.pages.filter((p, i) => i < FOLDER_PAGES || p.id === activeId);
+  const hidden = folder.pages.length - cut.length;
   return (
     <ul role={depth ? "group" : "tree"} className="space-y-px">
       {/* Inbox heads the tree, as the place new captures land. */}
@@ -599,7 +640,7 @@ function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folde
           </li>
         );
       })}
-      {folder.pages.map((p) => (
+      {cut.map((p) => (
         <li key={p.id} role="treeitem" aria-selected={p.id === activeId}>
           {actions.renaming === `p:${p.id}` ? (
             <RenameField initial={p.title} icon="artifacts" indent={24 + depth * 16} error={actions.renameError} pending={actions.renamePending} onCommit={(name) => actions.renamePage(p, name)} onCancel={actions.cancelRename} />
@@ -617,6 +658,13 @@ function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folde
           )}
         </li>
       ))}
+      {hidden > 0 && (
+        <li>
+          <button onClick={() => setAll(true)} style={{ paddingLeft: 24 + depth * 16 }} className="flex h-[26px] w-full items-center rounded-md pr-2 text-left text-[12px] text-fg-tertiary hover:bg-hover hover:text-fg-secondary">
+            + {hidden} more
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
