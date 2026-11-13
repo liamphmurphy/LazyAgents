@@ -54,11 +54,12 @@ test("Welcome Wizard: from a fresh install to a first chat", async ({ page, requ
   expect(avatarUploads).toHaveLength(0);
   await wizard.getByRole("button", { name: "Continue" }).click();
 
-  // 2 · Connect a harness: required, no Skip, Codex carries the image note.
+  // 2 · Connect a harness: required, no Skip, the image-capable harnesses wear an Images badge.
   await expect(wizard.getByText("Next, I need a mind to run on").first()).toBeVisible();
   expect(avatarUploads).toHaveLength(1);
   await expect(checklist.getByRole("listitem").first()).toHaveAttribute("data-state", "done");
-  await expect(wizard.getByRole("region", { name: "Codex" })).toContainText("Currently required for native AI image generation.");
+  await expect(wizard.getByRole("region", { name: "Codex" }).getByTestId("codex-images")).toHaveText("Images");
+  await expect(wizard.getByRole("region", { name: "Antigravity" }).getByTestId("antigravity-images")).toHaveText("Images");
   await expect(wizard.getByRole("button", { name: /skip/i })).toHaveCount(0);
   const next = wizard.getByRole("button", { name: "Continue" });
   await expect(next).toBeDisabled();
@@ -70,7 +71,12 @@ test("Welcome Wizard: from a fresh install to a first chat", async ({ page, requ
   await claude.getByRole("button", { name: "Verify Claude Code" }).click();
   await expect(claude.getByTestId("claude-code-models")).toHaveText("1 model");
   await expect(claude).toHaveAttribute("data-verified", "true");
-  await expect(wizard.getByTestId("wizard-hint")).toHaveText("Image generation stays off until Codex is connected.");
+  await expect(wizard.getByTestId("wizard-hint")).toHaveText("Image generation stays off until Codex or Antigravity is connected.");
+  // Antigravity is checked the same way (the fake answers `agy models`) and makes images, so the hint clears.
+  const agy = wizard.getByRole("region", { name: "Antigravity" });
+  await agy.getByRole("button", { name: "Verify Antigravity" }).click();
+  await expect(agy.getByTestId("antigravity-models")).toHaveText("2 models");
+  await expect(wizard.getByTestId("wizard-hint")).toHaveText("");
   await next.click();
 
   // 3 · First persona: drafted, refined, met.

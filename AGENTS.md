@@ -21,7 +21,7 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
   "setup": [
     "(cd web && { [ -d node_modules ] || npm ci; })",
     "(mkdir -p .lazyagents/pgbin && cd server && go build -o ../.lazyagents/pgbin/vesper ./cmd/vesper && go build -o ../.lazyagents/pgbin/fake-harness ./cmd/fake-harness)",
-    "(cd .lazyagents/pgbin && ln -sf fake-harness claude && ln -sf fake-harness codex)"
+    "(cd .lazyagents/pgbin && ln -sf fake-harness claude && ln -sf fake-harness codex && ln -sf fake-harness agy)"
   ],
   "processes": [
     { "name": "api", "dir": "server", "port": 8000,
@@ -30,6 +30,7 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
                "S3_ENDPOINT": "http://s3:8333", "API_ADDR": "0.0.0.0:8000", "VESPER_NO_SIGNIN": "1",
                "RUNNER_BACKEND": "fake", "RUNNER_MCP_URL": "http://localhost:8000/mcp", "RUNNER_DATA_DIR": "/tmp/runs",
                "RUNNER_CLAUDE_BIN": "/workspace/.lazyagents/pgbin/claude", "RUNNER_CODEX_BIN": "/workspace/.lazyagents/pgbin/codex",
+               "RUNNER_ANTIGRAVITY_BIN": "/workspace/.lazyagents/pgbin/agy",
                "FAKE_HARNESS_MODE": "chat-read" } },
     { "name": "web", "dir": "web", "port": 3000, "command": "npm run dev -- -H 0.0.0.0 -p 3000",
       "env": { "API_INTERNAL_URL": "http://api:8000" } }
@@ -54,8 +55,8 @@ playground gateway keeps the `vesper_session` cookie for the outer Vesper.
   doesn't need.
 - The inner Vesper has a runner (`vesper runner`, fake backend), started in
   the api container once the API is healthy: a process needs a port, and the
-  runner listens on none. Its `claude` and `codex` are the repository's
-  `fake-harness`, so chats get canned replies through the real MCP path and
+  runner listens on none. Its `claude`, `codex` and `agy` are the repository's
+  `fake-harness` (it speaks agy only when its name is `agy`), so chats get canned replies through the real MCP path and
   no credentials enter the playground. Change `FAKE_HARNESS_MODE` for other
   scripts (see `server/cmd/fake-harness/main.go`).
 - Wrap each setup command in `( … )` so a `cd` stays inside it, and keep each
