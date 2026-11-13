@@ -600,12 +600,12 @@ func TestDirectExecutionPolicyAndSelectiveContextInstructions(t *testing.T) {
 }
 
 func TestAgentsMDTestsSection(t *testing.T) {
-	want := "## Tests\n\nRun the narrowest tests that cover your change"
+	want := "## Tests\n\nWhile iterating, run only the narrowest tests that cover your change"
 	for name, md := range map[string]string{
 		"managed":   string(AgentsMD("", spec(), nil, "PAY-1")),
 		"delegated": string(SubagentAgentsMD("", spec(), nil, "PAY-1")),
 	} {
-		if !strings.Contains(md, want) || !strings.Contains(md, "don't start your own database") || !strings.Contains(md, "`DOCKER_HOST`") {
+		if !strings.Contains(md, want) || !strings.Contains(md, "don't re-run whole suites between edits") || !strings.Contains(md, "don't start your own database") || !strings.Contains(md, "`DOCKER_HOST`") {
 			t.Fatalf("%s AGENTS.md lacks the Tests section:\n%s", name, md)
 		}
 	}
@@ -623,7 +623,7 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	md := string(AgentsMD("", epic, nil, "PAY-1"))
 	// The full suite waits for the epic review, but the ticket tests what it
 	// changed, with the same database and Docker guidance as any run.
-	for _, want := range []string{"## Checks", "The full suite and end-to-end (browser) tests run once, in the epic's final review", "run the narrowest tests that cover your change", "fails on the epic branch without your change", "don't start your own database", "`DOCKER_HOST`", "Resolve conflicts and rebuild.", "builds cleanly", "test_command running only the tests over that slice"} {
+	for _, want := range []string{"## Checks", "The full suite and end-to-end (browser) tests run once, in the epic's final review", "while iterating, run only the narrowest tests that cover your change", "don't re-run whole suites between edits", "fails on the epic branch without your change", "don't start your own database", "`DOCKER_HOST`", "Resolve conflicts and rebuild.", "builds cleanly", "test_command running only the tests over that slice"} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("epic ticket missing %q:\n%s", want, md)
 		}
@@ -635,7 +635,7 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	}
 
 	plain := string(AgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
-	for _, want := range []string{"## Tests", "Run the full suite once before finishing", "tests pass"} {
+	for _, want := range []string{"## Tests", "Run the full suite once before finishing", "before set_pr and complete_run", "tests pass"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("standalone ticket missing %q:\n%s", want, plain)
 		}
@@ -647,7 +647,7 @@ func TestAgentsMDEpicTicketsDeferTests(t *testing.T) {
 	// A sub agent outside an epic runs only the narrowest tests: the main agent
 	// runs the full suite once after merging. Lifecycle rules are stated here once.
 	sub := string(SubagentAgentsMD("", spec("repo:write", "allowed"), nil, "PAY-1"))
-	for _, want := range []string{"## Tests", "Run the narrowest tests", "Tests command, that is the bar", "Don't run the full suite", "never wait for or poll GitHub PR checks",
+	for _, want := range []string{"## Tests", "run only the narrowest tests", "Tests command, that is the bar", "Don't run the full suite", "never wait for or poll GitHub PR checks",
 		"commit what you change", "outcome is the one-line headline, report carries the detail", "If you're blocked, call complete_run", "request_approval or await_human", "get_ticket only if"} {
 		if !strings.Contains(sub, want) {
 			t.Fatalf("delegated AGENTS.md missing %q:\n%s", want, sub)
