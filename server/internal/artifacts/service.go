@@ -5,6 +5,7 @@ package artifacts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -74,6 +75,7 @@ type Content struct {
 }
 
 type NewArtifact struct {
+	Properties   json.RawMessage
 	ProjectKey   string // required for PRDs, specs and ADRs; optional for the rest (a chat has no project to file under)
 	Path         string // notes only: "Payments/Ledger/Rollback runbook"
 	Type         string
@@ -90,9 +92,10 @@ type NewArtifact struct {
 }
 
 type NewVersion struct {
-	Label   string
-	Note    string
-	Content Content
+	Properties json.RawMessage // nil inherits the current version
+	Label      string
+	Note       string
+	Content    Content
 	// State defaults to published. A suggested version is stored without
 	// becoming current; BasedOn records the version it was written against.
 	State   string
@@ -108,6 +111,7 @@ func IsMarkdown(name, contentType string) bool {
 
 // resolved is content ready to store: markdown text or an uploaded blob.
 type resolved struct {
+	properties  json.RawMessage
 	body        *string
 	blobKey     *string
 	filename    *string
@@ -235,8 +239,26 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 		pending := ReviewPending
 		review = &pending
 	}
+	if r.properties == nil && a.CurrentVersionID != nil {
+		cur, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID})
+		if err != nil {
+			return store.ArtifactVersion{}, err
+		}
+		r.properties = cur.Properties
+	}
+	if r.properties != nil {
+		var p Properties
+		if err := json.Unmarshal(r.properties, &p); err != nil || p == nil {
+			return store.ArtifactVersion{}, apperr.Invalid("properties", "must be an object")
+		}
+		var err error
+		r.properties, err = NormalizeProperties(p)
+		if err != nil {
+			return store.ArtifactVersion{}, err
+		}
+	}
 	v, err := q.CreateArtifactVersion(ctx, store.CreateArtifactVersionParams{
-		ArtifactID: a.ID, Label: label, BodyMd: r.body, BlobKey: r.blobKey, Filename: r.filename,
+		ArtifactID: a.ID, Label: label, Properties: r.properties, BodyMd: r.body, BlobKey: r.blobKey, Filename: r.filename,
 		ContentType: r.contentType, SizeBytes: r.size, Note: note, CreatedByType: by.Type, CreatedByID: by.ID,
 		State: state, BasedOnVersionID: basedOn, ReviewState: review,
 	})
@@ -261,12 +283,18 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 // makeCurrent points the artifact at a version, refreshes its search text
 // and summary, and re-indexes the links it contains.
 func makeCurrent(ctx context.Context, q *store.Queries, a store.Artifact, v store.ArtifactVersion, summary string) error {
+	if err := IndexProperties(ctx, q, a, v); err != nil {
+		return err
+	}
 	search := ""
 	mockup := a.Type == "mockup"
 	if mockup && v.BodyMd != nil {
 		search = SVGText(*v.BodyMd)
 	} else if v.BodyMd != nil {
 		search = PlainText(*v.BodyMd)
+		if a.Type == "note" {
+			search += "\n" + strings.Join(Tags(DecodeProperties(v.Properties), *v.BodyMd), " ")
+		}
 		if summary == "" || a.Type == "note" {
 			summary = Summary(*v.BodyMd)
 		}
@@ -282,7 +310,13 @@ func makeCurrent(ctx context.Context, q *store.Queries, a store.Artifact, v stor
 	if v.BodyMd != nil && !mockup {
 		body = *v.BodyMd
 	}
-	return links.Index(ctx, q, a.WorkspaceID, links.Source{Kind: links.SourceArtifact, ID: a.ID, VersionID: &v.ID}, body)
+	if err := links.Index(ctx, q, a.WorkspaceID, links.Source{Kind: links.SourceArtifact, ID: a.ID, VersionID: &v.ID}, body); err != nil {
+		return err
+	}
+	if a.Type == "note" {
+		return links.ResolvePending(ctx, q, a.WorkspaceID)
+	}
+	return nil
 }
 
 // Publish makes a stored (suggested) version current. The caller marks the
@@ -317,6 +351,11 @@ func (s *Service) CreateThen(ctx context.Context, ws uuid.UUID, by Actor, in New
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		q := store.New(tx)
+		if in.Type == "note" {
+			if err := q.LockNotePaths(ctx, ws); err != nil {
+				return err
+			}
+		}
 		a, err = s.create(ctx, q, ws, by, in, r)
 		if err == nil && then != nil {
 			err = then(q, a)
@@ -329,9 +368,20 @@ func (s *Service) CreateThen(ctx context.Context, ws uuid.UUID, by Actor, in New
 	return a, err
 }
 
+// NoteMetadata supplies the display title and versioned frontmatter when
+// creating a page through the lightweight wiki save path.
+type NoteMetadata struct {
+	Title      string
+	Properties json.RawMessage
+}
+
 // CreateNoteTx creates a markdown note inside the caller's transaction.
-func (s *Service) CreateNoteTx(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, path, projectKey, body, state string) (store.Artifact, error) {
+func (s *Service) CreateNoteTx(ctx context.Context, q *store.Queries, ws uuid.UUID, by Actor, path, projectKey, body, state string, metadata ...NoteMetadata) (store.Artifact, error) {
 	in := NewArtifact{Type: "note", Path: path, ProjectKey: projectKey, Content: Content{BodyMD: &body}, State: state}
+	if len(metadata) > 0 {
+		in.Title = metadata[0].Title
+		in.Properties = metadata[0].Properties
+	}
 	r, _, err := s.resolve(ctx, ws, "note", in.Content) // markdown: nothing to clean up
 	if err != nil {
 		return store.Artifact{}, err
@@ -355,14 +405,29 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 	if in.Content.File != nil {
 		fileName = in.Content.File.Name
 	}
+	r.properties = in.Properties
 	var notePath *string
 	title := ""
 	if in.Type == "note" {
+		if in.Path == "" {
+			var err error
+			in.Path, err = DerivedNotePath(ctx, q, ws, in.Title)
+			if err != nil {
+				return a, err
+			}
+		}
 		p, err := ValidNotePath(in.Path)
 		if err != nil {
 			return a, err
 		}
 		notePath, title = &p, links.TitleOf(p)
+		if in.Title != "" {
+			title = in.Title
+		}
+		title, err = ValidPageTitle(title)
+		if err != nil {
+			return a, err
+		}
 	} else {
 		var err error
 		if title, err = validTitle(defaultTitle(r, in.Title, fileName)); err != nil {
@@ -397,6 +462,15 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 			return a, apperr.Invalid("path", "a page called %q already exists", *notePath)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return a, err
+		}
+		// Explicit paths may reuse historical moved paths, but must not steal
+		// a published frontmatter alias (even for an unpublished suggestion).
+		taken, err := q.PropertyAliasTaken(ctx, store.PropertyAliasTakenParams{WorkspaceID: ws, Path: *notePath})
+		if err != nil {
+			return a, err
+		}
+		if taken {
+			return a, apperr.Invalid("path", "%q is another page's frontmatter alias", *notePath)
 		}
 		// The new page takes over this path from any renamed page.
 		if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: *notePath}); err != nil {
@@ -447,6 +521,10 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 	if in.State == Suggested {
 		return a, nil // nothing to resolve to until a person accepts it
 	}
+	// Notes already resolve pending aliases when their version is published.
+	if in.Type == "note" {
+		return a, nil
+	}
 	// Ghost links naming this artifact now resolve to it.
 	return a, links.ResolvePending(ctx, q, ws)
 }
@@ -466,6 +544,11 @@ func (s *Service) AddVersion(ctx context.Context, ws uuid.UUID, by Actor, id uui
 	var a store.Artifact
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		if cur.Type == "note" {
+			if err := q.LockNotePaths(ctx, ws); err != nil {
+				return err
+			}
+		}
 		var err error
 		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -503,6 +586,7 @@ func AddVersionTx(ctx context.Context, q *store.Queries, a store.Artifact, r res
 			label = "suggestion"
 		}
 	}
+	r.properties = in.Properties
 	return writeVersion(ctx, q, a, r, label, strings.TrimSpace(in.Note), by, a.Summary, in.State, in.BasedOn)
 }
 
@@ -554,6 +638,9 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 	var a store.Artifact
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		if err := q.LockNotePaths(ctx, ws); err != nil {
+			return err
+		}
 		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
@@ -561,11 +648,14 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 			return err
 		}
 		next := store.UpdateArtifactMetaParams{ID: cur.ID, Title: cur.Title, Summary: cur.Summary, EpicID: cur.EpicID}
-		if p.Title != nil && cur.Type == "note" && *p.Title != cur.Title {
-			return apperr.Invalid("title", "a page's title is the last part of its path: move the page to rename it")
-		}
 		if p.Title != nil {
-			if next.Title, err = validTitle(*p.Title); err != nil {
+			if cur.Type == "note" {
+				cur, err = RenameNoteTitleTx(ctx, q, cur, *p.Title)
+				if err != nil {
+					return err
+				}
+				next.Title = cur.Title
+			} else if next.Title, err = validTitle(*p.Title); err != nil {
 				return err
 			}
 		}

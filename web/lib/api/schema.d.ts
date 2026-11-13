@@ -6027,6 +6027,11 @@ export interface components {
             id: string;
             type: components["schemas"]["ArtifactType"];
             title: string;
+            properties?: components["schemas"]["PageProperties"];
+            /** @description Explicit tags; response also includes inline body tags */
+            tags?: string[];
+            /** @description Link names; old moved paths are preserved separately */
+            aliases?: string[];
             display_id?: string;
             summary: string;
             project?: components["schemas"]["Project"];
@@ -6803,6 +6808,10 @@ export interface components {
             /** @description Reads not tied to a run that still exists (older data), per agent */
             unlinked: components["schemas"]["ArtifactReader"][];
         };
+        /** @description Versioned frontmatter. Values are text, number, checkbox (boolean), list of strings, date (YYYY-MM-DD string), or link ([[path]] string). Omitted metadata is inherited; provided maps and arrays replace their field. Only published metadata is indexed. Invalid types or alias collisions return 422. Metadata inherits the page audience. */
+        PageProperties: {
+            [key: string]: unknown;
+        };
         WikiPageSummary: {
             /** Format: uuid */
             id: string;
@@ -6823,12 +6832,27 @@ export interface components {
             suggestions: number;
         };
         NewWikiPage: {
-            path: string;
+            /** @description Optional explicit unique path; otherwise derived from title with a numeric suffix */
+            path?: string;
+            /** @description Free display text; duplicate titles are allowed */
+            title?: string;
             body_md: string;
+            properties?: components["schemas"]["PageProperties"];
+            /** @description Explicit tags; response also includes inline body tags */
+            tags?: string[];
+            /** @description Link names; old moved paths are preserved separately */
+            aliases?: string[];
             project_key?: string;
         };
         WikiPageSave: {
+            /** @description Rename the display title and derive a unique last path segment in the current folder; the old path remains an alias */
+            title?: string;
             body_md?: string;
+            properties?: components["schemas"]["PageProperties"];
+            /** @description Explicit tags; response also includes inline body tags */
+            tags?: string[];
+            /** @description Link names; old moved paths are preserved separately */
+            aliases?: string[];
             /** @description Move the page here; the old path keeps resolving */
             path?: string;
             /**
@@ -10913,7 +10937,10 @@ export interface operations {
     };
     listWikiPages: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by an exact case-insensitive tag (including inline tags) */
+                tag?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
