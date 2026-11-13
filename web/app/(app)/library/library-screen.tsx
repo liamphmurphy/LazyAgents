@@ -9,6 +9,7 @@ import {
   useClearLibraryReference,
   useDeleteLibraryItem,
   useLibrary,
+  useRenameLibraryItem,
   useSetLibraryReference,
   useUploadLibraryItem,
   type LibraryItem,
@@ -18,9 +19,12 @@ import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { formatBytes } from "@/lib/files";
 import { clock } from "@/lib/chat-video";
+import { audioFormat } from "@/lib/chat-audio";
 import { timelineTime } from "@/lib/format";
 import { LIBRARY_UPLOAD_ACCEPT, checkLibraryUpload, referenceBadge, referenceCaption, referenceChoices } from "@/lib/library-ui";
 import { floatPanel } from "@/components/domain/pickers";
+import { AudioPlayer } from "@/components/domain/audio-player";
+import { Waveform } from "@/components/domain/waveform";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
@@ -111,7 +115,7 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
 /** The dialog a Library tile opens: the item's header with Download and Remove, over the item itself. */
 function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { item: LibraryItem; open?: boolean; onOpenChange?: (open: boolean) => void; trigger: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
   const del = useDeleteLibraryItem();
-  const noun = item.kind === "diagram" ? "diagram" : item.kind === "video" ? "video" : "image";
+  const noun = item.kind === "diagram" ? "diagram" : item.kind === "video" ? "video" : item.kind === "audio" ? "audio file" : "image";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
@@ -214,11 +218,91 @@ function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
   );
 }
 
+/** The audio player's title field: rename in place. */
+function RenameField({ item }: { item: LibraryItem }) {
+  const rename = useRenameLibraryItem();
+  const [title, setTitle] = useState(item.title);
+  const changed = title.trim() !== "" && title.trim() !== item.title;
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed) rename.mutate({ itemId: item.id, title: title.trim() });
+      }}
+    >
+      <input
+        value={title}
+        maxLength={300}
+        aria-label="Title"
+        onChange={(e) => setTitle(e.target.value)}
+        className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-[13px] text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      />
+      <Button type="submit" variant="secondary" disabled={!changed || rename.isPending}>{rename.isPending ? "Saving…" : "Rename"}</Button>
+      {rename.error && <span className="text-xs text-pill-blocked-fg">{rename.error.message}</span>}
+    </form>
+  );
+}
+
+/**
+ * Audio: its waveform with the length and an Audio tag, and a click opens the player (waveform
+ * scrubbing, speed, loop, download, rename). The one a chat's "Open in Library" names starts open.
+ */
+function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  // A click on the tile plays at once; arriving from a chat's "Open in Library" waits for Play.
+  const [autoPlay, setAutoPlay] = useState(false);
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5" data-testid="library-item" data-kind="audio">
+      <ItemDialog
+        item={item}
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          setAutoPlay(o);
+        }}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        trigger={
+          <button
+            type="button"
+            aria-label={`Play ${item.title}`}
+            className="relative flex aspect-video flex-col justify-end overflow-hidden rounded-lg border border-border bg-accent-soft px-3 pb-2 pt-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Waveform peaks={item.peaks} bars={32} className="h-full min-h-0 flex-1" />
+            <span className="mt-1.5 flex items-center justify-between text-[11px] text-fg-secondary">
+              <span className="flex items-center gap-1 rounded bg-surface px-1.5 py-px"><Icon name="audio" size={9} />Audio</span>
+              {item.duration_ms ? <span className="font-mono">{clock(item.duration_ms)}</span> : <span>{audioFormat(item.content_type, item.filename)}</span>}
+            </span>
+          </button>
+        }
+      >
+        <div className="flex flex-col gap-4 pb-1" data-testid="audio-dialog">
+          <AudioPlayer src={libraryItemUrl(item.id)} peaks={item.peaks} durationMs={item.duration_ms} large autoPlay={autoPlay} />
+          <RenameField item={item} />
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-fg-secondary">
+            <dt className="text-fg-tertiary">Format</dt>
+            <dd>{audioFormat(item.content_type, item.filename)}</dd>
+            {item.method && (
+              <>
+                <dt className="text-fg-tertiary">Made with</dt>
+                <dd data-testid="audio-made-with">{item.method}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+      </ItemDialog>
+      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <Source item={item} />
+    </li>
+  );
+}
+
 /** One tile; a click opens the full item with Download, Remove and, for an image, the reference actions. */
 function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | null }) {
   const del = useDeleteLibraryItem();
   const url = libraryItemUrl(item.id);
   if (item.kind === "video") return <VideoTile item={item} initiallyOpen={openItem === item.id} />;
+  if (item.kind === "audio") return <AudioTile item={item} initiallyOpen={openItem === item.id} />;
   if (item.kind === "document") {
     return (
       <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
@@ -258,7 +342,7 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
   );
 }
 
-/** Adds an image of the person's own, e.g. a photo to use as their reference. */
+/** Adds an image or audio file of the person's own, e.g. a photo to use as their reference or a voice memo. */
 function UploadButton() {
   const input = useRef<HTMLInputElement>(null);
   const upload = useUploadLibraryItem();
@@ -269,7 +353,7 @@ function UploadButton() {
     const bad = checkLibraryUpload(f);
     if (bad) return setError(bad);
     setError(null);
-    upload.mutate(f, { onError: (e) => setError(e.message || "Couldn’t upload the image.") });
+    upload.mutate(f, { onError: (e) => setError(e.message || "Couldn’t upload the file.") });
   }
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -279,7 +363,7 @@ function UploadButton() {
         type="file"
         accept={LIBRARY_UPLOAD_ACCEPT}
         hidden
-        aria-label="Image to upload"
+        aria-label="File to upload"
         onChange={(e) => {
           take(e.target.files);
           e.target.value = "";
@@ -324,6 +408,8 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
           ? "Workflows with an Add to library step save their results here."
           : kind === "video"
           ? "When a persona that can code renders a video in a chat, it\u2019s added here once it\u2019s finished."
+          : kind === "audio"
+          ? "When a persona that can code renders audio in a chat, it\u2019s added here once it\u2019s finished. You can also upload an MP3, WAV, OGG or M4A file, like a voice memo."
           : kind === "diagram"
           ? "When a persona draws an SVG diagram in a chat, choose Save to Library on it to keep it here."
           : "When a persona that can generate images makes one in a chat, it\u2019s added here. You can also upload your own, like a photo of yourself to use as your reference."}
@@ -348,7 +434,7 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
   );
 }
 
-const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", diagrams: "diagram", documents: "document" };
+const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", audio: "audio", diagrams: "diagram", documents: "document" };
 
 /** ?source=projects: what agents wrote on tickets; otherwise your keepsakes. */
 export function LibraryScreen() {
@@ -369,7 +455,7 @@ function Keepsakes() {
             <div className="min-w-0 flex-1 space-y-1">
               <h1 className="type-display">Library</h1>
               <p className="text-sm text-fg-secondary">
-                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
+                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos and audio they render, are saved here automatically and stay after their chat is deleted.
                 Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>
               <div className="pt-2">
@@ -378,7 +464,7 @@ function Keepsakes() {
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "audio", label: "Audio" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
           {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={KINDS[tab] ?? "image"} openItem={openItem} />}
         </div>
       </Content>

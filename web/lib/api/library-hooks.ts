@@ -43,7 +43,7 @@ export function useDeleteLibraryItem() {
   });
 }
 
-/** Multipart POST of one image of the person's own (PNG, JPEG, GIF or WebP, up to 25 MB). */
+/** Multipart POST of one image (PNG, JPEG, GIF or WebP) or audio file (MP3, WAV, OGG or M4A) of the person's own, up to 25 MB. */
 export function useUploadLibraryItem() {
   const qc = useQueryClient();
   return useMutation({
@@ -52,6 +52,16 @@ export function useUploadLibraryItem() {
       form.append("file", file);
       return postForm<LibraryItem>("/library", form);
     },
+    onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
+/** Retitles one of the caller's items. */
+export function useRenameLibraryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { itemId: string; title: string }) =>
+      unwrap(api.PATCH("/library/{itemId}", { params: { path: { itemId: v.itemId } }, body: { title: v.title } })),
     onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
   });
 }

@@ -12,11 +12,18 @@ type PersonaLike = { id: string; name: string };
 /** Matches the server's Library upload limit and the types it keeps. */
 export const LIBRARY_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 export const LIBRARY_UPLOAD_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
-export const LIBRARY_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp";
+export const LIBRARY_AUDIO_EXTENSIONS = [".mp3", ".wav", ".ogg", ".oga", ".m4a"] as const;
+export const LIBRARY_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp,.mp3,.wav,.ogg,.oga,.m4a,audio/mpeg,audio/wav,audio/ogg,audio/mp4";
+
+/** Whether a picked file is audio, by its name: browsers disagree on the types of .wav and .m4a. */
+export function isAudioFile(file: { name: string }): boolean {
+  const name = file.name.toLowerCase();
+  return LIBRARY_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
 
 /** Why a picked file can't be uploaded, or null. The server checks the bytes too. */
 export function checkLibraryUpload(file: { name: string; type: string; size: number }): string | null {
-  if (!(LIBRARY_UPLOAD_TYPES as readonly string[]).includes(file.type)) return `${file.name} isn't a PNG, JPEG, GIF or WebP image.`;
+  if (!isAudioFile(file) && !(LIBRARY_UPLOAD_TYPES as readonly string[]).includes(file.type)) return `${file.name} isn't a PNG, JPEG, GIF or WebP image, or an MP3, WAV, OGG or M4A file.`;
   if (file.size <= 0) return `${file.name} is empty.`;
   if (file.size > LIBRARY_UPLOAD_MAX_BYTES) return `${file.name} is over 25 MB.`;
   return null;
