@@ -278,7 +278,7 @@ export function Dock({
                 title={t.id === active?.id ? `${t.label}: click to collapse` : t.label}
                 onClick={() => dispatch({ type: "select", tab: t.id })}
                 className={cx(
-                  "relative flex h-7 flex-none items-center gap-1.5 rounded-md px-2 text-[13px]",
+                  "relative flex h-7 flex-none items-center gap-1.5 rounded-md px-2 text-13",
                   t.id === active?.id ? "bg-selected font-medium text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
                 )}
               >
@@ -346,15 +346,15 @@ function TabIcon({ tab, size = 14 }: { tab: DockTab; size?: number }) {
 function Header({ back, title, titleMenu, saveState, presence, actions, overflow }: EditorHeader) {
   return (
     <header className="flex h-12 flex-none items-center gap-3 border-b border-border-subtle bg-surface px-4">
-      <Link href={back.href} className="flex flex-none items-center gap-1 text-[13px] text-fg-secondary hover:text-fg">
+      <Link href={back.href} className="flex flex-none items-center gap-1 text-13 text-fg-secondary hover:text-fg">
         <span aria-hidden>←</span>
         {back.label}
       </Link>
       <div className="flex min-w-0 items-center gap-1">
-        <h1 className="truncate text-[14px] font-semibold">{title}</h1>
+        <h1 className="truncate text-14 font-semibold">{title}</h1>
         {titleMenu}
       </div>
-      {saveState && <span className="flex-none text-[12px] text-fg-tertiary" aria-live="polite">{saveState}</span>}
+      {saveState && <span className="flex-none text-12 text-fg-tertiary" aria-live="polite">{saveState}</span>}
       <div className="flex-1" />
       {presence && <div className="flex flex-none items-center max-md:hidden">{presence}</div>}
       {actions && <div className="flex flex-none items-center gap-2">{actions}</div>}

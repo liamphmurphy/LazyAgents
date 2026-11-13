@@ -30,7 +30,7 @@ export function Sheet({
         <Dialog.Content
           aria-describedby={undefined}
           className={cx(
-            "motion-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border-float bg-surface-raised px-safe pb-safe text-[13px] text-fg shadow-[var(--shadow-float)] outline-none",
+            "motion-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border-float bg-surface-raised px-safe pb-safe text-13 text-fg shadow-[var(--shadow-float)] outline-none",
             className,
           )}
         >
@@ -75,12 +75,12 @@ export function SheetOptions<T extends string>({
               type="button"
               aria-current={on || undefined}
               onClick={() => onPick(o.value)}
-              className={cx("flex min-h-[48px] w-full items-center gap-3 rounded-lg px-3 text-left text-[15px] hover:bg-hover", on && "bg-selected")}
+              className={cx("flex min-h-[48px] w-full items-center gap-3 rounded-lg px-3 text-left text-15 hover:bg-hover", on && "bg-selected")}
             >
               {o.icon}
               <span className="flex min-w-0 flex-1 flex-col leading-tight">
                 <span className="truncate">{o.label}</span>
-                {o.detail && <span className="truncate text-xs text-fg-tertiary">{o.detail}</span>}
+                {o.detail && <span className="truncate text-12 text-fg-tertiary">{o.detail}</span>}
               </span>
               {on && <Icon name="check" size={16} strokeWidth={1.8} className="flex-none text-accent" />}
             </button>

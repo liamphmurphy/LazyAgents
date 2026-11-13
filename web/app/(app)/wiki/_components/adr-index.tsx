@@ -46,14 +46,14 @@ function ADRRow({ a }: { a: WikiADR }) {
     <li className="relative flex flex-col gap-1.5 border-b border-border-subtle px-4 py-3 last:border-0">
       {open && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[3px] bg-pill-human-fg" />}
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={a.href} className="min-w-0 flex-1 truncate text-[13.5px] font-medium hover:underline">
-          {a.display_id && <span className="mr-2 font-mono text-xs text-fg-tertiary">{a.display_id}</span>}
+        <Link href={a.href} className="min-w-0 flex-1 truncate text-14 font-medium hover:underline">
+          {a.display_id && <span className="mr-2 font-mono text-12 text-fg-tertiary">{a.display_id}</span>}
           {a.title}
         </Link>
         <StatusPill a={a} />
       </div>
       {(a.date || a.ticket || open) && (
-        <span className="text-xs text-fg-tertiary">
+        <span className="text-12 text-fg-tertiary">
           {[
             a.date,
             a.ticket && (
@@ -73,7 +73,7 @@ function ADRRow({ a }: { a: WikiADR }) {
         </span>
       )}
       {qs.length > 0 && (
-        <ol aria-label={`Open questions in ${a.title}`} className="flex flex-col gap-1 text-[12.5px] text-fg-2">
+        <ol aria-label={`Open questions in ${a.title}`} className="flex flex-col gap-1 text-13 text-fg-2">
           {shown.map((q, i) => (
             <li key={i} className="flex gap-1.5">
               <span className="flex-none text-fg-tertiary">{i + 1}.</span>
@@ -84,7 +84,7 @@ function ADRRow({ a }: { a: WikiADR }) {
           ))}
           {qs.length > 2 && (
             <li>
-              <button type="button" className="text-xs text-accent hover:underline" onClick={() => setAll(!all)}>
+              <button type="button" className="text-12 text-accent hover:underline" onClick={() => setAll(!all)}>
                 {all ? "Show fewer" : `+ ${qs.length - 2} more`}
               </button>
             </li>
@@ -118,7 +118,7 @@ export function ADRIndex() {
           Architecture decisions
         </h1>
         {data && (
-          <p className="text-[12.5px] text-fg-secondary">
+          <p className="text-13 text-fg-secondary">
             {adrs.length} {adrs.length === 1 ? "ADR" : "ADRs"}
             {open.length > 0 && (
               <>
@@ -136,7 +136,7 @@ export function ADRIndex() {
             type="button"
             aria-pressed={filter === k}
             onClick={() => setFilter(k)}
-            className={cx("h-6 rounded-[5px] px-2.5 text-xs", filter === k ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
+            className={cx("h-6 rounded-[5px] px-2.5 text-12", filter === k ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
           >
             {label} <span className={cx("font-mono", k === "open" && n > 0 ? "text-pill-human-fg" : "text-fg-tertiary")}>{n}</span>
           </button>
@@ -152,7 +152,7 @@ export function ADRIndex() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : list.length === 0 ? (
-        <p className="rounded-xl border border-border bg-surface px-3.5 py-3 text-xs text-fg-tertiary">
+        <p className="rounded-xl border border-border bg-surface px-3.5 py-3 text-12 text-fg-tertiary">
           {adrs.length === 0 ? (
             <>
               No ADRs yet. Pages titled <code className="inline">ADR - …</code> (usually under Architecture/) and ADR documents show up here.
@@ -170,7 +170,7 @@ export function ADRIndex() {
           ))}
         </ul>
       )}
-      <p className="text-xs text-fg-tertiary">
+      <p className="text-12 text-fg-tertiary">
         Status, date and ticket come from each ADR&apos;s <code className="inline">Status: …</code> line; questions from its Open questions section.
       </p>
     </section>

@@ -95,8 +95,8 @@ export function LayoutGrid({ theme, current, onPick, title }: { theme: Theme; cu
   return (
     <div className="w-[min(520px,90vw)] p-1.5" onKeyDown={onKey}>
       <div className="flex items-baseline justify-between px-1 pb-2">
-        <span className="text-[13px] font-semibold text-fg">{title}</span>
-        <span className="text-[11.5px] text-fg-tertiary">Theme: {theme.name}</span>
+        <span className="text-13 font-semibold text-fg">{title}</span>
+        <span className="text-12 text-fg-tertiary">Theme: {theme.name}</span>
       </div>
       <div role="group" aria-label={title} className="grid grid-cols-4 gap-x-3 gap-y-2.5 max-sm:grid-cols-3">
         {LAYOUTS.map((l) => (
@@ -110,9 +110,9 @@ export function LayoutGrid({ theme, current, onPick, title }: { theme: Theme; cu
           >
             <span className={cx("relative block overflow-hidden rounded-[3px] border", l.id === current ? "border-accent ring-2 ring-accent/60" : "border-border-strong group-data-[highlighted]:border-fg-tertiary")}>
               <LayoutThumb layout={l.id} theme={theme} />
-              {NEW_LAYOUTS.has(l.id) && <span aria-hidden className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-[8.5px] font-bold leading-[13px] text-[#0E0F14]">NEW</span>}
+              {NEW_LAYOUTS.has(l.id) && <span aria-hidden className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-10 font-bold leading-[13px] text-[#0E0F14]">NEW</span>}
             </span>
-            <span className={cx("truncate text-[11.5px]", l.id === current ? "font-semibold text-fg" : "text-fg-secondary")}>{l.label}</span>
+            <span className={cx("truncate text-12", l.id === current ? "font-semibold text-fg" : "text-fg-secondary")}>{l.label}</span>
           </DropdownMenu.Item>
         ))}
       </div>

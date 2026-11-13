@@ -14,7 +14,7 @@ export function CostChip({ value, title, href = "/reports?tab=costs" }: { value:
       title={title}
       aria-label={`${title}: ${value}`}
       data-testid="cost-chip"
-      className="flex flex-none items-center gap-1 whitespace-nowrap rounded-full border border-border-strong py-0.5 pl-1.5 pr-2.5 font-mono text-[11.5px] text-fg-secondary hover:bg-hover hover:text-fg"
+      className="flex flex-none items-center gap-1 whitespace-nowrap rounded-full border border-border-strong py-0.5 pl-1.5 pr-2.5 font-mono text-12 text-fg-secondary hover:bg-hover hover:text-fg"
     >
       <Icon name="dollar" size={12} className="text-fg-tertiary" />
       {value}

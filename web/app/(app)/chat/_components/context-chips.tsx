@@ -25,7 +25,7 @@ function Label({ chip }: { chip: Chip }) {
   );
 }
 
-const chipClass = "inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs text-fg-secondary";
+const chipClass = "inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-12 text-fg-secondary";
 
 /** Attachments waiting to be sent; each can be removed. */
 export function ChipList({ chips, onRemove, disabled }: { chips: Chip[]; onRemove: (key: string) => void; disabled?: boolean }) {
@@ -138,20 +138,20 @@ export function AddContext({ onPick, onClosed, disabled, compact, create }: { on
                 pick(items[active] ?? items[0]);
               }
             }}
-            className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg outline-none focus-visible:border-accent"
+            className="h-8 rounded-md border border-border-strong bg-surface px-2 text-13 text-fg outline-none focus-visible:border-accent"
           />
           <SuggestionList id={listId} label="Context to attach" items={items} active={active} onActive={setActive} onPick={pick} className="!border-0 !p-0 !shadow-none" />
           {suggest.isError ? (
-            <p role="alert" className="px-2 py-1 text-xs text-pill-blocked-fg">Couldn’t load suggestions.</p>
+            <p role="alert" className="px-2 py-1 text-12 text-pill-blocked-fg">Couldn’t load suggestions.</p>
           ) : suggest.data && items.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-fg-tertiary">No matches.</p>
+            <p className="px-2 py-1 text-12 text-fg-tertiary">No matches.</p>
           ) : null}
           {create && (
             <div role="group" aria-label={`Create with ${create.persona}`} data-testid="create-with" className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
-              <p className="px-2 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Create with {create.persona}</p>
+              <p className="px-2 pb-0.5 text-11 font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Create with {create.persona}</p>
               <div className="flex gap-0.5">
                 {CREATE_KINDS.filter((k) => !k.hint).map((k) => (
-                  <button key={k.kind} type="button" onClick={() => { setOpen(false); create.onCreate(k.kind); }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-hover hover:text-fg">
+                  <button key={k.kind} type="button" onClick={() => { setOpen(false); create.onCreate(k.kind); }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-13 text-fg-secondary hover:bg-hover hover:text-fg">
                     <Icon name={CREATE_ICON[k.kind]} size={14} />
                     {k.label}
                   </button>
@@ -161,10 +161,10 @@ export function AddContext({ onPick, onClosed, disabled, compact, create }: { on
                 <button key={k.kind} type="button" onClick={() => { setOpen(false); create.onCreate(k.kind); }} className="flex items-center gap-2.5 rounded-md bg-accent/15 px-2 py-1.5 text-left hover:bg-accent/25">
                   <Icon name={CREATE_ICON[k.kind]} size={16} className="flex-none text-accent" />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-[13px] font-semibold text-fg">{k.label}</span>
-                    <span className="text-[11.5px] text-fg-secondary">{k.hint}</span>
+                    <span className="text-13 font-semibold text-fg">{k.label}</span>
+                    <span className="text-12 text-fg-secondary">{k.hint}</span>
                   </span>
-                  {k.command && <span className="flex-none text-[11px] text-fg-tertiary">{k.command}</span>}
+                  {k.command && <span className="flex-none text-11 text-fg-tertiary">{k.command}</span>}
                 </button>
               ))}
             </div>

@@ -34,7 +34,7 @@ export function Criteria({ t, events }: { t: Ticket; events?: ActivityEvent[] })
       <h2 className="flex items-baseline gap-2 type-heading">
         Acceptance criteria
         {t.criteria.length > 0 && (
-          <span className="font-mono text-xs font-normal text-fg-tertiary">
+          <span className="font-mono text-12 font-normal text-fg-tertiary">
             {done}/{t.criteria.length}
           </span>
         )}
@@ -49,7 +49,7 @@ export function Criteria({ t, events }: { t: Ticket; events?: ActivityEvent[] })
               onChange={(e) => update.mutate({ id: c.id, done: e.target.checked })}
               className="size-3.5 flex-none accent-[var(--state-done)]"
             />
-            <label htmlFor={`crit-${c.id}`} className={cx("flex-1 py-1 text-[13.5px]", c.done ? "text-fg-tertiary line-through" : "text-fg-2")}>
+            <label htmlFor={`crit-${c.id}`} className={cx("flex-1 py-1 text-14", c.done ? "text-fg-tertiary line-through" : "text-fg-2")}>
               {c.text}
             </label>
             {c.done && checks.get(c.id) && <CheckedBy e={checks.get(c.id)!} />}
@@ -80,17 +80,17 @@ export function Criteria({ t, events }: { t: Ticket; events?: ActivityEvent[] })
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Add a criterion and press Enter"
-          className="h-8 flex-1 bg-transparent text-[13.5px] text-fg outline-none placeholder:text-fg-tertiary"
+          className="h-8 flex-1 bg-transparent text-14 text-fg outline-none placeholder:text-fg-tertiary"
         />
       </form>
-      {add.isError && <p className="text-xs text-pill-blocked-fg">{add.error.message}</p>}
+      {add.isError && <p className="text-12 text-pill-blocked-fg">{add.error.message}</p>}
     </section>
   );
 }
 
 function CheckedBy({ e }: { e: ActivityEvent }) {
   return (
-    <span className="flex flex-none items-center gap-1.5 text-[11.5px] text-fg-tertiary">
+    <span className="flex flex-none items-center gap-1.5 text-12 text-fg-tertiary">
       <ActorAvatar actor={e.actor} />
       <span>
         <span className="sr-only">Checked by </span>

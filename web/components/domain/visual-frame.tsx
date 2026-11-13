@@ -46,7 +46,7 @@ export function VisualFrame<V extends string>({ testId, icon, label, views, view
   const [zoomed, setZoomed] = useState(false);
   return (
     <figure className="m-0 overflow-hidden break-inside-avoid rounded-lg border border-border bg-surface-sunken" data-testid={testId}>
-      <div className="flex items-center justify-between gap-2 border-b border-border-row px-3 py-1 text-xs text-fg-tertiary">
+      <div className="flex items-center justify-between gap-2 border-b border-border-row px-3 py-1 text-12 text-fg-tertiary">
         <span className="flex items-center gap-1.5">
           <Icon name={icon} size={12} />
           <span>{label}</span>
@@ -70,7 +70,7 @@ export function VisualFrame<V extends string>({ testId, icon, label, views, view
         </span>
       </div>
       {children}
-      {caption && <figcaption className="border-t border-border-row px-3 py-2 text-[13px] text-fg-secondary">{caption}</figcaption>}
+      {caption && <figcaption className="border-t border-border-row px-3 py-2 text-13 text-fg-secondary">{caption}</figcaption>}
       {zoomed && zoom && (
         <ZoomDialog label={label} onClose={() => setZoomed(false)}>
           {zoom}

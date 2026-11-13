@@ -66,7 +66,7 @@ export function useReview(draft: Design | undefined, proposals: DesignProposal[]
 }
 
 const Pin = ({ n, kind, dim }: { n: number; kind: ChangeKind; dim?: boolean }) => (
-  <span aria-hidden className={cx("grid size-[18px] flex-none place-items-center rounded-full text-[10px] font-bold text-[#0C0B12]", dim && "opacity-50")} style={{ background: KIND_COLOR[kind] }}>
+  <span aria-hidden className={cx("grid size-[18px] flex-none place-items-center rounded-full text-10 font-bold text-[#0C0B12]", dim && "opacity-50")} style={{ background: KIND_COLOR[kind] }}>
     {n}
   </span>
 );
@@ -91,9 +91,9 @@ export function stepChange(review: Review, dir: 1 | -1): Change | undefined {
 export function ReviewPill({ review, mode, onMode, onStep, onClose, busy }: { review: Review; mode: ReviewMode; onMode: (m: ReviewMode) => void; onStep: (dir: 1 | -1) => void; onClose: () => void; busy: boolean }) {
   const m = review.changes.length;
   const at = review.changes.findIndex((c) => c.i === review.focus);
-  const arrow = "grid size-6 place-items-center rounded-full text-[15px] text-fg-2 hover:bg-hover disabled:opacity-40";
+  const arrow = "grid size-6 place-items-center rounded-full text-15 text-fg-2 hover:bg-hover disabled:opacity-40";
   return (
-    <div role="region" aria-label="Review" data-testid="review-pill" className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-float bg-surface-raised p-1 text-[12.5px] shadow-[var(--shadow-float)]">
+    <div role="region" aria-label="Review" data-testid="review-pill" className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-float bg-surface-raised p-1 text-13 shadow-[var(--shadow-float)]">
       <div role="group" aria-label="View" className="flex rounded-full bg-surface p-0.5">
         {(["before", "after", "diff"] as const).map((v) => (
           <button key={v} type="button" aria-pressed={mode === v} onClick={() => onMode(v)} className={cx("rounded-full px-2.5 py-0.5", mode === v ? "bg-selected font-semibold text-fg" : "text-fg-secondary hover:bg-hover")}>
@@ -107,7 +107,7 @@ export function ReviewPill({ review, mode, onMode, onStep, onClose, busy }: { re
         {at < 0 ? `${m} ${m === 1 ? "change" : "changes"}` : `${at + 1} of ${m}`}
       </span>
       <button type="button" aria-label="Next change" className={arrow} disabled={!m} onClick={() => onStep(1)}>›</button>
-      <button type="button" aria-label="Close review" disabled={busy} className="grid size-6 place-items-center rounded-full text-[11px] text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-40" onClick={onClose}>✕</button>
+      <button type="button" aria-label="Close review" disabled={busy} className="grid size-6 place-items-center rounded-full text-11 text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-40" onClick={onClose}>✕</button>
     </div>
   );
 }
@@ -202,13 +202,13 @@ export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, er
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="review-panel">
       <div className="flex-none px-4 pt-3">
-        <p className="text-[13px] font-semibold text-fg">{persona}’s suggestion</p>
-        <p className="mt-0.5 text-[12px] text-fg-secondary" data-testid="review-status">
+        <p className="text-13 font-semibold text-fg">{persona}’s suggestion</p>
+        <p className="mt-0.5 text-12 text-fg-secondary" data-testid="review-status">
           {review.left} of {review.changes.length} left
           {pages.length > 0 && ` · ${pages.join(", ")}`}
           {review.total > 1 ? ` · suggestion 1 of ${review.total}` : ""}
         </p>
-        <ul aria-label="Legend" className="mt-1.5 flex items-center gap-3 text-[11px] text-fg-tertiary">
+        <ul aria-label="Legend" className="mt-1.5 flex items-center gap-3 text-11 text-fg-tertiary">
           {(Object.keys(KIND_COLOR) as ChangeKind[]).map((k) => (
             <li key={k} className="flex items-center gap-1">
               <span aria-hidden className="size-2.5 rounded-[2px]" style={{ background: KIND_COLOR[k] }} />
@@ -219,16 +219,16 @@ export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, er
       </div>
       <div role="tablist" aria-label="Review" className="flex gap-4 border-b border-border-subtle px-4 pt-3">
         {tabs.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={cx("-mb-px flex items-center gap-1.5 border-b-2 pb-2 text-[12.5px]", tab === t.id ? "border-accent font-semibold text-fg" : "border-transparent text-fg-tertiary")}>
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={cx("-mb-px flex items-center gap-1.5 border-b-2 pb-2 text-13", tab === t.id ? "border-accent font-semibold text-fg" : "border-transparent text-fg-tertiary")}>
             {t.label}
-            <span className="rounded-full bg-hover px-1.5 text-[10px] text-fg-secondary">{t.n}</span>
+            <span className="rounded-full bg-hover px-1.5 text-10 text-fg-secondary">{t.n}</span>
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "changes" ? (
           <>
-            {review.proposal.summary && <p className="mb-3 text-[12.5px] text-fg-secondary" data-testid="review-summary">{review.proposal.summary}</p>}
+            {review.proposal.summary && <p className="mb-3 text-13 text-fg-secondary" data-testid="review-summary">{review.proposal.summary}</p>}
             <ol className="flex flex-col gap-2">
               {review.changes.map((c) => (
                 <ChangeCard key={c.i} c={c} review={review} design={design} chatId={chatId} canvasId={canvasId} seq={seq} persona={persona} busy={busy} onFocus={onFocus} />
@@ -240,8 +240,8 @@ export function ReviewPanel({ review, design, chatId, canvasId, seq, persona, er
         )}
       </div>
       <div className="flex-none border-t border-border-subtle px-4 py-3" data-testid="review-actions">
-        {error && <p role="alert" className="mb-2 text-[12px] text-pill-blocked-fg">{error}</p>}
-        <p className="mb-2 text-[11px] text-fg-tertiary">Done turns the accepted changes into one version. Rejected ones, with your reasons, go back to {persona}.</p>
+        {error && <p role="alert" className="mb-2 text-12 text-pill-blocked-fg">{error}</p>}
+        <p className="mb-2 text-11 text-fg-tertiary">Done turns the accepted changes into one version. Rejected ones, with your reasons, go back to {persona}.</p>
         <span className="flex flex-wrap items-center gap-1.5">
           <Button variant="outline" disabled={!review.left || busy} onClick={review.rejectRest}>Reject rest</Button>
           <Button variant="primary" disabled={!review.left || busy} onClick={review.acceptRest}>Accept rest</Button>
@@ -263,13 +263,13 @@ function ChangeCard({ c, review, design, chatId, canvasId, seq, persona, busy, o
       <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => onFocus(c)} aria-label={`Show change ${c.i + 1} on the canvas`}>
         <Pin n={c.i + 1} kind={c.kind} dim={!!d} />
         <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-semibold text-fg">{c.title}</span>
-          {c.why && <span className="mt-0.5 block text-[12px] text-fg-secondary" data-testid="change-why">{c.why}</span>}
-          {c.needs.length > 0 && <span className="mt-0.5 block text-[11px] text-fg-tertiary">Needs change {c.needs.map((n) => n + 1).join(", ")}</span>}
+          <span className="block text-13 font-semibold text-fg">{c.title}</span>
+          {c.why && <span className="mt-0.5 block text-12 text-fg-secondary" data-testid="change-why">{c.why}</span>}
+          {c.needs.length > 0 && <span className="mt-0.5 block text-11 text-fg-tertiary">Needs change {c.needs.map((n) => n + 1).join(", ")}</span>}
         </span>
       </button>
       {d ? (
-        <div className="mt-2 flex items-center gap-2 pl-[26px] text-[11.5px]">
+        <div className="mt-2 flex items-center gap-2 pl-[26px] text-12">
           <span className={d.state === "accepted" ? "text-[#6FCF97]" : "text-pill-blocked-fg"}>{d.state === "accepted" ? "✓ Accepted" : "✗ Rejected"}{d.reason ? `: ${d.reason}` : ""}</span>
           {d.state === "rejected" ? (
             <button type="button" className="text-accent hover:underline" disabled={busy} onClick={() => review.accept(c.i)}>Accept instead</button>
@@ -290,7 +290,7 @@ function ChangeCard({ c, review, design, chatId, canvasId, seq, persona, busy, o
                 setReason("");
               }}
             >
-              <input autoFocus aria-label={`Why reject change ${c.i + 1}? (optional)`} placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} onKeyDown={(e) => e.key === "Escape" && setRejecting(false)} className="h-[28px] rounded-md border border-border-strong bg-surface px-2 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
+              <input autoFocus aria-label={`Why reject change ${c.i + 1}? (optional)`} placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} onKeyDown={(e) => e.key === "Escape" && setRejecting(false)} className="h-[28px] rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none" />
               <span className="flex gap-1.5">
                 <Button type="submit" variant="outline" disabled={busy}>Reject</Button>
                 <Button variant="ghost" onClick={() => setRejecting(false)}>Cancel</Button>
@@ -336,12 +336,12 @@ function Thread({ chatId, canvasId, seq, node, design, persona }: { chatId: stri
   return (
     <div className="mt-2 flex flex-col gap-2 border-t border-border-subtle pt-2 pl-[26px]" data-testid="review-thread">
       {thread.map((c) => (
-        <p key={c.id} className="text-[12px] text-fg-2">
+        <p key={c.id} className="text-12 text-fg-2">
           <span className="font-semibold text-fg">{c.author_type === "user" ? "You" : persona}</span> {c.body}
         </p>
       ))}
-      <textarea aria-label={`Comment on ${label ? labelOf(label) : "this layer"}`} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder={root ? "Reply…" : `Ask ${persona} about this…`} className="w-full resize-none rounded-md border border-border-strong bg-surface p-1.5 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
-      {error && <p role="alert" className="text-[11.5px] text-pill-blocked-fg">{error}</p>}
+      <textarea aria-label={`Comment on ${label ? labelOf(label) : "this layer"}`} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder={root ? "Reply…" : `Ask ${persona} about this…`} className="w-full resize-none rounded-md border border-border-strong bg-surface p-1.5 text-13 text-fg focus:border-accent focus:outline-none" />
+      {error && <p role="alert" className="text-12 text-pill-blocked-fg">{error}</p>}
       <Button variant="outline" className="self-start" disabled={!body.trim() || actions.add.isPending || actions.send.isPending} onClick={() => void send()}>Send</Button>
     </div>
   );
@@ -349,12 +349,12 @@ function Thread({ chatId, canvasId, seq, node, design, persona }: { chatId: stri
 
 function CommentList({ comments, design }: { comments: { id: string; parent_id?: string | null; author_type: string; body: string; anchor: { node?: string } }[]; design: Design }) {
   const roots = comments.filter((c) => !c.parent_id);
-  if (!roots.length) return <p className="text-[12.5px] text-fg-tertiary">No comments yet. Discuss a change to start a thread on its layer.</p>;
+  if (!roots.length) return <p className="text-13 text-fg-tertiary">No comments yet. Discuss a change to start a thread on its layer.</p>;
   return (
     <ul className="flex flex-col gap-3">
       {roots.map((r) => (
-        <li key={r.id} className="rounded-[10px] border border-border-subtle bg-surface-raised p-3 text-[12.5px]">
-          <span className="text-[11px] text-fg-tertiary">{r.anchor.node ? (find(design, r.anchor.node) ? labelOf(find(design, r.anchor.node)!.node) : "a layer") : "Design"}</span>
+        <li key={r.id} className="rounded-[10px] border border-border-subtle bg-surface-raised p-3 text-13">
+          <span className="text-11 text-fg-tertiary">{r.anchor.node ? (find(design, r.anchor.node) ? labelOf(find(design, r.anchor.node)!.node) : "a layer") : "Design"}</span>
           {[r, ...comments.filter((c) => c.parent_id === r.id)].map((c) => (
             <p key={c.id} className="mt-1 text-fg-2">
               <span className="font-semibold text-fg">{c.author_type === "user" ? "You" : "Persona"}</span> {c.body}

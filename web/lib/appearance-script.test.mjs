@@ -18,3 +18,13 @@ test("blocked storage keeps the default footer and does not break first paint", 
   assert.equal(root.dataset.harnessActivity, "visible");
   assert.equal(root.dataset.palette, "dusk");
 });
+
+test("pre-paint text size matches saved appearance, and unknown sizes fall back to default", () => {
+  for (const textSize of [undefined, "small", "default", "large", "larger", "huge", 3]) {
+    const raw = JSON.stringify({ version: 1, palette: "dusk", textSize });
+    const root = { dataset: {}, style: { setProperty() {} }, setAttribute() {} };
+    runInNewContext(themeScript, { document: { documentElement: root }, localStorage: { getItem: (key) => key === "la-appearance" ? raw : null }, matchMedia: () => ({ matches: false }) });
+    assert.equal(root.dataset.textSize, parseAppearance(raw).textSize);
+    assert.equal(root.dataset.textSize, ["small", "large", "larger"].includes(textSize) ? textSize : "default");
+  }
+});

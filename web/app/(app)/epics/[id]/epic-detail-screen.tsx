@@ -99,14 +99,14 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
           <Pill tone={e.epic.status === "done" ? "done" : "neutral"}>{e.epic.status === "done" ? "Done" : "Open"}</Pill>
           <HealthPill health={e.epic.health} />
         </div>
-        <p className="flex flex-wrap gap-x-2 text-xs text-fg-tertiary">
+        <p className="flex flex-wrap gap-x-2 text-12 text-fg-tertiary">
           <span>{e.project.name}</span>·
           <span className={overdue ? "text-pill-blocked-fg" : undefined}>
             {e.target_date ? `${overdue ? "Overdue ·" : "Target"} ${dueDate(e.target_date)}` : "No target date"}
           </span>·
           <span>{e.owner ? `Owner ${e.owner.name}` : "No owner"}</span>
         </p>
-        <p className="whitespace-pre-line text-[14px] leading-relaxed text-fg-2">{e.objective || "No objective has been written yet."}</p>
+        <p className="whitespace-pre-line text-14 leading-relaxed text-fg-2">{e.objective || "No objective has been written yet."}</p>
         <div className="flex flex-wrap gap-2">
           <ButtonLink variant="outline" href={boardHref(e)}>Board filtered to this epic</ButtonLink>
           <ButtonLink variant="outline" href={`/tickets?view=all&epic=${e.epic.id}&project=${encodeURIComponent(e.project.key)}`}>Ticket list</ButtonLink>
@@ -118,17 +118,17 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
 
       {waiting.length > 0 && <NeedsYouBanner tickets={waiting} needs={needs} />}
 
-      <nav aria-label="Epic views" className="flex gap-5 border-b border-border-subtle pb-2 text-sm">
+      <nav aria-label="Epic views" className="flex gap-5 border-b border-border-subtle pb-2 text-14">
         <button aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "font-semibold text-fg" : "text-fg-secondary"} onClick={() => setTab("overview")}>Overview</button>
         <button aria-current={tab === "map" ? "page" : undefined} className={tab === "map" ? "font-semibold text-fg" : "text-fg-secondary"} onClick={() => setTab("map")}>Map</button>
       </nav>
       {tab === "map" ? <DependencyMap key={e.epic.id} project={e.project.key} epic={e.epic.id} /> : <>
       <section aria-label="Tickets" className="space-y-2">
-        <h2 className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">
+        <h2 className="flex items-center gap-2 text-11 font-medium uppercase tracking-[0.06em] text-fg-tertiary">
           Tickets <span className="font-mono">{e.epic.tickets_open} open of {e.epic.tickets_total}</span>
         </h2>
         {tickets.isError ? (
-          <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
+          <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
         ) : tickets.isPending ? (
           <Skeleton className="h-24" />
         ) : (
@@ -159,7 +159,7 @@ function EpicContext({ epic: e, onClose }: { epic: EpicOverview; onClose: () => 
       </ContextSection>
       <ContextSection title="Points burn-up">
         {tickets.isError ? (
-          <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
+          <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t load tickets: {tickets.error.message}</p>
         ) : tickets.isPending ? (
           <Skeleton className="h-32" />
         ) : (
@@ -183,7 +183,7 @@ function EpicProgressBar({ epicId, tickets, needs }: { epicId: string; tickets?:
   return (
     <section aria-label="Epic progress" className="space-y-2">
       <StackedBar segments={parts} height={8} />
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-secondary">
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-12 text-fg-secondary">
         {parts.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5">
             <span aria-hidden className="size-2 rounded-full" style={{ background: s.color }} />
@@ -202,7 +202,7 @@ function EpicProgressBar({ epicId, tickets, needs }: { epicId: string; tickets?:
 function NeedsYouBanner({ tickets, needs }: { tickets: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
   return (
     <section aria-label="Needs you" className="rounded-xl border border-state-human/50 bg-pill-human-bg/40 p-3">
-      <h2 className="mb-1 px-1 text-[11px] font-medium uppercase tracking-[0.06em] text-pill-human-fg">
+      <h2 className="mb-1 px-1 text-11 font-medium uppercase tracking-[0.06em] text-pill-human-fg">
         Needs you <span className="font-mono">{tickets.length}</span>
       </h2>
       <ul>
@@ -217,14 +217,14 @@ function NeedsYouItem({ t, needs }: { t: TicketSummary; needs: NeedsYou }) {
   const approval = approvalId(needs);
   return (
     <li className="flex flex-wrap items-center gap-3 rounded-lg px-1 py-1.5">
-      <span className="font-mono text-xs text-fg-tertiary">{t.key}</span>
+      <span className="font-mono text-12 text-fg-tertiary">{t.key}</span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="truncate text-[13px] font-medium hover:underline">{t.title}</Link>
-        <StateText t={t} needs={needs} className="text-xs" />
+        <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="truncate text-13 font-medium hover:underline">{t.title}</Link>
+        <StateText t={t} needs={needs} className="text-12" />
       </span>
-      {decide.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{decide.error.message}</span>}
+      {decide.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{decide.error.message}</span>}
       {decide.isSuccess ? (
-        <span role="status" className="text-xs text-fg-secondary">Approved</span>
+        <span role="status" className="text-12 text-fg-secondary">Approved</span>
       ) : approval && (
         <Button variant="approve" disabled={decide.isPending} onClick={() => decide.mutate({ id: approval, decision: "approve" })} aria-label={`Approve ${t.key}`}>
           {decide.isPending ? "Approving…" : "Approve"}
@@ -239,7 +239,7 @@ const CHECKLIST_ORDER: TicketSummary["status"][] = ["in_progress", "in_review", 
 
 /** The epic's tickets as a checklist: done ones ticked, current state on the right. */
 function TicketChecklist({ tickets, needs }: { tickets: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
-  if (!tickets.length) return <p className="text-sm text-fg-tertiary">No tickets in this epic yet.</p>;
+  if (!tickets.length) return <p className="text-14 text-fg-tertiary">No tickets in this epic yet.</p>;
   const sorted = [...tickets].sort((a, b) =>
     Number(needs.has(b.key) && b.status !== "done") - Number(needs.has(a.key) && a.status !== "done") ||
     CHECKLIST_ORDER.indexOf(a.status) - CHECKLIST_ORDER.indexOf(b.status));
@@ -256,15 +256,15 @@ function TicketChecklist({ tickets, needs }: { tickets: TicketSummary[]; needs: 
             >
               {done && <Icon name="check" size={11} strokeWidth={2.2} />}
             </span>
-            <span className="w-[72px] flex-none truncate font-mono text-xs text-fg-tertiary">{t.key}</span>
+            <span className="w-[72px] flex-none truncate font-mono text-12 text-fg-tertiary">{t.key}</span>
             <Link
               href={`/tickets/${encodeURIComponent(t.key)}`}
-              className={cx("min-w-0 flex-1 truncate text-[13px] font-medium after:absolute after:inset-0", (done || t.status === "canceled") && "text-fg-secondary", t.status === "canceled" && "line-through")}
+              className={cx("min-w-0 flex-1 truncate text-13 font-medium after:absolute after:inset-0", (done || t.status === "canceled") && "text-fg-secondary", t.status === "canceled" && "line-through")}
             >
               {t.title}
             </Link>
-            {t.assignee && <span className="hidden text-xs text-fg-tertiary sm:inline">{t.assignee.name}</span>}
-            <span className="w-10 flex-none text-right font-mono text-xs text-fg-tertiary">{t.estimate_points != null ? `${t.estimate_points} pt` : "—"}</span>
+            {t.assignee && <span className="hidden text-12 text-fg-tertiary sm:inline">{t.assignee.name}</span>}
+            <span className="w-10 flex-none text-right font-mono text-12 text-fg-tertiary">{t.estimate_points != null ? `${t.estimate_points} pt` : "—"}</span>
             <StateText t={t} needs={needs.get(t.key)} className="w-[200px] flex-none text-right max-sm:w-[110px]" />
           </li>
         );
@@ -279,8 +279,8 @@ function Completion({ projectKey, epicId }: { projectKey: string; epicId: string
   return (
     <section aria-label="Epic completion">
       {board.data?.epic ? <EpicCompletion summary={board.data.epic} stacked />
-        : board.isError ? <p role="alert" className="text-xs">Couldn&apos;t load acceptance criteria: {board.error.message} <button type="button" className="underline" onClick={() => void board.refetch()}>Retry</button></p>
-        : <p role="status" className="text-xs text-fg-tertiary">Loading acceptance criteria…</p>}
+        : board.isError ? <p role="alert" className="text-12">Couldn&apos;t load acceptance criteria: {board.error.message} <button type="button" className="underline" onClick={() => void board.refetch()}>Retry</button></p>
+        : <p role="status" className="text-12 text-fg-tertiary">Loading acceptance criteria…</p>}
     </section>
   );
 }
@@ -290,7 +290,7 @@ const W = 720, H = 180, PAD = { l: 36, r: 12, t: 12, b: 26 };
 export function BurnUpChart({ data }: { data: BurnUp }) {
   const { scope, done, points } = data;
   if (!scope) {
-    return <p className="text-sm text-fg-tertiary">No estimates yet. Estimate the epic’s tickets to see a burn-up.</p>;
+    return <p className="text-14 text-fg-tertiary">No estimates yet. Estimate the epic’s tickets to see a burn-up.</p>;
   }
   const day = (d: string) => new Date(`${d}T00:00:00`).getTime();
   const t0 = day(points[0].date), t1 = day(points.at(-1)!.date);
@@ -311,7 +311,7 @@ export function BurnUpChart({ data }: { data: BurnUp }) {
         <text x={PAD.l} y={H - 8} fontSize="11" fill="var(--text-tertiary)">{dueDate(points[0].date)}</text>
         <text x={W - PAD.r} y={H - 8} textAnchor="end" fontSize="11" fill="var(--text-tertiary)">Today</text>
       </svg>
-      <figcaption className="flex flex-wrap justify-between gap-2 text-xs text-fg-tertiary">
+      <figcaption className="flex flex-wrap justify-between gap-2 text-12 text-fg-tertiary">
         <span><span className="font-mono text-fg">{done} / {scope}</span> pts done · {pct}%</span>
         <span>Dashed line is today’s scope. Done tickets count on the day they were last updated.</span>
       </figcaption>
@@ -322,7 +322,7 @@ export function BurnUpChart({ data }: { data: BurnUp }) {
 function Details({ epic: e }: { epic: EpicOverview }) {
   const updateEpic = useUpdateEpic(e.epic.id);
   return (
-    <dl className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 text-xs">
+    <dl className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 text-12">
       <dt className="text-fg-tertiary">Owner</dt>
       <dd>
         {e.owner ? (
@@ -407,10 +407,10 @@ function StartReady({ epic }: { epic: EpicOverview }) {
     <section aria-label="Start ready" className="space-y-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <h2 className="text-[13.5px] font-medium">
+          <h2 className="text-14 font-medium">
             {loading ? "Checking which tickets can start…" : ready.length ? `${ready.length} ${ready.length === 1 ? "ticket is" : "tickets are"} ready to start` : "Nothing is ready to start"}
           </h2>
-          <p className="text-xs text-fg-secondary">
+          <p className="text-12 text-fg-secondary">
             Starts only tickets whose blockers are done. Existing agent assignments are kept; runs begin as runner slots free up.
           </p>
         </div>
@@ -420,7 +420,7 @@ function StartReady({ epic }: { epic: EpicOverview }) {
         </Button>
       </div>
       {unassigned > 0 && (
-        <label className="flex flex-wrap items-center gap-2 text-xs text-fg-secondary">
+        <label className="flex flex-wrap items-center gap-2 text-12 text-fg-secondary">
           Agent for unassigned tickets
           <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
             disabled={start.isPending || bootstrap.isPending}
@@ -433,7 +433,7 @@ function StartReady({ epic }: { epic: EpicOverview }) {
         </label>
       )}
       {!loading && blocked.length > 0 && (
-        <div className="text-xs text-fg-secondary">
+        <div className="text-12 text-fg-secondary">
           <p>Still blocked, so not started:</p>
           <ul className="mt-1 space-y-0.5">
             {blocked.map((t) => (
@@ -445,12 +445,12 @@ function StartReady({ epic }: { epic: EpicOverview }) {
           </ul>
         </div>
       )}
-      {!loading && live.size > 0 && <p className="text-xs text-fg-tertiary">{live.size} already {live.size === 1 ? "has a run" : "have runs"}.</p>}
-      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-xs text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and start these tickets."}</p>}
-      {start.isError && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t start the tickets: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to start."}</p>}
-      {failed && <p role="alert" className="text-xs text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
-      {incomplete && <p role="alert" className="text-xs text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to start tickets in smaller batches.</p>}
-      {start.isSuccess && <p role="status" className="text-xs text-fg-secondary">{start.data} epic tickets queued. Follow their progress above.</p>}
+      {!loading && live.size > 0 && <p className="text-12 text-fg-tertiary">{live.size} already {live.size === 1 ? "has a run" : "have runs"}.</p>}
+      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-12 text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and start these tickets."}</p>}
+      {start.isError && <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t start the tickets: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to start."}</p>}
+      {failed && <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
+      {incomplete && <p role="alert" className="text-12 text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to start tickets in smaller batches.</p>}
+      {start.isSuccess && <p role="status" className="text-12 text-fg-secondary">{start.data} epic tickets queued. Follow their progress above.</p>}
     </section>
   );
 }

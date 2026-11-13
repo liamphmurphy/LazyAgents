@@ -88,7 +88,7 @@ export function GateStrip({ t }: { t: Ticket }) {
   const gates = unmetGates(t);
   if (gates.length === 0) {
     return (
-      <p className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface px-4 py-2.5 text-[13px] text-pill-done-fg">
+      <p className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface px-4 py-2.5 text-13 text-pill-done-fg">
         <Icon name="check" size={14} /> Ready for {STATUS_NAME[next]}
       </p>
     );
@@ -96,34 +96,34 @@ export function GateStrip({ t }: { t: Ticket }) {
   return (
     <section aria-labelledby="gates-title" className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface p-3.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 id="gates-title" className="text-[13px] font-semibold">
+        <h2 id="gates-title" className="text-13 font-semibold">
           Before {STATUS_NAME[next]}
         </h2>
-        <span className="text-xs text-fg-tertiary">What stands between this ticket and the next stage</span>
-        <span className="ml-auto text-xs font-medium text-pill-human-fg">
+        <span className="text-12 text-fg-tertiary">What stands between this ticket and the next stage</span>
+        <span className="ml-auto text-12 font-medium text-pill-human-fg">
           {gates.length} {gates.length === 1 ? "gate" : "gates"} open
         </span>
       </div>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
         {gates.map((g) => (
           <li key={g.id} className={cx("flex flex-col gap-1 rounded-lg border px-3 py-2.5", g.id === "pr" ? "border-border-subtle" : "border-pill-human-bg bg-pill-human-bg/30")}>
-            <span className="flex items-center gap-1.5 text-[13px] font-medium">
+            <span className="flex items-center gap-1.5 text-13 font-medium">
               <Icon name={g.icon} size={14} className="text-fg-tertiary" />
               {g.title}
             </span>
-            <span className="truncate text-xs text-fg-secondary" title={g.detail}>
+            <span className="truncate text-12 text-fg-secondary" title={g.detail}>
               {g.detail}
             </span>
             {g.external ? (
-              <a href={g.href} target="_blank" rel="noreferrer noopener" className="mt-auto text-xs text-accent hover:underline">
+              <a href={g.href} target="_blank" rel="noreferrer noopener" className="mt-auto text-12 text-accent hover:underline">
                 {g.action} ↗
               </a>
             ) : g.href.startsWith("#") ? (
-              <a href={g.href} className="mt-auto text-xs text-accent hover:underline">
+              <a href={g.href} className="mt-auto text-12 text-accent hover:underline">
                 {g.action} →
               </a>
             ) : (
-              <Link href={g.href} className="mt-auto text-xs text-accent hover:underline">
+              <Link href={g.href} className="mt-auto text-12 text-accent hover:underline">
                 {g.action} →
               </Link>
             )}

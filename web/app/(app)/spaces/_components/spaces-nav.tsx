@@ -37,7 +37,7 @@ function NestedChats({ spaceId, chatId, total }: { spaceId: string; chatId?: str
             href={`/chat/${c.id}`}
             aria-current={c.id === chatId ? "page" : undefined}
             className={cx(
-              "flex h-[26px] items-center truncate rounded-md px-[8px] text-[12.5px]",
+              "flex h-[26px] items-center truncate rounded-md px-[8px] text-13",
               c.id === chatId ? "bg-accent-soft text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
             )}
           >
@@ -46,7 +46,7 @@ function NestedChats({ spaceId, chatId, total }: { spaceId: string; chatId?: str
         </li>
       ))}
       <li>
-        <Link href={`/spaces/${spaceId}`} className="flex h-[26px] items-center rounded-md px-[8px] text-[12px] text-fg-tertiary hover:bg-hover hover:text-fg">
+        <Link href={`/spaces/${spaceId}`} className="flex h-[26px] items-center rounded-md px-[8px] text-12 text-fg-tertiary hover:bg-hover hover:text-fg">
           See all {total}
         </Link>
       </li>
@@ -62,7 +62,7 @@ function ActivityBadge({ spaceId, name, activity }: { spaceId: string; name: str
   const target = badgeTarget(activity);
   const label = activityLabel(name, activity);
   const dot = <span aria-hidden data-space-activity className={cx("size-1.5 flex-none rounded-full", activity.needsYou ? "bg-state-human" : "bg-state-done")} />;
-  const pill = "flex h-[20px] flex-none items-center gap-[5px] rounded-full bg-hover px-[7px] text-xs text-fg-secondary hover:text-fg";
+  const pill = "flex h-[20px] flex-none items-center gap-[5px] rounded-full bg-hover px-[7px] text-12 text-fg-secondary hover:text-fg";
   if (target.kind === "chat") {
     return (
       <Link href={`/chat/${target.chat.id}`} aria-label={`${label}; open ${chatTitle(target.chat)}`} title={target.chat.title} className={pill}>
@@ -81,17 +81,17 @@ function ActivityBadge({ spaceId, name, activity }: { spaceId: string; name: str
       <Popover.Portal>
         <Popover.Content side="right" align="start" sideOffset={8} collisionPadding={8} aria-label={`Chats active in ${name}`}
           className="z-50 w-[300px] rounded-xl border border-border-strong bg-surface p-[6px] shadow-lg">
-          <p className="px-[8px] pb-[4px] pt-[2px] text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Active in {name}</p>
+          <p className="px-[8px] pb-[4px] pt-[2px] text-11 font-medium uppercase tracking-wide text-fg-tertiary">Active in {name}</p>
           <ul className="flex flex-col gap-px">
             {activity.chats.map((c) => (
               <li key={c.id}>
                 <Link href={`/chat/${c.id}`} onClick={() => setOpen(false)} className="flex flex-col gap-px rounded-md px-[8px] py-[6px] hover:bg-hover">
-                  <span className="flex items-center gap-[8px] text-[13px] text-fg">
+                  <span className="flex items-center gap-[8px] text-13 text-fg">
                     <span aria-hidden className={cx("size-1.5 flex-none rounded-full", dotClass(c.state))} />
                     <span className="min-w-[0px] flex-1 truncate">{chatTitle(c)}</span>
-                    {c.id === activity.latestWorking?.id && <span className="flex-none text-[11px] text-fg-tertiary">latest</span>}
+                    {c.id === activity.latestWorking?.id && <span className="flex-none text-11 text-fg-tertiary">latest</span>}
                   </span>
-                  <span className="truncate pl-[14px] text-[12px] text-fg-tertiary">
+                  <span className="truncate pl-[14px] text-12 text-fg-tertiary">
                     {c.persona ? `${c.persona.name} · ` : ""}
                     {c.state === "needs_you" ? "waiting on you" : "working"}
                   </span>
@@ -99,7 +99,7 @@ function ActivityBadge({ spaceId, name, activity }: { spaceId: string; name: str
               </li>
             ))}
           </ul>
-          <Link href={`/spaces/${spaceId}`} onClick={() => setOpen(false)} className="mt-[4px] block rounded-md border-t border-border-subtle px-[8px] pb-[4px] pt-[8px] text-[12px] text-accent hover:text-fg">
+          <Link href={`/spaces/${spaceId}`} onClick={() => setOpen(false)} className="mt-[4px] block rounded-md border-t border-border-subtle px-[8px] pb-[4px] pt-[8px] text-12 text-accent hover:text-fg">
             Open {name}
           </Link>
         </Popover.Content>
@@ -121,7 +121,7 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
   return (
     <section aria-label="Spaces" className="flex flex-col gap-px">
       <div className="flex items-center pb-[4px] pl-[8px] pr-[4px]">
-        <span className="flex-1 text-[12px] font-medium text-fg-tertiary">Spaces</span>
+        <span className="flex-1 text-12 font-medium text-fg-tertiary">Spaces</span>
         <button
           type="button"
           aria-label="New space"
@@ -133,9 +133,9 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
         </button>
       </div>
       {spaces.isError ? (
-        <p role="alert" className="px-[8px] text-[12px] text-pill-blocked-fg">Couldn’t load spaces.</p>
+        <p role="alert" className="px-[8px] text-12 text-pill-blocked-fg">Couldn’t load spaces.</p>
       ) : spaces.data && list.length === 0 ? (
-        <button type="button" onClick={() => setCreating(true)} className="flex h-[30px] items-center gap-[10px] rounded-md px-[8px] text-left text-[13px] text-fg-tertiary hover:bg-hover hover:text-fg">
+        <button type="button" onClick={() => setCreating(true)} className="flex h-[30px] items-center gap-[10px] rounded-md px-[8px] text-left text-13 text-fg-tertiary hover:bg-hover hover:text-fg">
           <span className="grid size-[16px] place-items-center rounded border border-dashed border-border-strong">
             <Icon name="plus" size={10} />
           </span>
@@ -151,7 +151,7 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
             <div key={s.id} className="flex flex-col gap-px">
               <div
                 className={cx(
-                  "group flex h-[28px] items-center gap-[6px] rounded-md pr-[8px] text-[13px]",
+                  "group flex h-[28px] items-center gap-[6px] rounded-md pr-[8px] text-13",
                   active ? "bg-accent-soft text-fg" : expanded ? "text-fg hover:bg-hover" : "text-fg-secondary hover:bg-hover hover:text-fg",
                 )}
               >
@@ -178,7 +178,7 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
                 {expanded ? (
                   <Icon name="chev" size={11} className="flex-none text-fg-tertiary" />
                 ) : (
-                  !busy && <span className="flex-none text-xs text-fg-tertiary">{s.chat_count}</span>
+                  !busy && <span className="flex-none text-12 text-fg-tertiary">{s.chat_count}</span>
                 )}
               </div>
               {expanded && <NestedChats spaceId={s.id} chatId={open.chatId} total={s.chat_count} />}

@@ -62,12 +62,12 @@ function ChartPlot({ spec, alt, tall }: { spec: ChartSpec; alt: string; tall?: b
     <div className="flex flex-col gap-2 bg-surface px-3 py-3">
       {(spec.title || spec.subtitle) && (
         <div>
-          {spec.title && <div className="text-[13px] font-semibold text-fg">{spec.title}</div>}
-          {spec.subtitle && <div className="text-xs text-fg-secondary">{spec.subtitle}</div>}
+          {spec.title && <div className="text-13 font-semibold text-fg">{spec.title}</div>}
+          {spec.subtitle && <div className="text-12 text-fg-secondary">{spec.subtitle}</div>}
         </div>
       )}
       {multi && (
-        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-secondary">
+        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-12 text-fg-secondary">
           {spec.series.map((s, i) => (
             <li key={s.name} className="flex items-center gap-1.5">
               <span aria-hidden className={spec.type === "line" ? "h-0.5 w-3 rounded-full" : spec.type === "scatter" ? "size-2 rounded-full" : "size-2 rounded-xs"} style={{ background: palette.series[i] }} />
@@ -76,7 +76,7 @@ function ChartPlot({ spec, alt, tall }: { spec: ChartSpec; alt: string; tall?: b
           ))}
         </ul>
       )}
-      {spec.y.label && !layout?.horizontal && <div className="text-[11px] text-fg-tertiary">{spec.y.label}</div>}
+      {spec.y.label && !layout?.horizontal && <div className="text-11 text-fg-tertiary">{spec.y.label}</div>}
       {/* Arrow keys walk the same positions as the pointer. */}
       <div
         ref={ref}
@@ -137,7 +137,7 @@ function ChartPlot({ spec, alt, tall }: { spec: ChartSpec; alt: string; tall?: b
           <div className="h-[220px]" />
         )}
         {tip && point && layout && (
-          <div role="status" className="pointer-events-none absolute z-10 w-max max-w-[220px] rounded-md border border-border-float bg-surface-raised px-2 py-1.5 text-xs" style={{ left: point.x < layout.width / 2 ? point.x + 12 : point.x - 12, top: Math.max(0, point.y - 8), transform: point.x < layout.width / 2 ? undefined : "translateX(-100%)" }}>
+          <div role="status" className="pointer-events-none absolute z-10 w-max max-w-[220px] rounded-md border border-border-float bg-surface-raised px-2 py-1.5 text-12" style={{ left: point.x < layout.width / 2 ? point.x + 12 : point.x - 12, top: Math.max(0, point.y - 8), transform: point.x < layout.width / 2 ? undefined : "translateX(-100%)" }}>
             <div className="mb-0.5 text-fg-tertiary">{tip.title}</div>
             {tip.rows.map((r) => (
               <div key={r.name} className="flex items-center gap-1.5">
@@ -149,8 +149,8 @@ function ChartPlot({ spec, alt, tall }: { spec: ChartSpec; alt: string; tall?: b
           </div>
         )}
       </div>
-      {spec.x.label && !layout?.horizontal && <div className="text-center text-[11px] text-fg-tertiary">{spec.x.label}</div>}
-      {spec.y.label && layout?.horizontal && <div className="text-center text-[11px] text-fg-tertiary">{spec.y.label}</div>}
+      {spec.x.label && !layout?.horizontal && <div className="text-center text-11 text-fg-tertiary">{spec.x.label}</div>}
+      {spec.y.label && layout?.horizontal && <div className="text-center text-11 text-fg-tertiary">{spec.y.label}</div>}
     </div>
   );
 }
@@ -160,7 +160,7 @@ function ChartData({ spec }: { spec: ChartSpec }) {
   const num = "px-3 py-1.5 text-right font-mono tabular-nums";
   return (
     <div className="max-h-[420px] overflow-auto bg-surface">
-      <table className="w-full border-collapse text-xs text-fg-2">
+      <table className="w-full border-collapse text-12 text-fg-2">
         {spec.type === "scatter" ? (
           <>
             <thead><tr className="border-b border-border text-fg-tertiary"><th className={cell}>Series</th><th className={num}>{spec.x.label ?? "x"}</th><th className={num}>{spec.y.label ?? "y"}</th></tr></thead>
@@ -198,7 +198,7 @@ export function ChartFence({ code, info }: { code: string; info?: string }) {
   if ("spec" in parsed) return <ChartVisual spec={parsed.spec} />;
   return (
     <div className="flex flex-col gap-1">
-      <p role="alert" className="text-xs text-pill-blocked-fg">{parsed.error}</p>
+      <p role="alert" className="text-12 text-pill-blocked-fg">{parsed.error}</p>
       <CodeFence code={code} info={info?.replace(/^\s*\S+/, "json")} />
     </div>
   );

@@ -43,7 +43,7 @@ type PaneProps = {
 function Section({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-fg-secondary">{label}</span>
+      <span className="text-12 font-medium text-fg-secondary">{label}</span>
       {children}
     </div>
   );
@@ -52,7 +52,7 @@ function Section({ label, children }: { label: ReactNode; children: ReactNode })
 function Quote({ tone = "human", children }: { tone?: "human" | "blocked"; children: ReactNode }) {
   return (
     <div
-      className="whitespace-pre-wrap break-words rounded-[10px] border border-border bg-surface px-4 py-3 text-[13.5px] leading-relaxed text-fg-2"
+      className="whitespace-pre-wrap break-words rounded-[10px] border border-border bg-surface px-4 py-3 text-14 leading-relaxed text-fg-2"
       style={{
         borderLeft: `3px solid var(${tone === "human" ? "--state-human" : "--state-blocked"})`,
       }}
@@ -63,7 +63,7 @@ function Quote({ tone = "human", children }: { tone?: "human" | "blocked"; child
 }
 
 function Hint({ children }: { children: ReactNode }) {
-  return <p className="text-xs text-fg-tertiary">{children}</p>;
+  return <p className="text-12 text-fg-tertiary">{children}</p>;
 }
 
 function Note({
@@ -124,7 +124,7 @@ function DoneButton({ onClick, disabled }: { onClick: () => void; disabled?: boo
 
 function Failure({ error }: { error?: Error | null }) {
   return error ? (
-    <p role="alert" className="text-xs text-pill-blocked-fg">
+    <p role="alert" className="text-12 text-pill-blocked-fg">
       {error.message}
     </p>
   ) : null;
@@ -154,10 +154,10 @@ export function DetailPane(props: PaneProps) {
       className="flex min-w-0 flex-[1_1_380px] flex-col gap-5 overflow-y-auto border-l border-border bg-panel p-6"
     >
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-tertiary">
+        <span className="min-w-0 flex-1 truncate text-10 font-semibold uppercase tracking-[0.06em] text-fg-tertiary">
           {[kind.label, item.ticket_key, item.project || "Workspace"].filter(Boolean).join(" · ")}
         </span>
-        <Link href={ticketHref} className="flex-none text-xs text-accent hover:underline">
+        <Link href={ticketHref} className="flex-none text-12 text-accent hover:underline">
           {item.ticket_key ? "Open ticket ↗" : "Open ↗"}
         </Link>
       </div>
@@ -172,7 +172,7 @@ export function DetailPane(props: PaneProps) {
           >
             {(HEADLINE[item.kind] ?? (() => item.title))(agent?.name ?? "An agent")}
           </h2>
-          <span className="text-xs text-fg-tertiary">
+          <span className="text-12 text-fg-tertiary">
             {item.kind === "stalled" ? "No activity for " : item.resolved || item.read ? "Changed " : "Waiting "}
             {waited(item.created_at)} · {item.title}
           </span>
@@ -226,18 +226,18 @@ function ApprovalPane({ item, register, onSent, onLeave }: PaneProps) {
   return (
     <>
       <Section label="Exact action">
-        <div className="flex flex-col gap-1.5 rounded-[10px] border border-border bg-surface px-4 py-3 text-[13px] text-fg-2">
+        <div className="flex flex-col gap-1.5 rounded-[10px] border border-border bg-surface px-4 py-3 text-13 text-fg-2">
           <span>
-            <span className="font-mono text-xs text-fg-tertiary">{ap?.scope}</span> {ap?.action_summary ?? item.summary}
+            <span className="font-mono text-12 text-fg-tertiary">{ap?.scope}</span> {ap?.action_summary ?? item.summary}
           </span>
           {ap?.action_preview && (
-            <pre className="max-h-56 overflow-auto rounded-md bg-surface-sunken p-2.5 font-mono text-xs leading-relaxed">{ap.action_preview}</pre>
+            <pre className="max-h-56 overflow-auto rounded-md bg-surface-sunken p-2.5 font-mono text-12 leading-relaxed">{ap.action_preview}</pre>
           )}
         </div>
       </Section>
       {ap?.risk_summary && (
         <Section label={`Risk summary from ${ap.agent.name}`}>
-          <p className="text-[13px] text-fg-2">{ap.risk_summary}</p>
+          <p className="text-13 text-fg-2">{ap.risk_summary}</p>
         </Section>
       )}
       {live ? (
@@ -363,7 +363,7 @@ function RunPane({ item, register, onSent }: PaneProps) {
         </Section>
       )}
       {confirm ? (
-        <div role="group" aria-label="Confirm cancel" className="flex flex-wrap items-center gap-2 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-[13px]">
+        <div role="group" aria-label="Confirm cancel" className="flex flex-wrap items-center gap-2 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-13">
           <span className="mr-auto text-fg-2">Stop {item.agent?.name ?? "this"}’s run?</span>
           <Button variant="outline" onClick={() => setConfirm(false)}>
             Keep running
@@ -476,7 +476,7 @@ function InfoPane({ item, register, onSent }: PaneProps) {
   return (
     <>
       <Section label={item.kind === "planning" ? "Goal" : "Summary"}>
-        <p className="whitespace-pre-wrap break-words text-[13px] text-fg-2">{item.kind === "planning" ? item.title : item.summary}</p>
+        <p className="whitespace-pre-wrap break-words text-13 text-fg-2">{item.kind === "planning" ? item.title : item.summary}</p>
       </Section>
       {item.kind === "planning" && <Hint>{item.summary}. Edit, link and accept drafts on the plan screen.</Hint>}
       {ticket.data && <DispatchBanner t={ticket.data} />}

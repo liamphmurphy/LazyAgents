@@ -76,7 +76,7 @@ export function VersionDiff({ page, from, to }: { page: Artifact; from: string; 
       aria-label={side === "from" ? "Older version" : "Newer version"}
       value={value}
       onChange={(e) => pick(e.target.value, side)}
-      className="h-8 rounded-md border border-border bg-surface px-2 text-[12.5px] text-fg-2"
+      className="h-8 rounded-md border border-border bg-surface px-2 text-13 text-fg-2"
     >
       {!vs.some((v) => v.label === value) && <option value={value}>{value} (not found)</option>}
       {vs.map((v, i) => (
@@ -89,7 +89,7 @@ export function VersionDiff({ page, from, to }: { page: Artifact; from: string; 
 
   return (
     <section aria-label="Compare versions" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-fg-secondary">
+      <div className="flex flex-wrap items-center gap-2 text-13 text-fg-secondary">
         <span>Compare</span>
         {select(from, "from")}
         <span aria-hidden className="text-fg-tertiary">
@@ -120,11 +120,11 @@ export function VersionDiff({ page, from, to }: { page: Artifact; from: string; 
           <Skeleton className="h-4 w-2/3" />
         </div>
       ) : stats && stats.added + stats.removed === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-3.5 py-3 text-xs text-fg-tertiary">
+        <p className="rounded-lg border border-border bg-surface px-3.5 py-3 text-12 text-fg-tertiary">
           {from} and {to} have the same content.
         </p>
       ) : (
-        <div className="overflow-auto rounded-lg border border-border bg-surface-sunken py-1 font-mono text-xs leading-relaxed">
+        <div className="overflow-auto rounded-lg border border-border bg-surface-sunken py-1 font-mono text-12 leading-relaxed">
           {folded.map((l, i) =>
             l.op === "skip" ? (
               unfolded.has(l.from) ? (

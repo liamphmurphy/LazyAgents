@@ -55,7 +55,7 @@ function Delivery({ state }: { state: "inline" | "searched" | "extracting" }) {
   return (
     <span
       title={look.title}
-      className={cx("inline-flex h-[20px] flex-none items-center rounded-[10px] px-[10px] text-[11px]", look.className)}
+      className={cx("inline-flex h-[20px] flex-none items-center rounded-[10px] px-[10px] text-11", look.className)}
       style={state === "searched" ? { background: "color-mix(in srgb, var(--state-progress) 15%, transparent)" } : undefined}
     >
       {look.label}
@@ -68,10 +68,10 @@ function SourceRow({ s, spaceId }: { s: SpaceSource; spaceId: string }) {
   return (
     <li className="flex h-[44px] items-center gap-[12px] border-b border-border-row" data-testid="space-source">
       <SourceIcon kind={s.kind} />
-      <span className="min-w-[0px] flex-1 truncate text-[13px] text-fg" title={s.url ?? s.title}>
+      <span className="min-w-[0px] flex-1 truncate text-13 text-fg" title={s.url ?? s.title}>
         {sourceName(s)}
       </span>
-      <span className="w-[160px] flex-none truncate text-[11.5px] text-fg-tertiary max-sm:hidden">{sourceDetail(s)}</span>
+      <span className="w-[160px] flex-none truncate text-12 text-fg-tertiary max-sm:hidden">{sourceDetail(s)}</span>
       <span className="flex w-[72px] flex-none justify-end">
         <Delivery state={s.delivery} />
       </span>
@@ -115,17 +115,17 @@ function PendingRow({ name, error, onDismiss }: { name: string; error?: string; 
   return (
     <li className="flex min-h-[44px] flex-wrap items-center gap-[12px] border-b border-border-row py-[6px]" data-testid="space-source-pending">
       <SourceIcon kind="file" />
-      <span className="min-w-[0px] flex-1 truncate text-[13px] text-fg-secondary">{name}</span>
+      <span className="min-w-[0px] flex-1 truncate text-13 text-fg-secondary">{name}</span>
       {error ? (
         <>
-          <span role="alert" className="text-[11.5px] text-pill-blocked-fg">{error}</span>
+          <span role="alert" className="text-12 text-pill-blocked-fg">{error}</span>
           <button type="button" onClick={onDismiss} aria-label={`Dismiss ${name}`} className="grid size-[28px] place-items-center rounded-md text-fg-tertiary hover:bg-hover">
             <Icon name="x" size={12} />
           </button>
         </>
       ) : (
         <>
-          <span className="w-[160px] flex-none text-[11.5px] text-fg-tertiary max-sm:hidden">File · reading…</span>
+          <span className="w-[160px] flex-none text-12 text-fg-tertiary max-sm:hidden">File · reading…</span>
           <span className="flex w-[72px] flex-none justify-end">
             <Delivery state="extracting" />
           </span>
@@ -140,8 +140,8 @@ function Panel({ title, onBack, children }: { title: string; onBack: () => void;
   return (
     <div className="flex min-h-[100px] flex-col gap-[10px] rounded-xl border border-border-strong bg-surface-sunken p-[14px]">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-fg">{title}</span>
-        <button type="button" onClick={onBack} className="text-[12px] text-fg-secondary hover:text-fg">
+        <span className="text-13 font-medium text-fg">{title}</span>
+        <button type="button" onClick={onBack} className="text-12 text-fg-secondary hover:text-fg">
           Cancel
         </button>
       </div>
@@ -150,7 +150,7 @@ function Panel({ title, onBack, children }: { title: string; onBack: () => void;
   );
 }
 
-const field = "w-full rounded-md border border-border-strong bg-surface px-[10px] text-[13px] text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
+const field = "w-full rounded-md border border-border-strong bg-surface px-[10px] text-13 text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
 
 function TextForm({ spaceId, onDone }: { spaceId: string; onDone: () => void }) {
   const add = useAddSpaceSource(spaceId);
@@ -166,7 +166,7 @@ function TextForm({ spaceId, onDone }: { spaceId: string; onDone: () => void }) 
       <form onSubmit={submit} className="flex flex-col gap-[8px]">
         <input aria-label="Title" className={cx(field, "h-[30px]")} placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea aria-label="Text" autoFocus className={cx(field, "h-[128px] resize-y py-[8px]")} placeholder="Paste notes, a plan, an article…" value={text} onChange={(e) => setText(e.target.value)} />
-        {add.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(add.error)}</p>}
+        {add.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(add.error)}</p>}
         <div className="flex justify-end">
           <Button type="submit" variant="primary" disabled={add.isPending || !text.trim()}>{add.isPending ? "Adding…" : "Add text"}</Button>
         </div>
@@ -191,23 +191,23 @@ function WebsiteForm({ spaceId, onDone }: { spaceId: string; onDone: () => void 
           <input aria-label="Web address" autoFocus className={cx(field, "h-[30px] flex-1")} placeholder="https://examine.com/creatine" value={url} onChange={(e) => setUrl(e.target.value)} />
           <Button type="submit" variant="primary" disabled={add.isPending || !url.trim()}>{add.isPending ? "Reading…" : "Add"}</Button>
         </div>
-        <p className="text-[11.5px] text-fg-tertiary">The page is read once now and kept as text.</p>
-        {add.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(add.error)}</p>}
+        <p className="text-12 text-fg-tertiary">The page is read once now and kept as text.</p>
+        {add.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(add.error)}</p>}
       </form>
     </Panel>
   );
 }
 
 function PickList<T extends { id: string }>({ items, loading, empty, render, onPick, busy }: { items: T[]; loading: boolean; empty: string; render: (t: T) => ReactNode; onPick: (t: T) => void; busy: boolean }) {
-  if (loading) return <p className="px-[4px] py-[8px] text-[12px] text-fg-tertiary">Loading…</p>;
-  if (items.length === 0) return <p className="px-[4px] py-[8px] text-[12px] text-fg-secondary">{empty}</p>;
+  if (loading) return <p className="px-[4px] py-[8px] text-12 text-fg-tertiary">Loading…</p>;
+  if (items.length === 0) return <p className="px-[4px] py-[8px] text-12 text-fg-secondary">{empty}</p>;
   return (
     <ul className="flex max-h-[180px] flex-col gap-px overflow-y-auto">
       {items.map((t) => (
         <li key={t.id}>
-          <button type="button" disabled={busy} onClick={() => onPick(t)} className="flex h-[32px] w-full items-center gap-[10px] rounded-md px-[8px] text-left text-[13px] hover:bg-hover disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={() => onPick(t)} className="flex h-[32px] w-full items-center gap-[10px] rounded-md px-[8px] text-left text-13 hover:bg-hover disabled:opacity-50">
             {render(t)}
-            <span className="ml-auto flex-none text-[12px] text-accent">Add</span>
+            <span className="ml-auto flex-none text-12 text-accent">Add</span>
           </button>
         </li>
       ))}
@@ -231,12 +231,12 @@ function LibraryPicker({ spaceId, links, onDone }: { spaceId: string; links: boo
           <>
             <SourceIcon kind={i.kind === "link" ? "link" : "library"} size={18} />
             <span className="min-w-[0px] truncate">{i.title}</span>
-            <span className="truncate text-[11.5px] text-fg-tertiary">{i.kind === "link" ? (i.site ?? i.url) : i.kind}</span>
+            <span className="truncate text-12 text-fg-tertiary">{i.kind === "link" ? (i.site ?? i.url) : i.kind}</span>
           </>
         )}
       />
-      {add.isPending && <p className="text-[12px] text-fg-tertiary">{links ? "Reading the page…" : "Adding…"}</p>}
-      {add.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(add.error)}</p>}
+      {add.isPending && <p className="text-12 text-fg-tertiary">{links ? "Reading the page…" : "Adding…"}</p>}
+      {add.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(add.error)}</p>}
     </Panel>
   );
 }
@@ -256,11 +256,11 @@ function CanvasPicker({ spaceId, onDone }: { spaceId: string; onDone: () => void
           <>
             <SourceIcon kind="canvas" size={18} />
             <span className="min-w-[0px] truncate">{c.title}</span>
-            <span className="truncate text-[11.5px] text-fg-tertiary">{c.chat_title || "Untitled chat"}</span>
+            <span className="truncate text-12 text-fg-tertiary">{c.chat_title || "Untitled chat"}</span>
           </>
         )}
       />
-      {add.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(add.error)}</p>}
+      {add.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(add.error)}</p>}
     </Panel>
   );
 }
@@ -320,8 +320,8 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
         <Dialog.Content className="motion-dialog fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] w-[min(860px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-y-auto rounded-2xl border border-border-float bg-surface-raised px-[28px] pb-[20px] pt-[24px] shadow-[var(--shadow-float)] outline-none">
           <div className="flex items-start justify-between">
             <div className="flex flex-col gap-[4px]">
-              <Dialog.Title className="text-[18px] font-semibold text-fg">Sources</Dialog.Title>
-              <Dialog.Description className="text-[12.5px] text-fg-tertiary">{spaceName} · available to every chat in this space</Dialog.Description>
+              <Dialog.Title className="text-18 font-semibold text-fg">Sources</Dialog.Title>
+              <Dialog.Description className="text-13 text-fg-tertiary">{spaceName} · available to every chat in this space</Dialog.Description>
             </div>
             <Dialog.Close className="grid size-[28px] place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg" aria-label="Close">
               <Icon name="x" size={14} strokeWidth={1.6} />
@@ -337,7 +337,7 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
                   aria-pressed={mode === o.mode}
                   onClick={() => (o.mode === "upload" ? picker.current?.click() : setMode(o.mode))}
                   className={cx(
-                    "flex h-[48px] items-center gap-[12px] rounded-[10px] border px-[20px] text-left text-[13.5px] text-fg hover:bg-hover",
+                    "flex h-[48px] items-center gap-[12px] rounded-[10px] border px-[20px] text-left text-14 text-fg hover:bg-hover",
                     mode === o.mode ? "border-accent bg-accent-soft" : "border-border-strong bg-surface",
                   )}
                 >
@@ -370,8 +370,8 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
                     over ? "border-accent bg-accent-soft" : "border-border-hover bg-surface-sunken hover:bg-hover",
                   )}
                 >
-                  <span className="text-[14px] text-fg-secondary">Drop files here</span>
-                  <span className="text-[12px] text-fg-tertiary">PDF, Markdown, text and images · up to 20 MB each</span>
+                  <span className="text-14 text-fg-secondary">Drop files here</span>
+                  <span className="text-12 text-fg-tertiary">PDF, Markdown, text and images · up to 20 MB each</span>
                 </button>
               ) : mode === "text" ? (
                 <TextForm spaceId={spaceId} onDone={back} />
@@ -383,9 +383,9 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
                 <LibraryPicker key={mode} spaceId={spaceId} links={mode === "link"} onDone={back} />
               )}
 
-              <div className="mt-[28px] border-b border-border-subtle pb-[10px] text-[12px] text-fg-secondary">In this space · {list.length + pending.filter((p) => !p.error).length}</div>
+              <div className="mt-[28px] border-b border-border-subtle pb-[10px] text-12 text-fg-secondary">In this space · {list.length + pending.filter((p) => !p.error).length}</div>
               {sources.isError ? (
-                <p role="alert" className="py-[12px] text-[12px] text-pill-blocked-fg">{errorText(sources.error)}</p>
+                <p role="alert" className="py-[12px] text-12 text-pill-blocked-fg">{errorText(sources.error)}</p>
               ) : (
                 <ul aria-label="Sources in this space">
                   {list.map((s) => (
@@ -395,19 +395,19 @@ export function SourcesDialog({ spaceId, spaceName, open, onOpenChange }: { spac
                     <PendingRow key={p.key} name={p.name} error={p.error} onDismiss={() => setPending((ps) => ps.filter((x) => x.key !== p.key))} />
                   ))}
                   {sources.data && list.length === 0 && pending.length === 0 && (
-                    <li className="py-[12px] text-[12.5px] text-fg-secondary">Nothing here yet. Every chat in {spaceName} will be able to use what you add.</li>
+                    <li className="py-[12px] text-13 text-fg-secondary">Nothing here yet. Every chat in {spaceName} will be able to use what you add.</li>
                   )}
                 </ul>
               )}
 
-              <p className="mt-[20px] text-[12px] text-fg-secondary">
+              <p className="mt-[20px] text-12 text-fg-secondary">
                 Inline context: {formatTokens(used, true)} of {formatTokens(budget)} tokens
               </p>
               <div className="mt-[10px] h-[6px] overflow-hidden rounded-[3px] bg-pill-neutral-bg" role="meter" aria-label="Inline context" aria-valuemin={0} aria-valuemax={budget} aria-valuenow={used}>
                 <div className="h-full rounded-[3px] bg-accent" style={{ width: `${Math.min(100, (used / budget) * 100)}%` }} />
               </div>
-              <p className="mt-[12px] text-[11.5px] text-fg-tertiary">Large sources, or anything past the budget, are searched when needed instead of sent every turn.</p>
-              <p className="mt-[6px] text-[11.5px] text-fg-tertiary">Deep research reports written in this space’s chats are added here when they’re saved. Start one with Research in the space’s composer.</p>
+              <p className="mt-[12px] text-12 text-fg-tertiary">Large sources, or anything past the budget, are searched when needed instead of sent every turn.</p>
+              <p className="mt-[6px] text-12 text-fg-tertiary">Deep research reports written in this space’s chats are added here when they’re saved. Start one with Research in the space’s composer.</p>
             </div>
           </div>
           <div className="mt-[20px] flex justify-end">

@@ -24,7 +24,7 @@ export function TestEnvironmentsCard() {
     retry: 1,
   });
   return <Card title="Test environments">
-    <p className="mb-4 text-xs text-fg-tertiary">
+    <p className="mb-4 text-12 text-fg-tertiary">
       Services started next to every turn and tools installed when a run starts, per repository. The first run reads them from the
       repository’s CI workflows and compose files; tools agents install with <code>nix profile install</code> are added after each turn.
       Services declared on a project’s agent override win over these.
@@ -33,7 +33,7 @@ export function TestEnvironmentsCard() {
     {query.isError && <Banner tone="blocked" title="Couldn’t load test environments" actions={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>}>
       {query.error instanceof Error ? query.error.message : "The API is unavailable."}
     </Banner>}
-    {query.data && !query.data.environments.length && <p className="text-sm text-fg-tertiary">None yet. A run on a repository records one when its CI declares services or an agent installs a tool.</p>}
+    {query.data && !query.data.environments.length && <p className="text-14 text-fg-tertiary">None yet. A run on a repository records one when its CI declares services or an agent installs a tool.</p>}
     <div className="space-y-5">
       {query.data?.environments.map((env) => <TestEnvironmentRow key={env.repo} env={env} />)}
     </div>
@@ -70,8 +70,8 @@ function TestEnvironmentRow({ env }: { env: TestEnvironment }) {
   return <div className="border-t border-border-subtle pt-4 first:border-0 first:pt-0">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
-        <p className="break-all font-mono text-sm font-medium">{env.repo}</p>
-        <p className="mt-0.5 text-xs text-fg-tertiary">
+        <p className="break-all font-mono text-14 font-medium">{env.repo}</p>
+        <p className="mt-0.5 text-12 text-fg-tertiary">
           {provenance(env)}
           {env.inferred_from.length > 0 && <> · read from {env.inferred_from.join(", ")}</>}
           {env.learned_from_run_id && <> · last tool from <Link className="underline underline-offset-2" href={`/runs/${env.learned_from_run_id}`}>this run</Link></>}
@@ -84,18 +84,18 @@ function TestEnvironmentRow({ env }: { env: TestEnvironment }) {
         }}>Forget</Button>
       </div>
     </div>
-    {draft === null ? <div className="mt-3 space-y-2 text-sm">
+    {draft === null ? <div className="mt-3 space-y-2 text-14">
       {services.map((s) => <div key={s.name} className="flex flex-wrap items-center gap-2">
-        <SmallPill tone="neutral">{s.name}</SmallPill><code className="text-xs text-fg-secondary">{s.image}</code>
-        {Object.keys(s.expose ?? {}).map((k) => <code key={k} className="text-xs text-fg-tertiary">{k}</code>)}
+        <SmallPill tone="neutral">{s.name}</SmallPill><code className="text-12 text-fg-secondary">{s.image}</code>
+        {Object.keys(s.expose ?? {}).map((k) => <code key={k} className="text-12 text-fg-tertiary">{k}</code>)}
       </div>)}
-      {packages.length > 0 && <div className="flex flex-wrap gap-2">{packages.map((p) => <code key={p} className="rounded bg-surface-sunken px-1.5 py-0.5 text-xs">{p}</code>)}</div>}
+      {packages.length > 0 && <div className="flex flex-wrap gap-2">{packages.map((p) => <code key={p} className="rounded bg-surface-sunken px-1.5 py-0.5 text-12">{p}</code>)}</div>}
       {!services.length && !packages.length && <p className="text-fg-tertiary">Nothing: runs start with the image as it is.</p>}
     </div> : <div className="mt-3 space-y-2">
       <label htmlFor={`recipe-${env.repo}`} className="sr-only">Test environment for {env.repo} as JSON</label>
       <textarea id={`recipe-${env.repo}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={12} spellCheck={false}
-        className="w-full rounded-md border border-border-strong bg-surface p-3 font-mono text-xs text-fg" />
-      {(parseError || save.error) && <p role="alert" className="text-xs text-pill-blocked-fg">{parseError || (save.error instanceof Error ? save.error.message : "Couldn’t save")}</p>}
+        className="w-full rounded-md border border-border-strong bg-surface p-3 font-mono text-12 text-fg" />
+      {(parseError || save.error) && <p role="alert" className="text-12 text-pill-blocked-fg">{parseError || (save.error instanceof Error ? save.error.message : "Couldn’t save")}</p>}
       <Button disabled={!!parseError || save.isPending} onClick={() => save.mutate(draft)}>{save.isPending ? "Saving…" : "Save"}</Button>
     </div>}
   </div>;

@@ -21,7 +21,7 @@ function Snippet({ text }: { text: string }) {
   }
   parts.push(rest);
   return (
-    <p className="line-clamp-3 text-xs leading-relaxed text-fg-secondary">
+    <p className="line-clamp-3 text-12 leading-relaxed text-fg-secondary">
       {parts.map((p, i) =>
         typeof p === "string" ? <Fragment key={i}>{p}</Fragment> : <span key={i} className="font-medium text-fg-2">{p.label}</span>,
       )}
@@ -33,9 +33,9 @@ function SourceLine({ m }: { m: Mention }) {
   const s = m.source;
   const label = s.kind === "artifact" && s.artifact_type === "note" ? (s.path ?? s.title) : s.title;
   return (
-    <Link href={s.href ?? "#"} className="flex min-w-0 items-center gap-2 text-[13px] hover:underline">
+    <Link href={s.href ?? "#"} className="flex min-w-0 items-center gap-2 text-13 hover:underline">
       <TargetMark t={s} size={12} />
-      {s.display_id && s.kind !== "agent" && <span className="flex-none font-mono text-xs text-fg-tertiary">{s.display_id}</span>}
+      {s.display_id && s.kind !== "agent" && <span className="flex-none font-mono text-12 text-fg-tertiary">{s.display_id}</span>}
       <span className="truncate font-medium">{s.kind === "comment" ? "Comment" : label}</span>
     </Link>
   );
@@ -48,7 +48,7 @@ function SourceLine({ m }: { m: Mention }) {
 export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: string | undefined; compact?: boolean }) {
   const { data, isError } = useBacklinks(kind, id);
   const link = useLinkMention();
-  if (isError) return <p className="text-xs text-fg-tertiary">Couldn&apos;t load backlinks.</p>;
+  if (isError) return <p className="text-12 text-fg-tertiary">Couldn&apos;t load backlinks.</p>;
   if (!data) {
     return (
       <div aria-busy="true" className="flex flex-col gap-2">
@@ -60,7 +60,7 @@ export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: stri
   return (
     <div className="flex flex-col gap-4">
       <section className="flex flex-col gap-2">
-        <h3 className="text-[12.5px] text-fg-tertiary">
+        <h3 className="text-13 text-fg-tertiary">
           Linked mentions <span className="font-mono">{data.linked.length || ""}</span>
         </h3>
         {data.linked.length ? (
@@ -70,18 +70,18 @@ export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: stri
                 <SourceLine m={m} />
                 {!compact && m.snippets.map((s, i) => <Snippet key={i} text={s} />)}
                 {m.anchors?.length ? (
-                  <span className="font-mono text-[11px] text-fg-tertiary">cites #{m.anchors.join(", #")}</span>
+                  <span className="font-mono text-11 text-fg-tertiary">cites #{m.anchors.join(", #")}</span>
                 ) : null}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-fg-tertiary">Nothing links here yet. Link it from any page, ticket or comment with [[…]].</p>
+          <p className="text-12 text-fg-tertiary">Nothing links here yet. Link it from any page, ticket or comment with [[…]].</p>
         )}
       </section>
       {data.unlinked.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="text-[12.5px] text-fg-tertiary">
+          <h3 className="text-13 text-fg-tertiary">
             Unlinked mentions <span className="font-mono">{data.unlinked.length}</span>
           </h3>
           <ul className="flex flex-col gap-2.5">
@@ -95,7 +95,7 @@ export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: stri
                     <Button
                       variant="ghost"
                       icon="link"
-                      className="h-6 px-1.5 text-xs"
+                      className="h-6 px-1.5 text-12"
                       disabled={link.isPending}
                       onClick={() => link.mutate({ target_kind: kind, target_id: id, source_kind: m.source_kind as "artifact" | "ticket", source_id: m.source_id })}
                     >
@@ -109,7 +109,7 @@ export function BacklinksPanel({ kind, id, compact }: { kind: NodeKind; id: stri
               </li>
             ))}
           </ul>
-          {link.isError && <p className="text-xs text-pill-blocked-fg">{link.error.message}</p>}
+          {link.isError && <p className="text-12 text-pill-blocked-fg">{link.error.message}</p>}
         </section>
       )}
     </div>

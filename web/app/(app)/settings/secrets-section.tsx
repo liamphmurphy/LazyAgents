@@ -76,7 +76,7 @@ export function SecretsSection() {
         </Banner>
       ))}
       {notice && (
-        <p role="status" className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-[13px] text-pill-done-fg">
+        <p role="status" className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-13 text-pill-done-fg">
           <Icon name="check" size={13} /> {notice}
         </p>
       )}
@@ -119,14 +119,14 @@ export function SecretsSection() {
           </div>
         )}
         {others.length === 0 ? (
-          <p className="px-[18px] py-4 text-[13px] text-fg-tertiary">
+          <p className="px-[18px] py-4 text-13 text-fg-tertiary">
             No other secrets. Staging database URLs (db:migrate), deploy tokens and per-project overrides go here.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="w-full min-w-[640px] border-collapse text-13">
               <thead>
-                <tr className="text-left text-[12.5px] text-fg-tertiary">
+                <tr className="text-left text-13 text-fg-tertiary">
                   <th className="px-[18px] py-2.5 font-normal">Name</th>
                   <th className="px-2 py-2.5 font-normal">Scope</th>
                   <th className="px-2 py-2.5 font-normal">Backs</th>
@@ -138,7 +138,7 @@ export function SecretsSection() {
               <tbody>
                 {others.map((s) => (
                   <tr key={s.id} className="border-t border-border-row">
-                    <td className="px-[18px] py-2.5 font-mono text-[12.5px]">{s.name}</td>
+                    <td className="px-[18px] py-2.5 font-mono text-13">{s.name}</td>
                     <td className="whitespace-nowrap px-2">
                       {s.project ? (
                         <span className="flex items-center gap-1.5 text-fg-secondary">
@@ -150,8 +150,8 @@ export function SecretsSection() {
                       )}
                     </td>
                     <td className="px-2">{s.grants_scope ? <MonoChip>{s.grants_scope}</MonoChip> : <span className="text-fg-tertiary">–</span>}</td>
-                    <td className="whitespace-nowrap px-2 text-xs text-fg-secondary">{ago(s.updated_at)}</td>
-                    <td className="whitespace-nowrap px-2 text-xs text-fg-secondary">{s.last_used_at ? ago(s.last_used_at) : "Never"}</td>
+                    <td className="whitespace-nowrap px-2 text-12 text-fg-secondary">{ago(s.updated_at)}</td>
+                    <td className="whitespace-nowrap px-2 text-12 text-fg-secondary">{s.last_used_at ? ago(s.last_used_at) : "Never"}</td>
                     <td className="pr-3">
                       <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" disabled={readOnly} aria-label={`Replace ${s.name}`} onClick={() => open({ name: s.name, project: s.project?.key ?? "", fixedName: true })}>
@@ -173,8 +173,8 @@ export function SecretsSection() {
             </table>
           </div>
         )}
-        {del.isError && <p role="alert" className="px-[18px] pb-3 text-xs text-pill-blocked-fg">{del.error.message}</p>}
-        <p className="border-t border-border-row px-[18px] py-2.5 text-xs text-fg-tertiary">
+        {del.isError && <p role="alert" className="px-[18px] pb-3 text-12 text-pill-blocked-fg">{del.error.message}</p>}
+        <p className="border-t border-border-row px-[18px] py-2.5 text-12 text-fg-tertiary">
           No value column: the API returns names, scopes and timestamps only.
         </p>
       </Card>
@@ -224,7 +224,7 @@ function ConnectionRow({
         </span>
         <span className="flex min-w-[150px] flex-1 flex-col">
           <span className="font-medium">{c.label}</span>
-          <span className="font-mono text-xs text-fg-tertiary">{c.name}</span>
+          <span className="font-mono text-12 text-fg-tertiary">{c.name}</span>
         </span>
         <span className="flex w-[130px] flex-col items-start gap-1">
           {on ? (
@@ -234,7 +234,7 @@ function ConnectionRow({
           ) : (
             <SmallPill tone={c.required ? "human" : "neutral"}>Not set</SmallPill>
           )}
-          {on && <span className="text-xs text-fg-tertiary">Updated {ago(state.secret.updated_at)}</span>}
+          {on && <span className="text-12 text-fg-tertiary">Updated {ago(state.secret.updated_at)}</span>}
         </span>
         <span className="flex min-w-[200px] flex-[2] flex-col gap-1">
           <span className="flex flex-wrap gap-1.5" aria-label={`${on ? "Unlocks" : "Would unlock"}: ${c.unlocks.join(", ")}`}>
@@ -242,7 +242,7 @@ function ConnectionRow({
               <span
                 key={u}
                 className={cx(
-                  "whitespace-nowrap rounded-[5px] border px-1.5 py-px text-[11.5px]",
+                  "whitespace-nowrap rounded-[5px] border px-1.5 py-px text-12",
                   on ? "border-pill-done-bg bg-pill-done-bg/40 text-pill-done-fg" : "border-border text-fg-tertiary",
                 )}
               >
@@ -251,9 +251,9 @@ function ConnectionRow({
             ))}
           </span>
           {on ? (
-            <span className="text-xs text-fg-tertiary">{state.secret.last_used_at ? `Used ${ago(state.secret.last_used_at)}` : "Not used yet"}</span>
+            <span className="text-12 text-fg-tertiary">{state.secret.last_used_at ? `Used ${ago(state.secret.last_used_at)}` : "Not used yet"}</span>
           ) : (
-            !editing && <span className="text-xs text-fg-tertiary">{c.without}</span>
+            !editing && <span className="text-12 text-fg-tertiary">{c.without}</span>
           )}
         </span>
         {!editing && !signInId && (
@@ -276,7 +276,7 @@ function ConnectionRow({
         </div>
       )}
       {start.isError && !signInId && (
-        <p role="alert" className="mt-2 pl-11 text-xs text-pill-blocked-fg">{start.error.message}</p>
+        <p role="alert" className="mt-2 pl-11 text-12 text-pill-blocked-fg">{start.error.message}</p>
       )}
       {signInId && c.signIn && (
         <div className="mt-3 pl-11">
@@ -391,7 +391,7 @@ function SecretForm({
           ) : (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
-                <button id={`${id}-project`} type="button" className="flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-[13px] hover:bg-hover">
+                <button id={`${id}-project`} type="button" className="flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-13 hover:bg-hover">
                   <span className="flex-1 truncate">{projects.find((p) => p.key === project)?.name ?? "Workspace"}</span>
                   <Icon name="chev" size={12} className="text-fg-tertiary" />
                 </button>
@@ -418,8 +418,8 @@ function SecretForm({
           </Button>
         </div>
       </div>
-      {hint && <p className="text-xs text-fg-tertiary">{hint}</p>}
-      {set.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{set.error.message}</p>}
+      {hint && <p className="text-12 text-fg-tertiary">{hint}</p>}
+      {set.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{set.error.message}</p>}
     </form>
   );
 }
@@ -487,7 +487,7 @@ function SignInPanel({
     );
   }
   return (
-    <div aria-label={`${label} sign-in`} className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-[13px]">
+    <div aria-label={`${label} sign-in`} className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-13">
       {v.step === "starting" && <p className="text-fg-secondary">Starting a sign-in container…</p>}
       {v.step === "verifying" && <p className="text-fg-secondary">Checking the code and saving the login…</p>}
       {v.step === "open" && (
@@ -501,7 +501,7 @@ function SignInPanel({
             )}
             {v.code && (
               <>
-                <code aria-label="One-time code" className="rounded-md border border-border-strong bg-selected px-2.5 py-1 font-mono text-[15px] tracking-wider">
+                <code aria-label="One-time code" className="rounded-md border border-border-strong bg-selected px-2.5 py-1 font-mono text-15 tracking-wider">
                   {v.code}
                 </code>
                 <Button
@@ -541,11 +541,11 @@ function SignInPanel({
               </Button>
             </form>
           )}
-          {submit.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{submit.error.message}</p>}
+          {submit.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{submit.error.message}</p>}
         </>
       )}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-fg-tertiary">Runs in a throwaway container. The login is stored encrypted and never shown here.</span>
+        <span className="text-12 text-fg-tertiary">Runs in a throwaway container. The login is stored encrypted and never shown here.</span>
         <Button variant="ghost" onClick={stop}>Cancel</Button>
       </div>
     </div>

@@ -389,7 +389,7 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
       {group && (
         <div className="pointer-events-none absolute z-20" style={pct(group)} data-testid="slide-selection-group">
           <div className="absolute inset-0 outline-dashed outline-[1.5px] outline-accent" />
-          <span className="absolute -top-6 right-0 whitespace-nowrap rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-[10.5px] text-fg-secondary">{sels.length} elements</span>
+          <span className="absolute -top-6 right-0 whitespace-nowrap rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-11 text-fg-secondary">{sels.length} elements</span>
           {!readOnly && !drag && CORNERS.map((h) => (
               <span
                 key={h}
@@ -414,9 +414,9 @@ export function SlideCanvas({ deck, slide, assetUrl, fontsReady, selected, onSel
         >
           <div className="absolute inset-0 outline outline-[1.5px] outline-accent" />
           {overflow.has(sel.id) && (
-            <span className="absolute left-0 top-full mt-1 whitespace-nowrap rounded-[5px] bg-state-human px-1.5 py-0.5 text-[11px] font-semibold text-approve-fg">Text doesn’t fit</span>
+            <span className="absolute left-0 top-full mt-1 whitespace-nowrap rounded-[5px] bg-state-human px-1.5 py-0.5 text-11 font-semibold text-approve-fg">Text doesn’t fit</span>
           )}
-          <span className="absolute -top-6 right-0 whitespace-nowrap rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-[10.5px] text-fg-secondary">{kindLabel(sel)}</span>
+          <span className="absolute -top-6 right-0 whitespace-nowrap rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-11 text-fg-secondary">{kindLabel(sel)}</span>
           {!readOnly && (sel.type === "line" ? LINE_ENDS : HANDLES).map((h) => (
               <span
                 key={h}

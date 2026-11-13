@@ -12,7 +12,7 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
   if (r.queries.length === 0 && r.sources.length === 0) return null;
   const n = r.sources.length;
   return (
-    <details data-testid="web-search" className="motion-details group w-full max-w-[min(720px,100%)] rounded-lg border border-border bg-surface text-[12.5px]">
+    <details data-testid="web-search" className="motion-details group w-full max-w-[min(720px,100%)] rounded-lg border border-border bg-surface text-13">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-fg-secondary">
         <Icon name="search" size={14} className="text-fg-tertiary" />
         <span>
@@ -24,7 +24,7 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
       <div className="flex flex-col gap-2 border-t border-border-subtle px-3 py-2">
         {r.queries.length > 0 && (
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-tertiary">Queries</p>
+            <p className="mb-1 text-12 font-semibold uppercase tracking-wide text-fg-tertiary">Queries</p>
             <ul className="flex flex-col gap-0.5">
               {r.queries.map((x) => (
                 <li key={x} data-testid="web-query" className="flex items-center gap-2 text-fg">
@@ -37,14 +37,14 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
         )}
         {n > 0 && (
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-tertiary">Sources</p>
+            <p className="mb-1 text-12 font-semibold uppercase tracking-wide text-fg-tertiary">Sources</p>
             <ul className="flex flex-col gap-0.5">
               {r.sources.map((s) => (
                 <li key={s.url} data-testid="web-source" className="flex items-baseline gap-3">
                   <a href={s.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-accent hover:underline">
                     {s.title}
                   </a>
-                  <span className="flex-none text-xs text-fg-tertiary">{s.host}</span>
+                  <span className="flex-none text-12 text-fg-tertiary">{s.host}</span>
                 </li>
               ))}
             </ul>

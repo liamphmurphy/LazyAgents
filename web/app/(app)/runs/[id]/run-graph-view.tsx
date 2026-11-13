@@ -148,7 +148,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
         onDoubleClick={() => activate(item)}
         onKeyDown={(e) => keyDown(e, item)}
         className={cx(
-          "text-left text-xs transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
+          "text-left text-12 transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
           className,
           !gate && "rounded-lg border px-2.5 py-1.5",
           !gate && TONE[l.status],
@@ -178,7 +178,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
                 </span>
               )}
             </span>
-            <span className="block truncate text-[11px] opacity-90">{l.sub}</span>
+            <span className="block truncate text-11 opacity-90">{l.sub}</span>
           </>
         )}
       </button>
@@ -201,11 +201,11 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
     <section ref={nodes} aria-label="Run graph" className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4 lg:flex-row">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="mr-auto text-xs text-fg-secondary">Turns left to right · subagent runs below the turn that delegated them</p>
+          <p className="mr-auto text-12 text-fg-secondary">Turns left to right · subagent runs below the turn that delegated them</p>
           {!list && (
             <>
               <Button variant="outline" onClick={fit}>Fit view</Button>
-              <span className="inline-flex items-center gap-1 rounded-md border border-border-strong px-1 text-[13px]">
+              <span className="inline-flex items-center gap-1 rounded-md border border-border-strong px-1 text-13">
                 <button type="button" aria-label="Zoom out" className="px-1.5" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(1)))}>−</button>
                 <span aria-live="polite" className="w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
                 <button type="button" aria-label="Zoom in" className="px-1.5" onClick={() => setZoom((z) => Math.min(1.5, +(z + 0.1).toFixed(1)))}>+</button>
@@ -214,7 +214,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
           )}
           <Button variant="outline" aria-pressed={list} onClick={() => setList(!list)}>{list ? "Graph" : "☰ List"}</Button>
         </div>
-        {!layout.columns.length && <p className="text-[13px] text-fg-secondary">Nothing to draw yet. Turns appear here as the run works.</p>}
+        {!layout.columns.length && <p className="text-13 text-fg-secondary">Nothing to draw yet. Turns appear here as the run works.</p>}
         {/* The canvas: hidden on narrow screens and when the list is chosen. */}
         <div ref={viewport} aria-label="Run graph canvas" className={cx("min-h-[240px] overflow-auto rounded-lg border border-border bg-surface", list ? "hidden" : "max-md:hidden")}>
           <div style={{ width: width * zoom, height: height * zoom }}>
@@ -239,7 +239,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
         {!list && <Legend />}
         {/* List fallback: the same nodes, nested. Shown on narrow screens and on request; always read by screen readers. */}
         <div className={cx(list ? "" : "md:sr-only md:focus-within:not-sr-only")}>
-          <ul aria-label="Run graph as a list" className="flex flex-col gap-1.5 text-[13px]">
+          <ul aria-label="Run graph as a list" className="flex flex-col gap-1.5 text-13">
             {layout.columns.map((c) => (
               <li key={`li-${c.main.id}`}>
                 {nodeButton(c.main, "inline-block min-w-48", undefined, true)}
@@ -299,7 +299,7 @@ function Legend() {
     <span className="inline-flex items-center gap-1"><span aria-hidden="true" className={cx("inline-block size-2.5 rounded-sm", cls)} />{label}</span>
   );
   return (
-    <p className="flex flex-wrap items-center gap-3 text-[11px] text-fg-secondary">
+    <p className="flex flex-wrap items-center gap-3 text-11 text-fg-secondary">
       {swatch("bg-state-done", "done")}
       {swatch("bg-accent", "running")}
       {swatch("bg-state-human", "waiting")}
@@ -337,7 +337,7 @@ function Summary({ node, d, turnOfEvent, onOpen, onClose }: {
     case "gate":
       title = `${GATE_LABEL[node.gate]} after turn ${node.after_turn}`;
       rows.push(["State", node.state]);
-      if (node.detail) rows.push(["Detail", <code key="d" className="text-xs">{node.detail}</code>]);
+      if (node.detail) rows.push(["Detail", <code key="d" className="text-12">{node.detail}</code>]);
       action = node.state === "pending" ? "Go to the action" : `Open turn ${node.after_turn}`;
       break;
     case "error":
@@ -354,11 +354,11 @@ function Summary({ node, d, turnOfEvent, onOpen, onClose }: {
   return (
     <aside aria-label="Selected node" className="flex w-full flex-none flex-col gap-2 self-start rounded-lg border border-border bg-surface p-4 lg:w-80">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-[14px] font-semibold">{title}</h2>
+        <h2 className="text-14 font-semibold">{title}</h2>
         <button type="button" aria-label="Close summary" className="text-fg-tertiary hover:text-fg" onClick={onClose}>×</button>
       </div>
       {!!rows.length && (
-        <dl className="grid grid-cols-[6.5rem_1fr] gap-y-1 text-[13px]">
+        <dl className="grid grid-cols-[6.5rem_1fr] gap-y-1 text-13">
           {rows.map(([k, v]) => (
             <div key={k} className="contents"><dt className="text-fg-secondary">{k}</dt><dd>{v}</dd></div>
           ))}
@@ -366,8 +366,8 @@ function Summary({ node, d, turnOfEvent, onOpen, onClose }: {
       )}
       {message && (
         <>
-          <p className="text-[13px] text-fg-secondary">{node.kind === "turn" ? "Last message" : node.kind === "error" ? "Message" : "Outcome"}</p>
-          <p className="line-clamp-6 whitespace-pre-line rounded-md bg-pill-neutral-bg p-2.5 text-[12.5px] text-fg-2">{message}</p>
+          <p className="text-13 text-fg-secondary">{node.kind === "turn" ? "Last message" : node.kind === "error" ? "Message" : "Outcome"}</p>
+          <p className="line-clamp-6 whitespace-pre-line rounded-md bg-pill-neutral-bg p-2.5 text-13 text-fg-2">{message}</p>
         </>
       )}
       {action && <Button variant="primary" className="self-start" onClick={onOpen}>{action}</Button>}

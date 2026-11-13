@@ -7,7 +7,7 @@ import { COLUMN_ROLES, ROLE_LABELS, columnRole, columnValues, dayLabel, money, s
 import { Button } from "@/components/ui/button";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-const select = "h-[28px] rounded-md border border-border-strong bg-surface-sunken px-[6px] text-[12px] text-fg focus:border-accent focus:outline-none";
+const select = "h-[28px] rounded-md border border-border-strong bg-surface-sunken px-[6px] text-12 text-fg focus:border-accent focus:outline-none";
 // After this long without a mapping, say so: the person can map it themselves.
 const SLOW_MS = 45_000;
 
@@ -37,7 +37,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
       <AssistantStatus pending={p} slow={slow} edited={!!edited} />
 
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full border-collapse text-[12px]">
+        <table className="w-full border-collapse text-12">
           <thead>
             <tr className="bg-surface-sunken">
               <th className="w-[34px] px-2 py-[6px] text-left font-normal text-fg-tertiary">Row</th>
@@ -67,7 +67,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
                 <tr key={r} className={cx("border-t border-border-subtle", isHeader && "bg-accent-soft/40 font-medium", above && "opacity-40")}>
                   <td className="px-2 py-[5px] tabular-nums text-fg-tertiary">{r + 1}</td>
                   {Array.from({ length: width }, (_, i) => (
-                    <td key={i} className={cx("max-w-[220px] truncate px-[6px] py-[5px] font-mono text-[11.5px]", columnRole(mapping, i) === "skip" ? "text-fg-tertiary" : "text-fg-2")} title={row[i]}>
+                    <td key={i} className={cx("max-w-[220px] truncate px-[6px] py-[5px] font-mono text-12", columnRole(mapping, i) === "skip" ? "text-fg-tertiary" : "text-fg-2")} title={row[i]}>
                       {row[i] ?? ""}
                     </td>
                   ))}
@@ -78,7 +78,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[8px] text-[12px] text-fg-secondary">
+      <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[8px] text-12 text-fg-secondary">
         <label className="flex items-center gap-[6px]">
           Column names on row
           <select aria-label="Header row" className={select} value={mapping.header_row} onChange={(e) => update({ ...mapping, header_row: Number(e.target.value) })}>
@@ -111,7 +111,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
       </div>
 
       {mapping.direction !== undefined && (
-        <div className="motion-rise flex flex-wrap items-center gap-[6px] text-[12px] text-fg-secondary" role="group" aria-label="Values that mean money out">
+        <div className="motion-rise flex flex-wrap items-center gap-[6px] text-12 text-fg-secondary" role="group" aria-label="Values that mean money out">
           <span>Money out when the marker is</span>
           {markerValues.map((v) => {
             const on = mapping.debit_values?.includes(v) ?? false;
@@ -121,7 +121,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
                 type="button"
                 aria-pressed={on}
                 onClick={() => update({ ...mapping, debit_values: on ? (mapping.debit_values ?? []).filter((x) => x !== v) : [...(mapping.debit_values ?? []), v] })}
-                className={cx("h-6 rounded-full border px-[9px] font-mono text-[11.5px]", on ? "border-accent/60 bg-accent-soft text-fg" : "border-border-strong text-fg-tertiary hover:text-fg")}
+                className={cx("h-6 rounded-full border px-[9px] font-mono text-12", on ? "border-accent/60 bg-accent-soft text-fg" : "border-border-strong text-fg-tertiary hover:text-fg")}
               >
                 {v}
               </button>
@@ -133,12 +133,12 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
       <Preview preview={preview} />
 
       {(commit.error || cancel.error) && (
-        <p role="alert" className="text-[12px] text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(commit.error ?? cancel.error)}
         </p>
       )}
       <div className="flex items-center justify-end gap-[8px]">
-        <span className="mr-auto text-[11px] text-fg-tertiary">Saved for next time: files with this layout import directly.</span>
+        <span className="mr-auto text-11 text-fg-tertiary">Saved for next time: files with this layout import directly.</span>
         <Button variant="secondary" disabled={cancel.isPending} onClick={() => cancel.mutate(p.id, { onSuccess: onCancelled })}>
           Cancel
         </Button>
@@ -151,7 +151,7 @@ export function MappingStep({ initial, onImported, onCancelled }: { initial: Fin
 }
 
 function AssistantStatus({ pending, slow, edited }: { pending: FinancePendingImport; slow: boolean; edited: boolean }) {
-  const box = "flex items-start gap-[8px] rounded-lg border px-[10px] py-[8px] text-[12.5px]";
+  const box = "flex items-start gap-[8px] rounded-lg border px-[10px] py-[8px] text-13";
   if (pending.assistant === "mapped") {
     return (
       <div className={cx(box, "motion-rise border-accent/40 bg-accent-soft text-fg")} role="status">
@@ -184,27 +184,27 @@ function AssistantStatus({ pending, slow, edited }: { pending: FinancePendingImp
 function Preview({ preview }: { preview: ReturnType<typeof useMappingPreview> }) {
   if (preview.isError) {
     return (
-      <p role="alert" className="rounded-lg border border-pill-blocked-fg/30 bg-pill-blocked-bg px-[10px] py-[8px] text-[12px] text-pill-blocked-fg">
+      <p role="alert" className="rounded-lg border border-pill-blocked-fg/30 bg-pill-blocked-bg px-[10px] py-[8px] text-12 text-pill-blocked-fg">
         {errorText(preview.error)}
       </p>
     );
   }
   const d = preview.data;
-  if (!d) return <p className="text-[12px] text-fg-tertiary">Reading the file…</p>;
+  if (!d) return <p className="text-12 text-fg-tertiary">Reading the file…</p>;
   return (
     <div className={cx("rounded-lg border border-border bg-surface px-[10px] py-[8px] transition-opacity", preview.isPlaceholderData && "opacity-60")} aria-label="Preview">
-      <p className="text-[12px] text-fg-secondary">
+      <p className="text-12 text-fg-secondary">
         Reads <b className="font-semibold text-fg">{d.count}</b> transactions · {dayLabel(d.first_date)} – {dayLabel(d.last_date)} · in <span className="text-pill-done-fg">{money(d.in_cents)}</span> · out{" "}
         <span className="text-pill-blocked-fg">{money(d.out_cents)}</span>
       </p>
       {d.count > 2 && (d.out_cents === 0 || d.in_cents === 0) && (
-        <p className="mt-[4px] text-[12px] text-pill-human-fg">
+        <p className="mt-[4px] text-12 text-pill-human-fg">
           ⚠ Every amount reads as money {d.out_cents === 0 ? "in" : "out"}. If that&rsquo;s wrong, mark the in/out column, or tick &ldquo;Purchases show as positive&rdquo;.
         </p>
       )}
       <ul className="mt-[6px] flex flex-col gap-[2px]">
         {d.rows.map((r, i) => (
-          <li key={i} className="grid grid-cols-[56px_1fr_auto] gap-[10px] text-[12px]">
+          <li key={i} className="grid grid-cols-[56px_1fr_auto] gap-[10px] text-12">
             <span className="text-fg-tertiary">{dayLabel(r.posted_on)}</span>
             <span className="truncate text-fg-2">{r.description}</span>
             <span className={cx("tabular-nums", r.amount_cents > 0 ? "text-pill-done-fg" : "text-fg-2")}>{money(r.amount_cents, { cents: true, sign: true })}</span>

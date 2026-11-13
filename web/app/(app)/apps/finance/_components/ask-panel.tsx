@@ -93,7 +93,7 @@ export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* With a chat open, the switcher sits in the conversation's own header instead of a second one. */}
       {ask.chats.length > 0 && !ask.chatId && switcher(false)}
-      <p className="flex-none border-b border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary">
+      <p className="flex-none border-b border-border-subtle px-4 py-2 text-11 text-fg-tertiary">
         Answers come from your imported transactions.
       </p>
       {ask.loading ? (
@@ -115,7 +115,7 @@ export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
       )}
       <p
         data-testid="finance-privacy"
-        className="flex flex-none items-center gap-[6px] border-t border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary"
+        className="flex flex-none items-center gap-[6px] border-t border-border-subtle px-4 py-2 text-11 text-fg-tertiary"
       >
         <Icon name="lock" size={12} />
         {PRIVACY_NOTE}
@@ -134,7 +134,7 @@ function Starter({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto p-4">
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-13 text-fg-secondary">
         Ask about your spending, subscriptions, savings or a single transaction.
         Tell me a category is wrong and I&rsquo;ll fix it and remember the
         merchant.
@@ -150,7 +150,7 @@ function Starter({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
               type="button"
               disabled={ask.asking}
               onClick={() => ask.ask(s)}
-              className="w-full rounded-lg border border-border-strong px-[10px] py-[7px] text-left text-[13px] text-fg-2 hover:border-border-hover hover:bg-hover disabled:opacity-50"
+              className="w-full rounded-lg border border-border-strong px-[10px] py-[7px] text-left text-13 text-fg-2 hover:border-border-hover hover:bg-hover disabled:opacity-50"
             >
               {s}
             </button>
@@ -164,7 +164,7 @@ function Starter({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
         <input
           data-dock-composer
           aria-label="Ask about your money"
-          className="flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-tertiary"
+          className="flex-1 bg-transparent text-13 text-fg outline-none placeholder:text-fg-tertiary"
           placeholder="Ask about your money…"
           value={text}
           disabled={ask.asking}
@@ -179,7 +179,7 @@ function Starter({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
         </Button>
       </form>
       {ask.error && (
-        <p role="alert" className="text-[12px] text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(ask.error)}
         </p>
       )}

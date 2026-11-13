@@ -90,7 +90,7 @@ export function OwnerCredentialsForm({
         </Field>
       )}
       {error && (
-        <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
+        <p role="alert" className="text-13 text-pill-blocked-fg">
           {error.message}
         </p>
       )}

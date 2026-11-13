@@ -26,7 +26,7 @@ function MomentCard({ m, persona }: { m: Memory; persona?: Persona }) {
       style={{ borderTopColor: color, borderTopWidth: 3 }}
     >
       <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 text-[13px] font-medium text-fg">{m.title}</span>
+        <span className="min-w-0 flex-1 text-13 font-medium text-fg">{m.title}</span>
         <IconButton
           icon="trash"
           label={`Delete ${m.title}`}
@@ -36,9 +36,9 @@ function MomentCard({ m, persona }: { m: Memory; persona?: Persona }) {
           }}
         />
       </div>
-      {m.summary && <p className="text-[12.5px] text-fg-secondary">{m.summary}</p>}
-      {m.body && m.body !== m.summary && <p className="whitespace-pre-wrap text-xs text-fg-secondary">{m.body}</p>}
-      <p className="mt-auto flex flex-wrap items-center gap-1 text-[11.5px] text-fg-tertiary">
+      {m.summary && <p className="text-13 text-fg-secondary">{m.summary}</p>}
+      {m.body && m.body !== m.summary && <p className="whitespace-pre-wrap text-12 text-fg-secondary">{m.body}</p>}
+      <p className="mt-auto flex flex-wrap items-center gap-1 text-12 text-fg-tertiary">
         <span aria-hidden className="size-2 rounded-full" style={{ background: color }} />
         <span>{persona?.name ?? "A deleted persona"}</span>
         <span>· {day(m.created_at)}</span>
@@ -75,7 +75,7 @@ function AddMoment({ personas, initial, onDone }: { personas: Persona[]; initial
           aria-label="Persona"
           value={persona}
           onChange={(e) => setPersona(e.target.value)}
-          className="h-[30px] w-40 flex-none rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+          className="h-[30px] w-40 flex-none rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none"
         >
           {personas.map((p) => (
             <option key={p.id} value={p.id}>
@@ -87,7 +87,7 @@ function AddMoment({ personas, initial, onDone }: { personas: Persona[]; initial
       </div>
       <TextArea aria-label="Summary" rows={2} placeholder="One line to remember it by" value={summary} maxLength={300} onChange={(e) => setSummary(e.target.value)} />
       {create.isError && (
-        <p role="alert" className="text-xs text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(create.error)}
         </p>
       )}
@@ -123,7 +123,7 @@ export function Fridge() {
             aria-pressed={filter === p.id}
             onClick={() => setFilter(p.id)}
             className={cx(
-              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs",
+              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-12",
               filter === p.id ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
             )}
           >

@@ -19,7 +19,7 @@ export function ChoicesFence({ code, info }: { code: string; info?: string }) {
   const closed = !messageId || !actions || actions.disabled || next !== undefined;
   return (
     <div data-testid="choices" role="group" aria-label={parsed.question || "Options"} className="flex w-[480px] max-w-full flex-col gap-2 rounded-xl border border-border bg-surface p-3">
-      {parsed.question && <p className="text-[13.5px] font-semibold text-fg">{parsed.question}</p>}
+      {parsed.question && <p className="text-14 font-semibold text-fg">{parsed.question}</p>}
       <div className="flex flex-col gap-1.5">
         {parsed.options.map((o) => (
           <button
@@ -36,8 +36,8 @@ export function ChoicesFence({ code, info }: { code: string; info?: string }) {
             )}
           >
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-[13px] font-semibold text-fg">{o.label}</span>
-              {o.detail && <span className="text-xs text-fg-secondary">{o.detail}</span>}
+              <span className="text-13 font-semibold text-fg">{o.label}</span>
+              {o.detail && <span className="text-12 text-fg-secondary">{o.detail}</span>}
             </span>
             {chosen === o.label && <Icon name="check" size={14} className="flex-none text-accent" />}
           </button>

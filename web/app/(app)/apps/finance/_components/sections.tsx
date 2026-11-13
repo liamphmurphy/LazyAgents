@@ -17,7 +17,7 @@ export function Panel({ title, aside, children, className, delay = 0 }: { title:
     <section className={cx("motion-rise relative min-w-0 rounded-xl border border-border bg-surface p-[14px]", className)} style={{ animationDelay: `${delay}ms` }}>
       <div className="mb-[10px] flex items-center gap-2">
         <h2 className="type-heading text-fg">{title}</h2>
-        {aside && <div className="ml-auto flex items-center gap-[10px] text-[12px] text-fg-tertiary">{aside}</div>}
+        {aside && <div className="ml-auto flex items-center gap-[10px] text-12 text-fg-tertiary">{aside}</div>}
       </div>
       {children}
     </section>
@@ -26,14 +26,14 @@ export function Panel({ title, aside, children, className, delay = 0 }: { title:
 
 function Pill({ tone, children }: { tone: "good" | "warn" | "neutral"; children: ReactNode }) {
   const cls = tone === "good" ? "bg-pill-done-bg text-pill-done-fg" : tone === "warn" ? "bg-pill-human-bg text-pill-human-fg" : "bg-pill-neutral-bg text-pill-neutral-fg";
-  return <span className={cx("rounded-full px-[7px] py-[2px] text-[11px] font-medium", cls)}>{children}</span>;
+  return <span className={cx("rounded-full px-[7px] py-[2px] text-11 font-medium", cls)}>{children}</span>;
 }
 
 function Tile({ label, children, foot, delay }: { label: string; children: ReactNode; foot: ReactNode; delay: number }) {
   return (
     <div className="motion-rise min-w-0 rounded-xl border border-border bg-surface p-[14px]" style={{ animationDelay: `${delay}ms` }}>
-      <div className="text-[12px] text-fg-tertiary">{label}</div>
-      <div className="mt-1 text-[22px] font-semibold tabular-nums tracking-[-0.02em] text-fg">{children}</div>
+      <div className="text-12 text-fg-tertiary">{label}</div>
+      <div className="mt-1 text-22 font-semibold tabular-nums tracking-[-0.02em] text-fg">{children}</div>
       <div className="mt-[6px] flex items-end justify-between gap-2">{foot}</div>
     </div>
   );
@@ -55,7 +55,7 @@ export function Kpis({ data, range, reviewLeft, onBalances }: { data: FinanceOve
         delay={40}
         foot={
           data.net_worth_cents === undefined ? (
-            <button type="button" onClick={onBalances} className="text-[12px] text-accent hover:underline">
+            <button type="button" onClick={onBalances} className="text-12 text-accent hover:underline">
               Add account balances
             </button>
           ) : (
@@ -73,7 +73,7 @@ export function Kpis({ data, range, reviewLeft, onBalances }: { data: FinanceOve
         delay={90}
         foot={
           <>
-            <span className="text-[11px] text-fg-tertiary">
+            <span className="text-11 text-fg-tertiary">
               in {money(current.inflow_cents)} · out {money(current.outflow_cents)}
             </span>
             <Sparkline values={months.map((m) => m.inflow_cents - m.outflow_cents)} color={ACCENT} />
@@ -87,7 +87,7 @@ export function Kpis({ data, range, reviewLeft, onBalances }: { data: FinanceOve
         delay={140}
         foot={
           <>
-            <span className="text-[11px] text-fg-tertiary">of money in, kept</span>
+            <span className="text-11 text-fg-tertiary">of money in, kept</span>
             <Sparkline values={savingsSeries(months)} color="var(--state-review)" />
           </>
         }
@@ -188,7 +188,7 @@ export function CashFlow({ data, range }: { data: FinanceOverview; range: number
       </svg>
       {h && hover !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-[9px] py-[7px] text-[12px] shadow-[var(--shadow-float)]"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-[9px] py-[7px] text-12 shadow-[var(--shadow-float)]"
           // The chart spans the panel inside its 14px padding.
           style={{ left: `calc(14px + (100% - 28px) * ${(left + cw * hover + cw / 2) / W})`, top: 52 }}
         >
@@ -202,7 +202,7 @@ export function CashFlow({ data, range }: { data: FinanceOverview; range: number
           <div className="text-fg-secondary">Net {money(h.inflow - h.outflow, { sign: true })}</div>
         </div>
       )}
-      <p className={cx("mt-[6px] min-h-[18px] text-[12px] transition-colors", note.warn ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
+      <p className={cx("mt-[6px] min-h-[18px] text-12 transition-colors", note.warn ? "text-pill-blocked-fg" : "text-fg-tertiary")}>
         {note.warn && "⚠ "}
         {note.text}
       </p>
@@ -218,7 +218,7 @@ export function Spending({ data, onAsk }: { data: FinanceOverview; onAsk: (q: st
   return (
     <Panel title={`Spending · ${month}`} aside="vs months before" delay={290}>
       {cats.length === 0 ? (
-        <p className="py-6 text-center text-[12px] text-fg-tertiary">No spending in {month} yet.</p>
+        <p className="py-6 text-center text-12 text-fg-tertiary">No spending in {month} yet.</p>
       ) : (
         <ul className="flex flex-col">
           {cats.map((c, i) => {
@@ -233,15 +233,15 @@ export function Spending({ data, onAsk }: { data: FinanceOverview; onAsk: (q: st
                   title={question}
                   className="-mx-[6px] grid h-[26px] w-[calc(100%+12px)] grid-cols-[96px_1fr_64px_52px] items-center gap-2 rounded-md px-[6px] text-left hover:bg-row-hover"
                 >
-                  <span className="truncate text-[12.5px] text-fg-2">{c.category}</span>
+                  <span className="truncate text-13 text-fg-2">{c.category}</span>
                   <span className="h-[6px] overflow-hidden rounded-full bg-track">
                     <span
                       className="fin-fill block h-full rounded-full"
                       style={{ width: `${(c.spent_cents / max) * 100}%`, background: d.tone === "hot" ? "var(--pill-blocked-fg)" : ACCENT, animationDelay: `${350 + i * 50}ms` }}
                     />
                   </span>
-                  <span className="text-right text-[12.5px] tabular-nums">{money(c.spent_cents)}</span>
-                  <span className={cx("text-right text-[11px]", d.tone === "hot" ? "text-pill-blocked-fg" : d.tone === "cool" ? "text-pill-done-fg" : "text-fg-tertiary")}>{d.label}</span>
+                  <span className="text-right text-13 tabular-nums">{money(c.spent_cents)}</span>
+                  <span className={cx("text-right text-11", d.tone === "hot" ? "text-pill-blocked-fg" : d.tone === "cool" ? "text-pill-done-fg" : "text-fg-tertiary")}>{d.label}</span>
                 </button>
               </li>
             );
@@ -275,12 +275,12 @@ export function Review({
           <li key={r.id} className="fin-row border-t border-border-subtle first:border-t-0" data-leaving={leaving.has(r.id)}>
             <div className="grid grid-cols-[1fr_auto] gap-x-[10px] gap-y-1 py-[9px]">
               <div className="min-w-0">
-                <div className="truncate font-mono text-[12px] text-fg-2">{r.description}</div>
-                <div className="text-[11px] text-fg-tertiary">
+                <div className="truncate font-mono text-12 text-fg-2">{r.description}</div>
+                <div className="text-11 text-fg-tertiary">
                   {dayLabel(r.posted_on)} · {accountLabel(r.account_name, r.account_mask)}
                 </div>
               </div>
-              <div className={cx("text-right tabular-nums text-[12.5px]", r.amount_cents > 0 ? "text-pill-done-fg" : "text-fg-2")}>{money(r.amount_cents, { cents: true, sign: true })}</div>
+              <div className={cx("text-right tabular-nums text-13", r.amount_cents > 0 ? "text-pill-done-fg" : "text-fg-2")}>{money(r.amount_cents, { cents: true, sign: true })}</div>
               <div className="col-span-2 flex flex-wrap items-center gap-[6px]">
                 {r.suggestions.map((c, j) => (
                   <button
@@ -289,11 +289,11 @@ export function Review({
                     disabled={leaving.has(r.id)}
                     onClick={() => onPick(r, c)}
                     className={cx(
-                      "h-6 rounded-full border px-[9px] text-[12px] transition-colors",
+                      "h-6 rounded-full border px-[9px] text-12 transition-colors",
                       j === 0 ? "border-accent/40 bg-accent-soft text-fg hover:border-accent" : "border-border-strong text-fg-secondary hover:bg-hover hover:text-fg",
                     )}
                   >
-                    {j === 0 && <span aria-hidden className="mr-1 text-[10px] text-accent">✦</span>}
+                    {j === 0 && <span aria-hidden className="mr-1 text-10 text-accent">✦</span>}
                     {c}
                   </button>
                 ))}
@@ -302,7 +302,7 @@ export function Review({
                   value=""
                   disabled={leaving.has(r.id)}
                   onChange={(e) => e.target.value && onPick(r, e.target.value)}
-                  className="h-6 rounded-full border border-border-strong bg-transparent px-2 text-[12px] text-fg-tertiary hover:text-fg"
+                  className="h-6 rounded-full border border-border-strong bg-transparent px-2 text-12 text-fg-tertiary hover:text-fg"
                 >
                   <option value="">Other…</option>
                   {data.categories_all
@@ -319,7 +319,7 @@ export function Review({
         ))}
       </ul>
       {done && (
-        <p className="motion-rise py-[18px] text-center text-[12px] text-fg-tertiary">
+        <p className="motion-rise py-[18px] text-center text-12 text-fg-tertiary">
           {data.review_count > rows.length ? "Loading the next ones…" : "✓ All caught up. Rules will handle these merchants next time."}
         </p>
       )}
@@ -341,27 +341,27 @@ export function Recurring({ items }: { items: Schemas["FinanceRecurring"][] }) {
   return (
     <Panel title="Recurring" aside={items.length ? `${money(total, { cents: true })}/mo` : undefined} delay={390}>
       {items.length === 0 ? (
-        <p className="py-6 text-center text-[12px] text-fg-tertiary">No monthly charges found yet. They show up after two months of statements.</p>
+        <p className="py-6 text-center text-12 text-fg-tertiary">No monthly charges found yet. They show up after two months of statements.</p>
       ) : (
         <ul>
           {items.map((r, i) => (
             <li key={r.label} className="motion-rise grid grid-cols-[22px_1fr_auto] items-center gap-[10px] border-t border-border-subtle py-2 first:border-t-0" style={{ animationDelay: `${450 + i * 60}ms` }}>
-              <span aria-hidden className="grid size-[22px] place-items-center rounded-md text-[11px] font-semibold text-on-accent" style={{ background: hue(r.label) }}>
+              <span aria-hidden className="grid size-[22px] place-items-center rounded-md text-11 font-semibold text-on-accent" style={{ background: hue(r.label) }}>
                 {r.label.charAt(0)}
               </span>
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-[6px]">
-                  <span className="truncate text-[13px] text-fg">{r.label}</span>
+                  <span className="truncate text-13 text-fg">{r.label}</span>
                   {r.previous_cents !== undefined && r.changed_on && (
-                    <span className="flex-none rounded-full bg-pill-human-bg px-[6px] py-px text-[10px] font-semibold text-pill-human-fg">
+                    <span className="flex-none rounded-full bg-pill-human-bg px-[6px] py-px text-10 font-semibold text-pill-human-fg">
                       {r.amount_cents > r.previous_cents ? "↑" : "↓"} {money(Math.abs(r.amount_cents - r.previous_cents), { cents: true })} since {monthLabel(r.changed_on)}
                     </span>
                   )}
-                  {r.new && <span className="flex-none rounded-full bg-accent-soft px-[6px] py-px text-[10px] font-semibold text-accent">New</span>}
+                  {r.new && <span className="flex-none rounded-full bg-accent-soft px-[6px] py-px text-10 font-semibold text-accent">New</span>}
                 </div>
-                <div className="text-[11px] text-fg-tertiary">Monthly · around the {ordinal(r.day_of_month)}</div>
+                <div className="text-11 text-fg-tertiary">Monthly · around the {ordinal(r.day_of_month)}</div>
               </div>
-              <span className="tabular-nums text-[13px]">{money(r.amount_cents, { cents: true })}</span>
+              <span className="tabular-nums text-13">{money(r.amount_cents, { cents: true })}</span>
             </li>
           ))}
         </ul>

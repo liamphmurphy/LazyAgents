@@ -14,9 +14,9 @@ import { SpaceTile } from "@/app/(app)/spaces/_components/space-parts";
 
 type Counts = Record<NavBadge, number>;
 
-const heading = "mb-1.5 px-3 text-xs font-medium text-fg-tertiary";
+const heading = "mb-1.5 px-3 text-12 font-medium text-fg-tertiary";
 const card = "overflow-hidden rounded-lg border border-border bg-surface";
-const row = "flex min-h-[44px] items-center gap-3 px-3 text-sm text-fg hover:bg-hover";
+const row = "flex min-h-[44px] items-center gap-3 px-3 text-14 text-fg hover:bg-hover";
 
 function count(item: NavItem, counts: Counts) {
   return item.badge ? counts[item.badge] : 0;
@@ -26,9 +26,9 @@ function count(item: NavItem, counts: Counts) {
 function RowBadge({ item, counts }: { item: NavItem; counts: Counts }) {
   const n = count(item, counts);
   if (n <= 0) return null;
-  if (item.badge === "wiki") return <span aria-hidden className="font-mono text-xs text-pill-human-fg">{n}</span>;
+  if (item.badge === "wiki") return <span aria-hidden className="font-mono text-12 text-pill-human-fg">{n}</span>;
   return (
-    <span aria-hidden className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-xs font-semibold text-approve-fg">
+    <span aria-hidden className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-12 font-semibold text-approve-fg">
       {n}
     </span>
   );
@@ -40,7 +40,7 @@ function SearchField() {
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event("la:search"))}
-      className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-left text-[16px] text-fg-tertiary hover:bg-hover"
+      className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-left text-16 text-fg-tertiary hover:bg-hover"
     >
       <Icon name="search" size={16} strokeWidth={1.6} />
       Search
@@ -54,7 +54,7 @@ function ProfileRow({ group, counts }: { group: NavGroup; counts: Counts }) {
   return (
     <section aria-label={group.label} className={cx(card, "flex items-center gap-3 px-3 py-2")}>
       {me && <HumanAvatar name={me.name} initials={me.initials} color={me.avatar_color} src={me.avatar_url} size={32} label={false} />}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">{me?.name ?? ""}</span>
+      <span className="min-w-0 flex-1 truncate text-14 font-medium">{me?.name ?? ""}</span>
       {group.items.map((item) => (
         <Link
           key={item.href}
@@ -81,7 +81,7 @@ function AppsGrid({ group, counts }: { group: NavGroup; counts: Counts }) {
             <Link
               href={item.href}
               aria-label={moreLabel(item.label, item.badge, counts)}
-              className="relative flex h-[76px] flex-col items-center justify-center gap-1.5 rounded-[10px] border border-border bg-surface text-xs text-fg-secondary hover:bg-hover hover:text-fg"
+              className="relative flex h-[76px] flex-col items-center justify-center gap-1.5 rounded-[10px] border border-border bg-surface text-12 text-fg-secondary hover:bg-hover hover:text-fg"
             >
               <Icon name={item.icon} size={20} />
               <span className="max-w-full truncate px-1">{item.label}</span>
@@ -122,9 +122,9 @@ function Spaces() {
     <section aria-labelledby="more-spaces">
       <h2 id="more-spaces" className={heading}>Spaces</h2>
       {spaces.isError ? (
-        <p role="alert" className="px-3 text-xs text-pill-blocked-fg">Couldn’t load spaces.</p>
+        <p role="alert" className="px-3 text-12 text-pill-blocked-fg">Couldn’t load spaces.</p>
       ) : spaces.data && list.length === 0 ? (
-        <p className="px-3 text-sm text-fg-tertiary">No spaces yet.</p>
+        <p className="px-3 text-14 text-fg-tertiary">No spaces yet.</p>
       ) : (
         <ul className={card}>
           {list.map((s) => (
@@ -132,7 +132,7 @@ function Spaces() {
               <Link href={`/spaces/${s.id}`} className={row}>
                 <SpaceTile name={s.name} color={s.color} size={20} />
                 <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                <span className="text-xs text-fg-tertiary">{s.chat_count}</span>
+                <span className="text-12 text-fg-tertiary">{s.chat_count}</span>
               </Link>
             </li>
           ))}

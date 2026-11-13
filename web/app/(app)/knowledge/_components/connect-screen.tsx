@@ -53,7 +53,7 @@ export function ConnectScreen() {
     <>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1000px] px-8 pb-16 pt-8">
-          <h1 className="flex items-center gap-3 text-[26px] font-bold tracking-[-0.02em] text-fg">
+          <h1 className="flex items-center gap-3 text-26 font-bold tracking-[-0.02em] text-fg">
             <Icon name="link" size={20} className="text-accent" /> Keep notes connected
           </h1>
           <Librarian />
@@ -64,22 +64,22 @@ export function ConnectScreen() {
                 ["orphans", "Orphans"],
               ] as const
             ).map(([t, label]) => (
-              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cx("-mb-px flex items-center gap-2 border-b-2 pb-2.5 text-sm", tab === t ? "border-accent font-semibold text-fg" : "border-transparent text-fg-tertiary hover:text-fg-secondary")}>
+              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cx("-mb-px flex items-center gap-2 border-b-2 pb-2.5 text-14", tab === t ? "border-accent font-semibold text-fg" : "border-transparent text-fg-tertiary hover:text-fg-secondary")}>
                 {label}
-                {counts[t] !== undefined && <span className="rounded-full bg-selected px-1.5 text-[10px] font-semibold text-fg-secondary">{counts[t]}</span>}
+                {counts[t] !== undefined && <span className="rounded-full bg-selected px-1.5 text-10 font-semibold text-fg-secondary">{counts[t]}</span>}
               </button>
             ))}
           </div>
           {tab === "unresolved" && (
             <>
-              <p className="mt-4 text-[13px] text-fg-tertiary">Links to pages that don&apos;t exist yet. Create one and every link to it starts working.</p>
+              <p className="mt-4 text-13 text-fg-tertiary">Links to pages that don&apos;t exist yet. Create one and every link to it starts working.</p>
               <ul className="mt-4 space-y-2">
                 {net.isPending && <Skeleton className="h-12 w-full" />}
                 {unresolved.map((u) => (
                   <li key={u.name} className="flex items-center gap-4 rounded-xl border border-border-subtle bg-surface px-4 py-3">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-[#8E86C8] underline decoration-dotted underline-offset-4">{u.name}</span>
-                      <span className="mt-0.5 block truncate text-xs text-fg-tertiary">
+                      <span className="block truncate text-14 font-medium text-[#8E86C8] underline decoration-dotted underline-offset-4">{u.name}</span>
+                      <span className="mt-0.5 block truncate text-12 text-fg-tertiary">
                         from{" "}
                         {u.from.slice(0, 3).map((f, i) => (
                           <span key={f.id}>
@@ -92,7 +92,7 @@ export function ConnectScreen() {
                         {u.from.length > 3 && ` and ${u.from.length - 3} more`}
                       </span>
                     </span>
-                    <span className="text-xs text-fg-tertiary">
+                    <span className="text-12 text-fg-tertiary">
                       {u.from.length} {u.from.length === 1 ? "page" : "pages"}
                     </span>
                     <Button onClick={() => create.mutate({ title: u.name.split("/").pop() ?? u.name, path: u.name, body_md: "" }, { onSuccess: (p) => router.push(pageHref(p.id, p.title)) })} disabled={create.isPending}>
@@ -100,25 +100,25 @@ export function ConnectScreen() {
                     </Button>
                   </li>
                 ))}
-                {net.data && !unresolved.length && <li className="py-8 text-center text-[13px] text-fg-tertiary">Every link resolves.</li>}
+                {net.data && !unresolved.length && <li className="py-8 text-center text-13 text-fg-tertiary">Every link resolves.</li>}
               </ul>
             </>
           )}
           {tab === "orphans" && (
             <>
-              <p className="mt-4 text-[13px] text-fg-tertiary">Pages with no links in or out. Link them from a structure page, or let the librarian propose links.</p>
+              <p className="mt-4 text-13 text-fg-tertiary">Pages with no links in or out. Link them from a structure page, or let the librarian propose links.</p>
               <ul className="mt-4 divide-y divide-border-row">
                 {orphans.isPending && <Skeleton className="h-12 w-full" />}
                 {orphans.data?.rows.map((r) => (
                   <li key={r.id}>
                     <Link href={pageHref(r.id, r.title)} className="flex items-center gap-3 rounded-md px-2 py-3 hover:bg-hover">
                       <Icon name="artifacts" size={14} className="text-fg-tertiary" />
-                      <span className="flex-1 text-sm text-fg-2">{r.title}</span>
-                      <span className="text-xs text-fg-tertiary">{r.path.split("/").slice(0, -1).join("/") || "Top level"}</span>
+                      <span className="flex-1 text-14 text-fg-2">{r.title}</span>
+                      <span className="text-12 text-fg-tertiary">{r.path.split("/").slice(0, -1).join("/") || "Top level"}</span>
                     </Link>
                   </li>
                 ))}
-                {orphans.data && !orphans.data.rows.length && <li className="py-8 text-center text-[13px] text-fg-tertiary">No orphans: every page links somewhere.</li>}
+                {orphans.data && !orphans.data.rows.length && <li className="py-8 text-center text-13 text-fg-tertiary">No orphans: every page links somewhere.</li>}
               </ul>
             </>
           )}
@@ -145,20 +145,20 @@ function Librarian() {
         <Icon name="bulb" size={18} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-fg">
+        <p className="text-14 font-semibold text-fg">
           Weekly librarian pass{task && <span className="font-normal text-fg-tertiary"> · Mondays {task.at_time}</span>}
         </p>
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-13 text-fg-secondary">
           {task ? "A persona proposes links for unlinked mentions and lists orphans. Its suggestions wait for you in Needs you." : "Have a persona propose the links you missed once a week. Nothing changes until you accept it."}
         </p>
-        {(save.error || run.error) && <p className="mt-1 text-xs text-state-blocked">{(save.error ?? run.error)?.message}</p>}
+        {(save.error || run.error) && <p className="mt-1 text-12 text-state-blocked">{(save.error ?? run.error)?.message}</p>}
       </div>
       {task ? (
         <>
           <Button onClick={() => run.mutate(task.id)} disabled={run.isPending}>
             {run.isPending ? "Starting…" : "Run now"}
           </Button>
-          <Link href="/scheduled" className="text-xs text-fg-tertiary hover:text-fg-secondary">
+          <Link href="/scheduled" className="text-12 text-fg-tertiary hover:text-fg-secondary">
             Schedule
           </Link>
         </>

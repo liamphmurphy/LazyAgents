@@ -23,8 +23,8 @@ const FORMATS: { id: ExportFormat; label: string; detail: string }[] = [
 ];
 const MIME: Record<ExportFormat, string> = { png: "image/png", svg: "image/svg+xml", pdf: "application/pdf" };
 
-const label = "text-[11px] font-medium uppercase tracking-wide text-fg-tertiary";
-const choice = (on: boolean) => cx("flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg", on ? "bg-selected" : "hover:bg-hover");
+const label = "text-11 font-medium uppercase tracking-wide text-fg-tertiary";
+const choice = (on: boolean) => cx("flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-13 text-fg", on ? "bg-selected" : "hover:bg-hover");
 
 async function bytes(url: string, signal: AbortSignal, what: string): Promise<Response> {
   const r = await fetch(url, { credentials: "same-origin", signal });
@@ -179,7 +179,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current, trigg
   return (
     <div className="flex items-center gap-2">
       {notice && (
-        <span role={notice.tone === "error" ? "alert" : "status"} data-testid="design-export-notice" className={cx("max-w-[420px] truncate text-[12px]", notice.tone === "error" ? "text-pill-blocked-fg" : "text-fg-secondary")} title={notice.text}>
+        <span role={notice.tone === "error" ? "alert" : "status"} data-testid="design-export-notice" className={cx("max-w-[420px] truncate text-12", notice.tone === "error" ? "text-pill-blocked-fg" : "text-fg-secondary")} title={notice.text}>
           {notice.text}
           {notice.tone === "busy" && notice.cancellable !== false && (
             <button type="button" className="ml-2 text-accent hover:underline" onClick={() => abort.current?.abort()}>
@@ -208,7 +208,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current, trigg
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content align="end" sideOffset={6} aria-label="Export" className={cx(floatPanel, "z-50 flex w-[320px] flex-col gap-3 p-3")}>
-            {trigger && <span className="text-[13px] font-semibold text-fg">Export</span>}
+            {trigger && <span className="text-13 font-semibold text-fg">Export</span>}
             <fieldset className="flex flex-col gap-0.5">
               <legend className={label}>What</legend>
               {scopes.map((s) => (
@@ -225,7 +225,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current, trigg
                   <input type="radio" name="export-format" className="mt-0.5" checked={format === f.id} onChange={() => setFormat(f.id)} />
                   <span className="flex flex-col">
                     {f.label}
-                    <span className="text-[11px] text-fg-tertiary">{f.detail}</span>
+                    <span className="text-11 text-fg-tertiary">{f.detail}</span>
                   </span>
                 </label>
               ))}
@@ -234,7 +234,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current, trigg
               <div className="flex items-center gap-2" role="radiogroup" aria-label="Scale">
                 <span className={label}>Scale</span>
                 {[1, 2, 3].map((s) => (
-                  <button key={s} type="button" role="radio" aria-checked={scale === s} onClick={() => setScale(s)} className={cx("rounded-md border px-2 py-0.5 text-[12.5px]", scale === s ? "border-accent bg-selected text-fg" : "border-border text-fg-secondary hover:bg-hover")}>
+                  <button key={s} type="button" role="radio" aria-checked={scale === s} onClick={() => setScale(s)} className={cx("rounded-md border px-2 py-0.5 text-13", scale === s ? "border-accent bg-selected text-fg" : "border-border text-fg-secondary hover:bg-hover")}>
                     {s}×
                   </button>
                 ))}
@@ -249,7 +249,7 @@ export function ExportMenu({ id, title, design, pageId, selected, current, trigg
                   Save to Library
                 </Button>
               </div>
-              {!!count && !oneFile && <span className="text-[11px] text-fg-tertiary">The Library takes one file at a time: pick one item, or PDF.</span>}
+              {!!count && !oneFile && <span className="text-11 text-fg-tertiary">The Library takes one file at a time: pick one item, or PDF.</span>}
             </div>
           </Popover.Content>
         </Popover.Portal>

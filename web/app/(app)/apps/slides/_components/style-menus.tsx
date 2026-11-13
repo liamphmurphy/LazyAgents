@@ -27,7 +27,7 @@ export type StyleActions = {
   rememberColor: (c: string) => void;
 };
 
-const heading = "px-2.5 pb-1 pt-1.5 text-[12.5px] text-fg-2";
+const heading = "px-2.5 pb-1 pt-1.5 text-13 text-fg-2";
 const mixedSwatch = "repeating-linear-gradient(45deg, #c7c7cc 0 3px, transparent 3px 6px)";
 const same = <T,>(xs: T[]) => xs.every((x) => JSON.stringify(x) === JSON.stringify(xs[0]));
 
@@ -35,7 +35,7 @@ function Opacity({ value, onChange, label }: { value: number | undefined; onChan
   const pct = Math.round((value ?? 1) * 100);
   return (
     <div className="px-2.5 py-2" onKeyDown={ownKeys}>
-      <div className="flex items-center justify-between text-[13px] text-fg-2">
+      <div className="flex items-center justify-between text-13 text-fg-2">
         <span>Opacity</span>
         <span className="font-mono text-fg">{pct}%</span>
       </div>
@@ -66,7 +66,7 @@ function Tabs({ tab, setTab }: { tab: "solid" | "gradient"; setTab: (t: "solid" 
           type="button"
           role="tab"
           aria-selected={tab === t}
-          className={cx("rounded-[5px] px-2 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent", tab === t ? "border border-border-strong bg-surface font-semibold text-fg" : "text-fg-2")}
+          className={cx("rounded-[5px] px-2 py-1 text-13 outline-none focus-visible:ring-2 focus-visible:ring-accent", tab === t ? "border border-border-strong bg-surface font-semibold text-fg" : "text-fg-2")}
           onClick={() => setTab(t)}
         >
           {t === "solid" ? "Solid" : "Gradient"}
@@ -139,16 +139,16 @@ function GradientEditor({ theme, g, onChange, a }: { theme: Theme; g: Gradient; 
           step={1}
           value={g.angle}
           aria-label="Gradient angle in degrees"
-          className="h-7 w-14 rounded-md border border-border-strong bg-surface px-1.5 font-mono text-[12.5px] text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="h-7 w-14 rounded-md border border-border-strong bg-surface px-1.5 font-mono text-13 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
           onChange={(e) => e.target.value !== "" && Number.isFinite(Number(e.target.value)) && angle(Number(e.target.value))}
         />
-        <span className="text-[12.5px] text-fg-2">°</span>
+        <span className="text-13 text-fg-2">°</span>
         {QUICK.map((q) => (
-          <button key={q.angle} type="button" title={q.label} aria-label={q.label} aria-pressed={g.angle === q.angle} className={cx("h-7 w-6 rounded-md border text-[12px]", g.angle === q.angle ? "border-accent bg-selected" : "border-border-strong")} onClick={() => onChange({ ...g, angle: q.angle })}>
+          <button key={q.angle} type="button" title={q.label} aria-label={q.label} aria-pressed={g.angle === q.angle} className={cx("h-7 w-6 rounded-md border text-12", g.angle === q.angle ? "border-accent bg-selected" : "border-border-strong")} onClick={() => onChange({ ...g, angle: q.angle })}>
             {q.glyph}
           </button>
         ))}
-        <button type="button" title="Swap colours" aria-label="Swap colours" className="h-7 w-6 rounded-md border border-border-strong text-[12px]" onClick={() => onChange({ ...g, stops: [g.stops[1], g.stops[0]] })}>
+        <button type="button" title="Swap colours" aria-label="Swap colours" className="h-7 w-6 rounded-md border border-border-strong text-12" onClick={() => onChange({ ...g, stops: [g.stops[1], g.stops[0]] })}>
           ⇄
         </button>
       </div>

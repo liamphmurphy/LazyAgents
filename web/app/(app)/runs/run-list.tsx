@@ -124,11 +124,11 @@ function RunRow({ run, active, query }: { run: Run; active: boolean; query: stri
       >
         <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13px] text-fg">{runTitle(run)}</span>
-          <span className="truncate text-xs text-fg-tertiary">{runLine(run)}</span>
+          <span className="truncate text-13 text-fg">{runTitle(run)}</span>
+          <span className="truncate text-12 text-fg-tertiary">{runLine(run)}</span>
         </span>
         <span className="flex flex-none flex-col items-end gap-1.5 pt-0.5">
-          <time dateTime={run.started_at} className="text-[11px] text-fg-tertiary">{ago(run.started_at)}</time>
+          <time dateTime={run.started_at} className="text-11 text-fg-tertiary">{ago(run.started_at)}</time>
           <StatusDot dot={runDot(run)} />
         </span>
       </Link>
@@ -150,11 +150,11 @@ function NeedsRow({ item, active, query }: { item: Item; active: boolean; query:
           </span>
         )}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13px] font-medium text-fg">{item.title}</span>
-          <span className={cx("truncate text-xs", kind.tone === "blocked" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{meta}</span>
+          <span className="truncate text-13 font-medium text-fg">{item.title}</span>
+          <span className={cx("truncate text-12", kind.tone === "blocked" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{meta}</span>
         </span>
         <span className="flex flex-none flex-col items-end gap-1.5 pt-0.5">
-          <span className="text-[11px] text-fg-tertiary">{waited(item.created_at)}</span>
+          <span className="text-11 text-fg-tertiary">{waited(item.created_at)}</span>
           <StatusDot dot={kind.tone === "blocked" ? "failed" : "human"} />
         </span>
       </Link>
@@ -165,7 +165,7 @@ function NeedsRow({ item, active, query }: { item: Item; active: boolean; query:
 function Group({ id, label, count, tone, children }: { id: string; label: string; count?: number; tone?: "human"; children: React.ReactNode }) {
   return (
     <section id={id} aria-label={label} className="flex scroll-mt-2 flex-col gap-0.5">
-      <h2 className={cx("flex items-center gap-1.5 px-2.5 pb-0.5 pt-2 text-xs font-medium", tone === "human" ? "text-pill-human-fg" : "text-fg-tertiary")}>
+      <h2 className={cx("flex items-center gap-1.5 px-2.5 pb-0.5 pt-2 text-12 font-medium", tone === "human" ? "text-pill-human-fg" : "text-fg-tertiary")}>
         {label}
         {count != null && <span className="font-mono">{count}</span>}
       </h2>
@@ -181,7 +181,7 @@ function StatusLine({ project }: { project?: string }) {
   const costs = useCosts({ ...range, project }).data;
   const href = `/reports?tab=costs&range=7${project ? `&project=${encodeURIComponent(project)}` : ""}`;
   return (
-    <p role="status" className="flex flex-wrap items-center gap-x-1.5 px-2.5 font-mono text-[11px] text-fg-tertiary">
+    <p role="status" className="flex flex-wrap items-center gap-x-1.5 px-2.5 font-mono text-11 text-fg-tertiary">
       {runner && <span>{runner.online ? `${runner.busy} busy · ${runner.queued} queued · ${runner.slots} slots` : `Runner offline · ${runner.queued} queued`}</span>}
       {runner && <span aria-hidden>·</span>}
       <Link href={href} className="hover:text-fg hover:underline" title="Spend in the last 7 days, in Reports">
@@ -215,7 +215,7 @@ function Chips({ project, agent, hideDone }: { project?: string; agent?: string;
         type="button"
         aria-pressed={hideDone}
         onClick={() => set("done", hideDone ? undefined : "hide")}
-        className={cx("flex h-8 items-center gap-1 rounded-md border px-2.5 text-xs", hideDone ? "border-accent bg-accent-soft text-fg" : "border-border-strong bg-surface text-fg hover:bg-hover")}
+        className={cx("flex h-8 items-center gap-1 rounded-md border px-2.5 text-12", hideDone ? "border-accent bg-accent-soft text-fg" : "border-border-strong bg-surface text-fg hover:bg-hover")}
       >
         {hideDone && <Icon name="check" size={12} />}
         Hide done
@@ -261,7 +261,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
     >
       <div className="flex flex-col gap-2 px-1">
         <div className="flex items-center gap-2 px-1.5">
-          <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-[15px]")}>Runs</h1>
+          <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-15")}>Runs</h1>
         </div>
         <StatusLine project={data.project} />
         <div className="relative px-1">
@@ -273,7 +273,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && (setSearch(""), e.currentTarget.blur())}
-            className={cx("w-full pr-8", fill ? "h-[44px] text-[16px]" : "h-8")}
+            className={cx("w-full pr-8", fill ? "h-[44px] text-16" : "h-8")}
           />
           {!search && <Kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 pointer-coarse:hidden">/</Kbd>}
         </div>
@@ -287,7 +287,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
           </Group>
         )}
         {data.error ? (
-          <div role="alert" className="flex flex-col items-start gap-2 px-3 py-4 text-[13px] text-pill-blocked-fg">
+          <div role="alert" className="flex flex-col items-start gap-2 px-3 py-4 text-13 text-pill-blocked-fg">
             Couldn’t load runs. {data.error.message}
             <Button variant="outline" onClick={data.retry}>Retry</Button>
           </div>
@@ -296,7 +296,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-11" />)}
           </div>
         ) : empty ? (
-          <p className="px-3 py-8 text-center text-[13px] text-fg-tertiary">
+          <p className="px-3 py-8 text-center text-13 text-fg-tertiary">
             {search ? "No runs match." : "No runs yet. Start one from a ticket or a chat."}
           </p>
         ) : (

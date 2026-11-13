@@ -14,7 +14,7 @@ import { RecommendActions } from "./recommend-fence";
 import { SvgFenceMessage } from "./svg-fence";
 
 const CARD = "flex w-full max-w-[680px] flex-col gap-3 rounded-xl border border-border bg-surface p-3.5";
-const INPUT = "w-full resize-y rounded-md border border-border-strong bg-surface p-2 text-[13px] text-fg focus:border-accent focus:outline-none";
+const INPUT = "w-full resize-y rounded-md border border-border-strong bg-surface p-2 text-13 text-fg focus:border-accent focus:outline-none";
 
 const STATE_PILL: Record<string, string> = {
   running: "bg-pill-neutral-bg text-pill-neutral-fg",
@@ -26,7 +26,7 @@ const STATE_PILL: Record<string, string> = {
 
 export function RunStatePill({ state }: { state: string }) {
   const ref = usePulse<HTMLSpanElement>(state);
-  return <span ref={ref} className={cx("flex-none rounded-full px-2 py-0.5 text-[11.5px] font-medium transition-colors duration-200", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
+  return <span ref={ref} className={cx("flex-none rounded-full px-2 py-0.5 text-12 font-medium transition-colors duration-200", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
 }
 
 /** Confirms a run: a persona's suggestion or a /workflow pick. Nothing starts until Run. */
@@ -43,12 +43,12 @@ export function WorkflowStartCard({ workflow, chatId, input: initial = "", messa
   return (
     <div data-testid="workflow-start" className={CARD}>
       <div className="flex items-baseline justify-between gap-3">
-        <h4 className="text-[14px] font-semibold text-fg">Run {workflow.name}?</h4>
-        <span className="flex-none font-mono text-xs text-fg-tertiary">v{workflow.published_version} · {workflow.draft.nodes.length} steps</span>
+        <h4 className="text-14 font-semibold text-fg">Run {workflow.name}?</h4>
+        <span className="flex-none font-mono text-12 text-fg-tertiary">v{workflow.published_version} · {workflow.draft.nodes.length} steps</span>
       </div>
-      {workflow.description && <p className="text-[12.5px] text-fg-secondary">{workflow.description}</p>}
+      {workflow.description && <p className="text-13 text-fg-secondary">{workflow.description}</p>}
       <textarea aria-label="What to run it on" autoFocus={!initial} rows={3} placeholder="What should it work on?" value={input} onChange={(e) => setInput(e.target.value)} className={INPUT} />
-      {start.error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{start.error.message}</p>}
+      {start.error && <p role="alert" className="text-13 text-pill-blocked-fg">{start.error.message}</p>}
       <div className="flex items-center gap-2">
         <Button variant="primary" disabled={!input.trim() || start.isPending} onClick={() => start.mutate({ workflow_id: workflow.id, input, ...(messageId ? { message_id: messageId } : {}) }, { onSuccess: onDone })}>
           {start.isPending ? "Starting…" : "Run workflow"}
@@ -89,21 +89,21 @@ export function WorkflowGatePanel({ run }: { run: WorkflowRun }) {
   return (
     <div data-testid="workflow-gate" className="flex flex-col gap-3 rounded-xl border border-state-human bg-surface p-3.5">
       <div>
-        <h4 className="text-[14px] font-semibold text-fg">{gate.title}</h4>
-        {gate.config.prompt && <p className="text-[12.5px] text-fg-secondary">{gate.config.prompt}</p>}
+        <h4 className="text-14 font-semibold text-fg">{gate.title}</h4>
+        {gate.config.prompt && <p className="text-13 text-fg-secondary">{gate.config.prompt}</p>}
       </div>
       {sources.map(({ node, step }) => (step?.output || step?.images?.length) && (
         <details key={node?.id} open className="rounded-lg border border-border-subtle bg-surface-sunken p-2.5">
-          <summary className="cursor-pointer text-[12px] font-medium text-fg-secondary">{node?.title}</summary>
-          <div className="mt-2 flex max-h-96 flex-col gap-2 overflow-y-auto text-[13px]">
+          <summary className="cursor-pointer text-12 font-medium text-fg-secondary">{node?.title}</summary>
+          <div className="mt-2 flex max-h-96 flex-col gap-2 overflow-y-auto text-13">
             <WorkflowImages runId={run.id} images={step.images ?? []} />
             {step.output && <Markdown>{step.output}</Markdown>}
           </div>
         </details>
       ))}
-      {failedCheck && <p role="status" data-testid="workflow-gate-check-failed" className="text-[12.5px] text-pill-blocked-fg">{failedCheck.title} didn&apos;t pass, so this can&apos;t be approved. Request changes or reject it.</p>}
+      {failedCheck && <p role="status" data-testid="workflow-gate-check-failed" className="text-13 text-pill-blocked-fg">{failedCheck.title} didn&apos;t pass, so this can&apos;t be approved. Request changes or reject it.</p>}
       {changes && <textarea aria-label="Note for the re-run" rows={2} placeholder="Note for the re-run (required when requesting changes)" value={note} onChange={(e) => setNote(e.target.value)} className={INPUT} />}
-      {decide.error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{decide.error.message}</p>}
+      {decide.error && <p role="alert" className="text-13 text-pill-blocked-fg">{decide.error.message}</p>}
       <div className="flex items-center gap-2">
         <Button variant="primary" disabled={decide.isPending || !!failedCheck} onClick={() => send("approve")}>Approve</Button>
         {changes && <Button disabled={decide.isPending || !note.trim()} onClick={() => send("changes")}>Request changes</Button>}
@@ -121,12 +121,12 @@ export function WorkflowRunSummary({ run }: { run: WorkflowRun }) {
   return (
     <div data-testid="workflow-run" className={CARD}>
       <div className="flex items-center gap-2">
-        <Link href={`/workflows/runs/${run.id}`} className="min-w-0 truncate text-[14px] font-semibold text-fg hover:underline">{run.name}</Link>
-        <span className="flex-none font-mono text-xs text-fg-tertiary">v{run.version} · {done}/{total}</span>
+        <Link href={`/workflows/runs/${run.id}`} className="min-w-0 truncate text-14 font-semibold text-fg hover:underline">{run.name}</Link>
+        <span className="flex-none font-mono text-12 text-fg-tertiary">v{run.version} · {done}/{total}</span>
         <span className="flex-1" />
         <RunStatePill state={run.state} />
       </div>
-      {run.error && <p className="text-[12.5px] text-fg-secondary">{run.error}</p>}
+      {run.error && <p className="text-13 text-fg-secondary">{run.error}</p>}
       {run.state === "waiting" && <WorkflowGatePanel run={run} />}
       {runActive(run.state) && (
         <div><Button disabled={stop.isPending} onClick={() => stop.mutate()}>Stop</Button></div>
@@ -156,11 +156,11 @@ export function WorkflowRunFence({ code, info }: { code: string; info?: string }
   const run = runs.data?.runs.find((r) => r.message_id === messageId);
   if (run) {
     return runActive(run.state) ? (
-      <p className="text-[12.5px] text-fg-tertiary">Started <Link className="text-accent hover:underline" href={`/workflows/runs/${run.id}`}>{run.name}</Link>. Follow it above the message box.</p>
+      <p className="text-13 text-fg-tertiary">Started <Link className="text-accent hover:underline" href={`/workflows/runs/${run.id}`}>{run.name}</Link>. Follow it above the message box.</p>
     ) : <WorkflowRunSummary run={run} />;
   }
   const workflow = workflows.data?.workflows.find((w) => w.id === parsed.workflowId && w.published_version > 0);
-  if (!workflow) return <p className="text-[12.5px] text-fg-tertiary">That workflow isn&apos;t available any more.</p>;
-  if (dismissed) return <p data-testid="workflow-dismissed" className="text-xs text-fg-tertiary">Workflow not run.</p>;
+  if (!workflow) return <p className="text-13 text-fg-tertiary">That workflow isn&apos;t available any more.</p>;
+  if (dismissed) return <p data-testid="workflow-dismissed" className="text-12 text-fg-tertiary">Workflow not run.</p>;
   return <WorkflowStartCard workflow={workflow} chatId={chatId} input={parsed.input} messageId={messageId} onDismiss={() => setDismissed(true)} />;
 }

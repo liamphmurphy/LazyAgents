@@ -24,7 +24,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 function Section({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="flex items-center gap-2 text-[13px] font-semibold">
+      <h3 className="flex items-center gap-2 text-13 font-semibold">
         {title}
         {meta}
       </h3>
@@ -100,12 +100,12 @@ export function ReviewDialog({
             </Dialog.Close>
           </div>
           <div className="flex flex-col gap-5 overflow-y-auto px-[18px] pb-4 pt-2">
-            <p id="review-summary" className="text-[13px] text-fg-secondary">
+            <p id="review-summary" className="text-13 text-fg-secondary">
               Saving creates definition <b className="font-mono font-medium text-fg">v{next}</b>. New runs use it;{" "}
               {liveRuns > 0 ? `the ${plural(liveRuns, "live run")} keep${liveRuns === 1 ? "s" : ""} the v${detail.definition.version} snapshot.` : "runs in progress keep the definition they started with."}
             </p>
             {(approvals.length > 0 || widens.length > 0) && (
-              <div role="note" className="flex gap-3 rounded-lg border border-pill-human-bg bg-pill-human-bg/40 px-3 py-2.5 text-[13px]">
+              <div role="note" className="flex gap-3 rounded-lg border border-pill-human-bg bg-pill-human-bg/40 px-3 py-2.5 text-13">
                 <span aria-hidden className="flex size-5 flex-none items-center justify-center rounded-full bg-state-human font-semibold text-on-accent">!</span>
                 <div className="flex flex-col gap-0.5">
                   <b className="font-medium">
@@ -127,15 +127,15 @@ export function ReviewDialog({
               <Section
                 title="Instructions"
                 meta={
-                  <span className="font-mono text-xs font-normal">
+                  <span className="font-mono text-12 font-normal">
                     <span className="text-state-done">+{adds}</span> <span className="text-pill-blocked-fg">−{dels}</span>
                   </span>
                 }
               >
-                <div role="table" aria-label="Instructions diff" className="overflow-x-auto rounded-lg border border-border bg-surface font-mono text-[12px]">
+                <div role="table" aria-label="Instructions diff" className="overflow-x-auto rounded-lg border border-border bg-surface font-mono text-12">
                   {rows.map((r, i) =>
                     r.kind === "gap" ? (
-                      <div key={i} role="row" className="flex items-center gap-2 border-y border-border-subtle bg-surface-sunken px-3 py-1 text-[11.5px] text-fg-tertiary">
+                      <div key={i} role="row" className="flex items-center gap-2 border-y border-border-subtle bg-surface-sunken px-3 py-1 text-12 text-fg-tertiary">
                         {plural(r.count, "unchanged line")} hidden ·{" "}
                         <button type="button" className="text-accent hover:underline" onClick={() => setShowAll(true)}>
                           Show all
@@ -158,11 +158,11 @@ export function ReviewDialog({
             )}
 
             {scopes.length > 0 && (
-              <Section title="Scopes" meta={<span className="text-xs font-normal text-fg-tertiary">{plural(scopes.length, "change")}</span>}>
+              <Section title="Scopes" meta={<span className="text-12 font-normal text-fg-tertiary">{plural(scopes.length, "change")}</span>}>
                 <ul className="flex flex-col divide-y divide-border-row rounded-lg border border-border bg-surface">
                   {scopes.map((s) => (
                     <li key={s.scope} className="flex flex-col gap-1 px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                      <div className="flex flex-wrap items-center gap-2 text-13">
                         <span className="font-mono">{s.scope}</span>
                         <span className="text-fg-secondary">
                           {s.from ? MODE_LABEL[s.from] : "Not granted"} → {s.to ? MODE_LABEL[s.to] : "Not granted"}
@@ -171,7 +171,7 @@ export function ReviewDialog({
                           <Flag tone={KIND[s.kind].tone}>{KIND[s.kind].label}</Flag>
                         </span>
                       </div>
-                      <span className="text-xs text-fg-tertiary">
+                      <span className="text-12 text-fg-tertiary">
                         {s.to && s.effectiveTo !== s.to
                           ? `A wildcard in the definition keeps it at ${MODE_LABEL[s.effectiveTo]}.`
                           : s.to
@@ -187,8 +187,8 @@ export function ReviewDialog({
             )}
 
             {others.length > 0 && (
-              <Section title="Other" meta={<span className="text-xs font-normal text-fg-tertiary">{plural(others.length, "change")}</span>}>
-                <ul className="flex flex-col divide-y divide-border-row rounded-lg border border-border bg-surface text-[13px]">
+              <Section title="Other" meta={<span className="text-12 font-normal text-fg-tertiary">{plural(others.length, "change")}</span>}>
+                <ul className="flex flex-col divide-y divide-border-row rounded-lg border border-border bg-surface text-13">
                   {others.map((o) => (
                     <li key={o} className="px-3 py-2">
                       {o}
@@ -201,15 +201,15 @@ export function ReviewDialog({
             <Field label="Version note" htmlFor="review-note">
               <TextInput id="review-note" value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
             </Field>
-            {held.length > 0 && <p className="-mt-3 text-xs text-fg-tertiary">Project overrides still apply on top: {held.join("; ")}.</p>}
+            {held.length > 0 && <p className="-mt-3 text-12 text-fg-tertiary">Project overrides still apply on top: {held.join("; ")}.</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
             {error ? (
-              <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+              <span role="alert" className="mr-auto text-12 text-pill-blocked-fg">
                 {error}
               </span>
             ) : (
-              <span className="mr-auto text-xs text-fg-tertiary">⌘↵ saves · Esc returns to editing</span>
+              <span className="mr-auto text-12 text-fg-tertiary">⌘↵ saves · Esc returns to editing</span>
             )}
             <Dialog.Close asChild>
               <Button variant="ghost">Back to editing</Button>

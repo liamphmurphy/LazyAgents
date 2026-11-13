@@ -13,10 +13,10 @@ import { composerIconButton } from "./reply-tools";
 type Attachment = Schemas["ChatAttachment"];
 type Item = { key: number; name: string; size: number; status: "uploading" | "done" | "error"; id?: string; error?: string; preview?: string };
 
-const chipClass = "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs";
+const chipClass = "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-2 text-12";
 
 function Badge({ name }: { name: string }) {
-  return <span className="flex-none rounded bg-selected px-1 font-mono text-[10px] font-semibold text-fg-secondary">{attachmentBadge(name)}</span>;
+  return <span className="flex-none rounded bg-selected px-1 font-mono text-10 font-semibold text-fg-secondary">{attachmentBadge(name)}</span>;
 }
 
 /**
@@ -122,7 +122,7 @@ export function AttachButton({ onFiles, disabled, compact }: { onFiles: (f: File
         title="Attach or drop files"
         disabled={disabled}
         onClick={() => input.current?.click()}
-        className={compact ? composerIconButton : "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50"}
+        className={compact ? composerIconButton : "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-13 text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50"}
       >
         <svg aria-hidden viewBox="0 0 16 16" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="m13 7.5-4.8 4.8a3 3 0 0 1-4.2-4.2l5-5a2 2 0 0 1 2.8 2.8L6.8 10.9a1 1 0 0 1-1.4-1.4L9.7 5.2" />
@@ -246,11 +246,11 @@ function ImageThumb({ a, compact }: { a: Attachment; compact?: boolean }) {
           className="motion-dialog fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(1100px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none"
         >
           <div className="flex items-center gap-2">
-            <Dialog.Title className="min-w-0 flex-1 truncate text-[13px] text-fg">{a.filename}</Dialog.Title>
+            <Dialog.Title className="min-w-0 flex-1 truncate text-13 text-fg">{a.filename}</Dialog.Title>
             <a
               href={url}
               download={a.filename}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-12 text-fg hover:bg-hover"
             >
               <Icon name="download" size={14} />
               Download
@@ -343,9 +343,9 @@ export function DropOverlay({ over }: { over: boolean }) {
       className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-bg/80 p-4 backdrop-blur-[1px]"
     >
       <div className="flex max-w-[420px] flex-col items-center gap-1 rounded-xl border-2 border-dashed border-accent bg-accent/10 px-10 py-8 text-center">
-        <p className="text-[15px] font-semibold text-fg">Drop files to attach</p>
-        <p className="text-[12.5px] text-fg-secondary">PDF, images, text, Markdown, CSV, zip · up to 25 MB each</p>
-        <p className="text-xs text-fg-tertiary">Files become chips in the composer before you send</p>
+        <p className="text-15 font-semibold text-fg">Drop files to attach</p>
+        <p className="text-13 text-fg-secondary">PDF, images, text, Markdown, CSV, zip · up to 25 MB each</p>
+        <p className="text-12 text-fg-tertiary">Files become chips in the composer before you send</p>
       </div>
     </div>
   );

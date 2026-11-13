@@ -18,14 +18,14 @@ export function QueryTable({ table }: { table: PageTable }) {
     for (const r of table.rows) for (const k of Object.keys(r.properties ?? {})) if (!["tags", "aliases", "query", "zettel_id", "title"].includes(k)) seen.set(k, (seen.get(k) ?? 0) + 1);
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
   }, [table.rows]);
-  if (!table.rows.length) return <p className="rounded-lg border border-border-subtle bg-surface-sunken p-4 text-center text-xs text-fg-tertiary">No pages match this query yet.</p>;
+  if (!table.rows.length) return <p className="rounded-lg border border-border-subtle bg-surface-sunken p-4 text-center text-12 text-fg-tertiary">No pages match this query yet.</p>;
   // A [[link]] value reads as its name, as it does in the properties block.
   const unlink = (s: string) => s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t: string, label?: string) => label ?? t.split("/").pop() ?? t);
   const show = (v: unknown) => (v === undefined || v === null ? "—" : Array.isArray(v) ? v.map(String).map(unlink).join(", ") : typeof v === "object" ? JSON.stringify(v) : unlink(String(v)));
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-left text-[13px]">
-        <thead className="bg-surface-sunken text-xs text-fg-tertiary">
+      <table className="w-full text-left text-13">
+        <thead className="bg-surface-sunken text-12 text-fg-tertiary">
           <tr>
             <th className="px-3 py-2 font-semibold">Name</th>
             {columns.map((c) => (
@@ -73,7 +73,7 @@ export function QueryTable({ table }: { table: PageTable }) {
           })}
         </tbody>
       </table>
-      {table.has_more && <p className="border-t border-border-row px-3 py-2 text-xs text-fg-tertiary">Showing the first {table.rows.length}.</p>}
+      {table.has_more && <p className="border-t border-border-row px-3 py-2 text-12 text-fg-tertiary">Showing the first {table.rows.length}.</p>}
     </div>
   );
 }

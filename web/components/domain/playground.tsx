@@ -91,7 +91,7 @@ function SendToChat({ chatId, origin, branch, probe, logs, frame, onSent }: {
   };
   return (
     <>
-      {problem && <span role="alert" className="text-xs text-pill-blocked-fg">{problem}</span>}
+      {problem && <span role="alert" className="text-12 text-pill-blocked-fg">{problem}</span>}
       <Button variant="secondary" disabled={busy} onClick={send} title="Attach the page, console errors, failed requests and a screenshot to your next message">
         {busy ? "Capturing…" : "Send to chat"}
       </Button>
@@ -104,7 +104,7 @@ function StatusPill({ pg }: { pg: Playground }) {
     pg.action === "reset" ? ["Resetting", "review"] : pg.action === "stop" ? ["Stopping", "neutral"] :
     pg.state === "running" ? ["Running", "done"] : pg.state === "starting" ? ["Starting", "review"] : pg.state === "failed" ? ["Failed", "blocked"] : ["Stopped", "neutral"];
   return (
-    <span data-testid="playground-state" className={cx("inline-flex flex-none items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold", `bg-pill-${tone}-bg text-pill-${tone}-fg`)}>
+    <span data-testid="playground-state" className={cx("inline-flex flex-none items-center gap-1.5 rounded-full px-2 py-0.5 text-11 font-semibold", `bg-pill-${tone}-bg text-pill-${tone}-fg`)}>
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {label}
     </span>
@@ -125,18 +125,18 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
   const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
   const now = useNow();
   const tab = (t: PlaygroundTab, label: string, badge?: number) => (
-    <button type="button" role="tab" aria-selected={panel.tab === t} onClick={() => panel.setTab(t)} className={cx("flex items-center gap-1.5 border-b-2 px-0.5 pb-2 pt-2.5 text-[13px]", panel.tab === t ? "border-accent font-semibold text-fg" : "border-transparent text-fg-secondary hover:text-fg")}>
+    <button type="button" role="tab" aria-selected={panel.tab === t} onClick={() => panel.setTab(t)} className={cx("flex items-center gap-1.5 border-b-2 px-0.5 pb-2 pt-2.5 text-13", panel.tab === t ? "border-accent font-semibold text-fg" : "border-transparent text-fg-secondary hover:text-fg")}>
       {label}
-      {!!badge && <span aria-label={`${badge} errors`} className="rounded-full bg-pill-blocked-bg px-1.5 text-[10px] font-semibold text-pill-blocked-fg">{badge}</span>}
+      {!!badge && <span aria-label={`${badge} errors`} className="rounded-full bg-pill-blocked-bg px-1.5 text-10 font-semibold text-pill-blocked-fg">{badge}</span>}
     </button>
   );
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5">
         {full && <Button variant="secondary" onClick={panel.exitFull}>← Back to chat</Button>}
-        <h2 className="text-[14px] font-semibold text-fg">Playground</h2>
+        <h2 className="text-14 font-semibold text-fg">Playground</h2>
         <StatusPill pg={pg} />
-        {pg.branch && <code className="min-w-0 truncate font-mono text-xs text-fg-secondary">{pg.branch}</code>}
+        {pg.branch && <code className="min-w-0 truncate font-mono text-12 text-fg-secondary">{pg.branch}</code>}
         <span className="ml-auto flex items-center gap-1">
           {origin && running && (
             <a href={origin} target="_blank" rel="noopener noreferrer" aria-label="Open in a new tab" title="Open in a new tab" className="grid size-7 place-items-center rounded-sm text-fg-secondary hover:bg-hover hover:text-fg">↗</a>
@@ -164,7 +164,7 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
           {(pg.state === "stopped" || pg.state === "failed") && <Button variant="primary" disabled={act.isPending} onClick={() => act.mutate("start")}>Start again</Button>}
         </span>
       </div>
-      {act.isError && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(act.error)}</p>}
+      {act.isError && <p role="alert" className="border-b border-border-row px-4 py-1 text-12 text-pill-blocked-fg">{errorText(act.error)}</p>}
       {running && origin ? (
         panel.tab === "api" ? (
           <ApiTab chatId={chatId} pg={pg} origin={origin} logs={logs.lines} wide={full} onOpenLogs={() => panel.setTab("logs")} />
@@ -176,7 +176,7 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
       ) : (
         <NotRunning pg={pg} />
       )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border-subtle px-4 py-2 text-[11.5px] text-fg-tertiary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border-subtle px-4 py-2 text-12 text-fg-tertiary">
         <span className="text-fg-secondary">
           {[...pg.processes.map((p) => `${p.name} :${p.port}`), ...pg.services.map((s) => s.image)].join(" · ")}
         </span>
@@ -191,15 +191,15 @@ function PlaygroundView({ chatId, pg, full }: { chatId: string; pg: Playground; 
 /** Starting, failed or stopped: what it's doing, or why it isn't running. */
 function NotRunning({ pg }: { pg: Playground }) {
   if (pg.state === "running") {
-    return <div className="grid flex-1 place-items-center text-xs text-fg-secondary">{pg.step || "Resetting data"}…</div>;
+    return <div className="grid flex-1 place-items-center text-12 text-fg-secondary">{pg.step || "Resetting data"}…</div>;
   }
   if (pg.state === "starting") {
     return (
       <div className="grid flex-1 place-items-center p-6 text-center">
         <div>
-          <p className="text-[13.5px] font-semibold text-fg">Starting</p>
-          <p data-testid="playground-step" className="mt-1 text-xs text-fg-secondary">{pg.step || "Waiting for a runner"}…</p>
-          <p className="mt-3 text-[11px] text-fg-tertiary">The first start installs dependencies and can take a few minutes.</p>
+          <p className="text-14 font-semibold text-fg">Starting</p>
+          <p data-testid="playground-step" className="mt-1 text-12 text-fg-secondary">{pg.step || "Waiting for a runner"}…</p>
+          <p className="mt-3 text-11 text-fg-tertiary">The first start installs dependencies and can take a few minutes.</p>
         </div>
       </div>
     );
@@ -207,17 +207,17 @@ function NotRunning({ pg }: { pg: Playground }) {
   if (pg.state === "failed") {
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">
-        <p role="alert" className="text-[13.5px] font-semibold text-pill-blocked-fg">{pg.error}</p>
-        {pg.error_log && <pre data-testid="playground-error-log" className="overflow-auto rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg-2">{pg.error_log}</pre>}
-        <p className="text-xs text-fg-secondary">Ask the agent to fix it, or start it again.</p>
+        <p role="alert" className="text-14 font-semibold text-pill-blocked-fg">{pg.error}</p>
+        {pg.error_log && <pre data-testid="playground-error-log" className="overflow-auto rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-12 text-fg-2">{pg.error_log}</pre>}
+        <p className="text-12 text-fg-secondary">Ask the agent to fix it, or start it again.</p>
       </div>
     );
   }
   return (
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div>
-        <p className="text-[13.5px] font-semibold text-fg">Stopped</p>
-        <p className="mt-1 text-xs text-fg-secondary">{pg.stop_reason || "It isn’t running."} Its data starts fresh when it starts again.</p>
+        <p className="text-14 font-semibold text-fg">Stopped</p>
+        <p className="mt-1 text-12 text-fg-secondary">{pg.stop_reason || "It isn’t running."} Its data starts fresh when it starts again.</p>
       </div>
     </div>
   );
@@ -275,13 +275,13 @@ export function PlaygroundButton({ chatId }: { chatId: string }) {
     // The repository's playground ran in another chat: start it here without asking an agent.
     return (
       <>
-        {act.isError && <span role="alert" className="max-w-56 truncate text-xs text-pill-blocked-fg" title={errorText(act.error)}>{errorText(act.error)}</span>}
+        {act.isError && <span role="alert" className="max-w-56 truncate text-12 text-pill-blocked-fg" title={errorText(act.error)}>{errorText(act.error)}</span>}
         <button
           type="button"
           disabled={act.isPending}
           title="Start this repository’s playground, as it last ran"
           onClick={() => act.mutate("start", { onSuccess: panel.show })}
-          className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] text-fg transition-colors hover:bg-hover disabled:opacity-60"
+          className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-13 text-fg transition-colors hover:bg-hover disabled:opacity-60"
         >
           <Icon name="play" size={12} className="text-fg-secondary" />
           {act.isPending ? "Starting…" : "Start playground"}
@@ -292,7 +292,7 @@ export function PlaygroundButton({ chatId }: { chatId: string }) {
   if (!pg) return null;
   const live = pg.state === "running" || pg.state === "starting";
   return (
-    <button type="button" aria-pressed={panel.open} onClick={panel.open ? panel.close : panel.show} className={cx("inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border px-3 text-[13px] text-fg transition-colors hover:bg-hover", panel.open ? "border-accent bg-accent-soft" : "border-btn-secondary-border bg-btn-secondary")}>
+    <button type="button" aria-pressed={panel.open} onClick={panel.open ? panel.close : panel.show} className={cx("inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border px-3 text-13 text-fg transition-colors hover:bg-hover", panel.open ? "border-accent bg-accent-soft" : "border-btn-secondary-border bg-btn-secondary")}>
       <span aria-hidden className={cx("size-1.5 rounded-full", live ? "bg-pill-done-fg" : pg.state === "failed" ? "bg-pill-blocked-fg" : "bg-fg-tertiary")} />
       Playground
     </button>
@@ -323,8 +323,8 @@ export function PlaygroundFence({ code, info }: { code: string; info?: string })
       <Icon name="play" size={16} className="flex-none text-fg-tertiary" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="type-micro uppercase text-fg-tertiary">Playground</span>
-        <span className="truncate text-[13.5px] font-semibold text-fg">{pg?.branch || "This chat’s app"}</span>
-        <span className="truncate text-xs text-fg-secondary">{detail}</span>
+        <span className="truncate text-14 font-semibold text-fg">{pg?.branch || "This chat’s app"}</span>
+        <span className="truncate text-12 text-fg-secondary">{detail}</span>
       </span>
       <Button variant="primary" disabled={!pg} onClick={panel.show}>Open</Button>
     </div>

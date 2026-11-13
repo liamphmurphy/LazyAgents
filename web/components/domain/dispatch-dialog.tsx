@@ -18,15 +18,15 @@ type Preview = Schemas["DispatchPreview"];
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[116px_1fr] items-baseline gap-3 py-1.5 max-sm:grid-cols-1 max-sm:gap-1">
-      <span className="text-[12.5px] text-fg-tertiary">{label}</span>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px]">{children}</div>
+      <span className="text-13 text-fg-tertiary">{label}</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-13">{children}</div>
     </div>
   );
 }
 
 function ProjectMark() {
   return (
-    <span className="rounded-[4px] border border-border-strong px-1.5 font-mono text-[10.5px] text-fg-tertiary" title="Set by the project override">
+    <span className="rounded-[4px] border border-border-strong px-1.5 font-mono text-11 text-fg-tertiary" title="Set by the project override">
       project
     </span>
   );
@@ -65,9 +65,9 @@ function SinglePreview({ p }: { p: Preview }) {
       <div className="flex flex-col divide-y divide-border-subtle">
         <Row label="Definition">
           <span>{p.agent.name}</span>
-          {p.definition_version && <span className="font-mono text-xs text-fg-tertiary">v{p.definition_version}</span>}
+          {p.definition_version && <span className="font-mono text-12 text-fg-tertiary">v{p.definition_version}</span>}
           {p.has_override && <span className="text-fg-secondary">+ project override</span>}
-          <Link href={`/agents/${p.agent.handle}`} className="ml-auto text-xs text-accent hover:underline">
+          <Link href={`/agents/${p.agent.handle}`} className="ml-auto text-12 text-accent hover:underline">
             View definition
           </Link>
         </Row>
@@ -80,7 +80,7 @@ function SinglePreview({ p }: { p: Preview }) {
         </Row>
         <Row label="Repository">
           {p.repo_url ? (
-            <span className="flex items-center gap-1.5 font-mono text-[12.5px]">
+            <span className="flex items-center gap-1.5 font-mono text-13">
               <Icon name="github" size={13} />
               {p.repo_url.replace(/^(?:ssh:\/\/)?git@github\.com[:/]/, "").replace(/\.git$/, "")}
             </span>
@@ -90,7 +90,7 @@ function SinglePreview({ p }: { p: Preview }) {
         </Row>
         {p.repo_url && p.base_branch && <Row label="Base branch"><MonoChip>{p.base_branch}</MonoChip></Row>}
         <Row label="Branch">
-          <span className="flex items-center gap-1.5 font-mono text-[12.5px]">
+          <span className="flex items-center gap-1.5 font-mono text-13">
             <Icon name="branch" size={13} />
             {p.branch}
           </span>
@@ -109,11 +109,11 @@ function SinglePreview({ p }: { p: Preview }) {
           {p.context.length ? (
             <>
               {p.context.map((c) => (
-                <span key={c.path} className="rounded-[5px] bg-selected px-1.5 py-0.5 text-xs" title={c.path}>
+                <span key={c.path} className="rounded-[5px] bg-selected px-1.5 py-0.5 text-12" title={c.path}>
                   {c.kind === "wiki" ? "Wiki" : c.kind.toUpperCase()} · {c.title}
                 </span>
               ))}
-              <span className="font-mono text-[11.5px] text-fg-tertiary">→ .lazyagents/context/ and MCP</span>
+              <span className="font-mono text-12 text-fg-tertiary">→ .lazyagents/context/ and MCP</span>
             </>
           ) : (
             <span className="text-fg-tertiary">No documents attached</span>
@@ -122,8 +122,8 @@ function SinglePreview({ p }: { p: Preview }) {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[520px] text-left text-[13px]">
-          <thead className="text-[12px] text-fg-tertiary">
+        <table className="w-full min-w-[520px] text-left text-13">
+          <thead className="text-12 text-fg-tertiary">
             <tr>
               <th className="px-3.5 py-2 font-normal">Scope</th>
               <th className="px-3 py-2 font-normal">Mode</th>
@@ -134,14 +134,14 @@ function SinglePreview({ p }: { p: Preview }) {
           <tbody>
             {p.scopes.map((s) => (
               <tr key={s.scope} className="border-t border-border-subtle">
-                <td className="px-3.5 py-2 font-mono text-[12.5px]">{s.scope}</td>
+                <td className="px-3.5 py-2 font-mono text-13">{s.scope}</td>
                 <td className="px-3 py-2">
                   <ScopeMode mode={s.mode} />
                 </td>
                 <td className="px-3 py-2">
                   <EnforcementChip level={s.enforcement as Enforcement} />
                 </td>
-                <td className="px-3 py-2 text-[12.5px] text-fg-secondary">
+                <td className="px-3 py-2 text-13 text-fg-secondary">
                   {s.how} {s.source === "project" && <ProjectMark />}
                 </td>
               </tr>
@@ -156,14 +156,14 @@ function SinglePreview({ p }: { p: Preview }) {
             <MonoChip key={s.name}>{s.name}</MonoChip>
           ))}
           {withheld.map((s) => (
-            <span key={s.name} className="font-mono text-[12px] text-fg-tertiary" title={s.reason}>
+            <span key={s.name} className="font-mono text-12 text-fg-tertiary" title={s.reason}>
               {s.name} withheld
             </span>
           ))}
           {p.secrets.length === 0 && <span className="text-fg-tertiary">None stored</span>}
         </Row>
         <Row label="Guards">
-          <span className="font-mono text-[12.5px]">
+          <span className="font-mono text-13">
             {[res.budget.max_runtime && `${res.budget.max_runtime} runtime`, res.budget.max_turns && `${res.budget.max_turns} turns`]
               .filter(Boolean)
               .join(" · ") || "none"}
@@ -186,13 +186,13 @@ function BulkPreview({ previews }: { previews: Array<Preview | undefined> }) {
       <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border">
         {previews.map((p, i) =>
           p ? (
-            <li key={p.ticket_key} className="flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 text-[13px]">
-              <span className="w-16 font-mono text-xs text-fg-tertiary">{p.ticket_key}</span>
+            <li key={p.ticket_key} className="flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 text-13">
+              <span className="w-16 font-mono text-12 text-fg-tertiary">{p.ticket_key}</span>
               {p.agent.name && <AgentAvatar name={p.agent.name} colorIndex={p.agent.color_index} label={false} />}
               <span className="font-medium">{p.agent.name || "No agent"}</span>
               {p.resolved && <MonoChip>{p.resolved.harness}</MonoChip>}
               {p.resolved && <MonoChip>{p.resolved.model}</MonoChip>}
-              <span className="ml-auto text-xs">
+              <span className="ml-auto text-12">
                 {p.blockers.length ? (
                   <span className="text-pill-blocked-fg">{p.blockers.join("; ")}</span>
                 ) : (p.queued_behind ?? []).length ? (
@@ -270,7 +270,7 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
                   `Dispatch ${keys.length} tickets`
                 )}
               </Dialog.Title>
-              <p id="dispatch-desc" className="text-[12.5px] text-fg-secondary">
+              <p id="dispatch-desc" className="text-13 text-fg-secondary">
                 This is exactly what {single ? "the run" : "each run"} will get. Nothing starts until you approve.
               </p>
             </div>
@@ -341,7 +341,7 @@ export function DispatchDialog({ keys, open, onOpenChange, onDone }: { keys: str
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
-            <span className="mr-auto text-xs text-fg-tertiary">Logged on the ticket as dispatched by you</span>
+            <span className="mr-auto text-12 text-fg-tertiary">Logged on the ticket as dispatched by you</span>
             <Dialog.Close asChild>
               <Button variant="ghost">Cancel</Button>
             </Dialog.Close>

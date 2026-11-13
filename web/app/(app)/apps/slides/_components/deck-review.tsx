@@ -67,11 +67,11 @@ export function DeckReview({ base, head, persona, assetUrl, fontsReady, busy, er
       <SlideSvg deck={deck} slide={slide} assetUrl={assetUrl} fontsReady={fontsReady} marks={marks} className="block aspect-video w-full" />
     </span>
   );
-  const none = (text: string) => <span className="grid aspect-video w-full place-items-center rounded-[4px] border border-dashed border-border-strong bg-surface-sunken text-center text-[11px] text-fg-tertiary">{text}</span>;
+  const none = (text: string) => <span className="grid aspect-video w-full place-items-center rounded-[4px] border border-dashed border-border-strong bg-surface-sunken text-center text-11 text-fg-tertiary">{text}</span>;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="deck-review">
-      <div role="status" className="flex flex-none flex-col gap-2 border-b border-border-subtle px-3 py-2.5 text-[13px]">
+      <div role="status" className="flex flex-none flex-col gap-2 border-b border-border-subtle px-3 py-2.5 text-13">
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 font-semibold text-fg">
             {persona} suggested {changes.length === 1 ? "1 change" : `${changes.length} changes`}
@@ -79,9 +79,9 @@ export function DeckReview({ base, head, persona, assetUrl, fontsReady, busy, er
           <Button variant="secondary" disabled={busy} onClick={() => everything("reject")}>Reject all</Button>
           <Button variant="primary" disabled={busy} onClick={() => everything("accept")}>Accept all</Button>
         </div>
-        <span className="text-[12px] text-fg-tertiary">{left === changes.length ? "Accept or reject each one, or all at once. Editing is paused until you finish." : `${left} left to decide.`}</span>
+        <span className="text-12 text-fg-tertiary">{left === changes.length ? "Accept or reject each one, or all at once. Editing is paused until you finish." : `${left} left to decide.`}</span>
       </div>
-      {error && <p role="alert" className="px-3 pt-2 text-xs text-pill-blocked-fg">{error}</p>}
+      {error && <p role="alert" className="px-3 pt-2 text-12 text-pill-blocked-fg">{error}</p>}
       <ol className="flex min-h-0 flex-col gap-3 overflow-y-auto p-3">
         {changes.map((c) => {
           const d = decisions[c.id];
@@ -89,34 +89,34 @@ export function DeckReview({ base, head, persona, assetUrl, fontsReady, busy, er
           return (
             <li key={c.id} data-change={c.id} data-change-slide={(c.after ?? c.before)?.id} tabIndex={-1} className={cx("rounded-xl border bg-surface p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent/50", d ? "border-border-subtle" : "border-border")}>
               <div className="flex flex-wrap items-center gap-2">
-                <span className={cx("rounded-[5px] px-1.5 py-px text-[11.5px] font-medium", d ? "bg-pill-neutral-bg text-pill-neutral-fg" : "bg-pill-human-bg text-pill-human-fg")}>{label}</span>
-                <span className={cx("text-[13.5px] font-semibold", d ? "text-fg-secondary" : "text-fg")}>{c.kind === "theme" ? "Deck theme" : `Slide ${c.position} · ${c.title}`}</span>
-                {d && <span className={cx("rounded-[5px] px-1.5 py-px text-[11.5px] font-medium", d === "accept" ? "bg-pill-done-bg text-pill-done-fg" : "bg-pill-blocked-bg text-pill-blocked-fg")}>{d === "accept" ? "✓ Accepted" : "Rejected"}</span>}
+                <span className={cx("rounded-[5px] px-1.5 py-px text-12 font-medium", d ? "bg-pill-neutral-bg text-pill-neutral-fg" : "bg-pill-human-bg text-pill-human-fg")}>{label}</span>
+                <span className={cx("text-14 font-semibold", d ? "text-fg-secondary" : "text-fg")}>{c.kind === "theme" ? "Deck theme" : `Slide ${c.position} · ${c.title}`}</span>
+                {d && <span className={cx("rounded-[5px] px-1.5 py-px text-12 font-medium", d === "accept" ? "bg-pill-done-bg text-pill-done-fg" : "bg-pill-blocked-bg text-pill-blocked-fg")}>{d === "accept" ? "✓ Accepted" : "Rejected"}</span>}
                 <span className="flex-1" />
                 {d && (
-                  <button type="button" className="text-[12.5px] text-accent hover:underline" disabled={busy} onClick={() => setDecisions((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => Number(k) !== c.id)))}>
+                  <button type="button" className="text-13 text-accent hover:underline" disabled={busy} onClick={() => setDecisions((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => Number(k) !== c.id)))}>
                     Undo
                   </button>
                 )}
               </div>
               {d ? (
-                <p className="mt-1.5 text-[12.5px] text-fg-tertiary">{c.details.join(" · ")}</p>
+                <p className="mt-1.5 text-13 text-fg-tertiary">{c.details.join(" · ")}</p>
               ) : (
                 <div className="mt-2.5 flex flex-col gap-2.5">
                   {c.kind !== "theme" && (
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                       <div>
-                        <p className="mb-1 text-[11px] font-medium text-fg-tertiary">Before</p>
+                        <p className="mb-1 text-11 font-medium text-fg-tertiary">Before</p>
                         {c.before ? thumb(base, c.before, Object.fromEntries(Object.keys(c.marksBefore).map((k) => [k, "removed" as const]))) : none("No slide here before")}
                       </div>
                       <span aria-hidden className="pt-4 text-fg-tertiary">→</span>
                       <div>
-                        <p className="mb-1 text-[11px] font-medium text-fg-tertiary">After</p>
+                        <p className="mb-1 text-11 font-medium text-fg-tertiary">After</p>
                         {c.after ? thumb(head, c.after, c.kind === "added" ? Object.fromEntries(c.after.elements.map((e) => [e.id, "added" as const])) : c.marksAfter) : none("Slide removed")}
                       </div>
                     </div>
                   )}
-                  <ul className="flex flex-col gap-1 text-[12.5px] text-fg-secondary" aria-label="What changed">
+                  <ul className="flex flex-col gap-1 text-13 text-fg-secondary" aria-label="What changed">
                     {c.details.map((x, i) => <li key={i}>{x}</li>)}
                   </ul>
                   <div className="flex justify-end gap-2">

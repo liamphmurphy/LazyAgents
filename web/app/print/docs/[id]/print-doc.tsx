@@ -50,10 +50,10 @@ export function PrintDoc({ id }: { id: string }) {
   return (
     <div className="min-h-dvh bg-surface text-fg print:bg-transparent">
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-panel px-6 py-2 print:hidden">
-        <Link href={`/apps/docs/${id}`} className="text-[13px] text-fg-secondary hover:text-fg">
+        <Link href={`/apps/docs/${id}`} className="text-13 text-fg-secondary hover:text-fg">
           ← Back to document
         </Link>
-        <span className="ml-auto text-xs text-fg-tertiary">Choose “Save as PDF” as the destination.</span>
+        <span className="ml-auto text-12 text-fg-tertiary">Choose “Save as PDF” as the destination.</span>
         <Button variant="primary" icon="printer" disabled={!c} onClick={() => window.print()}>
           Print / Save as PDF
         </Button>

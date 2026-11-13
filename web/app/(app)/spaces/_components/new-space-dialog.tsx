@@ -12,10 +12,10 @@ import { ColorPicker, ConnectorSelect, MemoryChoice, PersonaSelect, ProjectSelec
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const MAX_INSTRUCTIONS = 4000;
 const input =
-  "h-[40px] w-full rounded-lg border border-border-strong bg-surface-sunken px-[14px] text-[14px] text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
+  "h-[40px] w-full rounded-lg border border-border-strong bg-surface-sunken px-[14px] text-14 text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
 
 const Label = ({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) => (
-  <label htmlFor={htmlFor} className="text-[12px] text-fg-secondary">
+  <label htmlFor={htmlFor} className="text-12 text-fg-secondary">
     {children}
   </label>
 );
@@ -83,7 +83,7 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         >
           <form onSubmit={submit} className="flex flex-col">
             <div className="flex items-center justify-between">
-              <Dialog.Title className="text-[18px] font-semibold text-fg">New space</Dialog.Title>
+              <Dialog.Title className="text-18 font-semibold text-fg">New space</Dialog.Title>
               <Dialog.Close className="grid size-[28px] place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg" aria-label="Close">
                 <Icon name="x" size={14} strokeWidth={1.6} />
               </Dialog.Close>
@@ -105,7 +105,7 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <div className="mt-[20px] flex flex-col gap-[10px]">
               <div className="flex items-baseline justify-between gap-[12px]">
                 <Label htmlFor="space-instructions">Instructions</Label>
-                <span className="text-[11px] text-fg-tertiary">Added to every chat in this space, below the persona</span>
+                <span className="text-11 text-fg-tertiary">Added to every chat in this space, below the persona</span>
               </div>
               <div className="relative">
                 <textarea
@@ -115,16 +115,16 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                   disabled={locked}
                   placeholder={"Act as my training and nutrition coach.\nPrefer short answers with numbers."}
                   onChange={(e) => setInstructions(e.target.value)}
-                  className="h-[132px] w-full resize-none rounded-lg border border-border-strong bg-surface-sunken px-[14px] py-[12px] text-[13.5px] leading-[20px] text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none"
+                  className="h-[132px] w-full resize-none rounded-lg border border-border-strong bg-surface-sunken px-[14px] py-[12px] text-14 leading-[20px] text-fg placeholder:text-fg-tertiary focus:border-accent focus:outline-none"
                 />
-                <span className="pointer-events-none absolute bottom-[8px] right-[10px] text-[11px] text-fg-tertiary">
+                <span className="pointer-events-none absolute bottom-[8px] right-[10px] text-11 text-fg-tertiary">
                   {instructions.length} / {MAX_INSTRUCTIONS}
                 </span>
               </div>
             </div>
 
             <div className="mt-[24px] flex flex-col gap-[10px]">
-              <span className="text-[12px] text-fg-secondary">Defaults for new chats</span>
+              <span className="text-12 text-fg-secondary">Defaults for new chats</span>
               <div className="flex gap-[12px] max-sm:flex-col">
                 <PersonaSelect value={persona} onChange={setPersona} disabled={locked} />
                 <ProjectSelect value={project} onChange={setProject} disabled={locked} />
@@ -133,13 +133,13 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             </div>
 
             <div className="mt-[24px] flex flex-col gap-[10px]">
-              <span className="text-[12px] text-fg-secondary">Memory</span>
+              <span className="text-12 text-fg-secondary">Memory</span>
               <MemoryChoice value={spaceMemory} onChange={setSpaceMemory} disabled={locked} />
             </div>
 
-            <p className="mt-[20px] text-[12px] text-fg-tertiary">Add files, text and websites after the space is created.</p>
+            <p className="mt-[20px] text-12 text-fg-tertiary">Add files, text and websites after the space is created.</p>
             {create.isError && (
-              <p role="alert" className="mt-[8px] text-[12px] text-pill-blocked-fg">
+              <p role="alert" className="mt-[8px] text-12 text-pill-blocked-fg">
                 {errorText(create.error)}
               </p>
             )}

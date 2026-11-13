@@ -35,14 +35,14 @@ export function VideoRendererNotes({ videos }: { videos: ChatVideo[] }) {
       {done.map((v) => {
         const took = renderTook(v);
         return (
-          <details key={v.id} className="group text-xs text-fg-tertiary" data-testid="video-renderer">
+          <details key={v.id} className="group text-12 text-fg-tertiary" data-testid="video-renderer">
             <summary className="cursor-pointer list-none select-none hover:text-fg-secondary [&::-webkit-details-marker]:hidden">
               <span className="inline-block transition-transform group-open:rotate-90">▸</span>{" "}
               Renderer: {scriptName(v.script_path)}{v.script_lines > 0 && ` (${v.script_lines.toLocaleString()} lines)`}{took && ` · rendered in ${took}`}
             </summary>
             <div className="mt-1.5 flex flex-col gap-1">
-              <code className="text-[11px] text-fg-secondary">{v.script_path}</code>
-              {v.script_tail && <pre className="overflow-x-auto rounded-lg border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-[11px] leading-[1.5] text-fg-secondary">{v.script_tail}</pre>}
+              <code className="text-11 text-fg-secondary">{v.script_path}</code>
+              {v.script_tail && <pre className="overflow-x-auto rounded-lg border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-11 leading-[1.5] text-fg-secondary">{v.script_tail}</pre>}
             </div>
           </details>
         );
@@ -57,10 +57,10 @@ function VideoCard({ chatId, v, messageId, onStop }: { chatId: string; v: ChatVi
   return (
     <div className="w-full max-w-[640px] overflow-hidden rounded-xl border border-border bg-surface" data-testid="video-card" data-stage={v.stage} data-state={v.state}>
       <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2.5">
-        <span className="flex items-center gap-1 rounded bg-accent-soft px-1.5 py-px text-[11px] text-accent"><Icon name="play" size={9} />Video</span>
-        <b className="min-w-0 truncate text-[13px] font-semibold text-fg">{v.title}</b>
+        <span className="flex items-center gap-1 rounded bg-accent-soft px-1.5 py-px text-11 text-accent"><Icon name="play" size={9} />Video</span>
+        <b className="min-w-0 truncate text-13 font-semibold text-fg">{v.title}</b>
         <span className="flex-1" />
-        <span className="flex-none text-xs text-fg-tertiary">{done ? v.output!.filename : plannedMeta(v)}</span>
+        <span className="flex-none text-12 text-fg-tertiary">{done ? v.output!.filename : plannedMeta(v)}</span>
       </div>
       <Pipeline states={states} />
       {done ? (
@@ -80,7 +80,7 @@ function VideoCard({ chatId, v, messageId, onStop }: { chatId: string; v: ChatVi
 
 function Pipeline({ states }: { states: StageState[] }) {
   return (
-    <ol className="flex flex-wrap items-center gap-1.5 border-b border-border-subtle px-3 py-2 text-xs" aria-label="Stages">
+    <ol className="flex flex-wrap items-center gap-1.5 border-b border-border-subtle px-3 py-2 text-12" aria-label="Stages">
       {VIDEO_STAGES.map((s, i) => (
         <li key={s.id} className="flex items-center gap-1.5" data-state={states[i]}>
           {i > 0 && <span className="h-px w-3 bg-border-strong" aria-hidden />}
@@ -96,7 +96,7 @@ function Pipeline({ states }: { states: StageState[] }) {
 }
 
 function StageDot({ state }: { state: StageState }) {
-  const base = "grid size-3.5 flex-none place-items-center rounded-full border-[1.5px] text-[9px] font-bold leading-none";
+  const base = "grid size-3.5 flex-none place-items-center rounded-full border-[1.5px] text-10 font-bold leading-none";
   if (state === "done") return <span className={cx(base, "border-state-done bg-state-done text-bg")} aria-hidden>✓</span>;
   if (state === "failed") return <span className={cx(base, "border-state-blocked bg-state-blocked text-bg")} aria-hidden>!</span>;
   if (state === "active") return <span className={cx(base, "video-spin border-state-progress border-t-transparent")} aria-hidden />;
@@ -110,18 +110,18 @@ function Spinner() {
 function Writing({ v }: { v: ChatVideo }) {
   return (
     <div className="p-3">
-      <div className="mb-1.5 flex items-center gap-2 text-xs text-fg-secondary">
+      <div className="mb-1.5 flex items-center gap-2 text-12 text-fg-secondary">
         <Spinner />
         Writing {v.script_path ? scriptName(v.script_path) : "the renderer"}
         <span className="flex-1" />
         {v.script_lines > 0 && <span className="text-fg-tertiary">{v.script_lines.toLocaleString()} lines</span>}
       </div>
       {v.script_tail && (
-        <pre className="mb-2.5 h-24 overflow-hidden rounded-lg border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-[11px] leading-[1.5] text-fg-secondary [mask-image:linear-gradient(#000_70%,transparent)]" data-testid="video-script">
+        <pre className="mb-2.5 h-24 overflow-hidden rounded-lg border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-11 leading-[1.5] text-fg-secondary [mask-image:linear-gradient(#000_70%,transparent)]" data-testid="video-script">
           {v.script_tail}
         </pre>
       )}
-      <div className="video-shimmer grid aspect-video place-items-center rounded-lg text-xs text-fg-tertiary">The preview shows up once the stills are rendered</div>
+      <div className="video-shimmer grid aspect-video place-items-center rounded-lg text-12 text-fg-tertiary">The preview shows up once the stills are rendered</div>
     </div>
   );
 }
@@ -137,8 +137,8 @@ function StillGrid({ chatId, v, dim }: { chatId: string; v: ChatVideo; dim?: boo
           {/* A same-origin, private URL: next/image would only add a proxy hop. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={frameUrl(chatId, v, "still", f.idx)} alt={`Frame ${f.idx}`} className="block size-full object-cover" />
-          <span className="absolute bottom-1 left-1.5 text-[10px] text-[#fff] [text-shadow:0_1px_2px_#000]">frame {f.idx}</span>
-          {!dim && <span className="absolute right-1.5 top-1 text-[11px] text-[#fff] [text-shadow:0_1px_2px_#000]" aria-hidden>✓</span>}
+          <span className="absolute bottom-1 left-1.5 text-10 text-[#fff] [text-shadow:0_1px_2px_#000]">frame {f.idx}</span>
+          {!dim && <span className="absolute right-1.5 top-1 text-11 text-[#fff] [text-shadow:0_1px_2px_#000]" aria-hidden>✓</span>}
         </div>
       ))}
       {Array.from({ length: pad }, (_, i) => <div key={`pad-${i}`} className="video-shimmer aspect-video rounded-md" aria-hidden />)}
@@ -151,13 +151,13 @@ function Stills({ chatId, v }: { chatId: string; v: ChatVideo }) {
   const checking = v.checks.some((c) => c.passed === undefined || c.passed === null);
   return (
     <div className="p-3">
-      <div className="mb-2 flex items-center gap-2 text-xs text-fg-secondary">
+      <div className="mb-2 flex items-center gap-2 text-12 text-fg-secondary">
         {checking || !v.checks.length ? <Spinner /> : <span className="text-pill-done-fg" aria-hidden>✓</span>}
         Rendering {n || "a few"} stills and checking them before the full render
       </div>
       <StillGrid chatId={chatId} v={v} />
       {v.checks.length > 0 && (
-        <ul className="mt-2.5 flex flex-col gap-1 text-xs text-fg-secondary" data-testid="video-checks">
+        <ul className="mt-2.5 flex flex-col gap-1 text-12 text-fg-secondary" data-testid="video-checks">
           {v.checks.map((c, i) => (
             <li key={i} className={cx("transition-opacity", c.passed === undefined || c.passed === null ? "opacity-40" : "opacity-100")}>
               {c.passed === true ? <span className="text-pill-done-fg">✓</span> : c.passed === false ? <span className="text-pill-blocked-fg">✗</span> : "○"} {c.label}
@@ -192,14 +192,14 @@ function Rendering({ chatId, v, onStop }: { chatId: string; v: ChatVideo; onStop
       <div className="relative aspect-video overflow-hidden rounded-lg bg-[#000]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {src ? <img src={src} alt="The latest rendered frame" className="block size-full object-cover" /> : <div className="video-shimmer size-full" />}
-        <span className="absolute left-2 top-2 rounded bg-[rgb(0_0_0/0.65)] px-1.5 py-0.5 text-[11px] text-[#fff]"><span className="video-blink text-state-blocked">●</span> {badge}</span>
-        {v.frames_total > 0 && <span className="absolute right-2 top-2 rounded bg-[rgb(0_0_0/0.65)] px-1.5 py-0.5 font-mono text-[11px] text-[#fff]" data-testid="video-frames">{v.frames_done} / {v.frames_total}</span>}
+        <span className="absolute left-2 top-2 rounded bg-[rgb(0_0_0/0.65)] px-1.5 py-0.5 text-11 text-[#fff]"><span className="video-blink text-state-blocked">●</span> {badge}</span>
+        {v.frames_total > 0 && <span className="absolute right-2 top-2 rounded bg-[rgb(0_0_0/0.65)] px-1.5 py-0.5 font-mono text-11 text-[#fff]" data-testid="video-frames">{v.frames_done} / {v.frames_total}</span>}
         {v.stage === "render" && <div className="video-sweep" aria-hidden />}
       </div>
       <div className="mb-1.5 mt-2.5 h-1 overflow-hidden rounded-sm bg-track" role="progressbar" aria-label="Render progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
         <div className="h-full bg-gradient-to-r from-accent to-state-review transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex items-center gap-2 text-xs text-fg-tertiary">
+      <div className="flex items-center gap-2 text-12 text-fg-tertiary">
         {v.stage === "render" ? (
           <span data-testid="video-eta">{renderEta(v, now)}</span>
         ) : (
@@ -259,7 +259,7 @@ function Ready({ chatId, v }: { chatId: string; v: ChatVideo }) {
           </button>
         )}
       </div>
-      <div className="flex items-center gap-2.5 bg-surface-sunken px-2.5 py-1.5 text-xs text-fg-secondary">
+      <div className="flex items-center gap-2.5 bg-surface-sunken px-2.5 py-1.5 text-12 text-fg-secondary">
         <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="text-fg hover:text-accent">
           <Icon name={playing ? "pause" : "play"} size={13} />
         </button>
@@ -282,8 +282,8 @@ function Ready({ chatId, v }: { chatId: string; v: ChatVideo }) {
         <button type="button" aria-label="Full screen" onClick={() => void ref.current?.requestFullscreen?.()} className="text-fg hover:text-accent"><Icon name="expand" size={13} /></button>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle px-3 py-2.5">
-        {v.library_item_id && <span className="rounded-full bg-pill-done-bg px-2 py-0.5 text-[11px] text-pill-done-fg">✓ Saved to Library</span>}
-        <span className="text-xs text-fg-tertiary" data-testid="video-meta">{meta}</span>
+        {v.library_item_id && <span className="rounded-full bg-pill-done-bg px-2 py-0.5 text-11 text-pill-done-fg">✓ Saved to Library</span>}
+        <span className="text-12 text-fg-tertiary" data-testid="video-meta">{meta}</span>
         <span className="flex-1" />
         <a href={`${src}?download=true`} download={out.filename} className={buttonClass("secondary")}>Download</a>
         {v.library_item_id && <ButtonLink href={`/library?tab=videos&item=${v.library_item_id}`}>Open in Library</ButtonLink>}
@@ -301,10 +301,10 @@ function Failed({ chatId, v, messageId }: { chatId: string; v: ChatVideo; messag
     <div className="p-3">
       <StillGrid chatId={chatId} v={v} dim />
       <div className="mt-2.5 rounded-lg border border-state-blocked/35 bg-pill-blocked-bg px-3 py-2.5 first:mt-0" role="alert">
-        <b className="text-[13px] text-pill-blocked-fg">{stopped ? "Stopped" : stage.failed}</b>
-        <p className="mb-2 mt-1 text-[13px] text-fg-2">{v.error}</p>
+        <b className="text-13 text-pill-blocked-fg">{stopped ? "Stopped" : stage.failed}</b>
+        <p className="mb-2 mt-1 text-13 text-fg-2">{v.error}</p>
         {log && v.error_log && (
-          <pre className="mb-2 max-h-48 overflow-auto rounded-md border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-[11px] leading-[1.5] text-fg-secondary" data-testid="video-log">{v.error_log}</pre>
+          <pre className="mb-2 max-h-48 overflow-auto rounded-md border border-border-subtle bg-surface-sunken px-2.5 py-2 font-mono text-11 leading-[1.5] text-fg-secondary" data-testid="video-log">{v.error_log}</pre>
         )}
         <div className="flex flex-wrap items-center gap-2">
           {actions && messageId && (
@@ -312,7 +312,7 @@ function Failed({ chatId, v, messageId }: { chatId: string; v: ChatVideo; messag
           )}
           {v.error_log && <Button variant="secondary" onClick={() => setLog((x) => !x)}>{log ? "Hide log" : "Show log"}</Button>}
           <span className="flex-1" />
-          <span className="rounded-full bg-pill-blocked-bg px-2 py-0.5 text-[11px] text-pill-blocked-fg">Not saved</span>
+          <span className="rounded-full bg-pill-blocked-bg px-2 py-0.5 text-11 text-pill-blocked-fg">Not saved</span>
         </div>
       </div>
     </div>

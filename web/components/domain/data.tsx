@@ -60,10 +60,10 @@ export function PropertyRow({
 }) {
   const inner = (
     <>
-      <span className="flex-none text-[12.5px] text-fg-tertiary" style={{ width: keyWidth }}>
+      <span className="flex-none text-13 text-fg-tertiary" style={{ width: keyWidth }}>
         {label}
       </span>
-      <span className="flex min-w-0 items-center gap-2 text-[13px] text-fg">{children}</span>
+      <span className="flex min-w-0 items-center gap-2 text-13 text-fg">{children}</span>
     </>
   );
   const cls = "flex min-h-[34px] w-full items-center gap-2.5 rounded-md px-2 text-left";
@@ -89,10 +89,10 @@ export function KpiTile({
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-[18px] py-4">
-      <span className="text-[12.5px] text-fg-secondary">{label}</span>
+      <span className="text-13 text-fg-secondary">{label}</span>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-fg">{value}</span>
-        {context && <span className="text-xs text-fg-tertiary">{context}</span>}
+        <span className="text-28 font-semibold leading-none tracking-[-0.02em] text-fg">{value}</span>
+        {context && <span className="text-12 text-fg-tertiary">{context}</span>}
       </div>
       {visual}
     </div>
@@ -103,8 +103,8 @@ export function KpiTile({
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[11.5px] text-fg-tertiary">{label}</span>
-      <span className="font-mono text-[13px] text-fg">{value}</span>
+      <span className="text-12 text-fg-tertiary">{label}</span>
+      <span className="font-mono text-13 text-fg">{value}</span>
     </div>
   );
 }

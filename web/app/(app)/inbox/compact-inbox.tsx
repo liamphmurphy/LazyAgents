@@ -40,7 +40,7 @@ function pill(kind: string) {
 }
 
 /** Touch-sized buttons: 44px tall (DESIGN.md §3). */
-const TOUCH = "!h-[44px] justify-center px-4 text-sm";
+const TOUCH = "!h-[44px] justify-center px-4 text-14";
 
 /** The ticket's pending approval behind an approval item, and approve/deny on the same endpoint as desktop. */
 function useApproval(item: Item, onSent: (id: string) => void) {
@@ -65,7 +65,7 @@ function useApproval(item: Item, onSent: (id: string) => void) {
 
 function Failure({ error }: { error?: Error | null }) {
   return error ? (
-    <p role="alert" className="text-xs text-pill-blocked-fg">
+    <p role="alert" className="text-12 text-pill-blocked-fg">
       {error.message}
     </p>
   ) : null;
@@ -121,7 +121,7 @@ function Reply({ item, onSent }: { item: Item; onSent: (id: string) => void }) {
           placeholder="Your answer"
           onChange={(e) => setBody(e.target.value)}
           // 16px so iOS doesn't zoom into the field.
-          className="min-h-[44px] flex-1 resize-none !text-base"
+          className="min-h-[44px] flex-1 resize-none !text-16"
         />
         <Button type="submit" variant="primary" className={TOUCH} disabled={!body.trim() || comment.isPending}>
           Send
@@ -137,7 +137,7 @@ function Card({ item, sent, onSent, onOpen }: { item: Item; sent: boolean; onSen
   const approval = item.kind === "approval";
   const body = (
     <>
-      <span className="flex min-w-0 items-center gap-2 text-[13px]">
+      <span className="flex min-w-0 items-center gap-2 text-13">
         {item.agent ? (
           <AgentAvatar name={item.agent.name} colorIndex={item.agent.color_index} label={false} size="md" />
         ) : (
@@ -147,21 +147,21 @@ function Card({ item, sent, onSent, onOpen }: { item: Item; sent: boolean; onSen
         )}
         {item.agent && <span className="truncate font-medium text-fg-secondary">{item.agent.name}</span>}
         {(item.ticket_key || item.project) && (
-          <span className="flex-none font-mono text-xs text-fg-tertiary">{item.ticket_key || item.project}</span>
+          <span className="flex-none font-mono text-12 text-fg-tertiary">{item.ticket_key || item.project}</span>
         )}
         {sent ? (
-          <span className="ml-auto flex-none text-xs font-medium text-accent">Sent</span>
+          <span className="ml-auto flex-none text-12 font-medium text-accent">Sent</span>
         ) : (
-          <span className={cx("ml-auto flex-none text-xs", longWait(item.created_at) ? "text-pill-human-fg" : "text-fg-tertiary")}>
+          <span className={cx("ml-auto flex-none text-12", longWait(item.created_at) ? "text-pill-human-fg" : "text-fg-tertiary")}>
             {waited(item.created_at)}
           </span>
         )}
       </span>
       <span className="flex min-w-0 items-start gap-2">
-        <span className={cx("mt-px flex-none rounded-[4px] px-1.5 py-px text-xs font-medium", PILL[kind.tone])}>{kind.label}</span>
+        <span className={cx("mt-px flex-none rounded-[4px] px-1.5 py-px text-12 font-medium", PILL[kind.tone])}>{kind.label}</span>
         <span className="min-w-0 font-semibold leading-snug text-fg">{item.title}</span>
       </span>
-      <span className="line-clamp-2 text-[13px] text-fg-tertiary">{item.summary}</span>
+      <span className="line-clamp-2 text-13 text-fg-tertiary">{item.summary}</span>
     </>
   );
   const tap = "flex w-full flex-col gap-2 text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent";
@@ -200,7 +200,7 @@ const longPreview = (s: string) => s.length > 320 || s.split("\n").length > 8;
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section aria-label={label} className="flex flex-col gap-1.5">
-      <h3 className="text-xs font-medium text-fg-secondary">{label}</h3>
+      <h3 className="text-12 font-medium text-fg-secondary">{label}</h3>
       {children}
     </section>
   );
@@ -234,8 +234,8 @@ function ApprovalSheet({ item, onSent, onClose }: { item: Item; onSent: (id: str
       >
         <div className="flex items-center gap-2 px-4 pt-3">
           {item.agent && <AgentAvatar name={item.agent.name} colorIndex={item.agent.color_index} label={false} size="md" />}
-          <span className="min-w-0 flex-1 truncate text-[13px] text-fg-secondary">
-            {item.agent?.name ?? "An agent"} {item.ticket_key && <span className="font-mono text-xs text-fg-tertiary">· {item.ticket_key}</span>}
+          <span className="min-w-0 flex-1 truncate text-13 text-fg-secondary">
+            {item.agent?.name ?? "An agent"} {item.ticket_key && <span className="font-mono text-12 text-fg-tertiary">· {item.ticket_key}</span>}
           </span>
           <button ref={close} type="button" aria-label="Close" onClick={onClose} className="grid size-[44px] place-items-center rounded-md text-fg-tertiary hover:bg-hover">
             <Icon name="x" size={18} />
@@ -250,19 +250,19 @@ function ApprovalSheet({ item, onSent, onClose }: { item: Item; onSent: (id: str
           ) : (
             <>
               <Section label="Action">
-                <p className="text-sm text-fg-2">
-                  {ap?.scope && <span className="font-mono text-xs text-fg-tertiary">{ap.scope}</span>}{" "}
+                <p className="text-14 text-fg-2">
+                  {ap?.scope && <span className="font-mono text-12 text-fg-tertiary">{ap.scope}</span>}{" "}
                   {ap?.action_summary ?? item.summary}
                 </p>
               </Section>
               {ap?.risk_summary && (
                 <Section label="Risk summary">
-                  <p className="text-sm text-fg-2">{ap.risk_summary}</p>
+                  <p className="text-14 text-fg-2">{ap.risk_summary}</p>
                 </Section>
               )}
               {preview && (
                 <Section label="Preview">
-                  <pre data-testid="approval-preview" className="max-h-56 overflow-auto whitespace-pre rounded-md bg-surface-sunken p-2.5 font-mono text-xs leading-relaxed text-fg-2">
+                  <pre data-testid="approval-preview" className="max-h-56 overflow-auto whitespace-pre rounded-md bg-surface-sunken p-2.5 font-mono text-12 leading-relaxed text-fg-2">
                     {preview}
                   </pre>
                   {longPreview(preview) && (
@@ -272,7 +272,7 @@ function ApprovalSheet({ item, onSent, onClose }: { item: Item; onSent: (id: str
                   )}
                 </Section>
               )}
-              {ap && ap.state !== "pending" && <p className="text-xs text-fg-tertiary">This request was {ap.state}.</p>}
+              {ap && ap.state !== "pending" && <p className="text-12 text-fg-tertiary">This request was {ap.state}.</p>}
             </>
           )}
         </div>
@@ -281,12 +281,12 @@ function ApprovalSheet({ item, onSent, onClose }: { item: Item; onSent: (id: str
       {full && (
         <div role="dialog" aria-modal="true" aria-label="Preview" className="fixed inset-0 z-50 flex flex-col bg-panel pt-safe">
           <div className="flex items-center border-b border-border-subtle px-4 py-1">
-            <span className="flex-1 text-sm font-medium text-fg">Preview</span>
+            <span className="flex-1 text-14 font-medium text-fg">Preview</span>
             <button type="button" aria-label="Close preview" onClick={() => setFull(false)} className="grid size-[44px] place-items-center rounded-md text-fg-tertiary hover:bg-hover">
               <Icon name="x" size={18} />
             </button>
           </div>
-          <pre className="min-h-0 flex-1 overflow-auto whitespace-pre p-4 pb-safe font-mono text-xs leading-relaxed text-fg-2">{preview}</pre>
+          <pre className="min-h-0 flex-1 overflow-auto whitespace-pre p-4 pb-safe font-mono text-12 leading-relaxed text-fg-2">{preview}</pre>
         </div>
       )}
     </div>
@@ -321,11 +321,11 @@ export function CompactInbox() {
                 aria-pressed={filter === f.key}
                 onClick={() => setFilter(f.key)}
                 className={cx(
-                  "flex h-[36px] flex-none items-center gap-1.5 rounded-full border px-3.5 text-[13px]",
+                  "flex h-[36px] flex-none items-center gap-1.5 rounded-full border px-3.5 text-13",
                   filter === f.key ? "border-transparent bg-selected font-medium text-fg" : "border-border-strong text-fg-secondary",
                 )}
               >
-                {f.label} <span className="font-mono text-xs text-fg-tertiary">{n}</span>
+                {f.label} <span className="font-mono text-12 text-fg-tertiary">{n}</span>
               </button>
             );
           })}
@@ -343,7 +343,7 @@ export function CompactInbox() {
         ) : open.length === 0 ? (
           <AllClear project={project} done={0} onShowDone={() => {}} />
         ) : shown.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[13px] text-fg-secondary">Nothing here right now.</p>
+          <p className="px-4 py-10 text-center text-13 text-fg-secondary">Nothing here right now.</p>
         ) : (
           <ul className="flex flex-col gap-3 px-4 pt-1 pb-4">
             {shown.map((i) => (

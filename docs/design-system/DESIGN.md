@@ -159,6 +159,10 @@ The v0.1 mockups hard-coded a few component colors. They're now tokens with ligh
 | Mono | JetBrains Mono 11–12.5 | IDs, branches, models, numbers |
 | Metric | Inter 28, 600, −0.02em | KPI tiles |
 
+**Scale.** Every font size in the web app is one of 13 steps, as Tailwind utilities named by their px at the default Text size: `text-10` (glyph badges, micro tags), `text-11`, `text-12` (small, meta), `text-13` (body), `text-14` (reading), `text-15` (chat), `text-16`, `text-18`, `text-20`, `text-22`, `text-26` (display), `text-28` (metric), `text-32`. Tailwind's own sizes (`text-xs`…) and arbitrary sizes (`text-[12.5px]`) are not allowed; `lib/ui-conventions.test.mjs` fails on them. The steps set no line-height. In CSS, write `calc(Npx * var(--type-scale))`.
+
+**Text size.** Settings → Appearance → Text size (Small 0.92×, Default, Large 1.12×, Larger 1.25×) sets `data-text-size` on `<html>` before first paint, which sets `--type-scale`. The scale steps and the `type-*` shorthands (restated in `globals.css`) multiply by it; spacing and control heights don't, so check new fixed-height UI at Larger.
+
 Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline code: mono 12px, padding 1px 5px, radius 4px, `--selected` background, `--border-strong` border.
 
 ### Spacing, radius, sizing

@@ -9,6 +9,26 @@
   --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Settings → Text size (lib/palettes.ts TEXT_SIZES) sets data-text-size on <html> before first
+   paint. Every type token and text-* step multiplies by --type-scale. The type tokens are
+   restated here rather than in tokens.css, whose hash Designs pins: a font change there would
+   flag every saved design's tokens as changed. Sizes and line-heights match tokens.css. */
+:root {
+  --type-scale: 1;
+  --text-display: 600 calc(26px * var(--type-scale))/1.2 var(--font-sans);
+  --text-title:   600 calc(19px * var(--type-scale))/1.3 var(--font-sans);
+  --text-heading: 600 calc(14px * var(--type-scale))/1.45 var(--font-sans);
+  --text-body:    400 calc(13px * var(--type-scale))/1.45 var(--font-sans);
+  --text-reading: 400 calc(14px * var(--type-scale))/1.65 var(--font-sans);
+  --text-chat:    400 calc(15px * var(--type-scale))/1.6 var(--font-sans);
+  --text-small:   400 calc(12px * var(--type-scale))/1.45 var(--font-sans);
+  --text-micro:   600 calc(10px * var(--type-scale))/1.2 var(--font-sans);
+  --text-mono:    400 calc(12px * var(--type-scale))/1.45 var(--font-mono);
+}
+:root[data-text-size="small"]  { --type-scale: 0.92; }
+:root[data-text-size="large"]  { --type-scale: 1.12; }
+:root[data-text-size="larger"] { --type-scale: 1.25; }
+
 /*
  * Tokens → Tailwind. Only design tokens exist as utilities: the default
  * palette is cleared so off-system colors can't creep in.
@@ -102,6 +122,25 @@
   --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* The type scale (DESIGN.md §2 Typography): text-10 … text-32, named by their px size at the
+     default Text size. Every step follows --type-scale, so Settings → Text size grows the whole
+     UI's text at once. Tailwind's sizes are cleared so a size off the scale can't creep in, and
+     no step sets a line-height, so text keeps the one it inherits. */
+  --text-*: initial;
+  --text-10: calc(10px * var(--type-scale));
+  --text-11: calc(11px * var(--type-scale));
+  --text-12: calc(12px * var(--type-scale));
+  --text-13: calc(13px * var(--type-scale));
+  --text-14: calc(14px * var(--type-scale));
+  --text-15: calc(15px * var(--type-scale));
+  --text-16: calc(16px * var(--type-scale));
+  --text-18: calc(18px * var(--type-scale));
+  --text-20: calc(20px * var(--type-scale));
+  --text-22: calc(22px * var(--type-scale));
+  --text-26: calc(26px * var(--type-scale));
+  --text-28: calc(28px * var(--type-scale));
+  --text-32: calc(32px * var(--type-scale));
+
   /* Same values as tokens.css; Tailwind's defaults are replaced. */
   --radius-*: initial;
   --radius-xs: 4px;
@@ -154,7 +193,7 @@
   .prose-code code,
   code.inline {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: calc(12px * var(--type-scale));
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--selected);
@@ -987,13 +1026,13 @@
 .harness-character[data-harness="claude-code"] { --character-color: #F2A97E; }
 .harness-character[data-harness="codex"] { --character-color: #B09AEF; }
 .harness-character[data-harness="antigravity"] { --character-color: #78BFDE; }
-.harness-name { display: block; font-size: 10px; line-height: 13px; color: var(--text-secondary); }
+.harness-name { display: block; font-size: calc(10px * var(--type-scale)); line-height: 1.3; color: var(--text-secondary); }
 .harness-working-dot { position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--state-done); }
 .harness-footer[data-rail="true"] { width: calc(100% + var(--spacing) * 3); margin: 0 calc(var(--spacing) * -1.5); padding: 6px 5px; }
 .harness-footer[data-rail="true"] .harness-characters { height: auto; flex-direction: column; gap: 4px; }
 .harness-footer[data-rail="true"] .harness-button { width: 34px; height: 36px; }
 .harness-footer[data-rail="true"] .harness-character { width: 24px; height: 24px; }
-.harness-footer[data-rail="true"] .harness-name { font-size: 8px; line-height: 10px; }
+.harness-footer[data-rail="true"] .harness-name { font-size: 8px; line-height: 10px; } /* fixed: the rail is a fixed-width column */
 .harness-footer[data-rail="true"] .harness-working-dot { width: 3px; height: 3px; top: 3px; right: 2px; }
 .harness-bubble { z-index: 50; width: 236px; max-width: calc(100vw - 16px); padding: 12px 14px 10px; border: 1px solid var(--border-float); border-radius: 12px; background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-float); outline: none; transform-origin: var(--radix-popover-content-transform-origin); }
 .harness-bubble[data-state="open"] { animation: harness-bubble-open 160ms cubic-bezier(.2,.8,.2,1); }
@@ -1002,8 +1041,8 @@
 @keyframes harness-bubble-close { to { opacity: 0; transform: scale(.96); } }
 .harness-bubble-arrow { fill: var(--surface-raised); }
 .harness-usage-heading { display: flex; align-items: baseline; gap: 6px; }
-.harness-usage-heading h3 { font-size: 12px; font-weight: 500; }
-.harness-usage-value { margin-left: auto; font-size: 18px; letter-spacing: -.6px; color: var(--text); }
+.harness-usage-heading h3 { font-size: calc(12px * var(--type-scale)); font-weight: 500; }
+.harness-usage-value { margin-left: auto; font-size: calc(18px * var(--type-scale)); letter-spacing: -.6px; color: var(--text); }
 .harness-usage-row[data-tone="warn"] .harness-usage-value { color: var(--pill-human-fg); }
 .harness-usage-row[data-tone="limited"] .harness-usage-value, .harness-usage-row[data-tone="limited"] .harness-usage-sub { color: var(--pill-blocked-fg); }
 .harness-usage-track { height: 4px; margin: 7px 0 8px; overflow: hidden; border-radius: 5px; background: var(--surface-sunken); }
@@ -1011,9 +1050,9 @@
 .harness-usage-row[data-tone="warn"] .harness-usage-track i { background: var(--pill-human-fg); }
 .harness-usage-row[data-tone="limited"] .harness-usage-track i { background: var(--pill-blocked-fg); }
 .harness-usage-track[data-unavailable="true"] { background: repeating-linear-gradient(90deg,var(--text-tertiary) 0 2px,transparent 2px 7px); }
-.harness-usage-meta { display: flex; justify-content: space-between; gap: 5px; color: var(--text-secondary); font-size: 10px; }
-.harness-usage-sub { margin-top: 5px; color: var(--text-tertiary); font-size: 11px; }
-.harness-bubble-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-size: 10.5px; color: var(--text-secondary); }
+.harness-usage-meta { display: flex; justify-content: space-between; gap: 5px; color: var(--text-secondary); font-size: calc(10px * var(--type-scale)); }
+.harness-usage-sub { margin-top: 5px; color: var(--text-tertiary); font-size: calc(11px * var(--type-scale)); }
+.harness-bubble-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-size: calc(11px * var(--type-scale)); color: var(--text-secondary); }
 .harness-bubble-footer a:hover { color: var(--text); }
 .harness-character .body, .harness-character .eyes, .harness-character .legs, .harness-character .orbit, .harness-character .exhaust, .harness-character .shadow { transform-box: view-box; transform-origin: 32px 34px; }
 .harness-character .eyes { animation: harness-blink 6s infinite; }
@@ -1135,11 +1174,11 @@
 
 /* The Docs app's page: the editor's content, styled like a written document. */
 @layer components {
-  .doc-page .ProseMirror { outline: none; color: var(--text-2); font-size: 15.5px; line-height: 1.7; min-height: 50vh; }
+  .doc-page .ProseMirror { outline: none; color: var(--text-2); font-size: calc(15.5px * var(--type-scale)); line-height: 1.7; min-height: 50vh; }
   .doc-page .ProseMirror > * + * { margin-top: 0.75em; }
-  .doc-page .ProseMirror h1 { font: 600 30px/1.2 Georgia, "Times New Roman", serif; letter-spacing: -0.01em; color: var(--text); margin: 0 0 0.5em; }
-  .doc-page .ProseMirror h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-top: 1.4em; }
-  .doc-page .ProseMirror h3 { font-size: 16.5px; font-weight: 600; color: var(--text); margin-top: 1.2em; }
+  .doc-page .ProseMirror h1 { font: 600 calc(30px * var(--type-scale))/1.2 Georgia, "Times New Roman", serif; letter-spacing: -0.01em; color: var(--text); margin: 0 0 0.5em; }
+  .doc-page .ProseMirror h2 { font-size: calc(20px * var(--type-scale)); font-weight: 600; color: var(--text); margin-top: 1.4em; }
+  .doc-page .ProseMirror h3 { font-size: calc(16.5px * var(--type-scale)); font-weight: 600; color: var(--text); margin-top: 1.2em; }
   .doc-page .ProseMirror h4, .doc-page .ProseMirror h5, .doc-page .ProseMirror h6 { font-weight: 600; color: var(--text); }
   .doc-page .ProseMirror ul { list-style: disc; padding-left: 1.4em; }
   .doc-page .ProseMirror ol { list-style: decimal; padding-left: 1.4em; }
@@ -1151,11 +1190,11 @@
   .doc-page .ProseMirror blockquote { border-left: 3px solid var(--border-strong); padding-left: 1em; color: var(--text-secondary); }
   .doc-page .ProseMirror a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .doc-page .ProseMirror code { font-family: var(--font-mono); font-size: 0.86em; padding: 1px 5px; border-radius: 4px; background: var(--selected); border: 1px solid var(--border-strong); }
-  .doc-page .ProseMirror pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.55; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  .doc-page .ProseMirror pre { font-family: var(--font-mono); font-size: calc(13px * var(--type-scale)); line-height: 1.55; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
   .doc-page .ProseMirror pre code { background: none; border: 0; padding: 0; font-size: inherit; }
   .doc-page .ProseMirror hr { border: 0; border-top: 1px solid var(--border-strong); margin: 1.6em 0; }
   .doc-page .ProseMirror hr.ProseMirror-selectednode { border-top-color: var(--accent); }
-  .doc-page .ProseMirror table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .doc-page .ProseMirror table { border-collapse: collapse; width: 100%; font-size: calc(14px * var(--type-scale)); }
   .doc-page .ProseMirror th, .doc-page .ProseMirror td { border: 1px solid var(--border-strong); padding: 6px 10px; vertical-align: top; text-align: left; }
   .doc-page .ProseMirror th { background: var(--surface-sunken); font-weight: 600; color: var(--text); }
   .doc-page .ProseMirror .selectedCell { background: var(--accent-soft); }

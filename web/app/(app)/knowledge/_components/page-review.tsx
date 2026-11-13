@@ -28,14 +28,14 @@ export function ReviewBar({ page, persona, direct }: { page: Page; persona: stri
   return (
     <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-[#F59E5B40] bg-[#F59E5B14] px-4 py-2.5">
       <Icon name="bulb" size={15} className="text-state-human" />
-      <p className="flex-1 text-[13px] text-fg">
+      <p className="flex-1 text-13 text-fg">
         <b>
           {persona} {direct ? "changed" : "suggested"} {left.length} {left.length === 1 ? "change" : "changes"}
         </b>
         {direct && <span className="text-fg-secondary"> · applied, reviewed afterwards</span>}
         {stale > 0 && <span className="text-state-human"> · {stale} stale</span>}
       </p>
-      {resolve.error && <span className="text-xs text-state-blocked">{resolve.error.message}</span>}
+      {resolve.error && <span className="text-12 text-state-blocked">{resolve.error.message}</span>}
       <Button onClick={() => decideAll(false)} disabled={resolve.isPending}>
         {direct ? "Undo rest" : "Reject rest"}
       </Button>
@@ -71,7 +71,7 @@ function ChangeCard({ pageId, review, change, direct }: { pageId: string; review
     return (
       <div className="flex gap-3 rounded-xl border border-[#F0BF4C40] bg-[#F0BF4C24] p-4">
         <Icon name="alert" size={15} className="mt-0.5 text-state-progress" />
-        <div className="text-[13px]">
+        <div className="text-13">
           <p className="font-semibold text-fg">Change {n} is stale: you edited this passage after it was suggested</p>
           <p className="mt-1 text-fg-secondary">Your text was kept. The persona gets the change back with this note so it can try again against your version.</p>
         </div>
@@ -81,11 +81,11 @@ function ChangeCard({ pageId, review, change, direct }: { pageId: string; review
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 text-[15px] leading-relaxed">
-          {property && <p className="mb-1 text-xs font-semibold text-fg-tertiary">{change.key ? `Property ${change.key}` : "Properties"}</p>}
+        <div className="min-w-0 flex-1 text-15 leading-relaxed">
+          {property && <p className="mb-1 text-12 font-semibold text-fg-tertiary">{change.key ? `Property ${change.key}` : "Properties"}</p>}
           {change.before && <p className="whitespace-pre-wrap rounded bg-[#EF646133] px-1 text-[#F48A87] line-through decoration-[#F48A87]/70">{change.before}</p>}
           {change.after && <p className="mt-1 whitespace-pre-wrap rounded bg-[#4CB78233] px-1 text-[#7BD3A6]">{change.after}</p>}
-          <p className="mt-2 text-xs italic text-fg-tertiary">
+          <p className="mt-2 text-12 italic text-fg-tertiary">
             {n} · {change.why ? `Why: ${change.why}` : "No reason given"}
           </p>
         </div>
@@ -113,14 +113,14 @@ function ChangeCard({ pageId, review, change, direct }: { pageId: string; review
             onKeyDown={(e) => e.key === "Enter" && decide(false)}
             placeholder="Why? The persona reads this in the page's chat"
             aria-label="Reason"
-            className="h-8 flex-1 rounded-md border border-accent bg-surface-sunken px-2.5 text-[13px] text-fg outline-none"
+            className="h-8 flex-1 rounded-md border border-accent bg-surface-sunken px-2.5 text-13 text-fg outline-none"
           />
           <Button onClick={() => decide(false)} disabled={resolve.isPending}>
             {direct ? "Undo" : "Reject"}
           </Button>
         </div>
       )}
-      {resolve.error && <p className="mt-2 text-xs text-state-blocked">{resolve.error.message}</p>}
+      {resolve.error && <p className="mt-2 text-12 text-state-blocked">{resolve.error.message}</p>}
     </div>
   );
 }

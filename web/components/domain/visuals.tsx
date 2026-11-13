@@ -21,5 +21,5 @@ export function LessonVisual({ kind, text, alt, steps, caption }: { kind: "diagr
   if (kind === "diagram") return <DiagramVisual source={text} captions={steps} alt={alt} label={steps?.length ? "Step-through" : "Diagram"} caption={caption} />;
   const parsed = parseChart(text);
   if ("spec" in parsed) return <ChartVisual spec={parsed.spec} alt={alt} caption={caption} />;
-  return <p role="alert" className="rounded-md border border-border p-3 text-xs text-pill-blocked-fg">This chart couldn&apos;t be drawn. {alt}</p>;
+  return <p role="alert" className="rounded-md border border-border p-3 text-12 text-pill-blocked-fg">This chart couldn&apos;t be drawn. {alt}</p>;
 }

@@ -82,7 +82,7 @@ export function Toast({ toast }: { toast: ToastMessage | null }) {
         <div
           key={toast.id}
           className={cx(
-            "fin-toast -translate-x-1/2 whitespace-nowrap rounded-lg border bg-surface-raised px-3.5 py-2 text-[12.5px] shadow-[var(--shadow-float)]",
+            "fin-toast -translate-x-1/2 whitespace-nowrap rounded-lg border bg-surface-raised px-3.5 py-2 text-13 shadow-[var(--shadow-float)]",
             toast.tone === "error" ? "border-pill-blocked-fg/40 text-pill-blocked-fg" : "border-border-strong text-fg-2",
           )}
         >

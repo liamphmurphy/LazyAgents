@@ -41,7 +41,7 @@ function moveInGrid(e: KeyboardEvent<HTMLElement>) {
 
 function Badge({ count, className }: { count: number; className: string }) {
   return (
-    <span aria-hidden className={cx("grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-[10px] font-semibold text-approve-fg", className)}>
+    <span aria-hidden className={cx("grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-10 font-semibold text-approve-fg", className)}>
       {count}
     </span>
   );
@@ -67,7 +67,7 @@ function AppTile({ item, index, count, current, onPick }: TileArgs) {
   return (
     <Link
       {...tileProps(item, "app", index, count, current, onPick)}
-      className={cx("motion-tile relative flex h-[70px] flex-col items-center justify-center gap-1.5 rounded-[10px] border text-xs outline-none focus-visible:border-accent", TILE_STATE(current))}
+      className={cx("motion-tile relative flex h-[70px] flex-col items-center justify-center gap-1.5 rounded-[10px] border text-12 outline-none focus-visible:border-accent", TILE_STATE(current))}
     >
       <Icon name={item.icon} size={17} />
       <span className="max-w-full truncate px-1">{item.label}</span>
@@ -81,7 +81,7 @@ function ToolPill({ item, index, count, current, onPick }: TileArgs) {
   return (
     <Link
       {...tileProps(item, "tool", index, count, current, onPick)}
-      className={cx("motion-tile flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-xs outline-none focus-visible:border-accent", TILE_STATE(current))}
+      className={cx("motion-tile flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-12 outline-none focus-visible:border-accent", TILE_STATE(current))}
     >
       <Icon name={item.icon} size={14} />
       <span>{item.label}</span>
@@ -96,7 +96,7 @@ function Grid({ counts, onPick, onNewSpace }: { counts: Record<NavBadge, number>
   return (
     <div onKeyDown={moveInGrid} className="flex flex-col gap-3.5">
       <div role="group" aria-label="Apps" className="flex flex-col gap-2">
-        <span aria-hidden className="text-[11px] font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Apps</span>
+        <span aria-hidden className="text-11 font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Apps</span>
         <div className="grid grid-cols-3 gap-2 min-[480px]:grid-cols-5">
           {APP_ITEMS.map((item, i) => (
             <AppTile key={item.href} item={item} index={i} count={countOf(item)} current={isActive(pathname, item.href)} onPick={onPick} />
@@ -104,7 +104,7 @@ function Grid({ counts, onPick, onNewSpace }: { counts: Record<NavBadge, number>
         </div>
       </div>
       <div role="group" aria-label="Tools" className="flex flex-col gap-2">
-        <span aria-hidden className="text-[11px] font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Tools</span>
+        <span aria-hidden className="text-11 font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Tools</span>
         <div className="flex flex-wrap gap-2">
           {TOOL_ITEMS.map((item, i) => (
             <ToolPill key={item.href} item={item} index={APP_ITEMS.length + i} count={countOf(item)} current={isActive(pathname, item.href)} onPick={onPick} />
@@ -115,12 +115,12 @@ function Grid({ counts, onPick, onNewSpace }: { counts: Record<NavBadge, number>
         <button
           type="button"
           onClick={() => { onPick(); onNewSpace(); }}
-          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[13px] font-medium text-accent hover:bg-hover"
+          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-13 font-medium text-accent hover:bg-hover"
         >
           <Icon name="plus" size={13} />
           New space
         </button>
-        <span aria-hidden className="text-[11px] text-fg-tertiary">Arrow keys move · Esc closes</span>
+        <span aria-hidden className="text-11 text-fg-tertiary">Arrow keys move · Esc closes</span>
       </div>
     </div>
   );
@@ -149,7 +149,7 @@ export function AppsMenu({ rail, counts, onNewSpace }: { rail?: boolean; counts:
       aria-current={current && !open ? "page" : undefined}
       onClick={rail || wide ? undefined : () => setOpen(!open)}
       className={cx(
-        "relative flex h-[30px] w-full items-center gap-2.5 rounded-sm text-[13px] font-medium",
+        "relative flex h-[30px] w-full items-center gap-2.5 rounded-sm text-13 font-medium",
         rail ? "justify-center px-0" : "px-2",
         open || current ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
       )}

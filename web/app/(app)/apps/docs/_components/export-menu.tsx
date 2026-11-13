@@ -12,8 +12,8 @@ import { toDocx } from "@/lib/doc-docx";
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
 
-const item = "flex cursor-pointer select-none flex-col rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
-const detail = "text-[11px] text-fg-tertiary";
+const item = "flex cursor-pointer select-none flex-col rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
+const detail = "text-11 text-fg-tertiary";
 
 type Notice = { tone: "ok" | "error"; text: string; href?: string };
 
@@ -72,7 +72,7 @@ export function ExportMenu({ id, title, current, trigger }: { id: string; title:
   return (
     <div className="flex items-center gap-2">
       {notice && (
-        <span role={notice.tone === "error" ? "alert" : "status"} className={notice.tone === "error" ? "text-[12px] text-pill-blocked-fg" : "text-[12px] text-fg-secondary"}>
+        <span role={notice.tone === "error" ? "alert" : "status"} className={notice.tone === "error" ? "text-12 text-pill-blocked-fg" : "text-12 text-fg-secondary"}>
           {notice.text}
           {notice.href && (
             <>

@@ -140,13 +140,13 @@ export function RenameField({
           }}
           onBlur={() => finish(true)}
           className={cx(
-            "h-[24px] min-w-0 flex-1 rounded border bg-surface px-1.5 text-[13px] text-fg outline-none",
+            "h-[24px] min-w-0 flex-1 rounded border bg-surface px-1.5 text-13 text-fg outline-none",
             shown ? "border-state-blocked" : "border-accent",
           )}
         />
       </div>
       {shown && (
-        <p className="py-1 pl-5 text-[11px] leading-snug text-pill-blocked-fg">
+        <p className="py-1 pl-5 text-11 leading-snug text-pill-blocked-fg">
           {shown}
         </p>
       )}
@@ -156,7 +156,7 @@ export function RenameField({
 
 function ErrorLine({ message }: { message?: string }) {
   return message ? (
-    <p className="px-5 pb-1 text-xs text-pill-blocked-fg">{message}</p>
+    <p className="px-5 pb-1 text-12 text-pill-blocked-fg">{message}</p>
   ) : null;
 }
 
@@ -192,7 +192,7 @@ export function MoveDialog({
           }}
           placeholder="Find a folder…"
           aria-label="Find a folder"
-          className="h-8 w-full rounded-md border border-border-subtle bg-surface-sunken px-2.5 text-[13px] text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
+          className="h-8 w-full rounded-md border border-border-subtle bg-surface-sunken px-2.5 text-13 text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
         />
       </div>
       <ul
@@ -206,7 +206,7 @@ export function MoveDialog({
               type="button"
               disabled={pending}
               onClick={() => onMove(f)}
-              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-fg-2 hover:bg-hover disabled:opacity-50"
+              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-13 text-fg-2 hover:bg-hover disabled:opacity-50"
             >
               <Icon
                 name="folder"
@@ -218,7 +218,7 @@ export function MoveDialog({
           </li>
         ))}
         {options.length === 0 && (
-          <li className="px-2 py-2 text-xs text-fg-tertiary">
+          <li className="px-2 py-2 text-12 text-fg-tertiary">
             No folder matches.
           </li>
         )}
@@ -259,7 +259,7 @@ export function NewFolderDialog({
       title="New folder"
       className="top-[24vh] w-[min(440px,calc(100vw-32px))]"
     >
-      <div className="px-5 pt-1 text-xs text-fg-tertiary">
+      <div className="px-5 pt-1 text-12 text-fg-tertiary">
         {parent ? `In ${parent}. ` : ""}It starts with an empty page, since a
         folder holds pages.
       </div>
@@ -271,7 +271,7 @@ export function NewFolderDialog({
           onKeyDown={(e) => e.key === "Enter" && create()}
           placeholder="Folder name"
           aria-label="Folder name"
-          className="h-8 w-full rounded-md border border-border-subtle bg-surface-sunken px-2.5 text-[13px] text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
+          className="h-8 w-full rounded-md border border-border-subtle bg-surface-sunken px-2.5 text-13 text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
         />
       </div>
       <div className="pt-2">
@@ -317,7 +317,7 @@ export function DeleteDialog({
       title={folder ? `Delete the folder “${name}”?` : `Delete “${name}”?`}
       className="top-[24vh] w-[min(440px,calc(100vw-32px))]"
     >
-      <p className="px-5 pt-2 text-[13px] leading-relaxed text-fg-secondary">
+      <p className="px-5 pt-2 text-13 leading-relaxed text-fg-secondary">
         {folder
           ? `This deletes the ${count === 1 ? "page" : `${count} pages`} in it, with their history.`
           : "This deletes the page and its history."}{" "}

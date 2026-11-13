@@ -96,7 +96,7 @@ export function PreviewTab({ origin, frameRef, livePath, onReload }: { origin: s
         }}
       >
         <IconButton icon="refresh" label="Reload" onClick={reload} />
-        <label className="flex min-w-0 flex-1 items-center rounded-md border border-border-strong bg-surface-sunken px-2 font-mono text-xs">
+        <label className="flex min-w-0 flex-1 items-center rounded-md border border-border-strong bg-surface-sunken px-2 font-mono text-12">
           <span className="flex-none text-fg-tertiary">{origin.replace(/^https?:\/\//, "")}</span>
           <input aria-label="Path" value={draft} onChange={(e) => setDraft(e.target.value)} className="min-w-0 flex-1 bg-transparent py-1.5 text-fg focus:outline-none" />
         </label>
@@ -128,7 +128,7 @@ export function LogsTab({ logs }: { logs: ReturnType<typeof usePlaygroundLogs> }
     if (follow) end.current?.scrollIntoView({ block: "end" });
   }, [follow, shown.length]);
   const chip = (label: string, value: string | null) => (
-    <button key={label} type="button" aria-pressed={source === value} onClick={() => setSource(value)} className={cx("rounded-full border px-2.5 py-0.5 text-[11.5px]", source === value ? "border-accent bg-accent-soft text-fg" : "border-border-strong text-fg-secondary hover:text-fg")}>
+    <button key={label} type="button" aria-pressed={source === value} onClick={() => setSource(value)} className={cx("rounded-full border px-2.5 py-0.5 text-12", source === value ? "border-accent bg-accent-soft text-fg" : "border-border-strong text-fg-secondary hover:text-fg")}>
       {label}
     </button>
   );
@@ -137,13 +137,13 @@ export function LogsTab({ logs }: { logs: ReturnType<typeof usePlaygroundLogs> }
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border-subtle px-3 py-2">
         {chip("all", null)}
         {sources.map((s) => chip(s, s))}
-        <span className="ml-auto flex items-center gap-3 text-xs text-fg-secondary">
+        <span className="ml-auto flex items-center gap-3 text-12 text-fg-secondary">
           <label className="flex items-center gap-1"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow</label>
           <button type="button" className="hover:text-fg" onClick={logs.clear}>Clear</button>
         </span>
       </div>
-      {logs.error && <p role="alert" className="px-3 py-1 text-xs text-pill-blocked-fg">{logs.error}</p>}
-      <div data-testid="playground-logs" className="min-h-0 flex-1 overflow-auto bg-surface-sunken px-3 py-2 font-mono text-xs leading-relaxed">
+      {logs.error && <p role="alert" className="px-3 py-1 text-12 text-pill-blocked-fg">{logs.error}</p>}
+      <div data-testid="playground-logs" className="min-h-0 flex-1 overflow-auto bg-surface-sunken px-3 py-2 font-mono text-12 leading-relaxed">
         {shown.length === 0 && <p className="text-fg-tertiary">No output yet.</p>}
         {shown.map((l, i) => (
           <div key={i} className="flex gap-3 whitespace-pre-wrap">
@@ -239,7 +239,7 @@ export function ApiTab({ chatId, pg, origin, logs, wide, onOpenLogs }: { chatId:
         <span className="block">The app doesn’t serve one at {spec.data.checked.map((c, i) => <span key={c}>{i ? ", " : ""}<code className="font-mono">{c}</code></span>)}, and the playground names none.</span>
         <span className="mt-3 block">The persona can read the routes and handlers and map the API, marked as inferred.</span>
         <Button variant="primary" className="mt-3" onClick={askToMap}>Map this API</Button>
-        {asked && <span role="status" className="mt-2 block text-[11px] text-fg-tertiary">{asked}</span>}
+        {asked && <span role="status" className="mt-2 block text-11 text-fg-tertiary">{asked}</span>}
       </Empty>
     );
   }
@@ -252,10 +252,10 @@ export function ApiTab({ chatId, pg, origin, logs, wide, onOpenLogs }: { chatId:
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {source && source.kind !== "unknown" && (
-        <div data-testid="playground-spec-source" className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 py-1.5 text-[11.5px] text-fg-secondary">
+        <div data-testid="playground-spec-source" className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 py-1.5 text-12 text-fg-secondary">
           {inferred ? (
             <>
-              <span className="rounded-full bg-pill-review-bg px-2 py-0.5 text-[10.5px] font-semibold text-pill-review-fg">Inferred</span>
+              <span className="rounded-full bg-pill-review-bg px-2 py-0.5 text-11 font-semibold text-pill-review-fg">Inferred</span>
               <span>
                 Read from the code{inferred.commit ? <> at <code className="font-mono">{inferred.commit.slice(0, 7)}</code></> : ""}; it may be incomplete.
               </span>
@@ -273,16 +273,16 @@ export function ApiTab({ chatId, pg, origin, logs, wide, onOpenLogs }: { chatId:
       <div className={cx("flex min-h-0 flex-1", !wide && "max-md:flex-col")}>
         <nav aria-label="Operations" className={cx("flex flex-none flex-col border-r border-border-subtle bg-bg-sidebar", wide ? "w-72" : "w-48")}>
           <div className="flex items-center gap-2 border-b border-border-subtle p-2">
-            <input aria-label="Filter operations" placeholder={`Filter ${api.count} operations`} value={filter} onChange={(e) => setFilter(e.target.value)} className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 py-1 text-xs text-fg focus:border-accent focus:outline-none" />
+            <input aria-label="Filter operations" placeholder={`Filter ${api.count} operations`} value={filter} onChange={(e) => setFilter(e.target.value)} className="min-w-0 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 py-1 text-12 text-fg focus:border-accent focus:outline-none" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             {groups.map((g) => (
               <details key={g.tag} open={!!filter || g.ops.some((o) => o.key === selected)} className="px-1">
-                <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                <summary className="cursor-pointer select-none px-2 py-1 text-10 font-semibold uppercase tracking-wider text-fg-tertiary">
                   {g.tag} <span className="font-normal">{g.ops.length}</span>
                 </summary>
                 {g.ops.map((o) => (
-                  <button key={o.key} type="button" aria-current={o.key === selected} onClick={() => setSelected(o.key)} className={cx("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px]", o.key === selected ? "bg-accent-soft text-fg" : "text-fg-2 hover:bg-hover")}>
+                  <button key={o.key} type="button" aria-current={o.key === selected} onClick={() => setSelected(o.key)} className={cx("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-12", o.key === selected ? "bg-accent-soft text-fg" : "text-fg-2 hover:bg-hover")}>
                     <span className={cx("w-9 flex-none font-bold", methodTone[o.method])}>{o.method === "DELETE" ? "DEL" : o.method}</span>
                     <span className="min-w-0 truncate">{o.path}</span>
                   </button>
@@ -291,9 +291,9 @@ export function ApiTab({ chatId, pg, origin, logs, wide, onOpenLogs }: { chatId:
             ))}
             {history.length > 0 && (
               <details className="px-1">
-                <summary className="cursor-pointer select-none px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">History <span className="font-normal">{history.length}</span></summary>
+                <summary className="cursor-pointer select-none px-2 py-1 text-10 font-semibold uppercase tracking-wider text-fg-tertiary">History <span className="font-normal">{history.length}</span></summary>
                 {history.map((h, i) => (
-                  <button key={i} type="button" onClick={() => setSelected(h.op.key)} className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-[11.5px] text-fg-2 hover:bg-hover">
+                  <button key={i} type="button" onClick={() => setSelected(h.op.key)} className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left font-mono text-12 text-fg-2 hover:bg-hover">
                     <span className={cx("w-9 flex-none font-bold", h.status >= 400 ? "text-pill-blocked-fg" : "text-pill-done-fg")}>{h.status || "ERR"}</span>
                     <span className="min-w-0 truncate">{h.op.method} {h.op.path}</span>
                   </button>
@@ -378,27 +378,27 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
     <div className={cx("flex min-h-0 min-w-0 flex-1 overflow-y-auto", wide ? "gap-4 p-4" : "flex-col gap-3 p-3")}>
       <section aria-label="Request" className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="flex items-center gap-2">
-          <span className={cx("rounded px-1.5 py-0.5 font-mono text-[11px] font-bold", methodTone[op.method])}>{op.method}</span>
-          <code className="min-w-0 truncate text-[13px] text-fg">{op.path}</code>
+          <span className={cx("rounded px-1.5 py-0.5 font-mono text-11 font-bold", methodTone[op.method])}>{op.method}</span>
+          <code className="min-w-0 truncate text-13 text-fg">{op.path}</code>
         </div>
-        {op.summary && <h3 className="text-[14px] font-semibold text-fg">{op.summary}</h3>}
+        {op.summary && <h3 className="text-14 font-semibold text-fg">{op.summary}</h3>}
         {/* Plain text: the document is the agent's to write. */}
-        {op.description && <p className="whitespace-pre-line text-xs text-fg-secondary">{op.description.trim()}</p>}
-        {op.operationId && <p className="text-[11px] text-fg-tertiary">{op.operationId} · {op.tag}</p>}
+        {op.description && <p className="whitespace-pre-line text-12 text-fg-secondary">{op.description.trim()}</p>}
+        {op.operationId && <p className="text-11 text-fg-tertiary">{op.operationId} · {op.tag}</p>}
         {op.source && <HandlerSource source={op.source} />}
-        <p className="rounded-md border border-pill-done-fg/30 bg-pill-done-bg px-2.5 py-1.5 text-xs text-fg-2">Sends with the cookies of your Preview session, as the app’s own page would.</p>
-        <div role="tablist" className="flex gap-4 text-xs">
+        <p className="rounded-md border border-pill-done-fg/30 bg-pill-done-bg px-2.5 py-1.5 text-12 text-fg-2">Sends with the cookies of your Preview session, as the app’s own page would.</p>
+        <div role="tablist" className="flex gap-4 text-12">
           {tabButton("params", `Params${op.params.length ? ` ${op.params.length}` : ""}`)}
           {tabButton("headers", "Headers")}
           {op.body && tabButton("body", "Body")}
         </div>
         {tab === "params" &&
           (op.params.length === 0 ? (
-            <p className="text-xs text-fg-tertiary">No parameters.</p>
+            <p className="text-12 text-fg-tertiary">No parameters.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {op.params.map((p) => (
-                <label key={`${p.in}:${p.name}`} className="flex flex-col gap-0.5 text-xs">
+                <label key={`${p.in}:${p.name}`} className="flex flex-col gap-0.5 text-12">
                   <span className="text-fg-2">
                     <code className="font-mono">{p.name}</code> <span className="text-fg-tertiary">{p.in}{p.required ? ", required" : ""}</span>
                   </span>
@@ -407,49 +407,49 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
               ))}
             </div>
           ))}
-        {tab === "headers" && <textarea aria-label="Headers" rows={4} value={headers} onChange={(e) => setHeaders(e.target.value)} placeholder="Name: value, one per line" className="rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg focus:border-accent focus:outline-none" />}
+        {tab === "headers" && <textarea aria-label="Headers" rows={4} value={headers} onChange={(e) => setHeaders(e.target.value)} placeholder="Name: value, one per line" className="rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-12 text-fg focus:border-accent focus:outline-none" />}
         {tab === "body" && op.body && (
           <>
-            <textarea aria-label="Body" spellCheck={false} rows={12} value={body} onChange={(e) => setBody(e.target.value)} className="min-h-40 rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg focus:border-accent focus:outline-none" />
-            <button type="button" className="self-start text-xs text-accent hover:underline" onClick={() => setBody(JSON.stringify(exampleFor(spec, op.body!.schema), null, 2))}>Fill example</button>
+            <textarea aria-label="Body" spellCheck={false} rows={12} value={body} onChange={(e) => setBody(e.target.value)} className="min-h-40 rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-12 text-fg focus:border-accent focus:outline-none" />
+            <button type="button" className="self-start text-12 text-accent hover:underline" onClick={() => setBody(JSON.stringify(exampleFor(spec, op.body!.schema), null, 2))}>Fill example</button>
           </>
         )}
         {warnings.map((w) => (
-          <p key={w.path + w.message} className="text-xs text-pill-blocked-fg">⚠ {w.path} {w.message}</p>
+          <p key={w.path + w.message} className="text-12 text-pill-blocked-fg">⚠ {w.path} {w.message}</p>
         ))}
-        {missing.length > 0 && <p className="text-xs text-fg-tertiary">Needs {missing.map((p) => p.name).join(", ")}.</p>}
+        {missing.length > 0 && <p className="text-12 text-fg-tertiary">Needs {missing.map((p) => p.name).join(", ")}.</p>}
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(curlFor(op.method, origin + path, headerMap, sendsBody ? body : undefined)); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
             {copied ? "Copied" : "Copy as curl"}
           </Button>
           <Button variant="primary" className="ml-auto" disabled={sending || missing.some((p) => p.in === "path")} onClick={() => void send()}>{sending ? "Sending…" : "Send"}</Button>
         </div>
-        {warnings.length > 0 && <p className="text-[11px] text-fg-tertiary">Warnings don’t block sending: testing bad input is the point.</p>}
-        {failure && <p role="alert" className="text-xs text-pill-blocked-fg">{failure}</p>}
+        {warnings.length > 0 && <p className="text-11 text-fg-tertiary">Warnings don’t block sending: testing bad input is the point.</p>}
+        {failure && <p role="alert" className="text-12 text-pill-blocked-fg">{failure}</p>}
       </section>
       <section aria-label="Response" data-testid="playground-response" className="flex min-w-0 flex-1 flex-col gap-2">
         {!last ? (
-          <p className="text-xs text-fg-tertiary">Send the request to see the response.</p>
+          <p className="text-12 text-fg-tertiary">Send the request to see the response.</p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[13px] font-semibold text-fg">Response</span>
+            <div className="flex flex-wrap items-center gap-2 text-12">
+              <span className="text-13 font-semibold text-fg">Response</span>
               <span className={cx("rounded-full px-2 py-0.5 font-semibold", last.status >= 400 ? "bg-pill-blocked-bg text-pill-blocked-fg" : "bg-pill-done-bg text-pill-done-fg")}>{last.status}</span>
               <span className="text-fg-secondary">{last.ms} ms · {last.bytes} B{last.contentType ? ` · ${last.contentType.split(";")[0]}` : ""}</span>
             </div>
-            <div role="tablist" className="flex gap-4 text-xs">
+            <div role="tablist" className="flex gap-4 text-12">
               {(["body", "headers"] as const).map((t) => (
                 <button key={t} type="button" role="tab" aria-selected={resTab === t} onClick={() => setResTab(t)} className={cx("border-b-2 pb-1 capitalize", resTab === t ? "border-accent text-fg" : "border-transparent text-fg-secondary hover:text-fg")}>{t}</button>
               ))}
             </div>
-            <pre className="max-h-72 overflow-auto rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-xs text-fg-2">
+            <pre className="max-h-72 overflow-auto rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-12 text-fg-2">
               {resTab === "body" ? pretty(last.body, last.contentType) || "(empty)" : last.headers.map(([k, v]) => `${k}: ${v}`).join("\n")}
             </pre>
-            <div className="mt-1 flex items-center text-xs">
+            <div className="mt-1 flex items-center text-12">
               <span className="font-semibold text-fg">Logs around this request</span>
               <button type="button" className="ml-auto text-accent hover:underline" onClick={onOpenLogs}>Open in Logs</button>
             </div>
-            <div className="rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-[11px] leading-relaxed">
+            <div className="rounded-md border border-border-strong bg-surface-sunken p-2 font-mono text-11 leading-relaxed">
               {related.length === 0 ? (
                 <p className="text-fg-tertiary">Nothing was logged while it ran.</p>
               ) : (
@@ -460,7 +460,7 @@ function OperationView({ spec, base, op, origin, logs, wide, onOpenLogs, onSent,
                   </div>
                 ))
               )}
-              <p className="mt-1 font-sans text-[10.5px] text-fg-tertiary">
+              <p className="mt-1 font-sans text-11 text-fg-tertiary">
                 {matchedBy === "id" ? <>Lines naming its request id, <code className="font-mono">{requestId}</code>.</> : "Matched by time: the app’s logs don’t show the request’s id, so lines from other requests at the same moment show too."}
               </p>
             </div>
@@ -476,7 +476,7 @@ function HandlerSource({ source }: { source: NonNullable<Operation["source"]> })
   const [copied, setCopied] = useState(false);
   const ref = source.line ? `${source.file}:${source.line}` : source.file;
   return (
-    <p className="flex items-center gap-2 text-[11px] text-fg-tertiary">
+    <p className="flex items-center gap-2 text-11 text-fg-tertiary">
       Handler <code data-testid="playground-handler" className="min-w-0 truncate font-mono text-fg-2">{ref}</code>
       <button type="button" className="text-accent hover:underline" onClick={() => { void navigator.clipboard.writeText(ref); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
         {copied ? "Copied" : "Copy"}
@@ -489,8 +489,8 @@ function Empty({ title, children }: { title: string; children?: React.ReactNode 
   return (
     <div className="grid min-h-0 flex-1 place-items-center p-6">
       <div className="max-w-sm text-center">
-        <p className="text-[13.5px] font-semibold text-fg">{title}</p>
-        {children && <p className="mt-1 text-xs text-fg-secondary">{children}</p>}
+        <p className="text-14 font-semibold text-fg">{title}</p>
+        {children && <p className="mt-1 text-12 text-fg-secondary">{children}</p>}
       </div>
     </div>
   );

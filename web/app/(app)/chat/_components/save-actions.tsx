@@ -46,7 +46,7 @@ function SaveDialog({
       footer={
         done ? (
           <>
-            <Link href={done.href} className="mr-auto text-[13px] text-accent hover:underline">{done.text}</Link>
+            <Link href={done.href} className="mr-auto text-13 text-accent hover:underline">{done.text}</Link>
             <Button variant="outline" onClick={onClose}>Done</Button>
           </>
         ) : (
@@ -71,9 +71,9 @@ function SaveDialog({
           </Field>
         </form>
       )}
-      {done && <p role="status" className="text-[13px]">Saved.</p>}
+      {done && <p role="status" className="text-13">Saved.</p>}
       {error != null && !done && (
-        <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(error)}</p>
+        <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(error)}</p>
       )}
     </DialogShell>
   );
@@ -94,7 +94,7 @@ export function SaveActions({ chat, body }: Props) {
   const savedArtifact = artifact.data;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+    <div className="flex flex-wrap items-center gap-1.5 text-12">
       <Button variant="ghost" icon="wiki" onClick={() => setMode("wiki")}>Save to wiki</Button>
       <Button variant="ghost" icon="artifacts" onClick={() => setMode("artifact")}>Save as artifact</Button>
       {mode === "wiki" && (

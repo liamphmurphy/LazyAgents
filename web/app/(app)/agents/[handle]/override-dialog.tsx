@@ -116,7 +116,7 @@ export function OverrideDialog({
             </Dialog.Close>
           </div>
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
-            <p className="text-[12.5px] text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this project. Permissions can only get stricter.</p>
+            <p className="text-13 text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this project. Permissions can only get stricter.</p>
             <Field label="Harness" htmlFor="ov-h">
               <Segmented
                 label="Harness"
@@ -141,7 +141,7 @@ export function OverrideDialog({
             </Field>
 
             <div className="flex flex-col gap-2">
-              <span className="text-[12.5px] font-medium text-fg-2">Permissions</span>
+              <span className="text-13 font-medium text-fg-2">Permissions</span>
               {Object.keys(scopes)
                 .sort()
                 .map((s) => {
@@ -154,7 +154,7 @@ export function OverrideDialog({
                   ];
                   return (
                     <div key={s} className="flex flex-wrap items-center gap-3">
-                      <span className="w-40 font-mono text-xs">{s}</span>
+                      <span className="w-40 font-mono text-12">{s}</span>
                       <Segmented small label={`${s} in ${project.name}`} value={scopes[s]} options={options} onChange={(m) => setScopes({ ...scopes, [s]: m })} />
                     </div>
                   );
@@ -176,9 +176,9 @@ export function OverrideDialog({
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-[12.5px] font-medium text-fg-2">Extra MCP servers</span>
+              <span className="text-13 font-medium text-fg-2">Extra MCP servers</span>
               {servers.map((m, i) => (
-                <div key={m.name} className="flex items-center gap-2 font-mono text-xs">
+                <div key={m.name} className="flex items-center gap-2 font-mono text-12">
                   <span>{m.name}</span>
                   <span className="truncate text-fg-tertiary">{m.url}</span>
                   <IconButton icon="trash" label={`Remove ${m.name}`} size={24} className="ml-auto" onClick={() => setServers(servers.filter((_, j) => j !== i))} />
@@ -201,18 +201,18 @@ export function OverrideDialog({
             </div>
             <section aria-labelledby="ov-skills-title" className="flex flex-col gap-3">
               <h3 id="ov-skills-title" className="font-medium">Project skills</h3>
-              <p className="text-xs text-fg-tertiary">Removals apply first, then additions. Unknown removals do nothing. To replace a default skill, remove its name and add the replacement. Future agent updates still flow through.</p>
+              <p className="text-12 text-fg-tertiary">Removals apply first, then additions. Unknown removals do nothing. To replace a default skill, remove its name and add the replacement. Future agent updates still flow through.</p>
               <Field label="Remove agent skills" htmlFor="ov-skills-remove" hint="Skill names separated by spaces, commas or new lines. Leave empty to keep all defaults.">
                 <TextArea id="ov-skills-remove" mono rows={2} value={skillsRemove} aria-invalid={!removalsValid} onChange={(e) => setSkillsRemove(e.target.value)} />
               </Field>
-              {!removalsValid && <p role="alert" className="text-xs text-pill-blocked-fg">Use unique skill names: lowercase letters, digits or hyphens, up to 64 characters.</p>}
-              {!skillsAdd.length && <p className="text-xs text-fg-tertiary">No project skills added. The agent’s remaining defaults are used.</p>}
-              <ul className="space-y-2">{skillsAdd.map((s, i) => <li key={s.name} className="flex items-center gap-2 text-sm"><span className="font-mono">{s.name}</span><span className="flex-1 text-fg-secondary">{s.description}</span><IconButton icon="trash" label={`Remove added skill ${s.name}`} onClick={() => setSkillsAdd(skillsAdd.filter((_, j) => i !== j))} /></li>)}</ul>
+              {!removalsValid && <p role="alert" className="text-12 text-pill-blocked-fg">Use unique skill names: lowercase letters, digits or hyphens, up to 64 characters.</p>}
+              {!skillsAdd.length && <p className="text-12 text-fg-tertiary">No project skills added. The agent’s remaining defaults are used.</p>}
+              <ul className="space-y-2">{skillsAdd.map((s, i) => <li key={s.name} className="flex items-center gap-2 text-14"><span className="font-mono">{s.name}</span><span className="flex-1 text-fg-secondary">{s.description}</span><IconButton icon="trash" label={`Remove added skill ${s.name}`} onClick={() => setSkillsAdd(skillsAdd.filter((_, j) => i !== j))} /></li>)}</ul>
               <Field label="Added skill name" htmlFor="ov-skill-name"><TextInput id="ov-skill-name" mono maxLength={64} value={skill.name} onChange={(e) => setSkill({ ...skill, name: e.target.value })} /></Field>
               <Field label="When to use this skill" htmlFor="ov-skill-description"><TextInput id="ov-skill-description" maxLength={1024} value={skill.description} onChange={(e) => setSkill({ ...skill, description: e.target.value })} /></Field>
               <Field label="Skill instructions" htmlFor="ov-skill-body"><TextArea id="ov-skill-body" mono rows={4} maxLength={65536} value={skill.body} onChange={(e) => setSkill({ ...skill, body: e.target.value })} /></Field>
-              {skillBodyTooLong && <p role="alert" className="text-xs text-pill-blocked-fg">Skill instructions are over 64 KiB. Shorten them before adding.</p>}
-              <p className="text-xs text-fg-tertiary">Up to 30 added skills. The resolved result keeps agent skills first and caps the total at 30. Add the draft skill or clear it before saving.</p>
+              {skillBodyTooLong && <p role="alert" className="text-12 text-pill-blocked-fg">Skill instructions are over 64 KiB. Shorten them before adding.</p>}
+              <p className="text-12 text-fg-tertiary">Up to 30 added skills. The resolved result keeps agent skills first and caps the total at 30. Add the draft skill or clear it before saving.</p>
               {(skill.name || skill.description || skill.body) && <Button variant="ghost" onClick={() => setSkill({ name: "", description: "", body: "" })}>Clear skill draft</Button>}
               <Button variant="outline" disabled={!canAddSkill} onClick={() => { setSkillsAdd([...skillsAdd, { name: skill.name.trim(), description: skill.description.trim(), body: skill.body.trim() }]); setSkill({ name: "", description: "", body: "" }); }}>Add project skill</Button>
             </section>
@@ -226,11 +226,11 @@ export function OverrideDialog({
             >
               <TextArea id="ov-services" mono rows={4} value={servicesText} aria-invalid={!services.ok} onChange={(e) => setServicesText(e.target.value)} placeholder={SERVICES_EXAMPLE} />
             </Field>
-            {!services.ok && <p role="alert" className="text-xs text-pill-blocked-fg">{services.error}</p>}
+            {!services.ok && <p role="alert" className="text-12 text-pill-blocked-fg">{services.error}</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
             {save.isError && (
-              <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+              <span role="alert" className="mr-auto text-12 text-pill-blocked-fg">
                 {save.error.message}
               </span>
             )}

@@ -11,7 +11,7 @@ import { Icon } from "@/components/ui/icon";
 
 type Done = "undone" | "forgotten" | "restored";
 
-const linkBtn = "text-xs text-accent hover:underline disabled:opacity-50";
+const linkBtn = "text-12 text-accent hover:underline disabled:opacity-50";
 
 function Notice({ n }: { n: MemoryNotice }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ function Notice({ n }: { n: MemoryNotice }) {
     >
       <span aria-hidden className={cx("absolute inset-y-0 left-0 w-[3px]", muted ? "bg-fg-tertiary" : "bg-accent")} />
       <Icon name="bookmark" size={14} className={muted ? "text-fg-tertiary" : "text-accent"} />
-      <span className={cx("min-w-0 flex-1 text-xs", muted ? "text-fg-secondary" : "text-fg")}>{text}</span>
+      <span className={cx("min-w-0 flex-1 text-12", muted ? "text-fg-secondary" : "text-fg")}>{text}</span>
       {actionable && (
         <span className="flex items-center gap-3">
           <button type="button" className={linkBtn} onClick={() => router.push(`/customization?id=${encodeURIComponent(n.id)}`)}>
@@ -82,7 +82,7 @@ function Notice({ n }: { n: MemoryNotice }) {
         </span>
       )}
       {err && (
-        <p role="alert" className="basis-full text-xs text-pill-blocked-fg">
+        <p role="alert" className="basis-full text-12 text-pill-blocked-fg">
           {err instanceof Error ? err.message : "Couldn’t change the memory."}
         </p>
       )}

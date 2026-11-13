@@ -44,7 +44,7 @@ export function AppFence({ code, info }: { code: string; info?: string }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-sunken" data-testid="app-fence">
-      <div className="flex items-center justify-between gap-2 border-b border-border-row px-3 py-1 text-xs text-fg-tertiary">
+      <div className="flex items-center justify-between gap-2 border-b border-border-row px-3 py-1 text-12 text-fg-tertiary">
         <span className="flex items-center gap-1.5">
           <Icon name="play" size={12} />
           <span>Interactive app</span>

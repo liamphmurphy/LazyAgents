@@ -37,7 +37,7 @@ export function SystemBanner() {
     <div
       role="status"
       aria-label={kind === "harness" ? `Agents can’t run: missing ${orList(harness!.secrets) || "a harness"}` : "No runner online"}
-      className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-[13px] text-pill-human-fg"
+      className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-13 text-pill-human-fg"
       style={{
         borderColor: "color-mix(in srgb, var(--state-human) 30%, transparent)",
         background: "color-mix(in srgb, var(--state-human) 10%, transparent)",
@@ -47,7 +47,7 @@ export function SystemBanner() {
       <span className="min-w-0 flex-1">
         <span className="font-semibold">{title}</span> {body}
       </span>
-      <Link href={href} className="flex h-[26px] items-center rounded-md border border-pill-human-bg bg-surface px-2.5 text-[12.5px] hover:bg-hover">
+      <Link href={href} className="flex h-[26px] items-center rounded-md border border-pill-human-bg bg-surface px-2.5 text-13 hover:bg-hover">
         {link}
       </Link>
       <IconButton icon="x" label="Hide this banner for this session" size={24} onClick={() => setStoredFlag("session", key)} />

@@ -13,7 +13,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 const isOFX = (f: File) => /\.(ofx|qfx)$/i.test(f.name);
 const NEW = "new";
 const KINDS = ["checking", "savings", "credit", "brokerage", "other"] as const;
-const field = "h-[34px] rounded-lg border border-border-strong bg-surface-sunken px-[10px] text-[13px] text-fg focus:border-accent focus:outline-none";
+const field = "h-[34px] rounded-lg border border-border-strong bg-surface-sunken px-[10px] text-13 text-fg focus:border-accent focus:outline-none";
 
 /**
  * Import a bank export. An OFX/QFX names its own account; a CSV goes into one the person picks
@@ -89,12 +89,12 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
           )}
         >
           <div className="flex items-center justify-between">
-            <Dialog.Title className="text-[16px] font-semibold text-fg">Import transactions</Dialog.Title>
+            <Dialog.Title className="text-16 font-semibold text-fg">Import transactions</Dialog.Title>
             <Dialog.Close className="grid size-[28px] place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg" aria-label="Close">
               <Icon name="x" size={14} strokeWidth={1.6} />
             </Dialog.Close>
           </div>
-          <p className="mt-1 text-[12px] text-fg-tertiary">A CSV or OFX/QFX export from your bank. Importing overlapping dates is safe: nothing is added twice.</p>
+          <p className="mt-1 text-12 text-fg-tertiary">A CSV or OFX/QFX export from your bank. Importing overlapping dates is safe: nothing is added twice.</p>
 
           {result ? (
             <Result result={result} remembered={!!mapped} />
@@ -121,20 +121,20 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
                 <input type="file" accept=".csv,.ofx,.qfx,text/csv" className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
                 <Icon name="upload" size={20} />
                 {file ? (
-                  <span className="text-[13px] text-fg">
+                  <span className="text-13 text-fg">
                     {file.name} <span className="text-fg-tertiary">· {Math.max(1, Math.round(file.size / 1024))} KB</span>
                   </span>
                 ) : (
-                  <span className="text-[13px]">
+                  <span className="text-13">
                     Drop an export here, or <u>choose a file</u>
                   </span>
                 )}
-                <span className="text-[11px] text-fg-tertiary">{file ? (isOFX(file) ? "OFX files know their account." : "Pick the account this CSV is from.") : "Up to 5 MB"}</span>
+                <span className="text-11 text-fg-tertiary">{file ? (isOFX(file) ? "OFX files know their account." : "Pick the account this CSV is from.") : "Up to 5 MB"}</span>
               </label>
 
               {needsAccount && (
                 <div className="motion-rise flex flex-col gap-[8px]">
-                  <label className="flex flex-col gap-1 text-[12px] text-fg-secondary">
+                  <label className="flex flex-col gap-1 text-12 text-fg-secondary">
                     <span>Account</span>
                     <select className={field} aria-label="Account" value={accountId} disabled={busy} onChange={(e) => setPicked(e.target.value)}>
                       {accounts.map((a) => (
@@ -158,7 +158,7 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
                       <input className={field} aria-label="Last digits" placeholder="0921" value={mask} maxLength={8} disabled={busy} onChange={(e) => setMask(e.target.value)} />
                     </div>
                   )}
-                  <label className="flex items-center gap-2 text-[12px] text-fg-secondary">
+                  <label className="flex items-center gap-2 text-12 text-fg-secondary">
                     <input type="checkbox" checked={flip} disabled={busy} onChange={(e) => setFlip(e.target.checked)} />
                     Purchases show as positive amounts (some card exports do)
                   </label>
@@ -166,7 +166,7 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
               )}
 
               {error && (
-                <p role="alert" className="text-[12px] text-pill-blocked-fg">
+                <p role="alert" className="text-12 text-pill-blocked-fg">
                   {errorText(error)}
                 </p>
               )}
@@ -201,12 +201,12 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
 function Step({ i, title, detail }: { i: number; title: ReactNode; detail: ReactNode }) {
   return (
     <li className="fin-step grid grid-cols-[18px_1fr] gap-[10px] py-[7px]" style={{ animationDelay: `${i * 140}ms` }}>
-      <span aria-hidden className="mt-px grid size-4 place-items-center rounded-full border-[1.5px] border-state-done bg-pill-done-bg text-[10px] text-pill-done-fg">
+      <span aria-hidden className="mt-px grid size-4 place-items-center rounded-full border-[1.5px] border-state-done bg-pill-done-bg text-10 text-pill-done-fg">
         ✓
       </span>
       <div>
-        <div className="text-[13px] text-fg">{title}</div>
-        <div className="text-[12px] text-fg-tertiary">{detail}</div>
+        <div className="text-13 text-fg">{title}</div>
+        <div className="text-12 text-fg-tertiary">{detail}</div>
       </div>
     </li>
   );

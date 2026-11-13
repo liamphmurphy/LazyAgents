@@ -17,7 +17,7 @@ export function LiveRunStrip() {
   const s = compact ? liveStrip(live.data?.runs ?? []) : null;
   if (!s) return null;
   return (
-    <div data-testid="live-run-strip" className="mb-2 flex min-h-[44px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3 text-[12.5px]">
+    <div data-testid="live-run-strip" className="mb-2 flex min-h-[44px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3 text-13">
       <Link href={`/runs/${s.run.id}`} aria-label={stripLabel(s)} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2">
         <span aria-hidden className={cx("size-2 flex-none rounded-full", s.waiting ? "bg-state-human" : "bg-state-done motion-safe:animate-pulse")} />
         <span className="truncate">

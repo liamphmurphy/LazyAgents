@@ -247,7 +247,7 @@ export function Composer({
     <>
       <LiveRunStrip />
       {commandError && (
-        <p role="alert" data-testid="command-error" className="text-[12.5px] text-pill-blocked-fg">
+        <p role="alert" data-testid="command-error" className="text-13 text-pill-blocked-fg">
           {commandError}
         </p>
       )}
@@ -316,10 +316,10 @@ export function Composer({
                       onMouseDown={(e) => e.preventDefault()}
                       onMouseEnter={() => setCommandActive(i)}
                       onClick={item.choose}
-                      className={cx("flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px]", i === commandActive && "bg-selected")}
+                      className={cx("flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-13", i === commandActive && "bg-selected")}
                     >
                       <span className="flex-none">{item.label}</span>
-                      {item.hint && <span className="ml-auto truncate text-xs text-fg-tertiary">{item.hint}</span>}
+                      {item.hint && <span className="ml-auto truncate text-12 text-fg-tertiary">{item.hint}</span>}
                     </button>
                   </li>
                 ))}
@@ -339,11 +339,11 @@ export function Composer({
                       onMouseDown={(e) => e.preventDefault()}
                       onMouseEnter={() => setMentionActive(i)}
                       onClick={() => pickMention(p.name)}
-                      className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]", i === mentionActive && "bg-selected")}
+                      className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-13", i === mentionActive && "bg-selected")}
                     >
                       <PersonaAvatar persona={personaLook(p)} size={18} />
                       <PersonaName persona={personaLook(p)} />
-                      {inChat(p.id) && <span className="ml-auto text-xs text-fg-tertiary">in chat</span>}
+                      {inChat(p.id) && <span className="ml-auto text-12 text-fg-tertiary">in chat</span>}
                     </button>
                   </li>
                 ))}

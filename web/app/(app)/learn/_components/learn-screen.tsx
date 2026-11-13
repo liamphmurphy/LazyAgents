@@ -12,7 +12,7 @@ function StatePill({ state }: { state: BuildState }) {
   const human = state === "outline_ready";
   const blocked = state === "failed";
   return (
-    <span className={cx("inline-block rounded px-1.5 py-0.5 text-[11px] font-medium", human ? "bg-pill-human-bg text-pill-human-fg" : blocked ? "bg-pill-blocked-bg text-pill-blocked-fg" : "bg-selected text-fg-2")}>
+    <span className={cx("inline-block rounded px-1.5 py-0.5 text-11 font-medium", human ? "bg-pill-human-bg text-pill-human-fg" : blocked ? "bg-pill-blocked-bg text-pill-blocked-fg" : "bg-selected text-fg-2")}>
       {COURSE_STATE_LABELS[state]}
     </span>
   );
@@ -30,9 +30,9 @@ function BuildCard({ c }: { c: CourseSummary }) {
   const step = buildStepIndex(c.state);
   return (
     <Link href={`/learn/${c.id}`} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 hover:border-border-hover">
-      <span className="truncate text-[14px] font-semibold text-fg">{c.topic}</span>
+      <span className="truncate text-14 font-semibold text-fg">{c.topic}</span>
       <span><StatePill state={c.state} /></span>
-      <span className="truncate font-mono text-xs text-fg-tertiary">
+      <span className="truncate font-mono text-12 text-fg-tertiary">
         {c.state === "failed" ? c.error : c.build_note || (c.state === "outline_ready" ? `${c.units} units · ${c.lessons} lessons` : " ")}
       </span>
       {step >= 0 && (
@@ -47,13 +47,13 @@ function BuildCard({ c }: { c: CourseSummary }) {
 function ModuleCard({ c }: { c: CourseSummary }) {
   return (
     <Link href={`/learn/${c.id}`} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 hover:border-border-hover">
-      <span className="truncate text-[14px] font-semibold text-fg">{c.topic}</span>
-      <span className="font-mono text-xs text-fg-tertiary">{c.parts > 1 && `Part ${c.state === "ready" ? c.part + 1 : c.part} of ${c.parts} · `}{c.complete} of {c.lessons} complete · {c.solid} solid</span>
+      <span className="truncate text-14 font-semibold text-fg">{c.topic}</span>
+      <span className="font-mono text-12 text-fg-tertiary">{c.parts > 1 && `Part ${c.state === "ready" ? c.part + 1 : c.part} of ${c.parts} · `}{c.complete} of {c.lessons} complete · {c.solid} solid</span>
       <ProgressBar value={c.complete} total={c.lessons} />
-      <span className="flex items-center justify-between gap-2 text-[13px]">
+      <span className="flex items-center justify-between gap-2 text-13">
         <span className={cx("truncate font-medium", c.next_lesson ? "text-accent" : "text-fg-secondary")}>{c.next_lesson ? `Continue: ${c.next_lesson}` : c.parts > c.part + 1 || c.state !== "ready" ? "Built parts done" : "Finished"}</span>
         {c.state !== "ready" && <StatePill state={c.state} />}
-        {c.flagged > 0 && <span className="flex-none text-xs text-pill-human-fg">{c.flagged} flagged</span>}
+        {c.flagged > 0 && <span className="flex-none text-12 text-pill-human-fg">{c.flagged} flagged</span>}
       </span>
     </Link>
   );
@@ -74,7 +74,7 @@ export function LearnScreen() {
         <div className="flex flex-col gap-6">
           <div className="space-y-1">
             <h1 className="type-display">Learn</h1>
-            <p className="text-sm text-fg-secondary">Turn a topic into a sourced, properly ordered module, then work through it with a tutor.</p>
+            <p className="text-14 text-fg-secondary">Turn a topic into a sourced, properly ordered module, then work through it with a tutor.</p>
           </div>
           {courses.error && <Banner tone="blocked" title={courses.error.message} />}
           {courses.isPending ? (

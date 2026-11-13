@@ -14,12 +14,12 @@ export default function Setup() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header>
         <h1 className="type-display">Get started with Vesper</h1>
-        <p className="mt-2 text-sm text-fg-secondary">Set your display name and primary email first. Agents author commits with your primary email; coding chats can use any address in your profile.</p>
+        <p className="mt-2 text-14 text-fg-secondary">Set your display name and primary email first. Agents author commits with your primary email; coding chats can use any address in your profile.</p>
       </header>
       <ProfileSection />
-      <p className="text-sm text-fg-secondary">Your Assistant starts with all persona permissions enabled. Connect a provider to chat; repositories and agents can be added whenever you need them.</p>
+      <p className="text-14 text-fg-secondary">Your Assistant starts with all persona permissions enabled. Connect a provider to chat; repositories and agents can be added whenever you need them.</p>
       <SetupChecklist />
-      {ready ? <ButtonLink href="/chat?new" variant="primary" className="self-start" onClick={() => setStoredFlag("local", setupIntroKey(boot.data.workspace.id))}>Continue to chat</ButtonLink> : <p role="status" className="text-sm text-fg-secondary">Replace the placeholder name and primary email, then save your profile to continue.</p>}
+      {ready ? <ButtonLink href="/chat?new" variant="primary" className="self-start" onClick={() => setStoredFlag("local", setupIntroKey(boot.data.workspace.id))}>Continue to chat</ButtonLink> : <p role="status" className="text-14 text-fg-secondary">Replace the placeholder name and primary email, then save your profile to continue.</p>}
     </div>
   );
 }

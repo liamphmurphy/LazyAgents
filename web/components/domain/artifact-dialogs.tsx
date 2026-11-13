@@ -90,7 +90,7 @@ function SelectMenu<T extends string>({
         <button
           id={id}
           type="button"
-          className="flex h-[30px] w-full items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-[13px] hover:bg-hover"
+          className="flex h-[30px] w-full items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-left text-13 hover:bg-hover"
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 truncate">{render ? render(value) : current?.label}</span>
           <Icon name="chev" size={14} className="text-fg-tertiary" />
@@ -142,7 +142,7 @@ function FilePicker({ files, onFiles, multiple, accept, hint }: { files: File[];
         </span>
         <span className="flex flex-col">
           <span className="font-medium">{multiple ? "Choose files or drop them here" : "Choose a file or drop it here"}</span>
-          <span className="text-[12.5px] text-fg-tertiary">{hint ?? "Markdown is outlined and searchable. Other files (PDF, images, exports) up to 25 MB."}</span>
+          <span className="text-13 text-fg-tertiary">{hint ?? "Markdown is outlined and searchable. Other files (PDF, images, exports) up to 25 MB."}</span>
         </span>
       </button>
       <input
@@ -161,10 +161,10 @@ function FilePicker({ files, onFiles, multiple, accept, hint }: { files: File[];
       {files.length > 0 && (
         <ul className="flex flex-col gap-1">
           {files.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-2.5 rounded-md bg-surface px-2.5 py-1.5 text-[13px]">
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2.5 rounded-md bg-surface px-2.5 py-1.5 text-13">
               <Icon name="artifacts" size={14} className="text-fg-tertiary" />
               <span className="flex-1 truncate">{f.name}</span>
-              <span className="font-mono text-[11px] text-fg-tertiary">{formatBytes(f.size)}</span>
+              <span className="font-mono text-11 text-fg-tertiary">{formatBytes(f.size)}</span>
               <IconButton icon="x" label={`Remove ${f.name}`} size={22} onClick={() => onFiles(files.filter((_, j) => j !== i))} />
             </li>
           ))}
@@ -250,11 +250,11 @@ export function UploadDialog({
       footer={
         <>
           {create.isError && (
-            <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+            <span role="alert" className="mr-auto text-12 text-pill-blocked-fg">
               {create.error.message}
             </span>
           )}
-          {progress && <span className="mr-auto text-xs text-fg-tertiary">{progress}</span>}
+          {progress && <span className="mr-auto text-12 text-fg-tertiary">{progress}</span>}
           <Dialog.Close asChild>
             <Button variant="ghost">Cancel</Button>
           </Dialog.Close>
@@ -359,11 +359,11 @@ export function NewVersionDialog({ artifact, open, onOpenChange }: { artifact: A
       footer={
         <>
           {update.isError && (
-            <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+            <span role="alert" className="mr-auto text-12 text-pill-blocked-fg">
               {update.error.message}
             </span>
           )}
-          <span className="mr-auto text-xs text-fg-tertiary">Current: {artifact.current_version.label}. Agents get the new version on their next read.</span>
+          <span className="mr-auto text-12 text-fg-tertiary">Current: {artifact.current_version.label}. Agents get the new version on their next read.</span>
           <Dialog.Close asChild>
             <Button variant="ghost">Cancel</Button>
           </Dialog.Close>
@@ -480,7 +480,7 @@ export function NewMockupDialog({
       footer={
         <>
           {error && (
-            <span role="alert" className="mr-auto text-xs text-pill-blocked-fg">
+            <span role="alert" className="mr-auto text-12 text-pill-blocked-fg">
               {error}
             </span>
           )}
@@ -509,7 +509,7 @@ export function NewMockupDialog({
         ]}
       />
       {mode === "template" ? (
-        <p className="text-[12.5px] text-fg-tertiary">A 1280×800 wireframe with a header, sidebar and content blocks. You&apos;ll edit the SVG source next.</p>
+        <p className="text-13 text-fg-tertiary">A 1280×800 wireframe with a header, sidebar and content blocks. You&apos;ll edit the SVG source next.</p>
       ) : (
         <FilePicker
           files={files}

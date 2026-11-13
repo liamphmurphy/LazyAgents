@@ -19,7 +19,7 @@ function useDebounced<T>(value: T, ms: number) {
 
 const chip = (on: boolean) =>
   cx(
-    "h-6 rounded-full border px-2.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+    "h-6 rounded-full border px-2.5 text-12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
     on ? "border-transparent bg-selected text-fg" : "border-border text-fg-secondary hover:bg-hover",
   );
 
@@ -84,7 +84,7 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
       {index ? (
         <h1 className="type-display">
           Patterns{" "}
-          {res.data && !dq && !topic && !tags.length && patterns.length < 50 && <span className="text-sm font-normal text-fg-tertiary">{patterns.length}</span>}
+          {res.data && !dq && !topic && !tags.length && patterns.length < 50 && <span className="text-14 font-normal text-fg-tertiary">{patterns.length}</span>}
         </h1>
       ) : (
         <h2 className="type-heading">Patterns</h2>
@@ -105,7 +105,7 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
         onKeyDown={onKeyDown}
       />
       <div role="group" aria-label="Filter by topic" className="flex flex-wrap items-center gap-1.5">
-        <span className="w-9 text-xs text-fg-tertiary">Topic</span>
+        <span className="w-9 text-12 text-fg-tertiary">Topic</span>
         {["", ...PATTERN_TOPICS].map((t) => (
           <button key={t} type="button" aria-pressed={topic === t} onClick={() => setFilters({ topic: t })} className={chip(topic === t)}>
             {t || "All"}
@@ -114,7 +114,7 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
       </div>
       {chips.length > 0 && (
         <div role="group" aria-label="Filter by tag" className="flex flex-wrap items-center gap-1.5">
-          <span className="w-9 text-xs text-fg-tertiary">Tag</span>
+          <span className="w-9 text-12 text-fg-tertiary">Tag</span>
           {visibleChips.map((f) => {
             const on = tags.includes(f.tag);
             return (
@@ -123,7 +123,7 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
                 type="button"
                 aria-pressed={on}
                 onClick={() => toggleTag(f.tag)}
-                className={cx(chip(false), "font-mono text-[11.5px]", on && "border-accent bg-pill-human-bg text-pill-human-fg hover:bg-pill-human-bg")}
+                className={cx(chip(false), "font-mono text-12", on && "border-accent bg-pill-human-bg text-pill-human-fg hover:bg-pill-human-bg")}
               >
                 {f.tag}
                 {on && " ✓"} <span className={on ? "" : "text-fg-tertiary"}>{f.count}</span>
@@ -131,19 +131,19 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
             );
           })}
           {chips.length > visibleChips.length && (
-            <button type="button" className="text-xs text-accent hover:underline" onClick={() => setMoreTags(true)}>
+            <button type="button" className="text-12 text-accent hover:underline" onClick={() => setMoreTags(true)}>
               + {chips.length - visibleChips.length} more
             </button>
           )}
           {moreTags && chips.length > 6 && (
-            <button type="button" className="text-xs text-accent hover:underline" onClick={() => setMoreTags(false)}>
+            <button type="button" className="text-12 text-accent hover:underline" onClick={() => setMoreTags(false)}>
               Fewer
             </button>
           )}
         </div>
       )}
       {tags.length > 0 && res.data && (
-        <p className="text-xs text-fg-secondary">
+        <p className="text-12 text-fg-secondary">
           {patterns.length} {patterns.length === 1 ? "pattern" : "patterns"} tagged <span className="font-mono">{tagList}</span> ·{" "}
           <button type="button" className="text-accent hover:underline" onClick={() => setFilters({ tags: [] })}>
             Clear
@@ -163,7 +163,7 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
           <Skeleton className="h-12 w-full" />
         </div>
       ) : patterns.length === 0 ? (
-        <p className="rounded-xl border border-border bg-surface px-3.5 py-3 text-xs text-fg-tertiary">
+        <p className="rounded-xl border border-border bg-surface px-3.5 py-3 text-12 text-fg-tertiary">
           {tags.length
             ? `No patterns tagged ${tagList}${topic ? ` in ${topic}` : ""}${dq ? " match" : ""}.`
             : dq
@@ -197,17 +197,17 @@ export function PatternsFinder({ index = false }: { index?: boolean }) {
               )}
             >
               <span className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] font-medium">{p.title}</span>
-                <span className="rounded-full bg-pill-human-bg px-2 text-[11px] text-pill-human-fg">{p.topic}</span>
+                <span className="text-13 font-medium">{p.title}</span>
+                <span className="rounded-full bg-pill-human-bg px-2 text-11 text-pill-human-fg">{p.topic}</span>
                 {p.tags.map((t) => (
-                  <span key={t} className={cx("font-mono text-[11px]", tags.includes(t) ? "font-semibold text-pill-human-fg" : "text-fg-tertiary")}>
+                  <span key={t} className={cx("font-mono text-11", tags.includes(t) ? "font-semibold text-pill-human-fg" : "text-fg-tertiary")}>
                     #{t}
                   </span>
                 ))}
               </span>
-              {p.summary && <span className="text-xs text-fg-secondary">{p.summary}</span>}
+              {p.summary && <span className="text-12 text-fg-secondary">{p.summary}</span>}
               {p.snippet && (
-                <span className="line-clamp-2 text-xs text-fg-tertiary">
+                <span className="line-clamp-2 text-12 text-fg-tertiary">
                   {snippetParts(p.snippet).map((s, j) =>
                     s.match ? (
                       <mark key={j} className="rounded-xs bg-pill-human-bg px-0.5 text-fg">

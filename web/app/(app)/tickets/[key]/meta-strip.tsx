@@ -20,7 +20,7 @@ function Chip({ label, value, onOpen, children }: { label: string; value: string
       aria-haspopup="dialog"
       aria-label={pickerName(label, value)}
       onClick={onOpen}
-      className="inline-flex h-[36px] max-w-full flex-none items-center gap-1.5 rounded-full border border-border-strong bg-surface px-3 text-[13px] text-fg-2 active:bg-hover"
+      className="inline-flex h-[36px] max-w-full flex-none items-center gap-1.5 rounded-full border border-border-strong bg-surface px-3 text-13 text-fg-2 active:bg-hover"
     >
       {children}
     </button>
@@ -85,7 +85,7 @@ export function MetaStrip({ t, boot, save }: { t: Ticket; boot: Bootstrap; save:
                 if (id !== (t.assignee?.id ?? "")) save({ assignee_agent_id: id || null }, `Agent → ${agents.find((a) => a.id === id)?.name ?? "Unassigned"}`);
               }}
             />
-            <p className="px-3 pt-2 text-xs text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
+            <p className="px-3 pt-2 text-12 text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
           </>
         )}
         {field === "priority" && (

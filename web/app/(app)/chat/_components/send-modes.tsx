@@ -29,7 +29,7 @@ export function SendModeSwitch({ value, onChange, disabled }: { value: SendMode;
           disabled={disabled}
           onClick={() => onChange(mode)}
           className={cx(
-            "inline-flex h-[24px] items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium disabled:cursor-not-allowed disabled:opacity-50",
+            "inline-flex h-[24px] items-center gap-1.5 rounded-full px-2.5 text-13 font-medium disabled:cursor-not-allowed disabled:opacity-50",
             value === mode ? ON[mode] : "text-fg-secondary hover:text-fg",
           )}
         >

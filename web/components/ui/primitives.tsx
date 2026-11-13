@@ -6,7 +6,7 @@ export function Kbd({ children, className }: { children: ReactNode; className?: 
   return (
     <kbd
       className={cx(
-        "inline-block min-w-[18px] rounded-xs border border-kbd-border px-[5px] py-px text-center font-mono text-[11px] text-fg-secondary",
+        "inline-block min-w-[18px] rounded-xs border border-kbd-border px-[5px] py-px text-center font-mono text-11 text-fg-secondary",
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function FilterChip({ label, value, ...rest }: { label: string; value: Re
   return (
     <button
       type="button"
-      className="inline-flex h-[26px] items-center overflow-hidden rounded-sm border border-border-strong text-xs hover:bg-hover"
+      className="inline-flex h-[26px] items-center overflow-hidden rounded-sm border border-border-strong text-12 hover:bg-hover"
       {...rest}
     >
       <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">{label}</span>
@@ -62,7 +62,7 @@ export function AddFilterChip(props: ComponentProps<"button">) {
   return (
     <button
       type="button"
-      className="inline-flex h-[26px] items-center gap-1.5 rounded-sm border border-dashed border-border-strong px-2.5 text-xs text-fg-secondary hover:bg-hover"
+      className="inline-flex h-[26px] items-center gap-1.5 rounded-sm border border-dashed border-border-strong px-2.5 text-12 text-fg-secondary hover:bg-hover"
       {...props}
     >
       <Icon name="plus" size={12} strokeWidth={1.8} />
@@ -94,7 +94,7 @@ export function EmptyState({
         <Icon name={icon} size={18} />
       </span>
       <h3 className="type-heading text-fg">{title}</h3>
-      {children && <p className="max-w-[360px] text-[13px] text-fg-secondary">{children}</p>}
+      {children && <p className="max-w-[360px] text-13 text-fg-secondary">{children}</p>}
       {actions && <div className="mt-2 flex flex-wrap justify-center gap-2">{actions}</div>}
     </div>
   );
@@ -130,7 +130,7 @@ export function Banner({
       {lead}
       <div className="flex min-w-[220px] flex-1 flex-col gap-0.5">
         <span className={cx("font-semibold", human ? "text-pill-human-fg" : "text-pill-blocked-fg")}>{title}</span>
-        {children && <span className="prose-code text-[12.5px] text-fg-2">{children}</span>}
+        {children && <span className="prose-code text-13 text-fg-2">{children}</span>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -150,11 +150,11 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-[12.5px] font-medium text-fg-2">
+      <label htmlFor={htmlFor} className="text-13 font-medium text-fg-2">
         {label}
       </label>
       {children}
-      {hint && <span id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-xs text-fg-tertiary">{hint}</span>}
+      {hint && <span id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-12 text-fg-tertiary">{hint}</span>}
     </div>
   );
 }
@@ -168,11 +168,11 @@ function widthOf(className?: string) {
 }
 
 export function TextInput({ mono, prefix, className, ...rest }: { mono?: boolean; prefix?: string } & ComponentProps<"input">) {
-  const font = mono ? "font-mono text-[12.5px]" : "text-[13px]";
+  const font = mono ? "font-mono text-13" : "text-13";
   if (prefix) {
     return (
       <span className={cx(inputBase, widthOf(className), "flex h-[30px] items-center overflow-hidden focus-within:border-accent", className)}>
-        <span className="pl-2.5 font-mono text-[12.5px] text-fg-tertiary">{prefix}</span>
+        <span className="pl-2.5 font-mono text-13 text-fg-tertiary">{prefix}</span>
         <input className={cx("h-full min-w-0 flex-1 bg-transparent pl-px pr-2.5 outline-none", font)} {...rest} />
       </span>
     );
@@ -187,7 +187,7 @@ export function TextArea({ mono, className, ...rest }: { mono?: boolean } & Comp
         inputBase,
         widthOf(className),
         "px-2.5 py-2",
-        mono ? "bg-surface-sunken font-mono text-[12.5px] leading-relaxed" : "type-reading",
+        mono ? "bg-surface-sunken font-mono text-13 leading-relaxed" : "type-reading",
         className,
       )}
       {...rest}

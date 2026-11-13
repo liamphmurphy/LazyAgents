@@ -119,7 +119,7 @@ const QUIET_CHECK_IN = "What are you working on right now, and is anything holdi
 
 function Divider({ children, testId }: { children: string; testId?: string }) {
   return (
-    <li className="flex items-center gap-3 py-1 text-xs text-fg-tertiary" data-testid={testId}>
+    <li className="flex items-center gap-3 py-1 text-12 text-fg-tertiary" data-testid={testId}>
       <span aria-hidden className="h-px flex-1 bg-border-subtle" />
       <span>{children}</span>
       <span aria-hidden className="h-px flex-1 bg-border-subtle" />
@@ -144,9 +144,9 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
   // A turn that ended without a reply keeps its steps: under the failure, or under the unanswered message.
   const endedSteps = ended && (
     <li className="flex flex-col items-start gap-1.5" data-testid="ended-turn">
-      <span className="flex items-center gap-2 text-xs text-fg-tertiary">
+      <span className="flex items-center gap-2 text-12 text-fg-tertiary">
         <PersonaAvatar persona={persona} size={22} />
-        <PersonaName persona={persona} className="text-[13px]" />
+        <PersonaName persona={persona} className="text-13" />
       </span>
       <TurnSteps runId={m.run_id} outcome={ended.outcome} since={ended.since} until={ended.until} end={ended.end} />
     </li>
@@ -171,9 +171,9 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
         // Assistant replies carry the avatar of the persona that wrote them (the chat's host
         // when unset) and its name in its color, so a group chat reads like one.
         // The harness · model tag and usage live in the Activity tab, so the chat stays immersive.
-        <span className="flex items-center gap-2 text-xs text-fg-tertiary" data-testid="assistant-identity">
+        <span className="flex items-center gap-2 text-12 text-fg-tertiary" data-testid="assistant-identity">
           <PersonaAvatar persona={author} size={22} />
-          <PersonaName persona={author} className="text-[13px]" />
+          <PersonaName persona={author} className="text-13" />
           <time dateTime={m.created_at}>{timelineTime(m.created_at)}</time>
         </span>
       )}
@@ -199,7 +199,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
               }
             }}
           >
-            <textarea aria-label="Edit message" autoFocus rows={Math.min(10, draft.split("\n").length + 1)} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} className="w-full resize-y rounded-md border border-border-strong bg-surface p-2 text-[13.5px] text-fg focus:border-accent focus:outline-none" />
+            <textarea aria-label="Edit message" autoFocus rows={Math.min(10, draft.split("\n").length + 1)} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} className="w-full resize-y rounded-md border border-border-strong bg-surface p-2 text-14 text-fg focus:border-accent focus:outline-none" />
             <div className="flex justify-end gap-1.5">
               <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
               <Button type="submit" variant="primary" disabled={!draft.trim()}>Save and resend</Button>
@@ -372,7 +372,7 @@ function ActivityLog({ list, turns, groups, running, runId, since, focus }: { li
         const t = turns.get(m.id)!;
         return (
           <li key={m.id} data-testid="activity-turn" className="flex flex-col items-start gap-1.5 border-b border-border-subtle pb-4">
-            <span className="flex w-full items-center gap-2 text-xs text-fg-tertiary">
+            <span className="flex w-full items-center gap-2 text-12 text-fg-tertiary">
               <span className="min-w-0 flex-1 truncate text-fg-secondary">{snippet(prompt.get(m.id) ?? "")}</span>
               <Tag groups={groups} m={m} />
             </span>
@@ -384,7 +384,7 @@ function ActivityLog({ list, turns, groups, running, runId, since, focus }: { li
       })}
       {running && (
         <li className="flex flex-col gap-2" data-testid="activity-running">
-          <span className="text-xs text-fg-secondary">Current turn</span>
+          <span className="text-12 text-fg-secondary">Current turn</span>
           <RunActivity runId={runId} since={since} focus={focus} />
         </li>
       )}
@@ -402,7 +402,7 @@ function ActivityBody({ chat: c, list, groups, focus }: { chat: NonNullable<Retu
     <>
       <div className="mx-auto mb-4 flex max-w-[860px] flex-wrap items-center gap-2">
         <ChatCostChip chatId={c.id} project={c.project} />
-        <span className="truncate font-mono text-xs text-fg-tertiary">
+        <span className="truncate font-mono text-12 text-fg-tertiary">
           {modelLabel(groups, current).harness} · {modelLabel(groups, current).model}
           {current.auto && " (auto)"}
           {c.effort && ` · ${effortLabel(c.effort)} effort`}
@@ -1070,7 +1070,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}
             {newReply && (
               <div className="sticky bottom-1 z-20 flex justify-center">
-                <button type="button" onClick={followLatest} className="flex items-center gap-1.5 rounded-full border border-border-float bg-surface-raised px-3 py-1 text-xs font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover">
+                <button type="button" onClick={followLatest} className="flex items-center gap-1.5 rounded-full border border-border-float bg-surface-raised px-3 py-1 text-12 font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover">
                   <Icon name="chev" size={12} />
                   New reply
                 </button>
@@ -1117,7 +1117,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                     tone="human"
                     title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
                     actions={
-                      !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                      !unavailable.checking && <Link href="/settings#secrets" className="text-13 text-accent hover:underline">
                         Add the key →
                       </Link>
                     }
@@ -1163,7 +1163,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                 kind: "error",
                 label: "Couldn’t send",
                 node: (
-                  <p role="alert" data-testid="send-mode-error" className="text-[12.5px] text-pill-blocked-fg">
+                  <p role="alert" data-testid="send-mode-error" className="text-13 text-pill-blocked-fg">
                     {modeError}
                   </p>
                 ),
@@ -1175,7 +1175,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                 kind: "error",
                 label: "Something failed",
                 node: (
-                  <p role="alert" className="text-[12.5px] text-pill-blocked-fg">
+                  <p role="alert" className="text-13 text-pill-blocked-fg">
                     {actionError instanceof ApiError && actionError.status === 409
                       ? `Can’t do that right now: ${actionError.message}`
                       : errorText(actionError)}
@@ -1233,7 +1233,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
           })()}
           {c.archived ? (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
-              <p className="flex-1 text-[13px] text-fg-secondary">This chat is archived. Restore it to continue.</p>
+              <p className="flex-1 text-13 text-fg-secondary">This chat is archived. Restore it to continue.</p>
               <RestoreChat chat={c} variant="primary" onRestored={restored} />
             </div>
           ) : (
@@ -1370,14 +1370,14 @@ function DockGreeting({ persona, tone, welcome, onPick, disabled }: { persona: P
       <div className="flex items-center gap-2.5">
         <PersonaAvatar persona={persona} size={28} />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-fg">{persona.id ? persona.name : "Your assistant"}</span>
-          <span className="block truncate text-xs text-fg-tertiary">{welcome.where}{persona.id ? ` · ${toneLabel(tone)}` : ""}</span>
+          <span className="block truncate text-14 font-semibold text-fg">{persona.id ? persona.name : "Your assistant"}</span>
+          <span className="block truncate text-12 text-fg-tertiary">{welcome.where}{persona.id ? ` · ${toneLabel(tone)}` : ""}</span>
         </span>
       </div>
-      <p className="text-[13px] text-fg-secondary">{welcome.intro}</p>
+      <p className="text-13 text-fg-secondary">{welcome.intro}</p>
       {welcome.starters.length > 0 && (
         <div>
-          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">{welcome.label}</h3>
+          <h3 className="mb-2 text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">{welcome.label}</h3>
           <ul aria-label="Conversation starters" className="flex flex-col gap-1.5">
             {welcome.starters.map((s) => (
               <li key={s.title}>
@@ -1390,8 +1390,8 @@ function DockGreeting({ persona, tone, welcome, onPick, disabled }: { persona: P
                 >
                   <Icon name={s.icon} size={15} className="mt-px flex-none text-fg-secondary" />
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-medium text-fg">{s.title}</span>
-                    <span className="line-clamp-2 block text-xs text-fg-secondary">{s.prompt}</span>
+                    <span className="block truncate text-13 font-medium text-fg">{s.title}</span>
+                    <span className="line-clamp-2 block text-12 text-fg-secondary">{s.prompt}</span>
                   </span>
                 </button>
               </li>

@@ -53,8 +53,8 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
   return (
     <nav aria-label="Slides" className="flex min-h-0 w-full flex-1 flex-col bg-panel max-md:flex-none max-md:flex-row max-md:border-t max-md:border-border-subtle">
       <div className="flex items-center justify-between px-3.5 pb-1 pt-3 max-md:hidden">
-        <span className="text-[12px] font-medium text-fg-secondary">Slides</span>
-        <span className="font-mono text-[11.5px] text-fg-tertiary">{deck.slides.length}</span>
+        <span className="text-12 font-medium text-fg-secondary">Slides</span>
+        <span className="font-mono text-12 text-fg-tertiary">{deck.slides.length}</span>
       </div>
       <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-2 max-md:flex-row max-md:overflow-x-auto max-md:overflow-y-hidden">
         {deck.slides.map((s, i) => (
@@ -73,7 +73,7 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
               setOver(undefined);
             }}
           >
-            <span className={cx("w-3 flex-none pt-0.5 text-right font-mono text-[11px] max-md:hidden", s.id === current ? "font-semibold text-accent" : "text-fg-tertiary")}>{i + 1}</span>
+            <span className={cx("w-3 flex-none pt-0.5 text-right font-mono text-11 max-md:hidden", s.id === current ? "font-semibold text-accent" : "text-fg-tertiary")}>{i + 1}</span>
             <button
               type="button"
               data-thumb={s.id}
@@ -94,13 +94,13 @@ export function Thumbnails({ deck, current, onSelect, onMove, onDuplicate, onRem
               )}
             >
               <SlideSvg deck={deck} slide={s} assetUrl={assetUrl} fontsReady={fontsReady} className="block aspect-video w-full" label="" />
-              {overflowing.has(s.id) && <span aria-hidden className="absolute right-1 top-1 grid size-3.5 place-items-center rounded-full bg-state-human text-[9px] font-extrabold text-approve-fg">!</span>}
-              {changed?.has(s.id) && <span aria-hidden className="absolute bottom-1 left-1 rounded-[4px] bg-state-human px-1 text-[10px] font-bold text-approve-fg">{persona}</span>}
+              {overflowing.has(s.id) && <span aria-hidden className="absolute right-1 top-1 grid size-3.5 place-items-center rounded-full bg-state-human text-10 font-extrabold text-approve-fg">!</span>}
+              {changed?.has(s.id) && <span aria-hidden className="absolute bottom-1 left-1 rounded-[4px] bg-state-human px-1 text-10 font-bold text-approve-fg">{persona}</span>}
             </button>
           </li>
         ))}
         <li className="pl-[18px] max-md:pl-0">
-          <div className="flex h-[30px] w-[128px] rounded-md border border-dashed border-border-strong text-[12.5px] text-fg-secondary">
+          <div className="flex h-[30px] w-[128px] rounded-md border border-dashed border-border-strong text-13 text-fg-secondary">
             <button type="button" disabled={readOnly} onClick={onAdd} className="flex-1 rounded-l-md hover:bg-hover disabled:opacity-40">
               + New slide
             </button>

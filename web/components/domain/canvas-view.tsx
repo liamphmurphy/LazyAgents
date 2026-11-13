@@ -54,7 +54,7 @@ export function CanvasButton({ chatId, live }: { chatId: string; live: boolean }
     } else panel.openFull(canvases[canvases.length - 1].id);
   };
   return (
-    <button type="button" aria-label={`Canvas, ${canvases.length} open`} onClick={go} className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] text-fg transition-colors hover:bg-hover">
+    <button type="button" aria-label={`Canvas, ${canvases.length} open`} onClick={go} className="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-13 text-fg transition-colors hover:bg-hover">
       Canvas
       <span className="text-fg-tertiary">{canvases.length}</span>
     </button>
@@ -97,7 +97,7 @@ function SvgView({ source, title, threads, selected, activeId, onPick, onPin }: 
     }
     setBoxes(next);
   }, [vids, source]);
-  if (!san?.tree) return <p role="alert" className="text-xs text-pill-blocked-fg">This SVG couldn&apos;t be displayed. Its source is under Source.</p>;
+  if (!san?.tree) return <p role="alert" className="text-12 text-pill-blocked-fg">This SVG couldn&apos;t be displayed. Its source is under Source.</p>;
   const vb = viewBoxOf(san.tree.attrs);
   const { width: _w, height: _h, x: _x, y: _y, ...rootAttrs } = san.tree.attrs;
   void [_w, _h, _x, _y];
@@ -112,7 +112,7 @@ function SvgView({ source, title, threads, selected, activeId, onPick, onPin }: 
   return (
     <div className="flex flex-col gap-2">
       {san.skipped > 0 && (
-        <p className="text-xs text-fg-tertiary">
+        <p className="text-12 text-fg-tertiary">
           {san.skipped} element{san.skipped === 1 ? "" : "s"} can&apos;t be shown here. They&apos;re kept in the source.
         </p>
       )}
@@ -127,7 +127,7 @@ function SvgView({ source, title, threads, selected, activeId, onPick, onPin }: 
             if (!b || c.target_lost) return null;
             return (
               <button key={c.id} type="button" aria-label={`Comment ${i + 1}`} data-testid="canvas-pin" onClick={() => onPin?.(c.id)} style={{ left: `${b.left + b.width}%`, top: `${b.top}%` }}
-                className={cx("absolute grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[11px] font-bold shadow", c.id === activeId ? "bg-accent text-on-accent" : c.status === "draft" ? "bg-accent/80 text-on-accent" : "bg-fg-secondary text-surface")}>
+                className={cx("absolute grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-11 font-bold shadow", c.id === activeId ? "bg-accent text-on-accent" : c.status === "draft" ? "bg-accent/80 text-on-accent" : "bg-fg-secondary text-surface")}>
                 {i + 1}
               </button>
             );
@@ -196,9 +196,9 @@ function TextPreview({ c, threads, activeId, pending, commentable, slots, onTool
 
 function Changes({ chatId, c }: { chatId: string; c: Canvas }) {
   const prev = useChatCanvas(chatId, c.viewing_seq > 1 ? c.id : undefined, c.viewing_seq - 1);
-  if (c.viewing_seq <= 1) return <p className="text-xs text-fg-tertiary">This is the first version.</p>;
-  if (prev.isError) return <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(prev.error)}</p>;
-  if (!prev.data || prev.data.viewing_seq !== c.viewing_seq - 1) return <p className="text-xs text-fg-tertiary">Loading…</p>;
+  if (c.viewing_seq <= 1) return <p className="text-12 text-fg-tertiary">This is the first version.</p>;
+  if (prev.isError) return <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(prev.error)}</p>;
+  if (!prev.data || prev.data.viewing_seq !== c.viewing_seq - 1) return <p className="text-12 text-fg-tertiary">Loading…</p>;
   if (c.kind === "svg") {
     return (
       <div className="flex flex-col gap-3">
@@ -210,7 +210,7 @@ function Changes({ chatId, c }: { chatId: string; c: Canvas }) {
     );
   }
   return (
-    <div data-testid="canvas-diff" className="overflow-x-auto rounded-lg border border-border bg-surface font-mono text-xs leading-relaxed">
+    <div data-testid="canvas-diff" className="overflow-x-auto rounded-lg border border-border bg-surface font-mono text-12 leading-relaxed">
       {diffLines(prev.data.body, c.body).map((l, i) => (
         <div key={i} className={cx("whitespace-pre-wrap px-3", l.op === "add" && "bg-pill-done-bg text-pill-done-fg", l.op === "del" && "bg-pill-blocked-bg text-pill-blocked-fg", l.op === "same" && "text-fg-secondary")}>
           <span aria-hidden className="mr-2 inline-block w-3 select-none opacity-70">{l.op === "add" ? "+" : l.op === "del" ? "−" : " "}</span>
@@ -231,9 +231,9 @@ function Editor({ c, actions, onDone }: { c: Canvas; actions: Actions; onDone: (
       {c.kind === "svg" ? (
         <MockupCanvas source={draft} history={history} zoom="fit" alt={c.title} inspectorSide={false} />
       ) : (
-        <textarea aria-label="Canvas text" value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-0 flex-1 resize-none rounded-lg border border-border bg-surface p-3 font-mono text-[13px] leading-relaxed text-fg focus:border-accent focus:outline-none" />
+        <textarea aria-label="Canvas text" value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-0 flex-1 resize-none rounded-lg border border-border bg-surface p-3 font-mono text-13 leading-relaxed text-fg focus:border-accent focus:outline-none" />
       )}
-      {actions.save.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(actions.save.error)}</p>}
+      {actions.save.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(actions.save.error)}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onDone}>Cancel</Button>
         <Button variant="primary" disabled={actions.save.isPending || draft === c.body} onClick={save}>Save version</Button>
@@ -259,13 +259,13 @@ function Thread({ c, n, replies, active, agent, readOnly, actions, onActivate }:
     setReplying(false);
   };
   return (
-    <li data-testid="canvas-comment" data-canvas-thread aria-current={active || undefined} onClick={onActivate} className={cx("flex flex-col gap-1.5 rounded-lg border bg-surface p-2.5 text-[12.5px]", active ? "border-accent" : "border-border")}>
-      <div className="flex items-center gap-1.5 text-[11.5px] text-fg-tertiary">
-        <span className="grid size-4 flex-none place-items-center rounded-full bg-fg-secondary text-[10px] font-bold text-surface">{n}</span>
+    <li data-testid="canvas-comment" data-canvas-thread aria-current={active || undefined} onClick={onActivate} className={cx("flex flex-col gap-1.5 rounded-lg border bg-surface p-2.5 text-13", active ? "border-accent" : "border-border")}>
+      <div className="flex items-center gap-1.5 text-12 text-fg-tertiary">
+        <span className="grid size-4 flex-none place-items-center rounded-full bg-fg-secondary text-10 font-bold text-surface">{n}</span>
         <span className="font-semibold text-fg-2">{who(c)}</span>
         <span className="ml-auto">{statusLabel(c)}</span>
       </div>
-      {c.target_lost && (c.status === "draft" || c.status === "open") ? <p className="text-[11.5px] italic text-fg-tertiary">Original target removed</p> : target && <p className="truncate text-[11.5px] text-fg-tertiary">{target}</p>}
+      {c.target_lost && (c.status === "draft" || c.status === "open") ? <p className="text-12 italic text-fg-tertiary">Original target removed</p> : target && <p className="truncate text-12 text-fg-tertiary">{target}</p>}
       <p className="whitespace-pre-wrap text-fg">{c.body}</p>
       {c.suggestion != null && (
         <p className="rounded bg-pill-done-bg px-2 py-1 text-pill-done-fg"><span className="sr-only">Suggested: </span>{c.suggestion}</p>
@@ -275,7 +275,7 @@ function Thread({ c, n, replies, active, agent, readOnly, actions, onActivate }:
       ))}
       {replying && (
         <div className="flex flex-col gap-1">
-          <textarea aria-label="Reply" autoFocus rows={2} value={reply} onChange={(e) => setReply(e.target.value)} className="w-full rounded border border-border bg-surface-sunken p-1.5 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
+          <textarea aria-label="Reply" autoFocus rows={2} value={reply} onChange={(e) => setReply(e.target.value)} className="w-full rounded border border-border bg-surface-sunken p-1.5 text-13 text-fg focus:border-accent focus:outline-none" />
           <div className="flex justify-end gap-2">
             <button type="button" className={link} onClick={() => setReplying(false)}>Cancel</button>
             <button type="button" className={link} disabled={!reply.trim() || readOnly || actions.add.isPending || actions.send.isPending} onClick={() => void submitReply()}>Send reply</button>
@@ -283,7 +283,7 @@ function Thread({ c, n, replies, active, agent, readOnly, actions, onActivate }:
         </div>
       )}
       {!replying && (
-        <div className="flex flex-wrap gap-x-3 text-[12px]">
+        <div className="flex flex-wrap gap-x-3 text-12">
           {c.status === "draft" && <button type="button" className={link} onClick={() => actions.remove.mutate(c.id)}>Delete</button>}
           {c.suggestion != null && c.status !== "resolved" && !c.target_lost && <button type="button" className={link} disabled={readOnly || actions.apply.isPending} onClick={() => actions.apply.mutate(c.id)}>Apply</button>}
           {c.status !== "draft" && c.status !== "resolved" && <button type="button" className={link} disabled={readOnly} onClick={() => setReplying(true)}>Reply</button>}
@@ -307,9 +307,9 @@ function Composer({ target, readOnly, actions, seq, onDone }: { target: Target; 
   };
   return (
     <div data-testid="canvas-composer" data-canvas-thread className="flex flex-col gap-1.5 rounded-lg border border-accent bg-surface p-2.5">
-      <p className="truncate text-[11.5px] text-fg-tertiary">On {target.kind === "text" ? `“${target.quote}”` : `“${target.label}”`}</p>
-      <textarea aria-label="Comment" autoFocus rows={3} value={body} onChange={(e) => setBody(e.target.value)} className="w-full rounded border border-border bg-surface-sunken p-1.5 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
-      {(actions.add.isError || actions.send.isError) && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(actions.add.error ?? actions.send.error)}</p>}
+      <p className="truncate text-12 text-fg-tertiary">On {target.kind === "text" ? `“${target.quote}”` : `“${target.label}”`}</p>
+      <textarea aria-label="Comment" autoFocus rows={3} value={body} onChange={(e) => setBody(e.target.value)} className="w-full rounded border border-border bg-surface-sunken p-1.5 text-13 text-fg focus:border-accent focus:outline-none" />
+      {(actions.add.isError || actions.send.isError) && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(actions.add.error ?? actions.send.error)}</p>}
       <div className="flex flex-wrap justify-end gap-1.5">
         <Button variant="secondary" onClick={onDone}>Cancel</Button>
         <Button variant="secondary" disabled={!body.trim() || busy} onClick={batch}>Add to batch</Button>
@@ -340,7 +340,7 @@ export function Rail({ inline, threads, replies, resolved, target, activeId, set
       {target && <Composer key={target.kind === "text" ? `${target.start}-${target.end}` : target.vid} target={target} readOnly={readOnly} actions={actions} seq={seq} onDone={onComposerDone} />}
       <ol className="flex flex-col gap-2">{threads.map(card)}</ol>
       {resolved.length > 0 && (
-        <details className="text-xs text-fg-tertiary">
+        <details className="text-12 text-fg-tertiary">
           <summary className="cursor-pointer">{resolved.length} resolved</summary>
           <ol className="mt-2 flex flex-col gap-2">{resolved.map(card)}</ol>
         </details>
@@ -428,14 +428,14 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
   return (
     <>
       <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5">
-        <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-fg">{c?.title ?? "Canvas"}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-14 font-semibold text-fg">{c?.title ?? "Canvas"}</h2>
         {drafts.length > 0 && (
           <Button variant="primary" disabled={locked || actions.send.isPending} onClick={() => actions.send.mutate({ comment_ids: drafts.map((d) => d.id) })}>
             Send {drafts.length} comment{drafts.length === 1 ? "" : "s"}
           </Button>
         )}
         {c?.promoted_artifact_id ? (
-          <Link href={`/artifacts/${c.promoted_artifact_id}`} className="text-xs text-accent hover:underline">Open artifact</Link>
+          <Link href={`/artifacts/${c.promoted_artifact_id}`} className="text-12 text-accent hover:underline">Open artifact</Link>
         ) : (
           c && <Button variant="secondary" disabled={actions.promote.isPending} onClick={() => actions.promote.mutate()}>Save as artifact</Button>
         )}
@@ -444,7 +444,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
         {onCollapse && <IconButton icon="chevronUp" label="Collapse canvas" onClick={onCollapse} />}
         {onClose && <IconButton icon="x" label="Close canvas" onClick={onClose} />}
       </div>
-      <div className="flex items-center gap-2 border-b border-border-row px-4 py-1.5 text-xs text-fg-tertiary">
+      <div className="flex items-center gap-2 border-b border-border-row px-4 py-1.5 text-12 text-fg-tertiary">
         {c && viewing !== undefined && (
           <span className="flex items-center gap-1">
             <button type="button" aria-label="Previous version" disabled={viewing <= 1} className="rounded px-1 hover:text-fg disabled:opacity-40" onClick={() => step(viewing - 1)}>‹</button>
@@ -464,16 +464,16 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
           {tab("edit", "Edit", locked || !isCurrent)}
         </span>
       </div>
-      {failure && <p role="alert" className="border-b border-border-row px-4 py-1 text-xs text-pill-blocked-fg">{errorText(failure)}</p>}
+      {failure && <p role="alert" className="border-b border-border-row px-4 py-1 text-12 text-pill-blocked-fg">{errorText(failure)}</p>}
       <div className={cx("min-h-0 flex-1", inline ? "overflow-y-auto" : "flex overflow-hidden max-md:flex-col max-md:overflow-y-auto")}>
         <div className={cx("relative min-w-0 flex-1", onBoard ? "max-md:min-h-[60vh]" : "p-4", !inline && !onBoard && "md:overflow-auto")}>
-          {canComment && !target && !open.length && !resolved.length && <p className={cx("text-xs text-fg-tertiary", onBoard ? "pointer-events-none absolute left-4 top-3 z-10" : "mb-3")}>{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
+          {canComment && !target && !open.length && !resolved.length && <p className={cx("text-12 text-fg-tertiary", onBoard ? "pointer-events-none absolute left-4 top-3 z-10" : "mb-3")}>{c?.kind === "svg" ? "Click an element to comment on it." : "Select text to comment on it."}</p>}
           {q.isError ? (
-            <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(q.error)}</p>
+            <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(q.error)}</p>
           ) : !c ? (
-            <p className="text-xs text-fg-tertiary">Loading…</p>
+            <p className="text-12 text-fg-tertiary">Loading…</p>
           ) : c.kind === "deck" ? (
-            <p className="text-[13px] text-fg-secondary">
+            <p className="text-13 text-fg-secondary">
               This is a slide deck.{" "}
               <Link href={`/apps/slides/${canvasId}`} className="text-accent hover:underline">
                 Open it in Slides
@@ -495,7 +495,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
                 <TextPreview c={c} threads={open} activeId={activeId} pending={target?.kind === "text" ? target : undefined} commentable={canComment} slots={slots} onToolbar={setToolbar} onActivate={setActiveId} />
               </MarkdownSlots.Provider>
               {toolbar && canComment && (
-                <div role="toolbar" aria-label="Selection" data-testid="canvas-toolbar" style={{ top: toolbar.top, left: toolbar.left }} className="absolute z-10 flex gap-0.5 rounded-lg border border-border-float bg-surface-raised p-1 text-[12.5px] shadow-[var(--shadow-float)]" onMouseUp={(e) => e.stopPropagation()}>
+                <div role="toolbar" aria-label="Selection" data-testid="canvas-toolbar" style={{ top: toolbar.top, left: toolbar.left }} className="absolute z-10 flex gap-0.5 rounded-lg border border-border-float bg-surface-raised p-1 text-13 shadow-[var(--shadow-float)]" onMouseUp={(e) => e.stopPropagation()}>
                   <button type="button" className="rounded px-2 py-0.5 font-semibold text-fg hover:bg-hover" onClick={() => { setTarget({ kind: "text", start: toolbar.start, end: toolbar.end, quote: toolbar.quote }); setToolbar(null); }}>Comment</button>
                   {QUICK.map(([label, message]) => (
                     <button key={label} type="button" disabled={locked} className="rounded px-2 py-0.5 text-fg hover:bg-hover disabled:opacity-40" onClick={() => void quick(toolbar, message)}>{label}</button>
@@ -527,10 +527,10 @@ function FullscreenChat({ chatId, live, readOnly }: { chatId: string; live: bool
   };
   return (
     <div className="flex flex-none flex-col gap-2 border-t border-border-subtle p-3">
-      {reply && <div data-testid="canvas-latest-reply" className="max-h-24 overflow-y-auto text-[13px]"><Markdown className="text-fg-2">{reply}</Markdown></div>}
-      {send.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(send.error)}</p>}
+      {reply && <div data-testid="canvas-latest-reply" className="max-h-24 overflow-y-auto text-13"><Markdown className="text-fg-2">{reply}</Markdown></div>}
+      {send.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(send.error)}</p>}
       <div className="flex items-end gap-2">
-        <textarea aria-label="Message from fullscreen" rows={1} value={text} disabled={readOnly} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder="Message" className="min-w-0 flex-1 resize-none rounded-lg border border-border bg-surface p-2 text-[13.5px] text-fg focus:border-accent focus:outline-none" />
+        <textarea aria-label="Message from fullscreen" rows={1} value={text} disabled={readOnly} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} placeholder="Message" className="min-w-0 flex-1 resize-none rounded-lg border border-border bg-surface p-2 text-14 text-fg focus:border-accent focus:outline-none" />
         <Button variant="primary" disabled={disabled || !text.trim()} onClick={submit}>Send</Button>
       </div>
     </div>

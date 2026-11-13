@@ -25,14 +25,14 @@ function EstimateMenu({ onChange, children }: { onChange: (points: number | null
       <DropdownMenu.Trigger asChild>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[216px] p-2")}>
-          <DropdownMenu.Label className="px-1 pb-1.5 text-[11.5px] text-fg-tertiary">Set estimate</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-1 pb-1.5 text-12 text-fg-tertiary">Set estimate</DropdownMenu.Label>
           <div className="flex gap-1">
             {ESTIMATE_SCALE.map((p) => (
               <DropdownMenu.Item
                 key={p}
                 onSelect={() => onChange(p)}
                 aria-label={`${p} points`}
-                className="grid h-[26px] min-w-7 flex-1 cursor-default place-items-center rounded-[5px] border border-border-strong font-mono text-xs outline-none data-[highlighted]:border-accent data-[highlighted]:bg-accent/18"
+                className="grid h-[26px] min-w-7 flex-1 cursor-default place-items-center rounded-[5px] border border-border-strong font-mono text-12 outline-none data-[highlighted]:border-accent data-[highlighted]:bg-accent/18"
               >
                 {p}
               </DropdownMenu.Item>
@@ -42,7 +42,7 @@ function EstimateMenu({ onChange, children }: { onChange: (points: number | null
           <DropdownMenu.Item className={cx(item, "text-fg-secondary")} onSelect={() => onChange(null)}>
             Clear estimate
           </DropdownMenu.Item>
-          <p className="px-1 pt-1 text-[11px] text-fg-tertiary">Records you as the estimator.</p>
+          <p className="px-1 pt-1 text-11 text-fg-tertiary">Records you as the estimator.</p>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -158,7 +158,7 @@ export function BulkResultPanel({
         {ok ? (
           <Icon name="check" size={14} className="text-state-done" />
         ) : (
-          <span aria-hidden className="grid size-3.5 place-items-center rounded-full border border-state-human bg-pill-human-bg text-[10px] font-bold text-pill-human-fg">!</span>
+          <span aria-hidden className="grid size-3.5 place-items-center rounded-full border border-state-human bg-pill-human-bg text-10 font-bold text-pill-human-fg">!</span>
         )}
         <span className="font-medium">{label}</span>
         <span className="text-fg-secondary">
@@ -166,7 +166,7 @@ export function BulkResultPanel({
         </span>
         <span className="ml-auto flex items-center gap-1">
           {!ok && (
-            <Button variant="outline" className="h-6 px-2 text-xs" onClick={onSelectFailed}>
+            <Button variant="outline" className="h-6 px-2 text-12" onClick={onSelectFailed}>
               Select failed
             </Button>
           )}
@@ -177,8 +177,8 @@ export function BulkResultPanel({
         <ul className="max-h-48 overflow-y-auto border-t border-border-subtle px-4 py-2">
           {failed.map((f) => (
             <li key={f.key} className="flex h-8 items-center gap-2.5">
-              <span className="font-mono text-xs text-fg-secondary">{f.key}</span>
-              <span className="rounded-[4px] bg-pill-blocked-bg px-1.5 font-mono text-[11.5px] text-pill-blocked-fg">{f.status || "error"}</span>
+              <span className="font-mono text-12 text-fg-secondary">{f.key}</span>
+              <span className="rounded-[4px] bg-pill-blocked-bg px-1.5 font-mono text-12 text-pill-blocked-fg">{f.status || "error"}</span>
               <span className="min-w-0 flex-1 truncate">{failureReason(f)}</span>
               <Link href={`/tickets/${f.key}`} className="flex-none text-accent hover:underline">
                 Open ticket →
@@ -186,7 +186,7 @@ export function BulkResultPanel({
             </li>
           ))}
           {updatedText && (
-            <li className="flex h-7 items-center gap-2 text-[12.5px] text-fg-secondary">
+            <li className="flex h-7 items-center gap-2 text-13 text-fg-secondary">
               <Icon name="check" size={13} className="text-state-done" />
               {updatedText}
             </li>

@@ -18,16 +18,16 @@ function MockupGate({ t, onNew }: { t: Ticket; onNew: () => void }) {
   const list = (
     <ul className="mt-1 flex flex-col gap-1">
       {g.mockups.map((m) => (
-        <li key={m.id} className="flex flex-wrap items-center gap-2 text-[13px]">
+        <li key={m.id} className="flex flex-wrap items-center gap-2 text-13">
           <Link href={`/artifacts/${m.id}`} className="font-medium text-fg hover:underline">
             {m.title}
           </Link>
-          <span className="font-mono text-xs text-fg-tertiary">{m.version_label}</span>
+          <span className="font-mono text-12 text-fg-tertiary">{m.version_label}</span>
           <ReviewChip state={m.review_state} />
-          <Link href={`/artifacts/${m.id}/review?ticket=${encodeURIComponent(t.key)}`} className="text-xs text-accent hover:underline">
+          <Link href={`/artifacts/${m.id}/review?ticket=${encodeURIComponent(t.key)}`} className="text-12 text-accent hover:underline">
             {m.review_state === "pending" ? "Review" : "Open review"}
           </Link>
-          {m.review_state === "changes_requested" && m.review_note && <span className="basis-full whitespace-pre-line text-xs text-fg-secondary">“{m.review_note}”</span>}
+          {m.review_state === "changes_requested" && m.review_note && <span className="basis-full whitespace-pre-line text-12 text-fg-secondary">“{m.review_note}”</span>}
         </li>
       ))}
     </ul>
@@ -67,11 +67,11 @@ export function ContextArtifacts({ t }: { t: Ticket }) {
       <div className="flex items-center justify-between gap-3">
         <h2 className="type-heading">Context artifacts</h2>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" icon="plus" className="h-7 px-2 text-[12.5px] text-fg-secondary" onClick={() => setMockup(true)}>
+          <Button variant="ghost" icon="plus" className="h-7 px-2 text-13 text-fg-secondary" onClick={() => setMockup(true)}>
             New mockup
           </Button>
           <ArtifactPicker exclude={t.artifacts.map((a) => a.id)} onPick={(a) => attach.mutate(a.id)}>
-            <Button variant="ghost" icon="plus" className="h-7 px-2 text-[12.5px] text-fg-secondary">
+            <Button variant="ghost" icon="plus" className="h-7 px-2 text-13 text-fg-secondary">
               Attach
             </Button>
           </ArtifactPicker>
@@ -85,9 +85,9 @@ export function ContextArtifacts({ t }: { t: Ticket }) {
           ))}
         </div>
       ) : (
-        <p className="text-[13px] text-fg-tertiary">Attach the PRDs, specs and ADRs an agent should read before it starts.</p>
+        <p className="text-13 text-fg-tertiary">Attach the PRDs, specs and ADRs an agent should read before it starts.</p>
       )}
-      {(attach.isError || detach.isError) && <p className="text-xs text-pill-blocked-fg">{(attach.error ?? detach.error)?.message}</p>}
+      {(attach.isError || detach.isError) && <p className="text-12 text-pill-blocked-fg">{(attach.error ?? detach.error)?.message}</p>}
       {mockup && <NewMockupDialog open ticketKey={t.key} defaultProject={t.project.key} defaultEpicId={t.epic?.id} onOpenChange={setMockup} />}
     </section>
   );

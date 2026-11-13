@@ -28,7 +28,7 @@ function CaptureForm({ onDone }: { onDone: () => void }) {
   };
   return (
     <>
-      <div className="flex items-center gap-2 px-5 pt-1 text-xs text-fg-tertiary">
+      <div className="flex items-center gap-2 px-5 pt-1 text-12 text-fg-tertiary">
         <Icon name="inbox" size={13} className="text-[#3FC1B0]" />
         Goes to Inbox. File it later, or let a persona file it for you.
       </div>
@@ -46,10 +46,10 @@ function CaptureForm({ onDone }: { onDone: () => void }) {
           rows={3}
           placeholder="A thought, a question, a [[link]]…"
           aria-label="Note"
-          className="w-full resize-none rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5 text-sm text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
+          className="w-full resize-none rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5 text-14 text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
         />
-        {capture.error && <p className="mt-2 text-xs text-state-blocked">{capture.error.message}</p>}
-        <div className="mt-3 flex items-center gap-3 text-[11px] text-fg-tertiary">
+        {capture.error && <p className="mt-2 text-12 text-state-blocked">{capture.error.message}</p>}
+        <div className="mt-3 flex items-center gap-3 text-11 text-fg-tertiary">
           <span>
             <Kbd>↵</Kbd> capture · <Kbd>⇧↵</Kbd> new line
           </span>

@@ -20,8 +20,8 @@ export function ChatSuggestions({ onPick, disabled }: { onPick: (prompt: string)
           >
             <Icon name={s.icon} size={18} className="mt-px flex-none text-fg-secondary" />
             <span className="min-w-0">
-              <span className="block truncate text-[13px] font-medium text-fg">{s.title}</span>
-              <span className="line-clamp-2 block text-xs text-fg-secondary">{s.prompt}</span>
+              <span className="block truncate text-13 font-medium text-fg">{s.title}</span>
+              <span className="line-clamp-2 block text-12 text-fg-secondary">{s.prompt}</span>
             </span>
           </button>
         </li>

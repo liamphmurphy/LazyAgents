@@ -35,7 +35,7 @@ export function ActivityRef({ refText, label }: { refText: string; label: string
 
 function LiveLine({ a }: { a: Activity }) {
   return (
-    <p data-testid="live-activity" className="flex min-w-0 items-center gap-2 text-[12.5px] text-fg-secondary">
+    <p data-testid="live-activity" className="flex min-w-0 items-center gap-2 text-13 text-fg-secondary">
       <span aria-hidden className="size-3 flex-none animate-spin rounded-full border-2 border-border-strong border-t-accent" />
       <span className="min-w-0 truncate">
         {a.verb}
@@ -53,9 +53,9 @@ function LiveLine({ a }: { a: Activity }) {
 
 function CallList({ calls }: { calls: ToolCall[] }) {
   return (
-    <details className="w-full text-[12.5px]">
+    <details className="w-full text-13">
       <summary className="cursor-pointer text-fg-tertiary">Tool calls ({calls.length})</summary>
-      <ul className="mt-2 flex flex-col gap-1 font-mono text-xs">
+      <ul className="mt-2 flex flex-col gap-1 font-mono text-12">
         {calls.map((c) => (
           <li key={c.key} className="flex gap-2">
             <span className="text-fg">{c.tool}</span>
@@ -72,7 +72,7 @@ const TAG_LABEL: Record<IntentTag, string> = { approach: "changed approach", sur
 
 function TagPill({ tag }: { tag: IntentTag }) {
   return (
-    <span data-testid="intent-tag" className={`flex-none rounded-full px-1.5 text-[10.5px] ${tag === "surprise" ? "bg-[var(--state-review)]/15 text-fg-secondary" : "bg-accent/15 text-fg-secondary"}`}>
+    <span data-testid="intent-tag" className={`flex-none rounded-full px-1.5 text-11 ${tag === "surprise" ? "bg-[var(--state-review)]/15 text-fg-secondary" : "bg-accent/15 text-fg-secondary"}`}>
       {TAG_LABEL[tag]}
     </span>
   );
@@ -107,16 +107,16 @@ function TurnTrace({ steps, live, scope, focus }: { steps: TraceStep[]; live?: b
         return (
           <li key={s.key} id={key ? traceStepId(key) : undefined} data-testid="trace-step" data-step-state={state}
             className={`flex w-full scroll-mt-4 flex-col gap-1.5 rounded-lg border bg-surface px-3 py-2 ${key && focus?.key === key ? "border-accent" : "border-border"}`}>
-            <div className="flex min-w-0 items-center gap-2 text-[13px]">
+            <div className="flex min-w-0 items-center gap-2 text-13">
               <StepGlyph step={{ state, kind: s.kind }} />
               <span className={`min-w-0 truncate ${state === "active" ? "font-medium text-fg" : "text-fg-secondary"}`}>{s.title}</span>
               {s.tag && <TagPill tag={s.tag} />}
             </div>
             {s.intents.map((t, j) => (
-              <p key={j} data-testid="trace-intent" className="rounded-md bg-accent/10 px-2.5 py-1.5 text-[12.5px] italic text-fg-secondary">{t}</p>
+              <p key={j} data-testid="trace-intent" className="rounded-md bg-accent/10 px-2.5 py-1.5 text-13 italic text-fg-secondary">{t}</p>
             ))}
             {s.thinking.length > 0 && (
-              <details data-thinking className="text-[12.5px]">
+              <details data-thinking className="text-13">
                 <summary className="cursor-pointer text-fg-tertiary">Thinking</summary>
                 <div className="mt-1.5 flex flex-col gap-2 border-l-2 border-border pl-3">
                   {s.thinking.map((t, j) => (
@@ -174,7 +174,7 @@ function StepTimer({ step, now }: { step: ChatStep; now: number }) {
   const ms = (active ? now : (step.endedAt ?? step.startedAt)) - step.startedAt;
   if (ms < 1000) return null;
   return (
-    <span data-testid="step-timer" className={`flex-none text-[10.5px] tabular-nums ${active ? "rounded-full bg-accent/15 px-1.5 text-fg-secondary" : "text-fg-tertiary"}`}>
+    <span data-testid="step-timer" className={`flex-none text-11 tabular-nums ${active ? "rounded-full bg-accent/15 px-1.5 text-fg-secondary" : "text-fg-tertiary"}`}>
       {formatSpan(ms)}
     </span>
   );
@@ -183,7 +183,7 @@ function StepTimer({ step, now }: { step: ChatStep; now: number }) {
 function StepRail({ steps, now, stopping, awaiting, onOpenStep, fold = foldSteps }: { steps: ChatStep[]; now: number; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void; fold?: (steps: ChatStep[]) => ReturnType<typeof foldSteps> }) {
   const { earlier, shown, later } = fold(steps);
   return (
-    <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
+    <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-13">
       {earlier > 0 && (
         <li className="flex items-center gap-2.5 text-fg-tertiary">
           <StepGlyph step={{ state: "done" }} />
@@ -197,20 +197,20 @@ function StepRail({ steps, now, stopping, awaiting, onOpenStep, fold = foldSteps
             <div className="flex min-w-0 items-center gap-2.5">
               <span className={`min-w-0 truncate ${s.state === "active" ? "font-medium text-fg" : s.state === "done" || s.state === "failed" ? "text-fg-secondary" : "text-fg-tertiary"}`}>{s.title}</span>
               {s.state === "failed" && <span className="sr-only">(failed)</span>}
-              {awaiting && s.state === "active" && <span data-testid="step-awaiting" className="flex-none rounded-full bg-pill-human-bg px-2 text-[10.5px] text-pill-human-fg">Waiting for approval</span>}
-              {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
+              {awaiting && s.state === "active" && <span data-testid="step-awaiting" className="flex-none rounded-full bg-pill-human-bg px-2 text-11 text-pill-human-fg">Waiting for approval</span>}
+              {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-11 text-fg-secondary">added</span>}
               {s.tag && <TagPill tag={s.tag} />}
               <span className="ml-auto flex flex-none items-center gap-2.5">
                 {onOpenStep && (s.reasoning || s.intent) && (
-                  <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="flex-none text-xs text-fg-tertiary hover:text-fg-secondary">
+                  <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="flex-none text-12 text-fg-tertiary hover:text-fg-secondary">
                     View reasoning ›
                   </button>
                 )}
                 <StepTimer step={s} now={now} />
               </span>
             </div>
-            {s.detail && <p data-testid="chat-step-detail" className="truncate text-xs text-fg-tertiary">{s.detail}</p>}
-            {s.intent && <p data-testid="chat-step-intent" className="line-clamp-2 text-xs italic text-fg-secondary">{s.intent}</p>}
+            {s.detail && <p data-testid="chat-step-detail" className="truncate text-12 text-fg-tertiary">{s.detail}</p>}
+            {s.intent && <p data-testid="chat-step-intent" className="line-clamp-2 text-12 italic text-fg-secondary">{s.intent}</p>}
           </div>
         </li>
       ))}
@@ -263,7 +263,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
           <PersonaAvatar persona={persona} size={28} />
         </span>
         <div className="min-w-0 flex-1">
-          <p role="status" aria-live="polite" className={`truncate text-[13.5px] ${awaiting ? "text-pill-human-fg" : "text-fg"}`} data-testid="chat-status">
+          <p role="status" aria-live="polite" className={`truncate text-14 ${awaiting ? "text-pill-human-fg" : "text-fg"}`} data-testid="chat-status">
             {stopping
               ? "Stopping…"
               : awaiting
@@ -272,7 +272,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
                   ? `${persona.name} has been quiet for ${quietFor(pulse.idle ?? 0)}`
                   : `${persona.name} is ${status.phrase}…`}
           </p>
-          <p aria-hidden data-testid="chat-pulse" className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-tertiary @max-[300px]:hidden">
+          <p aria-hidden data-testid="chat-pulse" className="flex min-w-0 items-center gap-1.5 truncate text-12 text-fg-tertiary @max-[300px]:hidden">
             {awaiting ? (
               "Paused until you decide"
             ) : quiet ? (
@@ -324,7 +324,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
           ) : (
             <StepRail steps={steps} now={now} stopping={stopping} awaiting={awaiting} onOpenStep={onOpenStep} />
           )}
-          <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+          <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-12 text-fg-tertiary hover:text-fg-secondary">
             {collapsed ? "Show steps" : "Hide steps"}
           </button>
         </>
@@ -368,7 +368,7 @@ export function TurnSteps({ runId, outcome, since, until, end, replyId }: { runI
     <>
       <div data-testid="turn-steps" data-outcome={outcome}
         className={`w-full max-w-[min(720px,100%)] rounded-xl border bg-surface ${outcome === "failed" ? "border-[var(--state-blocked)]/40" : "border-border"} ${open ? "" : "sm:w-fit sm:min-w-[320px]"}`}>
-        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[12.5px]">
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-13">
           {outcome === "stopped" ? (
             <span aria-hidden className="grid size-4 flex-none place-items-center rounded-full bg-fg-tertiary text-surface"><Icon name="pause" size={10} /></span>
           ) : (
@@ -377,20 +377,20 @@ export function TurnSteps({ runId, outcome, since, until, end, replyId }: { runI
           <span data-testid="turn-steps-summary" className="min-w-0 flex-1 truncate text-fg-secondary">
             {took ? `${OUTCOME_VERB[outcome]}${took}` : OUTCOME_VERB[outcome].split(" ")[0]} · {count}
           </span>
-          <span className="flex-none pl-3 text-xs text-fg-tertiary">{open ? "Hide steps ‹" : "Show steps ›"}</span>
+          <span className="flex-none pl-3 text-12 text-fg-tertiary">{open ? "Hide steps ‹" : "Show steps ›"}</span>
         </button>
         {open && (
           <>
             <StepRail steps={turn.steps} now={0} fold={outcome === "failed" ? fromFailure : showAll} onOpenStep={view} />
             {view && (
-              <button type="button" onClick={() => view(turn.steps[0].key)} className="px-3.5 pb-2.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+              <button type="button" onClick={() => view(turn.steps[0].key)} className="px-3.5 pb-2.5 text-12 text-fg-tertiary hover:text-fg-secondary">
                 All tool calls in Activity ›
               </button>
             )}
           </>
         )}
       </div>
-      {outcome === "stopped" && <p className="text-xs italic text-fg-tertiary">Stopped before it replied.</p>}
+      {outcome === "stopped" && <p className="text-12 italic text-fg-tertiary">Stopped before it replied.</p>}
     </>
   );
 }
@@ -437,11 +437,11 @@ export function InterimReply({ runId, since, persona }: { runId?: string; since?
   if (!line) return null;
   return (
     <div className="flex flex-col items-start gap-1" data-testid="interim-reply">
-      <span className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+      <span className="flex items-center gap-1.5 text-12 text-fg-tertiary">
         <PersonaAvatar persona={persona} size={22} />
-        <PersonaName persona={persona} className="text-[13px]" />
+        <PersonaName persona={persona} className="text-13" />
       </span>
-      <p className="max-w-[min(720px,100%)] whitespace-pre-wrap rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13.5px]">{line}</p>
+      <p className="max-w-[min(720px,100%)] whitespace-pre-wrap rounded-xl border border-border bg-surface px-3.5 py-2.5 text-14">{line}</p>
     </div>
   );
 }

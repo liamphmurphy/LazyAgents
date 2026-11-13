@@ -24,7 +24,7 @@ import { ActionBox, ReplyComposer, confirmCancel, waitsForReply } from "./run-pa
 type RunDetail = Schemas["RunDetail"];
 type Run = Schemas["Run"];
 
-const item = "flex min-h-[44px] cursor-pointer select-none items-center rounded-md px-3 text-[14px] text-fg outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
+const item = "flex min-h-[44px] cursor-pointer select-none items-center rounded-md px-3 text-14 text-fg outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 
 const SEGMENT: Record<string, string> = {
   done: "bg-state-done",
@@ -48,8 +48,8 @@ export function StepStrip({ run }: { run: Run }) {
           </li>
         ))}
       </ol>
-      <p className="flex items-baseline gap-2 text-[13px]">
-        <span className="flex-none font-mono text-xs text-fg-tertiary">{p.done}/{p.total}</span>
+      <p className="flex items-baseline gap-2 text-13">
+        <span className="flex-none font-mono text-12 text-fg-tertiary">{p.done}/{p.total}</span>
         <span className="min-w-0 truncate text-fg-2">{p.current?.text ?? (p.done === p.total ? "All steps done" : "")}</span>
       </p>
     </div>
@@ -108,8 +108,8 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
           <Icon name="chev" size={18} className="rotate-90" />
         </Link>
         <div className="flex min-w-0 flex-1 flex-col py-1.5 leading-tight">
-          <h1 className="truncate text-[15px] font-semibold">{title}</h1>
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-tertiary">
+          <h1 className="truncate text-15 font-semibold">{title}</h1>
+          <span className="flex min-w-0 items-center gap-1.5 text-12 text-fg-tertiary">
             <span className="truncate">{run.agent.name}{run.ticket_key && <> · <span className="font-mono">{run.ticket_key}</span></>} · {duration(run.started_at, run.ended_at)}</span>
             <StatusPill run={run} />
           </span>
@@ -131,7 +131,7 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-wrap:anywhere]"
       >
         {run.outcome && !live && (
-          <p className="mx-3 mt-3 whitespace-pre-line rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13px] text-fg-2">{run.outcome}</p>
+          <p className="mx-3 mt-3 whitespace-pre-line rounded-lg border border-border bg-surface px-3.5 py-2.5 text-13 text-fg-2">{run.outcome}</p>
         )}
         {log}
         <ActionBox d={d} compact />

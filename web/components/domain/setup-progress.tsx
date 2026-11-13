@@ -35,7 +35,7 @@ export function SetupProgress() {
   const pct = Math.round(setupProgress(step) * 100);
   return (
     <section aria-label="Getting set up" className="rounded-[10px] border border-border bg-surface p-2.5">
-      <h2 className="text-xs font-semibold text-fg">Getting set up</h2>
+      <h2 className="text-12 font-semibold text-fg">Getting set up</h2>
       <div role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} className="mb-0.5 mt-2 h-[3px] overflow-hidden rounded-full bg-track">
         <i className="wizard-progress block h-full" style={{ width: `${pct}%`, background: DUSK }} />
       </div>
@@ -43,7 +43,7 @@ export function SetupProgress() {
         {SETUP_ROWS.map((label, i) => {
           const state = rowState(i, step);
           return (
-            <li key={label} data-state={state} aria-current={state === "current" ? "step" : undefined} className={cx("wizard-row flex items-center gap-2 py-[3px] text-xs", state === "todo" ? "text-fg-secondary" : "text-fg")}>
+            <li key={label} data-state={state} aria-current={state === "current" ? "step" : undefined} className={cx("wizard-row flex items-center gap-2 py-[3px] text-12", state === "todo" ? "text-fg-secondary" : "text-fg")}>
               <span aria-hidden className="wizard-dot grid size-3.5 flex-none place-items-center rounded-full border-[1.5px]">
                 <svg width="8" height="8" viewBox="0 0 10 10">
                   <path d="M2 5l2 2 4-4" stroke="var(--text-on-accent)" strokeWidth="2" fill="none" />

@@ -44,7 +44,7 @@ type Proposal = Schemas["TicketProposal"];
 type Bootstrap = Schemas["Bootstrap"];
 type Project = Schemas["Project"];
 const control =
-  "w-full rounded-md border border-border-strong bg-surface px-2.5 py-2 text-sm text-fg";
+  "w-full rounded-md border border-border-strong bg-surface px-2.5 py-2 text-14 text-fg";
 const message = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong. Please try again.";
 
@@ -53,7 +53,7 @@ function Runtime({ handle, project }: { handle: string; project: string }) {
   if (q.isLoading) return <Skeleton className="h-10" />;
   if (q.isError) return <p role="alert">Couldn’t load the agent runtime.</p>;
   return (
-    <p className="font-mono text-xs text-fg-secondary">
+    <p className="font-mono text-12 text-fg-secondary">
       {q.data?.harness} · {q.data?.model}
     </p>
   );
@@ -113,20 +113,20 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
     <Card
       title="New plan"
       action={
-        <span className="flex h-6 items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs" title="Switch projects in the sidebar">
+        <span className="flex h-6 items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-12" title="Switch projects in the sidebar">
           <span aria-hidden className="size-2 flex-none rounded-[2px]" style={{ background: scoped.color }} />
           <span className="max-w-[140px] truncate">{scoped.name}</span>
-          <span className="font-mono text-[10.5px] text-fg-tertiary">{scoped.key}</span>
+          <span className="font-mono text-11 text-fg-tertiary">{scoped.key}</span>
         </span>
       }
     >
       <form onSubmit={submit} className="space-y-5" aria-label="New plan">
-        <p className="text-sm text-fg-secondary">
+        <p className="text-14 text-fg-secondary">
           Describe the goal and attach what the planner should read. You review
           proposals before any tickets exist.
         </p>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="plan-goal" className="text-[12.5px] font-medium text-fg-2">
+          <label htmlFor="plan-goal" className="text-13 font-medium text-fg-2">
             {needsGoal ? "Goal" : "Additional goal (optional)"}
           </label>
           <div className="flex flex-col gap-2 rounded-lg border border-border-strong bg-surface-sunken p-2 focus-within:border-accent">
@@ -156,7 +156,7 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
             {(artifact || chips.length > 0) && (
               <div className="flex flex-wrap items-center gap-1.5 px-1">
                 {artifact && (
-                  <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs text-fg-secondary" data-testid="plan-source">
+                  <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-12 text-fg-secondary" data-testid="plan-source">
                     <Link href={`/artifacts/${artifact}`} className="hover:text-fg">Source document (pinned version)</Link>
                     <button
                       type="button"
@@ -173,11 +173,11 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-1 pt-2">
               <AddContext onPick={attach} onClosed={() => area.current?.focus()} disabled={create.isPending || chips.length >= MAX_CONTEXT_REFS} />
-              <span className="text-xs text-fg-tertiary">
+              <span className="text-12 text-fg-tertiary">
                 or type [[ to attach wiki pages, artifacts and tickets · {chips.length} of {MAX_CONTEXT_REFS}
               </span>
               <span className="flex-1" />
-              <span className="text-xs text-fg-tertiary">⌘↵ to start</span>
+              <span className="text-12 text-fg-tertiary">⌘↵ to start</span>
             </div>
           </div>
         </div>
@@ -217,7 +217,7 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
           may incur model costs; it waits in the queue if no runner is online.
         </Banner>
         {create.error && (
-          <p role="alert" className="text-sm text-pill-blocked-fg">
+          <p role="alert" className="text-14 text-pill-blocked-fg">
             {message(create.error)}
           </p>
         )}
@@ -225,7 +225,7 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
           <Button type="submit" variant="approve" disabled={!ready}>
             {create.isPending ? "Starting…" : "Approve & start planning"}
           </Button>
-          <span className="text-xs text-fg-tertiary">The planner gets the attached documents when its run starts.</span>
+          <span className="text-12 text-fg-tertiary">The planner gets the attached documents when its run starts.</span>
         </div>
       </form>
     </Card>
@@ -322,7 +322,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
     return (
       <Card title={`Tickets created · ${planCount(plan)}`}>
         <div className="space-y-4">
-          <p className="text-sm text-fg-secondary">
+          <p className="text-14 text-fg-secondary">
             Assigned tickets whose blockers are Done are ready now. Dependent
             tickets can be dispatched too: they queue and start once their
             blockers are Done.
@@ -335,7 +335,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
           {plan.ticket_keys.map((key, i) => (
             <Link
               key={key}
-              className="block text-sm text-accent"
+              className="block text-14 text-accent"
               href={`/tickets/${key}`}
             >
               {key} · {plan.proposals[i]?.title}
@@ -407,12 +407,12 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                     }
                   />
                   <button
-                    className="flex-1 text-left text-sm"
+                    className="flex-1 text-left text-14"
                     aria-pressed={active === p.ref}
                     onClick={() => setActive(p.ref)}
                   >
                     {i + 1} · {p.title || "Untitled"}
-                    <span className="block text-xs text-fg-secondary">
+                    <span className="block text-12 text-fg-secondary">
                       {p.estimate_points ?? "—"} pts{" "}
                       {changed(p) ? "● estimate changed" : ""} ·{" "}
                       {p.requires_mockup ? "needs mockup · " : ""}
@@ -426,10 +426,10 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
             </div>
           </Card>
           <Card title="Dependencies">
-            <p className="mb-2 text-xs text-fg-secondary">
+            <p className="mb-2 text-12 text-fg-secondary">
               Blocker → blocked draft
             </p>
-            <ul className="space-y-2 text-sm" aria-label="Dependency links">
+            <ul className="space-y-2 text-14" aria-label="Dependency links">
               {items.map((p) => (
                 <li key={p.ref}>
                   {[
@@ -447,7 +447,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
               <p
                 key={problem}
                 role="alert"
-                className="mt-2 text-sm text-pill-blocked-fg"
+                className="mt-2 text-14 text-pill-blocked-fg"
               >
                 {problem}
               </p>
@@ -635,7 +635,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                       )}
                     </div>
                     {changed(item) && (
-                      <p className="mt-2 text-sm text-pill-human-fg">
+                      <p className="mt-2 text-14 text-pill-human-fg">
                         Changed from {baseline(item).points ?? "unestimated"}.{" "}
                         <button
                           className="text-accent"
@@ -649,7 +649,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                         </button>
                       </p>
                     )}
-                    <p className="mt-2 text-sm text-fg-secondary">
+                    <p className="mt-2 text-14 text-fg-secondary">
                       Planner’s rationale ({baseline(item).points ?? "—"} pts):{" "}
                       {baseline(item).rationale || "No rationale supplied."}
                     </p>
@@ -664,7 +664,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                       }
                     />
                   </Field>
-                  <p className="text-sm text-fg-secondary">
+                  <p className="text-14 text-fg-secondary">
                     Epic:{" "}
                     {data.epics.find((e) => e.id === plan.epic_id)?.name ||
                       "New epic from this plan’s goal"}
@@ -674,7 +674,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                     hint="Blockers must be Done before this ticket can be dispatched."
                   >
                     {items.length < 2 && (
-                      <p className="text-xs text-fg-tertiary">
+                      <p className="text-12 text-fg-tertiary">
                         No other proposals.
                       </p>
                     )}
@@ -682,7 +682,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                       i === index ? null : (
                         <label
                           key={other.ref}
-                          className="flex items-start gap-2 text-sm"
+                          className="flex items-start gap-2 text-14"
                         >
                           <input
                             type="checkbox"
@@ -728,7 +728,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
                       ))}
                     </select>
                   </Field>
-                  <label className="flex items-center gap-2 text-sm text-fg-secondary">
+                  <label className="flex items-center gap-2 text-14 text-fg-secondary">
                     <input
                       type="checkbox"
                       checked={!!item.requires_mockup}
@@ -745,7 +745,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
         </fieldset>
       </div>
       {review.error && (
-        <p role="alert" className="text-sm text-pill-blocked-fg">
+        <p role="alert" className="text-14 text-pill-blocked-fg">
           {message(review.error)}
         </p>
       )}
@@ -779,13 +779,13 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
         >
           Save draft
         </Button>
-        <p className="w-full text-sm text-fg-secondary">
+        <p className="w-full text-14 text-fg-secondary">
           {chosen.length} of {items.length} selected ·{" "}
           {chosen.reduce((sum, p) => sum + (p.estimate_points ?? 0), 0)} points
           · {chosen.filter((p) => p.requires_mockup).length} need mockups ·{" "}
           {chosen.filter(changed).length} estimates changed
         </p>
-        <p className="w-full text-xs text-fg-secondary">
+        <p className="w-full text-12 text-fg-secondary">
           Acceptance finishes this review. Unselected drafts will not create
           tickets.
         </p>
@@ -826,7 +826,7 @@ function SourcesRead({ plan, live }: { plan: Plan; live: boolean }) {
   const list = (
     <ul className="flex flex-col gap-1.5" data-testid="plan-sources">
       {sources.map((src) => (
-        <li key={src.key} className="flex min-w-0 items-center gap-2 text-[12.5px] text-fg-secondary">
+        <li key={src.key} className="flex min-w-0 items-center gap-2 text-13 text-fg-secondary">
           {src.done ? (
             <Icon name="check" size={12} className="flex-none text-pill-done-fg" />
           ) : (
@@ -847,7 +847,7 @@ function SourcesRead({ plan, live }: { plan: Plan; live: boolean }) {
   if (!live)
     return (
       <details className="rounded-lg border border-border bg-surface px-3 py-2">
-        <summary className="cursor-pointer text-[12.5px] text-fg-secondary">Sources read ({sources.length})</summary>
+        <summary className="cursor-pointer text-13 text-fg-secondary">Sources read ({sources.length})</summary>
         <div className="mt-2">{list}</div>
       </details>
     );
@@ -855,7 +855,7 @@ function SourcesRead({ plan, live }: { plan: Plan; live: boolean }) {
     <section aria-label="Sources read so far" className="space-y-2">
       <h3 className="type-micro text-fg-tertiary">SOURCES READ SO FAR</h3>
       {sources.length === 0 ? (
-        <p role="status" className="text-[12.5px] text-fg-tertiary">
+        <p role="status" className="text-13 text-fg-tertiary">
           {plan.run_state === "queued" ? "Waiting for a runner…" : "The planner hasn’t read anything yet."}
         </p>
       ) : (
@@ -883,14 +883,14 @@ function PlanDetail({ plan, data }: { plan: Plan; data: Bootstrap }) {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Pill tone={status.tone}>{status.label}</Pill>
-            <span className="font-mono text-xs text-fg-tertiary">
+            <span className="font-mono text-12 text-fg-tertiary">
               {plan.project} · {plan.harness} · {plan.model}
             </span>
           </div>
           <h2 className="type-heading whitespace-pre-wrap break-words">
             {plan.goal}
           </h2>
-          {epicName && <p className="text-sm text-fg-secondary">Epic: {epicName}</p>}
+          {epicName && <p className="text-14 text-fg-secondary">Epic: {epicName}</p>}
           {(plan.artifact_id || attached.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5">
               {plan.artifact_id && (
@@ -905,7 +905,7 @@ function PlanDetail({ plan, data }: { plan: Plan; data: Bootstrap }) {
             </div>
           )}
           {plan.state === "planning" && (
-            <p role="status" className="text-sm text-fg-secondary">
+            <p role="status" className="text-14 text-fg-secondary">
               {live
                 ? "The planner will submit draft tickets here. No tickets have been created."
                 : plan.outcome || "Planning stopped. Start a new plan to retry."}
@@ -946,10 +946,10 @@ function PlanRow({ plan, active }: { plan: Plan; active: boolean }) {
       <span className="flex items-center gap-2">
         <SmallPill tone={status.tone}>{status.label}</SmallPill>
         <span className="flex-1" />
-        <span className="text-[11px] text-fg-tertiary">{planCount(plan)}</span>
+        <span className="text-11 text-fg-tertiary">{planCount(plan)}</span>
       </span>
-      <span className="mt-1.5 block truncate text-sm">{firstLine(plan.goal)}</span>
-      <span className="mt-0.5 block text-xs text-fg-tertiary">
+      <span className="mt-1.5 block truncate text-14">{firstLine(plan.goal)}</span>
+      <span className="mt-0.5 block text-12 text-fg-tertiary">
         {plan.project} · {ago(plan.created_at)}
       </span>
     </Link>
@@ -999,12 +999,12 @@ export function PlansScreen() {
             </h2>
             {list.isLoading && <Skeleton className="h-24" />}
             {list.isError && (
-              <p role="alert" className="text-sm text-pill-blocked-fg">
+              <p role="alert" className="text-14 text-pill-blocked-fg">
                 Couldn’t load plans.
               </p>
             )}
             {list.data?.length === 0 && (
-              <p className="text-sm text-fg-tertiary">
+              <p className="text-14 text-fg-tertiary">
                 Your plans will appear here.
               </p>
             )}
@@ -1012,7 +1012,7 @@ export function PlansScreen() {
               <PlanRow key={p.id} plan={p} active={p.id === id} />
             ))}
             {!!list.data?.length && (
-              <p className="pt-1 text-[11.5px] text-fg-tertiary">
+              <p className="pt-1 text-12 text-fg-tertiary">
                 Status · first line of the goal · tickets accepted / proposals made
               </p>
             )}

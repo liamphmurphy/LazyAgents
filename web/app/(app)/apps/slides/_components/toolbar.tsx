@@ -134,14 +134,14 @@ function StyleGallery({ theme, current, line, onPick }: { theme: Theme; current?
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-[348px] p-3")} onCloseAutoFocus={(e) => e.preventDefault()}>
-          <DropdownMenu.Label className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-3">{line ? "Line style" : "Shape style"} · theme {theme.name}</DropdownMenu.Label>
+          <DropdownMenu.Label className="mb-2 text-11 font-semibold uppercase tracking-wide text-fg-3">{line ? "Line style" : "Shape style"} · theme {theme.name}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={current ?? ""} onValueChange={(v) => onPick(v as StyleId)} className="grid grid-cols-3 gap-2">
             {STYLES.map((s) => (
               <DropdownMenu.RadioItem
                 key={s.id}
                 value={s.id}
                 title={s.label}
-                className={cx("flex cursor-pointer select-none flex-col items-center gap-1 rounded-lg border border-transparent p-1.5 text-[11.5px] text-fg-2 outline-none data-[highlighted]:bg-hover", s.id === current && "border-accent")}
+                className={cx("flex cursor-pointer select-none flex-col items-center gap-1 rounded-lg border border-transparent p-1.5 text-12 text-fg-2 outline-none data-[highlighted]:bg-hover", s.id === current && "border-accent")}
               >
                 <StyleTile theme={theme} id={s.id} line={line} />
                 {s.label}
@@ -323,7 +323,7 @@ export function Toolbar({ theme, themeKey, layout, slide, selection, editing, di
       {!selected && (
         <>
           <Menu label="Deck theme" trigger={<>Theme: {theme.name} ▾</>}>
-            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-3">Built-in</DropdownMenu.Label>
+            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-11 font-semibold uppercase tracking-wide text-fg-3">Built-in</DropdownMenu.Label>
             {THEME_ORDER.map((k) => (
               <DropdownMenu.Item key={k} className={cx(item, k === themeKey && "font-semibold")} onSelect={() => a.setTheme(THEMES[k])}>
                 <ThemeSwatch theme={THEMES[k]} />
@@ -332,8 +332,8 @@ export function Toolbar({ theme, themeKey, layout, slide, selection, editing, di
               </DropdownMenu.Item>
             ))}
             <DropdownMenu.Separator className="my-1 h-px bg-border" />
-            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-3">My themes</DropdownMenu.Label>
-            {a.savedThemes.length === 0 && <p className="max-w-60 px-2.5 pb-1.5 text-[12px] text-fg-3">Save a customised theme to reuse it in every deck.</p>}
+            <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-11 font-semibold uppercase tracking-wide text-fg-3">My themes</DropdownMenu.Label>
+            {a.savedThemes.length === 0 && <p className="max-w-60 px-2.5 pb-1.5 text-12 text-fg-3">Save a customised theme to reuse it in every deck.</p>}
             {a.savedThemes.map((t) => {
               const current = !themeKey && t.name === theme.name;
               return (
@@ -360,23 +360,23 @@ export function Toolbar({ theme, themeKey, layout, slide, selection, editing, di
             {ORDER.map((o) => (
               <DropdownMenu.Item key={o.op} className={item} onSelect={() => a.order(o.op)}>
                 {o.label}
-                <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">{o.keys}</span>
+                <span className="ml-auto pl-4 font-mono text-11 text-fg-tertiary">{o.keys}</span>
               </DropdownMenu.Item>
             ))}
             <DropdownMenu.Item className={item} onSelect={a.duplicate}>
               Duplicate
-              <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⌘D</span>
+              <span className="ml-auto pl-4 font-mono text-11 text-fg-tertiary">⌘D</span>
             </DropdownMenu.Item>
             <DropdownMenu.Item className={cx(item, "data-[disabled]:opacity-40")} disabled={!a.group} onSelect={() => a.group?.()}>
               Group
-              <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⌘G</span>
+              <span className="ml-auto pl-4 font-mono text-11 text-fg-tertiary">⌘G</span>
             </DropdownMenu.Item>
             <DropdownMenu.Item className={cx(item, "data-[disabled]:opacity-40")} disabled={!a.ungroup} onSelect={() => a.ungroup?.()}>
               Ungroup
-              <span className="ml-auto pl-4 font-mono text-[11px] text-fg-tertiary">⇧⌘G</span>
+              <span className="ml-auto pl-4 font-mono text-11 text-fg-tertiary">⇧⌘G</span>
             </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
-            <DropdownMenu.Label className="px-2.5 py-1 text-[11px] text-fg-tertiary">{multi ? "Align to selection" : "Align to slide"}</DropdownMenu.Label>
+            <DropdownMenu.Label className="px-2.5 py-1 text-11 text-fg-tertiary">{multi ? "Align to selection" : "Align to slide"}</DropdownMenu.Label>
             {ALIGN.map((o) => (
               <DropdownMenu.Item key={o.op} className={item} onSelect={() => a.align(o.op)}>{o.label}</DropdownMenu.Item>
             ))}

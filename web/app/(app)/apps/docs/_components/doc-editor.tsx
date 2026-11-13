@@ -260,7 +260,7 @@ function Toolbar({ editor, disabled }: { editor: Editor; disabled: boolean }) {
       disabled={disabled || off}
       onMouseDown={(e) => e.preventDefault()}
       onClick={act}
-      className={cx("grid h-7 min-w-7 place-items-center rounded-md px-1.5 text-[13px] text-fg-secondary transition-colors hover:bg-hover hover:text-fg disabled:opacity-40", on && "bg-selected text-fg")}
+      className={cx("grid h-7 min-w-7 place-items-center rounded-md px-1.5 text-13 text-fg-secondary transition-colors hover:bg-hover hover:text-fg disabled:opacity-40", on && "bg-selected text-fg")}
     >
       {glyph}
     </button>
@@ -278,14 +278,14 @@ function Toolbar({ editor, disabled }: { editor: Editor; disabled: boolean }) {
       {b("Bold", s.bold, () => run().toggleBold().run(), <b>B</b>)}
       {b("Italic", s.italic, () => run().toggleItalic().run(), <i className="font-serif">I</i>)}
       {b("Strikethrough", s.strike, () => run().toggleStrike().run(), <s>S</s>)}
-      {b("Inline code", s.code, () => run().toggleCode().run(), <span className="font-mono text-[12px]">{"<>"}</span>)}
+      {b("Inline code", s.code, () => run().toggleCode().run(), <span className="font-mono text-12">{"<>"}</span>)}
       {b("Link", s.link, link, "🔗")}
       {sep}
       {b("Bulleted list", s.bullet, () => run().toggleBulletList().run(), "•≡")}
       {b("Numbered list", s.ordered, () => run().toggleOrderedList().run(), "1≡")}
       {b("Checklist", s.task, () => run().toggleTaskList().run(), "☑")}
       {b("Quote", s.quote, () => run().toggleBlockquote().run(), "❝")}
-      {b("Code block", s.block, () => run().toggleCodeBlock().run(), <span className="font-mono text-[12px]">{"{ }"}</span>)}
+      {b("Code block", s.block, () => run().toggleCodeBlock().run(), <span className="font-mono text-12">{"{ }"}</span>)}
       {b("Table", false, () => run().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), "▦")}
       {b("Divider", false, () => run().setHorizontalRule().run(), "―")}
     </div>
@@ -318,7 +318,7 @@ function SelectionMenu({ editor, persona, onPick }: { editor: Editor; persona: s
     setPos({ top: a.top - o.top - 42, left: Math.max(8, Math.min(a.left - o.left, o.width - 360)) });
   }, [editor, sel.from, sel.to, sel.empty]);
   const picked = (): Picked => ({ quote: editor.state.doc.textBetween(sel.from, sel.to, " ").trim(), at: sel.from / Math.max(1, editor.state.doc.content.size) });
-  const item = "rounded-md px-2 py-1 text-[12.5px] text-fg-2 hover:bg-hover hover:text-fg";
+  const item = "rounded-md px-2 py-1 text-13 text-fg-2 hover:bg-hover hover:text-fg";
   const visible = !!pos && (sel.focused || open);
   return (
     <div ref={box} data-testid="doc-selection-menu" hidden={!visible} style={pos} className="absolute z-20 flex items-center gap-0.5 rounded-lg border border-border-strong bg-surface-raised p-1 shadow-[var(--shadow-float)]" onMouseDown={(e) => !(e.target instanceof HTMLInputElement) && e.preventDefault()}>
@@ -333,7 +333,7 @@ function SelectionMenu({ editor, persona, onPick }: { editor: Editor; persona: s
             setAsking("");
           }}
         >
-          <input autoFocus aria-label={`Ask ${persona} about this`} value={asking} onChange={(e) => setAsking(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setOpen(false)} placeholder={`Ask ${persona} to…`} className="h-7 w-[240px] rounded-md border border-border bg-surface-sunken px-2 text-[12.5px] text-fg focus:border-accent focus:outline-none" />
+          <input autoFocus aria-label={`Ask ${persona} about this`} value={asking} onChange={(e) => setAsking(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setOpen(false)} placeholder={`Ask ${persona} to…`} className="h-7 w-[240px] rounded-md border border-border bg-surface-sunken px-2 text-13 text-fg focus:border-accent focus:outline-none" />
           <button type="submit" className={cx(item, "font-semibold text-accent")}>Send</button>
         </form>
       ) : (

@@ -39,7 +39,7 @@ function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
         <button type="button" onClick={() => setEditing(true)} className="-mx-1 rounded-md px-1 text-left hover:bg-hover" title="Edit title">
           <ViewTransition name={`ticket-title-${t.key}`} share="auto" default="none"><span>{t.title}</span></ViewTransition>
         </button>
-        {t.epic_review && <span className="ml-2 inline-block rounded-full bg-pill-review-bg px-2 py-0.5 align-middle text-xs font-medium text-pill-review-fg">Final review</span>}
+        {t.epic_review && <span className="ml-2 inline-block rounded-full bg-pill-review-bg px-2 py-0.5 align-middle text-12 font-medium text-pill-review-fg">Final review</span>}
       </h1>
     );
   }
@@ -74,7 +74,7 @@ function Description({ t, save: saveTicket }: { t: Ticket; save: SaveTicket }) {
     return t.description_md ? (
       <div className="group relative">
         <Markdown className="type-reading text-fg-2">{t.description_md}</Markdown>
-        <Button variant="ghost" icon="edit" onClick={() => setDraft(t.description_md)} className="mt-1 h-7 px-2 text-xs text-fg-tertiary">
+        <Button variant="ghost" icon="edit" onClick={() => setDraft(t.description_md)} className="mt-1 h-7 px-2 text-12 text-fg-tertiary">
           Edit description
         </Button>
       </div>
@@ -154,7 +154,7 @@ function Header({ t, save, onEdit }: { t: Ticket; save: SaveTicket; onEdit: () =
   const dispatch = needsDispatch(t);
   return (
     <header className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-2 text-13">
         <span className="font-mono text-fg-tertiary">{t.key}</span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-fg-2">
           <StatusGlyph state={t.status} size={12} label={false} />
@@ -185,7 +185,7 @@ function Header({ t, save, onEdit }: { t: Ticket; save: SaveTicket; onEdit: () =
           </Button>
         </div>
       </div>
-      {dispatch && <p className="text-xs text-pill-human-fg">{dispatchHint(t)}</p>}
+      {dispatch && <p className="text-12 text-pill-human-fg">{dispatchHint(t)}</p>}
       {dispatching && <DispatchDialog keys={[t.key]} open onOpenChange={setDispatching} />}
     </header>
   );
@@ -203,7 +203,7 @@ function CompactDetails({ t, boot, saver }: { t: Ticket; boot: Bootstrap; saver:
         <CodeSection t={t} />
       </div>
       <section className="flex flex-col gap-2 px-1">
-        <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+        <h2 className="text-13 text-fg-tertiary">Backlinks</h2>
         <BacklinksPanel kind="ticket" id={t.id} compact />
       </section>
     </section>
@@ -224,7 +224,7 @@ function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Tic
       <div className="flex flex-col gap-6 px-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] pt-4">
         {t.project.archived && <Banner tone="human" title="This project is archived">History is preserved. Restore the project before starting new work.</Banner>}
         <header className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[12.5px]">
+          <div className="flex items-center gap-2 text-13">
             <span className="font-mono text-fg-tertiary">{t.key}</span>
             {t.blocked_by.some((d) => d.status !== "done") && (
               <a href="#blocked-by"><Flag tone="blocked">Blocked</Flag></a>
@@ -236,8 +236,8 @@ function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Tic
         </header>
         {saver.conflict && <ConflictBanner what={saver.conflict.what} reloading={reloading} onReapply={saver.reapply} onKeep={saver.keepLatest} />}
         <MetaStrip t={t} boot={boot} save={saver.save} />
-        {saver.error && <p role="alert" className="text-xs text-pill-blocked-fg">{saver.error}</p>}
-        {needsDispatch(t) && <p className="text-xs text-pill-human-fg">{dispatchHint(t)}</p>}
+        {saver.error && <p role="alert" className="text-12 text-pill-blocked-fg">{saver.error}</p>}
+        {needsDispatch(t) && <p className="text-12 text-pill-human-fg">{dispatchHint(t)}</p>}
         <GateStrip t={t} />
         {t.approvals.map((ap) => (
           <div key={ap.id} id={`approval-${ap.id}`} className="scroll-mt-16">
@@ -284,7 +284,7 @@ function CompactTopBar({ t, ticketKey, pager, onCopy, copied }: { t?: Ticket; ti
       <Link href={t ? `/tickets?project=${t.project.key}` : "/tickets"} aria-label="Back to tickets" className="grid size-[44px] place-items-center rounded-full text-fg-secondary active:bg-hover">
         <Icon name="chev" size={18} className="rotate-90" />
       </Link>
-      <span className="min-w-0 flex-1 truncate text-[13px] text-fg-2">{t ? t.project.name : "Tickets"}</span>
+      <span className="min-w-0 flex-1 truncate text-13 text-fg-2">{t ? t.project.name : "Tickets"}</span>
       <IconButton icon="chev" label="Previous ticket" size={44} disabled={!pager.prev} onClick={() => pager.prev && router.push(`/tickets/${pager.prev}`)} className="rotate-180" />
       <IconButton icon="chev" label="Next ticket" size={44} disabled={!pager.next} onClick={() => pager.next && router.push(`/tickets/${pager.next}`)} />
       <IconButton icon={copied ? "check" : "link"} label={copied ? "Link copied" : `Copy link to ${ticketKey}`} size={44} onClick={onCopy} />
@@ -384,7 +384,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
           <>
             {t && <TicketCostChip ticketKey={t.key} project={t.project.key} />}
             {pager.total > 0 && pager.index >= 0 && (
-              <span className="font-mono text-xs text-fg-tertiary" aria-label={`Ticket ${pager.index + 1} of ${pager.total}`}>
+              <span className="font-mono text-12 text-fg-tertiary" aria-label={`Ticket ${pager.index + 1} of ${pager.total}`}>
                 {pager.index + 1} / {pager.total}
               </span>
             )}
@@ -444,7 +444,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               <CodeSection t={t} />
             </div>
             <section className="flex flex-col gap-2 px-1">
-              <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+              <h2 className="text-13 text-fg-tertiary">Backlinks</h2>
               <BacklinksPanel kind="ticket" id={t.id} compact />
             </section>
           </aside>

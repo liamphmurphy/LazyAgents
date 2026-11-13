@@ -151,17 +151,17 @@ export function ProjectChooser({ base, projects }: { base: string; projects: Pro
       className="mx-auto my-12 w-full max-w-[320px] rounded-xl border border-border bg-surface p-5"
     >
       <h2 id="choose-project" className="type-heading">Choose a project</h2>
-      {WHY[base] && <p className="mt-1 text-[12.5px] text-fg-secondary">{WHY[base]}</p>}
+      {WHY[base] && <p className="mt-1 text-13 text-fg-secondary">{WHY[base]}</p>}
       <ul className="mt-4 flex flex-col gap-1.5">
         {projects.map((p) => (
           <li key={p.key}>
             <Link
               href={href(p.key)}
-              className="flex h-10 items-center gap-2.5 rounded-md border border-border-strong bg-surface-sunken px-3.5 text-[13px] text-fg hover:bg-hover"
+              className="flex h-10 items-center gap-2.5 rounded-md border border-border-strong bg-surface-sunken px-3.5 text-13 text-fg hover:bg-hover"
             >
               <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
               <span className="flex-1 truncate">{p.name}</span>
-              <span className="font-mono text-[11.5px] text-fg-tertiary">{p.key}</span>
+              <span className="font-mono text-12 text-fg-tertiary">{p.key}</span>
             </Link>
           </li>
         ))}

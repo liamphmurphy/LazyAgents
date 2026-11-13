@@ -51,7 +51,7 @@ function Starters({ onPick, disabled, color }: { onPick: (prompt: string) => voi
             disabled={disabled}
             title={s.prompt}
             onClick={() => onPick(s.prompt)}
-            className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-[13px] text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-13 text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-50"
           >
             <svg aria-hidden width="11" height="11" viewBox="0 0 12 12" style={{ color }} className="flex-none">
               <path d="M6 .5c.4 2.9 1.2 3.7 4.1 4.1-2.9.4-3.7 1.2-4.1 4.1C5.6 5.8 4.8 5 1.9 4.6 4.8 4.2 5.6 3.4 6 .5Z" fill="currentColor" />
@@ -79,19 +79,19 @@ function PickUp() {
   if (!cards.length) return null;
   return (
     <section aria-label="Pick up where you left off" className="flex w-full flex-col gap-3">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Pick up where you left off</h2>
+      <h2 className="text-12 font-semibold uppercase tracking-[0.04em] text-fg-tertiary">Pick up where you left off</h2>
       <ul className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
         {cards.map((c) => (
           <li key={c.key} className="min-w-0">
             <Link href={c.href} className="flex h-full flex-col items-start gap-2 rounded-xl border border-border bg-surface p-3.5 text-left hover:border-border-hover hover:bg-hover">
               <span
-                className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", PICK_UP_PILL[c.tone])}
+                className={cx("rounded-full px-2.5 py-0.5 text-12 font-semibold", PICK_UP_PILL[c.tone])}
                 style={c.tone === "persona" && c.color ? { color: c.color, background: `color-mix(in srgb, ${c.color} 15%, transparent)` } : undefined}
               >
                 {c.label}
               </span>
-              <span className="line-clamp-2 text-[13.5px] font-medium text-fg">{c.title}</span>
-              <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
+              <span className="line-clamp-2 text-14 font-medium text-fg">{c.title}</span>
+              <span className="truncate text-12 text-fg-tertiary">{c.meta}</span>
             </Link>
           </li>
         ))}
@@ -238,19 +238,19 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
         <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} enterFrom={arrived ? 1 : 0} />
         {/* Keyed so the name and tagline fade over as the carousel steps. */}
         <div key={personaId ?? ""} className="motion-page flex flex-col items-center">
-          <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
-          <p className="mt-2 text-center text-[14px] text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
+          <h1 className="mt-5 text-26 font-semibold leading-tight tracking-[-0.02em] text-fg">{persona.name}</h1>
+          <p className="mt-2 text-center text-14 text-fg-secondary">{personaTagline(fullPersona, toneLabel, !!fullPersona && fullPersona.id === defaultId)}</p>
         </div>
         <div className="mt-7 flex w-full flex-col gap-2">
           {actionError && (
-            <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(actionError)}</p>
+            <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(actionError)}</p>
           )}
           {unavailable && (
             <Banner
               tone="human"
               title={unavailable.checking ? `Checking ${unavailable.label} models…` : `${unavailable.label} is unavailable`}
               actions={
-                !unavailable.checking && <Link href="/settings#secrets" className="text-[12.5px] text-accent hover:underline">
+                !unavailable.checking && <Link href="/settings#secrets" className="text-13 text-accent hover:underline">
                   Add the key →
                 </Link>
               }
@@ -321,7 +321,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
           <PickUp />
         </div>
       </div>
-      <p className="pb-4 text-center text-xs text-fg-tertiary">Your memory is private to you and separate from the team wiki.</p>
+      <p className="pb-4 text-center text-12 text-fg-tertiary">Your memory is private to you and separate from the team wiki.</p>
     </div>
   );
 }

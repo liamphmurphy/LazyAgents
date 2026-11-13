@@ -54,7 +54,7 @@ function SummaryEditor({ a }: { a: Artifact }) {
   const [draft, setDraft] = useState<string | null>(null);
   if (draft === null) {
     return (
-      <button type="button" onClick={() => setDraft(a.summary)} className="-mx-1 rounded-md px-1 text-left text-sm leading-relaxed text-fg-secondary hover:bg-hover">
+      <button type="button" onClick={() => setDraft(a.summary)} className="-mx-1 rounded-md px-1 text-left text-14 leading-relaxed text-fg-secondary hover:bg-hover">
         {a.summary || <span className="text-fg-tertiary">Add a summary…</span>}
       </button>
     );
@@ -180,7 +180,7 @@ export function ArtifactScreen({ id }: { id: string }) {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <DocTypeTag type={a.type} />
-                  <span className="font-mono text-xs text-fg-tertiary">{viewing.label}</span>
+                  <span className="font-mono text-12 text-fg-tertiary">{viewing.label}</span>
                 </div>
                 <h1 className="type-display">{artifactTitle(a)}</h1>
                 <SummaryEditor a={a} />
@@ -208,13 +208,13 @@ export function ArtifactScreen({ id }: { id: string }) {
           <aside aria-label="Artifact details" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-5 py-6 lg:max-w-[340px]">
             {!isMockup && a.outline.length > 0 && !isOld && (
               <section className="flex flex-col gap-1">
-                <h2 className="text-[12.5px] text-fg-tertiary">Outline · citations</h2>
+                <h2 className="text-13 text-fg-tertiary">Outline · citations</h2>
                 <ol>
                   {a.outline.map((s) => (
                     <li key={s.id}>
-                      <a href={`#${s.anchor}`} className="flex min-h-[26px] items-center gap-2 rounded-sm text-[13px] hover:bg-hover" style={{ paddingLeft: (s.level - 1) * 12 }}>
+                      <a href={`#${s.anchor}`} className="flex min-h-[26px] items-center gap-2 rounded-sm text-13 hover:bg-hover" style={{ paddingLeft: (s.level - 1) * 12 }}>
                         <span className={cx("flex-1 truncate", s.level === 1 && "font-medium")}>{s.heading}</span>
-                        <span className={cx("font-mono text-xs", s.citations ? "text-fg-secondary" : "text-fg-tertiary")} aria-label={`${s.citations} citations`}>
+                        <span className={cx("font-mono text-12", s.citations ? "text-fg-secondary" : "text-fg-tertiary")} aria-label={`${s.citations} citations`}>
                           {s.citations || ""}
                         </span>
                       </a>
@@ -225,46 +225,46 @@ export function ArtifactScreen({ id }: { id: string }) {
             )}
 
             <section className="flex flex-col gap-2">
-              <h2 className="text-[12.5px] text-fg-tertiary">Read by</h2>
+              <h2 className="text-13 text-fg-tertiary">Read by</h2>
               {a.read_by.length ? (
                 <ul className="flex flex-col gap-1.5">
                   {a.read_by.map((r) => (
-                    <li key={r.agent.id} className="flex items-center gap-2 text-[13px]">
+                    <li key={r.agent.id} className="flex items-center gap-2 text-13">
                       <AgentAvatar name={r.agent.name} colorIndex={r.agent.color_index} label={false} />
                       <span className="flex-1">{r.agent.name}</span>
-                      <span className="font-mono text-xs text-fg-tertiary" title={`Last read ${absoluteTime(r.last_read_at)}`}>
+                      <span className="font-mono text-12 text-fg-tertiary" title={`Last read ${absoluteTime(r.last_read_at)}`}>
                         {r.reads} reads
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-fg-tertiary">No agent has read this yet.</p>
+                <p className="text-12 text-fg-tertiary">No agent has read this yet.</p>
               )}
             </section>
 
             <section className="flex flex-col gap-2">
-              <h2 className="text-[12.5px] text-fg-tertiary">Backlinks</h2>
+              <h2 className="text-13 text-fg-tertiary">Backlinks</h2>
               <BacklinksPanel kind="artifact" id={a.id} />
             </section>
 
             <section className="flex flex-col gap-1">
-              <h2 className="text-[12.5px] text-fg-tertiary">Tickets</h2>
+              <h2 className="text-13 text-fg-tertiary">Tickets</h2>
               {a.tickets.length ? (
                 a.tickets.map((t) => (
-                  <Link key={t.key} href={`/tickets/${t.key}`} className="flex h-7 items-center gap-2 rounded-sm text-[13px] hover:bg-hover">
+                  <Link key={t.key} href={`/tickets/${t.key}`} className="flex h-7 items-center gap-2 rounded-sm text-13 hover:bg-hover">
                     <StatusGlyph state={t.status} size={12} surface="var(--bg-panel)" label={false} />
-                    <span className="w-16 font-mono text-xs text-fg-tertiary">{t.key}</span>
+                    <span className="w-16 font-mono text-12 text-fg-tertiary">{t.key}</span>
                     <span className="flex-1 truncate">{t.title}</span>
                   </Link>
                 ))
               ) : (
-                <p className="text-xs text-fg-tertiary">Not attached to any ticket. Attach it from a ticket&apos;s Context artifacts.</p>
+                <p className="text-12 text-fg-tertiary">Not attached to any ticket. Attach it from a ticket&apos;s Context artifacts.</p>
               )}
             </section>
 
             <section className="flex flex-col gap-1">
-              <h2 className="text-[12.5px] text-fg-tertiary">History</h2>
+              <h2 className="text-13 text-fg-tertiary">History</h2>
               <ol className="flex flex-col">
                 {a.versions.map((v) => {
                   const on = v.id === viewing.id;
@@ -276,13 +276,13 @@ export function ArtifactScreen({ id }: { id: string }) {
                         onClick={() => setVersionId(v.id === a.current_version.id ? null : v.id)}
                         className={cx("flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-hover", on && "bg-selected")}
                       >
-                        <span className="flex items-center gap-2 text-[13px]">
-                          <span className="font-mono text-xs">{v.label}</span>
-                          {v.id === a.current_version.id && <span className="text-[11px] text-pill-done-fg">current</span>}
+                        <span className="flex items-center gap-2 text-13">
+                          <span className="font-mono text-12">{v.label}</span>
+                          {v.id === a.current_version.id && <span className="text-11 text-pill-done-fg">current</span>}
                           {v.review && <ReviewChip state={v.review.state} />}
-                          <span className="ml-auto text-xs text-fg-tertiary" title={absoluteTime(v.created_at)}>{timelineTime(v.created_at)}</span>
+                          <span className="ml-auto text-12 text-fg-tertiary" title={absoluteTime(v.created_at)}>{timelineTime(v.created_at)}</span>
                         </span>
-                        <span className="truncate text-xs text-fg-tertiary">
+                        <span className="truncate text-12 text-fg-tertiary">
                           {v.created_by.name}
                           {v.note && ` · ${v.note}`}
                         </span>

@@ -19,9 +19,9 @@ type Props = {
 };
 
 const section = "border-b border-border-subtle px-4 py-3";
-const label = "mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
-const field = "flex h-[28px] min-w-0 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-[12.5px] text-fg focus-within:border-accent";
-const seg = (on: boolean) => cx("h-[26px] flex-1 rounded-md px-1.5 text-[12px]", on ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover");
+const label = "mb-2 text-11 font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
+const field = "flex h-[28px] min-w-0 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-13 text-fg focus-within:border-accent";
+const seg = (on: boolean) => cx("h-[26px] flex-1 rounded-md px-1.5 text-12", on ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover");
 
 /** A number field that commits as you type (one undo step per field while typing). */
 function Num({ label: l, value, onChange, min, max, step = 1, disabled, suffix }: { label: string; value: number | undefined; onChange: (v: number) => void; min?: number; max?: number; step?: number; disabled?: boolean; suffix?: string }) {
@@ -34,7 +34,7 @@ function Num({ label: l, value, onChange, min, max, step = 1, disabled, suffix }
   }, [value, focused]);
   return (
     <label className={cx(field, disabled && "opacity-50")}>
-      <span className="min-w-3.5 flex-none text-[11px] text-fg-tertiary">{l}</span>
+      <span className="min-w-3.5 flex-none text-11 text-fg-tertiary">{l}</span>
       <input
         aria-label={l.length > 2 ? l : undefined}
         inputMode="decimal"
@@ -58,7 +58,7 @@ function Num({ label: l, value, onChange, min, max, step = 1, disabled, suffix }
           onChange(c);
         }}
       />
-      {suffix && <span className="text-[11px] text-fg-tertiary">{suffix}</span>}
+      {suffix && <span className="text-11 text-fg-tertiary">{suffix}</span>}
     </label>
   );
 }
@@ -80,7 +80,7 @@ function Color({ name, value, onChange, disabled, resolved }: { name: string; va
         <input
           aria-label={name}
           disabled={disabled}
-          className="w-full min-w-0 bg-transparent font-mono text-[12px] outline-none"
+          className="w-full min-w-0 bg-transparent font-mono text-12 outline-none"
           value={token ? `${token}` : text}
           placeholder="None"
           onChange={(e) => {
@@ -91,7 +91,7 @@ function Color({ name, value, onChange, disabled, resolved }: { name: string; va
           }}
         />
       )}
-      {token && <span className="text-[11px] text-accent">token</span>}
+      {token && <span className="text-11 text-accent">token</span>}
       {value !== undefined && !disabled && (
         <button type="button" aria-label={`Remove ${name.toLowerCase()}`} className="grid size-5 place-items-center rounded text-fg-tertiary hover:bg-hover hover:text-fg" onClick={() => onChange(undefined)}>
           −
@@ -123,15 +123,15 @@ const mapRuns = (ps: Paragraph[], fn: (r: Run) => Run) => ps.map((p) => ({ ...p,
 export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, onRemove, onSelect }: Props) {
   const found = selected.map((id) => find(design, id)).filter((f) => !!f);
   if (!found.length) {
-    return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">Select a layer to edit it. Draw a frame (F), a rectangle (R), an ellipse (O), a line (L), a path with the pen (P) or text (T).</p>;
+    return <p className="px-4 py-6 text-13 text-fg-tertiary">Select a layer to edit it. Draw a frame (F), a rectangle (R), an ellipse (O), a line (L), a path with the pen (P) or text (T).</p>;
   }
   if (found.length > 1) {
     return (
       <div className={section}>
-        <p className="text-[13px] font-semibold text-fg">{found.length} layers</p>
+        <p className="text-13 font-semibold text-fg">{found.length} layers</p>
         <div className="mt-3 flex gap-2">
-          <button type="button" disabled={readOnly} className="h-[28px] flex-1 rounded-md border border-border text-[12.5px] text-fg hover:bg-hover disabled:opacity-50" onClick={onGroup}>Group ⌘G</button>
-          <button type="button" disabled={readOnly} className="h-[28px] flex-1 rounded-md border border-border text-[12.5px] text-pill-blocked-fg hover:bg-hover disabled:opacity-50" onClick={onRemove}>Delete</button>
+          <button type="button" disabled={readOnly} className="h-[28px] flex-1 rounded-md border border-border text-13 text-fg hover:bg-hover disabled:opacity-50" onClick={onGroup}>Group ⌘G</button>
+          <button type="button" disabled={readOnly} className="h-[28px] flex-1 rounded-md border border-border text-13 text-pill-blocked-fg hover:bg-hover disabled:opacity-50" onClick={onRemove}>Delete</button>
         </div>
       </div>
     );
@@ -149,7 +149,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
       }
       return out as DesignNode;
     }, k);
-  if (n.type === "connector") return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">Connectors are edited with the diagram tools.</p>;
+  if (n.type === "connector") return <p className="px-4 py-6 text-13 text-fg-tertiary">Connectors are edited with the diagram tools.</p>;
 
   const box = lay.widthOf(n);
   const al = "auto_layout" in n ? n.auto_layout : undefined;
@@ -183,8 +183,8 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
     <div className="pb-6" data-testid="design-inspector">
       <div className={section}>
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-[13px] font-semibold text-fg">{n.name ?? TYPE_LABEL[n.type]}</p>
-          <p className="flex-none text-[11.5px] text-fg-tertiary">
+          <p className="truncate text-13 font-semibold text-fg">{n.name ?? TYPE_LABEL[n.type]}</p>
+          <p className="flex-none text-12 text-fg-tertiary">
             {TYPE_LABEL[n.type]}
             {"preset" in n && presetLabel(n.preset) ? ` · ${presetLabel(n.preset)}` : ""}
           </p>
@@ -231,7 +231,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
               </select>
             </label>
             <Num label="◜" value={n.radius ?? 0} min={0} disabled={readOnly} onChange={(v) => patch({ radius: v || undefined }, "radius")} />
-            <label className="flex items-center gap-2 text-[12.5px] text-fg-2">
+            <label className="flex items-center gap-2 text-13 text-fg-2">
               <input type="checkbox" disabled={readOnly} checked={!!n.clip} onChange={(e) => patch({ clip: e.target.checked || undefined }, "clip")} />
               Clip content
             </label>
@@ -299,7 +299,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-14 text-[11.5px] text-fg-tertiary">Align</span>
+                <span className="w-14 text-12 text-fg-tertiary">Align</span>
                 <div className="flex flex-1 gap-1 rounded-md border border-border p-0.5" role="radiogroup" aria-label="Align">
                   {(["start", "center", "end"] as const).map((a) => (
                     <button key={a} type="button" role="radio" aria-checked={(al.align ?? "start") === a} disabled={readOnly} className={seg((al.align ?? "start") === a)} onClick={() => setAl({ align: a === "start" ? undefined : a })}>
@@ -309,7 +309,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-14 text-[11.5px] text-fg-tertiary">Justify</span>
+                <span className="w-14 text-12 text-fg-tertiary">Justify</span>
                 <select aria-label="Justify" disabled={readOnly} className={cx(field, "flex-1")} value={al.justify ?? "start"} onChange={(e) => setAl({ justify: e.target.value === "start" ? undefined : (e.target.value as AutoLayout["justify"]) })}>
                   <option value="start">Start</option>
                   <option value="center">Center</option>
@@ -319,7 +319,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
               </div>
             </div>
           ) : (
-            <p className="text-[12px] text-fg-tertiary">Stack this frame’s layers with a gap and padding (⇧A).</p>
+            <p className="text-12 text-fg-tertiary">Stack this frame’s layers with a gap and padding (⇧A).</p>
           )}
         </Section>
       )}
@@ -329,7 +329,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
           <div className="grid grid-cols-2 gap-2">
             {(["w", "h"] as const).map((axis) => (
               <label key={axis} className={field}>
-                <span className="w-3.5 text-[11px] text-fg-tertiary">{axis.toUpperCase()}</span>
+                <span className="w-3.5 text-11 text-fg-tertiary">{axis.toUpperCase()}</span>
                 <select aria-label={axis === "w" ? "Width sizing" : "Height sizing"} disabled={readOnly} className="w-full bg-transparent outline-none" value={sizing[axis]} onChange={(e) => setSizing(axis, e.target.value)}>
                   <option value="fixed">Fixed</option>
                   {canHug && <option value="hug">Hug</option>}
@@ -375,7 +375,7 @@ export function Inspector({ design, selected, lay, onEdit, readOnly, onGroup, on
             </select>
             <Num label="◜" value={n.radius ?? 0} min={0} disabled={readOnly} onChange={(v) => patch({ radius: v || undefined }, "radius")} />
             <label className={cx(field, "col-span-2")}>
-              <span className="text-[11px] text-fg-tertiary">Alt</span>
+              <span className="text-11 text-fg-tertiary">Alt</span>
               <input aria-label="Alt text" disabled={readOnly} maxLength={500} className="w-full bg-transparent outline-none" defaultValue={n.alt ?? ""} onBlur={(e) => patch({ alt: e.target.value.trim() || undefined }, "alt")} />
             </label>
           </div>

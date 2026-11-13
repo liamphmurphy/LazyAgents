@@ -6,7 +6,7 @@ import { Icon, type IconName } from "./icon";
 export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "approve" | "approve-outline";
 
 const base =
-  "inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-13 transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-accent font-semibold text-on-accent hover:brightness-110",
@@ -14,8 +14,8 @@ const variants: Record<ButtonVariant, string> = {
   outline: "border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover",
   ghost: "px-2.5 text-fg-2 hover:bg-hover",
   // Approval surfaces only: amber means a person is acting (DESIGN.md §1).
-  approve: "bg-state-human text-[12.5px] font-semibold text-approve-fg hover:brightness-105",
-  "approve-outline": "border border-pill-human-bg text-[12.5px] text-pill-human-fg hover:bg-pill-human-bg",
+  approve: "bg-state-human text-13 font-semibold text-approve-fg hover:brightness-105",
+  "approve-outline": "border border-pill-human-bg text-13 text-pill-human-fg hover:bg-pill-human-bg",
 };
 
 export function buttonClass(variant: ButtonVariant = "secondary", className?: string) {
@@ -29,7 +29,7 @@ function Inner({ icon, hint, children }: Pick<Extra, "icon" | "hint" | "children
     <>
       {icon && <Icon name={icon} size={14} strokeWidth={icon === "plus" ? 2 : 1.6} />}
       {children}
-      {hint && <span className="ml-0.5 font-mono text-[11px] opacity-60">{hint}</span>}
+      {hint && <span className="ml-0.5 font-mono text-11 opacity-60">{hint}</span>}
     </>
   );
 }

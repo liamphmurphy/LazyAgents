@@ -20,7 +20,7 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 export function ActorAvatar({ actor }: { actor: Actor }) {
   if (actor.type === "agent") return <AgentAvatar name={actor.name} colorIndex={actor.color_index ?? 0} size="stack" label={false} />;
   if (actor.type === "system")
-    return <span aria-hidden className="grid size-[22px] place-items-center rounded-full bg-selected text-[10px] text-fg-tertiary">⚙</span>;
+    return <span aria-hidden className="grid size-[22px] place-items-center rounded-full bg-selected text-10 text-fg-tertiary">⚙</span>;
   return <HumanAvatar name={actor.name} initials={actor.initials} color={actor.avatar_color} size={22} label={false} />;
 }
 
@@ -206,10 +206,10 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
       return (
         <>
           ran the test suite{" "}
-          <span className={failed ? "rounded-[5px] bg-pill-blocked-bg px-1.5 font-mono text-xs text-pill-blocked-fg" : "rounded-[5px] bg-pill-done-bg px-1.5 font-mono text-xs text-pill-done-fg"}>
+          <span className={failed ? "rounded-[5px] bg-pill-blocked-bg px-1.5 font-mono text-12 text-pill-blocked-fg" : "rounded-[5px] bg-pill-done-bg px-1.5 font-mono text-12 text-pill-done-fg"}>
             {Number(p.passed ?? 0)} passed
           </span>{" "}
-          <span className="rounded-[5px] border border-track px-1.5 font-mono text-xs text-fg-tertiary">
+          <span className="rounded-[5px] border border-track px-1.5 font-mono text-12 text-fg-tertiary">
             {failed} failed{p.duration_s ? ` · ${Math.round(Number(p.duration_s) / 60)}m ${Math.round(Number(p.duration_s) % 60)}s` : ""}
           </span>
         </>
@@ -259,7 +259,7 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
       ) : (
         <>
           ran <code className="inline">{str(p.scope)}</code> through Vesper: <span className="text-pill-blocked-fg">{str(p.summary)}</span>
-          {p.error ? <span className="block font-mono text-xs text-fg-tertiary">{str(p.error)}</span> : null}
+          {p.error ? <span className="block font-mono text-12 text-fg-tertiary">{str(p.error)}</span> : null}
         </>
       );
     case "waiting_for_human":
@@ -309,7 +309,7 @@ function sentence(e: ActivityEvent, agentColor: (id: string) => number | undefin
       );
     }
     default:
-      return <span className="font-mono text-xs">{e.verb}</span>;
+      return <span className="font-mono text-12">{e.verb}</span>;
   }
 }
 
@@ -331,7 +331,7 @@ function ViaChat({ e }: { e: ActivityEvent }) {
 function CommentBody({ e }: { e: ActivityEvent }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <div className="text-[12.5px]">
+      <div className="text-13">
         <B>{e.actor.name}</B>
         <ViaChat e={e} />
         <Time iso={e.created_at} />
@@ -369,7 +369,7 @@ function Thread({ root, replies, ticketKey }: { root: ActivityEvent; replies: Ac
       )}
       {!replying && (
         <div className="border-t border-border-subtle px-2 py-1">
-          <Button variant="ghost" className="h-7 text-xs text-fg-tertiary" onClick={() => setReplying(true)}>
+          <Button variant="ghost" className="h-7 text-12 text-fg-tertiary" onClick={() => setReplying(true)}>
             Reply
           </Button>
         </div>
@@ -428,8 +428,8 @@ export function Composer({
         className="resize-y rounded-none border-0 bg-transparent px-3.5 py-3 focus:border-0"
       />
       <div className="flex flex-wrap items-center justify-end gap-3 px-3 pb-2.5">
-        {comment.isError && <span className="mr-auto text-xs text-pill-blocked-fg">{comment.error.message}</span>}
-        <span className="text-xs text-fg-tertiary">
+        {comment.isError && <span className="mr-auto text-12 text-pill-blocked-fg">{comment.error.message}</span>}
+        <span className="text-12 text-fg-tertiary">
           <kbd className="font-mono">⌘↵</kbd> to send
         </span>
         {onDone && (
@@ -469,7 +469,7 @@ export function Timeline({ events, ticketKey, boot, run }: { events: ActivityEve
               <Thread root={e} replies={replies.get(str((e.payload as P).comment_id)) ?? []} ticketKey={ticketKey} />
             </div>
           ) : (
-            <div className="min-w-0 flex-1 pt-0.5 text-[13px] text-fg-secondary">
+            <div className="min-w-0 flex-1 pt-0.5 text-13 text-fg-secondary">
               <p>
                 <B>{e.actor.name}</B> {sentence(e, agentColor)}
                 <ViaChat e={e} />

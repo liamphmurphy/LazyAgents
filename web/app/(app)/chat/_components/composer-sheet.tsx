@@ -94,7 +94,7 @@ export function ComposerSheet({
           >
             <span aria-hidden className="h-1 w-9 rounded-full bg-border-strong" />
           </div>
-          <Dialog.Title className="px-4 pb-1 text-[13px] font-semibold text-fg-secondary">Options</Dialog.Title>
+          <Dialog.Title className="px-4 pb-1 text-13 font-semibold text-fg-secondary">Options</Dialog.Title>
           <ul className="flex min-h-0 flex-col overflow-y-auto pb-2">
             {options.map((o) => {
               const value = shownValue(o, counts);
@@ -113,9 +113,9 @@ export function ComposerSheet({
                     <RowIcon icon={o.icon} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-[15px] text-fg">{o.label}</span>
+                    <span className="text-15 text-fg">{o.label}</span>
                     {value && (
-                      <span data-testid="sheet-option-value" className="truncate text-[12.5px] text-fg-tertiary">
+                      <span data-testid="sheet-option-value" className="truncate text-13 text-fg-tertiary">
                         {value}
                       </span>
                     )}

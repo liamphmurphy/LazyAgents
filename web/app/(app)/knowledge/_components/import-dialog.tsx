@@ -52,10 +52,10 @@ function ImportFlow({ onClose }: { onClose: () => void }) {
 function Steps({ job }: { job?: ImportJob }) {
   const at = !job ? 0 : ["queued", "scanning", "preview"].includes(job.state) ? 1 : 2;
   return (
-    <ol className="flex items-center gap-3 px-5 pb-1 pt-3 text-[13px]">
+    <ol className="flex items-center gap-3 px-5 pb-1 pt-3 text-13">
       {["Upload", "Review", "Import"].map((s, i) => (
         <li key={s} className="flex flex-1 items-center gap-2 last:flex-none">
-          <span className={cx("grid size-[22px] flex-none place-items-center rounded-full text-[11px] font-bold", i < at ? "bg-state-done text-on-accent" : i === at ? "bg-accent text-on-accent" : "border border-border-strong text-fg-tertiary")}>
+          <span className={cx("grid size-[22px] flex-none place-items-center rounded-full text-11 font-bold", i < at ? "bg-state-done text-on-accent" : i === at ? "bg-accent text-on-accent" : "border border-border-strong text-fg-tertiary")}>
             {i < at ? <Icon name="check" size={12} /> : i + 1}
           </span>
           <span className={i <= at ? "font-semibold text-fg" : "text-fg-tertiary"}>{s}</span>
@@ -97,22 +97,22 @@ function Upload({ onJob }: { onJob: (id: string) => void }) {
         <span className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent">
           <Icon name="upload" size={22} />
         </span>
-        <span className="text-base font-semibold text-fg">{file ? file.name : "Drop a zipped vault here"}</span>
-        <span className="text-[13px] text-fg-tertiary">
+        <span className="text-16 font-semibold text-fg">{file ? file.name : "Drop a zipped vault here"}</span>
+        <span className="text-13 text-fg-tertiary">
           {file ? mb(file.size) : <><span className="font-semibold text-accent">choose a file</span> · .zip up to {LIMIT_GB} GB</>}
         </span>
-        <span className="text-xs text-fg-tertiary">Your .obsidian settings, .trash and plugin data are ignored</span>
+        <span className="text-12 text-fg-tertiary">Your .obsidian settings, .trash and plugin data are ignored</span>
       </button>
       <input ref={input} type="file" accept=".zip,application/zip" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
       <div className="flex flex-wrap items-end gap-4">
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-fg-tertiary">
+        <label className="flex flex-col gap-1.5 text-12 font-semibold text-fg-tertiary">
           Import into
           <span className="flex h-8 w-64 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5">
             <Icon name="folder" size={14} className="text-fg-secondary" />
-            <input value={folder} onChange={(e) => setFolder(e.target.value)} className="flex-1 bg-transparent text-[13px] font-normal text-fg outline-none" aria-label="Destination folder" />
+            <input value={folder} onChange={(e) => setFolder(e.target.value)} className="flex-1 bg-transparent text-13 font-normal text-fg outline-none" aria-label="Destination folder" />
           </span>
         </label>
-        <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-accent">
+        <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-13 font-medium text-accent">
           <Icon name="lock" size={13} /> Private: you and your personas
         </span>
         <span className="flex-1" />
@@ -124,8 +124,8 @@ function Upload({ onJob }: { onJob: (id: string) => void }) {
           {upload.isPending ? "Uploading…" : "Prepare dry run"}
         </Button>
       </div>
-      {(tooBig || upload.error) && <p className="text-xs text-state-blocked">{tooBig ? `That file is larger than ${LIMIT_GB} GB.` : upload.error?.message}</p>}
-      <p className="text-xs text-fg-tertiary">Nothing is written until you review the dry run and import.</p>
+      {(tooBig || upload.error) && <p className="text-12 text-state-blocked">{tooBig ? `That file is larger than ${LIMIT_GB} GB.` : upload.error?.message}</p>}
+      <p className="text-12 text-fg-tertiary">Nothing is written until you review the dry run and import.</p>
     </div>
   );
 }
@@ -153,8 +153,8 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
   if (job.state === "failed")
     return (
       <div className="flex flex-col gap-4 p-5">
-        <div className="rounded-lg border border-border-subtle bg-surface-sunken p-4 text-[13px] text-fg-2">{job.error || "The import failed."}</div>
-        <p className="text-xs text-fg-tertiary">Archives with paths outside the vault, absolute paths, too many files or extreme compression are refused whole. Nothing was written.</p>
+        <div className="rounded-lg border border-border-subtle bg-surface-sunken p-4 text-13 text-fg-2">{job.error || "The import failed."}</div>
+        <p className="text-12 text-fg-tertiary">Archives with paths outside the vault, absolute paths, too many files or extreme compression are refused whole. Nothing was written.</p>
         <div className="flex gap-2">
           <Button variant="primary" onClick={onRetry}>Choose another file</Button>
           <Button onClick={onClose}>Close</Button>
@@ -174,12 +174,12 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
             <Icon name={job.state === "done" ? "check" : "history"} size={20} />
           </span>
           <div>
-            <p className="text-base font-semibold text-fg">{job.state === "done" ? `Imported ${fmt(by("created") + by("updated"))} files` : "This import was undone"}</p>
-            <p className="text-xs text-fg-tertiary">Into {job.folder || "the top level"}/ · {new Date(job.updated_at).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}</p>
+            <p className="text-16 font-semibold text-fg">{job.state === "done" ? `Imported ${fmt(by("created") + by("updated"))} files` : "This import was undone"}</p>
+            <p className="text-12 text-fg-tertiary">Into {job.folder || "the top level"}/ · {new Date(job.updated_at).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}</p>
           </div>
         </div>
         {job.state === "done" && (
-          <ul className="space-y-1.5 text-[13px] text-fg-2">
+          <ul className="space-y-1.5 text-13 text-fg-2">
             {by("unchanged") > 0 && <li>{fmt(by("unchanged"))} unchanged since the last import</li>}
             {by("conflict") > 0 && <li><Icon name="alert" size={13} className="mr-1.5 inline text-state-progress" />{by("conflict")} conflicts kept both, as suggestions to review</li>}
             {by("skipped") + by("failed") > 0 && <li><Icon name="x" size={13} className="mr-1.5 inline text-state-blocked" />{by("skipped") + by("failed")} skipped; their reasons are below</li>}
@@ -187,7 +187,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
           </ul>
         )}
         <Failures rows={(job.report ?? []).filter((r) => r.status === "failed" || r.status === "skipped")} />
-        {undo.error && <p className="text-xs text-state-blocked">{undo.error.message}</p>}
+        {undo.error && <p className="text-12 text-state-blocked">{undo.error.message}</p>}
         <div className="flex items-center gap-2">
           <Button variant="primary" onClick={onClose}>Done</Button>
           {job.state === "done" && (
@@ -195,7 +195,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
               {undo.isPending ? "Undoing…" : "Undo this import"}
             </Button>
           )}
-          <span className="text-xs text-fg-tertiary">{job.state === "done" && "Undo removes the pages it created and restores the ones it replaced."}</span>
+          <span className="text-12 text-fg-tertiary">{job.state === "done" && "Undo removes the pages it created and restores the ones it replaced."}</span>
         </div>
       </div>
     );
@@ -206,7 +206,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
-        <p className="mt-2 text-[13px] text-fg-tertiary">
+        <p className="mt-2 text-13 text-fg-tertiary">
           <b className="text-fg">Dry run</b> · nothing has been written yet
         </p>
         <div className="mt-3 grid grid-cols-5 gap-2">
@@ -220,8 +220,8 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
             ] as const
           ).map(([n, label, cls]) => (
             <div key={label} className="rounded-lg border border-border-subtle bg-surface p-3">
-              <div className={cx("text-[22px] font-bold", cls)}>{fmt(n)}</div>
-              <div className="text-xs text-fg-tertiary">{label}</div>
+              <div className={cx("text-22 font-bold", cls)}>{fmt(n)}</div>
+              <div className="text-12 text-fg-tertiary">{label}</div>
             </div>
           ))}
         </div>
@@ -236,7 +236,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
               ["skipped", "Skipped"],
             ] as const
           ).map(([f, label]) => (
-            <button key={f} role="tab" aria-selected={filter === f} onClick={() => setFilter(f)} className={cx("h-7 rounded-md px-3 text-xs font-medium", filter === f ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}>
+            <button key={f} role="tab" aria-selected={filter === f} onClick={() => setFilter(f)} className={cx("h-7 rounded-md px-3 text-12 font-medium", filter === f ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}>
               {label} <span className="ml-1 text-fg-tertiary">{fmt(counts[f])}</span>
             </button>
           ))}
@@ -245,10 +245,10 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
           {filter === "unresolved" ? (
             <ul className="divide-y divide-border-row">
               {(plan?.unresolved ?? []).slice(0, 300).map((u) => (
-                <li key={u} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
+                <li key={u} className="flex items-center gap-3 px-4 py-2.5 text-13">
                   <Icon name="link" size={14} className="text-state-human" />
                   <span className="text-[#8E86C8] underline">{u}</span>
-                  <span className="text-xs text-fg-tertiary">will link once a page with that name exists</span>
+                  <span className="text-12 text-fg-tertiary">will link once a page with that name exists</span>
                 </li>
               ))}
             </ul>
@@ -260,30 +260,30 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
                   <li key={e.source} className="grid grid-cols-[20px_1fr_1fr] items-center gap-3 px-4 py-2.5">
                     <Icon name={s.icon} size={15} className={s.cls} />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium text-fg">{e.source}</span>
-                      {s.note && <span className="block truncate text-xs text-fg-tertiary">{s.note}</span>}
+                      <span className="block truncate text-13 font-medium text-fg">{e.source}</span>
+                      {s.note && <span className="block truncate text-12 text-fg-tertiary">{s.note}</span>}
                     </span>
-                    <span className="flex min-w-0 items-center gap-2 text-xs text-fg-secondary">
+                    <span className="flex min-w-0 items-center gap-2 text-12 text-fg-secondary">
                       <Icon name="chevr" size={12} className="text-fg-tertiary" />
                       <span className="truncate">{e.error ? "skipped" : e.path}</span>
                     </span>
                   </li>
                 );
               })}
-              {shown.length > 300 && <li className="px-4 py-2.5 text-xs text-fg-tertiary">and {fmt(shown.length - 300)} more</li>}
-              {shown.length === 0 && <li className="px-4 py-6 text-center text-xs text-fg-tertiary">Nothing here.</li>}
+              {shown.length > 300 && <li className="px-4 py-2.5 text-12 text-fg-tertiary">and {fmt(shown.length - 300)} more</li>}
+              {shown.length === 0 && <li className="px-4 py-6 text-center text-12 text-fg-tertiary">Nothing here.</li>}
             </ul>
           )}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-fg-tertiary">Into</p>
-            <span className="flex h-8 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[13px] text-fg-2">
+            <p className="mb-1.5 text-12 font-semibold text-fg-tertiary">Into</p>
+            <span className="flex h-8 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-13 text-fg-2">
               <Icon name="folder" size={14} /> {job.folder || "Top level"}/
             </span>
           </div>
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-fg-tertiary">When a page already exists</p>
+            <p className="mb-1.5 text-12 font-semibold text-fg-tertiary">When a page already exists</p>
             <div role="radiogroup" className="flex h-8 rounded-md border border-border-subtle bg-surface-sunken p-0.5">
               {(
                 [
@@ -292,15 +292,15 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
                   ["keep_both", "Keep both"],
                 ] as const
               ).map(([p, label]) => (
-                <button key={p} role="radio" aria-checked={policy === p} onClick={() => setPolicy(p)} className={cx("w-24 rounded text-xs font-medium", policy === p ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}>
+                <button key={p} role="radio" aria-checked={policy === p} onClick={() => setPolicy(p)} className={cx("w-24 rounded text-12 font-medium", policy === p ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}>
                   {label}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-fg-tertiary">Who can see them</p>
-            <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-accent">
+            <p className="mb-1.5 text-12 font-semibold text-fg-tertiary">Who can see them</p>
+            <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-13 font-medium text-accent">
               <Icon name="lock" size={13} /> Private: you and your personas
             </span>
           </div>
@@ -308,8 +308,8 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
       </div>
       <div className="flex flex-none items-center gap-3 border-t border-border px-5 py-3">
         <Icon name="alert" size={14} className="text-fg-tertiary" />
-        <span className="flex-1 text-xs text-fg-tertiary">Nothing is written until you import. You can undo the whole import afterwards.</span>
-        {(confirm.error || cancel.error) && <span className="text-xs text-state-blocked">{(confirm.error ?? cancel.error)?.message}</span>}
+        <span className="flex-1 text-12 text-fg-tertiary">Nothing is written until you import. You can undo the whole import afterwards.</span>
+        {(confirm.error || cancel.error) && <span className="text-12 text-state-blocked">{(confirm.error ?? cancel.error)?.message}</span>}
         <Button onClick={() => cancel.mutate(job.id, { onSuccess: onClose })} disabled={cancel.isPending}>
           Cancel
         </Button>
@@ -325,16 +325,16 @@ function Progress({ label, done, total, note, errors }: { label: string; done: n
   const pct = total ? Math.min(100, Math.round((done / total) * 100)) : undefined;
   return (
     <div className="flex flex-col gap-3 p-5">
-      <div className="flex items-baseline justify-between text-[13px]">
+      <div className="flex items-baseline justify-between text-13">
         <span className="font-semibold text-fg">{label}</span>
         {pct !== undefined && <span className="font-bold text-accent">{pct}%</span>}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-track" role="progressbar" aria-valuenow={pct} aria-label={label}>
         <div className={cx("h-full rounded-full bg-accent", pct === undefined && "w-1/3 animate-pulse")} style={pct !== undefined ? { width: `${Math.max(2, pct)}%` } : undefined} />
       </div>
-      <p className="text-xs text-fg-tertiary">{note}</p>
+      <p className="text-12 text-fg-tertiary">{note}</p>
       {!!errors?.length && <Failures rows={errors} />}
-      <p className="text-xs text-fg-tertiary">You can close this; the import keeps going.</p>
+      <p className="text-12 text-fg-tertiary">You can close this; the import keeps going.</p>
     </div>
   );
 }
@@ -342,7 +342,7 @@ function Progress({ label, done, total, note, errors }: { label: string; done: n
 function Failures({ rows }: { rows: { source: string; reason: string }[] }) {
   if (!rows.length) return null;
   return (
-    <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-[#EF64611A] p-3 text-xs">
+    <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-[#EF64611A] p-3 text-12">
       {rows.map((r) => (
         <li key={r.source} className="text-fg-2">
           <b>{r.source}</b>: <span className="text-fg-secondary">{r.reason || "skipped"}</span>

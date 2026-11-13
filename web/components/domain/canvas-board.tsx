@@ -144,7 +144,7 @@ export function CanvasBoard({ width, selectable, children }: { width: number; se
       </div>
       <div role="group" aria-label="Zoom" className="absolute bottom-3 left-3 z-10 flex cursor-auto items-center gap-1 rounded-lg border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">
         <Button variant="secondary" aria-label="Zoom out" onClick={() => zoomBy(1 / ZOOM_STEP)}>−</Button>
-        <span data-testid="canvas-zoom" className="w-12 text-center text-xs text-fg-secondary">{Math.round((view?.scale ?? 1) * 100)}%</span>
+        <span data-testid="canvas-zoom" className="w-12 text-center text-12 text-fg-secondary">{Math.round((view?.scale ?? 1) * 100)}%</span>
         <Button variant="secondary" aria-label="Zoom in" onClick={() => zoomBy(ZOOM_STEP)}>+</Button>
         <Button variant="secondary" onClick={fit}>Fit</Button>
       </div>

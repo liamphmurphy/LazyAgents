@@ -64,7 +64,7 @@ export function ModelPicker({
           disabled={disabled}
           aria-label={`Model for the next message: ${l.harness}, ${l.model}`}
           title={`${l.harness} · ${l.model}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-13 text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span className="truncate">{l.harness} · {l.model}</span>
           <Icon name="chev" size={13} strokeWidth={1.6} className="text-fg-tertiary" />
@@ -75,9 +75,9 @@ export function ModelPicker({
           {(groups ?? []).map((g, i) => (
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
-              <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
+              <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
               {!g.available && (
-                <div role="status" className="px-2 py-1 text-xs text-fg-tertiary">
+                <div role="status" className="px-2 py-1 text-12 text-fg-tertiary">
                   {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
                 </div>
               )}
@@ -95,7 +95,7 @@ export function ModelPicker({
                       {m.label}
                       <span className="ml-auto w-4 text-accent">{on && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
                     </span>
-                    {!g.available && <span className="text-xs text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
+                    {!g.available && <span className="text-12 text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
                   </DropdownMenu.Item>
                 );
               })}
@@ -168,15 +168,15 @@ export function ModelEffortPicker({
               Auto
               <span className="ml-auto w-4 text-accent">{value.auto && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
             </span>
-            <span className="text-xs text-fg-tertiary">Picks the model for each message</span>
+            <span className="text-12 text-fg-tertiary">Picks the model for each message</span>
           </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           {(groups ?? []).map((g, i) => (
             <DropdownMenu.Group key={g.harness} aria-label={g.label}>
               {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
-              <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
+              <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
               {!g.available && (
-                <div role="status" className="px-2 py-1 text-xs text-fg-tertiary">
+                <div role="status" className="px-2 py-1 text-12 text-fg-tertiary">
                   {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
                 </div>
               )}
@@ -194,7 +194,7 @@ export function ModelEffortPicker({
                       {m.label}
                       <span className="ml-auto w-4 text-accent">{on && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
                     </span>
-                    {!g.available && <span className="text-xs text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
+                    {!g.available && <span className="text-12 text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
                   </DropdownMenu.Item>
                 );
               })}
@@ -203,7 +203,7 @@ export function ModelEffortPicker({
           {options.length > 0 && (
             <DropdownMenu.Group aria-label="Reasoning effort">
               <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
-              <DropdownMenu.Label className="px-2 py-1 text-xs font-medium text-fg-tertiary">Reasoning effort</DropdownMenu.Label>
+              <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">Reasoning effort</DropdownMenu.Label>
               {options.map((e) => (
                 <DropdownMenu.Item key={e ?? "default"} className={item} onSelect={() => onEffort(e)}>
                   <span className="flex items-center gap-2">

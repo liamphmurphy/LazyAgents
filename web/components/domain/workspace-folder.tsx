@@ -13,10 +13,10 @@ export function WorkspaceFolderChip({ path, className }: { path: string; classNa
     <span
       data-testid="workspace-folder"
       title={`Checkout on this machine:\n${path}`}
-      className={cx("flex min-w-0 flex-none items-center gap-1 rounded-full border border-border bg-surface py-px pl-2.5 pr-0.5 text-xs text-fg-secondary", className)}
+      className={cx("flex min-w-0 flex-none items-center gap-1 rounded-full border border-border bg-surface py-px pl-2.5 pr-0.5 text-12 text-fg-secondary", className)}
     >
       <Icon name="folder" size={13} className="flex-none" />
-      <span className="max-w-[220px] truncate font-mono text-[11.5px]" dir="rtl">
+      <span className="max-w-[220px] truncate font-mono text-12" dir="rtl">
         {/* rtl keeps the run's own folder visible when the path truncates */}
         <bdi>{path}</bdi>
       </span>

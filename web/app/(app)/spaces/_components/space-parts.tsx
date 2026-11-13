@@ -31,7 +31,7 @@ export function SpaceTile({ name, color, size = 16, className }: { name: string;
   );
 }
 
-const menuItem = "flex h-[32px] cursor-default select-none items-center gap-[10px] rounded-md px-[8px] text-[13px] outline-none data-[highlighted]:bg-hover";
+const menuItem = "flex h-[32px] cursor-default select-none items-center gap-[10px] rounded-md px-[8px] text-13 outline-none data-[highlighted]:bg-hover";
 
 /** The tile as a button that picks the space's color. */
 export function ColorPicker({ name, value, onChange, size = 40, disabled }: { name: string; value: SpaceColor; onChange: (c: SpaceColor) => void; size?: number; disabled?: boolean }) {
@@ -77,9 +77,9 @@ function SelectBox({ label, value, muted, disabled, children }: { label: string;
           aria-label={`${label}: ${value}`}
           className="flex h-[56px] min-w-[0px] flex-1 flex-col justify-center gap-[4px] rounded-lg border border-border-strong bg-surface-sunken px-[14px] text-left hover:bg-hover data-[state=open]:border-accent disabled:opacity-50"
         >
-          <span className="text-[11px] text-fg-tertiary">{label}</span>
+          <span className="text-11 text-fg-tertiary">{label}</span>
           <span className="flex w-full items-center gap-[8px]">
-            <span className={cx("min-w-[0px] flex-1 truncate text-[13.5px]", muted ? "text-fg-secondary" : "text-fg")}>{value}</span>
+            <span className={cx("min-w-[0px] flex-1 truncate text-14", muted ? "text-fg-secondary" : "text-fg")}>{value}</span>
             <Icon name="chev" size={12} className="flex-none text-fg-secondary" />
           </span>
         </button>
@@ -173,7 +173,7 @@ export function ConnectorSelect({ value, onChange, disabled }: { value: string[]
   return (
     <SelectBox label="Connectors" value={label} muted={label === "None"} disabled={disabled}>
       {rows.length === 0 ? (
-        <p className="px-[8px] py-[6px] text-[12px] text-fg-secondary">No connectors yet. Add one under Customization.</p>
+        <p className="px-[8px] py-[6px] text-12 text-fg-secondary">No connectors yet. Add one under Customization.</p>
       ) : (
         rows.map((c) => (
           <DropdownMenu.CheckboxItem key={c.id} checked={value.includes(c.id)} onCheckedChange={(on) => toggle(c.id, on === true)} onSelect={(e) => e.preventDefault()} className={menuItem}>
@@ -213,8 +213,8 @@ export function MemoryChoice({ value, onChange, disabled }: { value: boolean; on
               {picked && <span className="size-[8px] rounded-full bg-accent" />}
             </span>
             <span className="flex min-w-[0px] flex-col gap-[2px]">
-              <span className="text-[13.5px] font-semibold text-fg">{o.title}</span>
-              <span className="text-[12px] text-fg-secondary">{o.detail}</span>
+              <span className="text-14 font-semibold text-fg">{o.title}</span>
+              <span className="text-12 text-fg-secondary">{o.detail}</span>
             </span>
           </button>
         );

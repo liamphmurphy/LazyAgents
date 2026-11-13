@@ -33,10 +33,10 @@ import { LibrarySourceSwitch } from "./_components/source-switch";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
-  if (item.source === "upload") return <span className="min-w-0 truncate text-xs text-fg-tertiary">Uploaded by you</span>;
+  if (item.source === "upload") return <span className="min-w-0 truncate text-12 text-fg-tertiary">Uploaded by you</span>;
   const chat = item.chat_id ? `/chat/${item.chat_id}` : undefined;
   return (
-    <span className="min-w-0 truncate text-xs text-fg-tertiary">
+    <span className="min-w-0 truncate text-12 text-fg-tertiary">
       {item.persona_name ?? "Assistant"}
       {" · "}
       {chat ? (
@@ -63,7 +63,7 @@ function ReferenceActions({ item }: { item: LibraryItem }) {
   const error = set.error ?? clear.error;
   return (
     <>
-      {error && <span className="text-xs text-pill-blocked-fg">{error.message}</span>}
+      {error && <span className="text-12 text-pill-blocked-fg">{error.message}</span>}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button variant="secondary" icon="users" disabled={busy}>
@@ -101,7 +101,7 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
     <span
       data-testid="library-reference"
       title={`New images keep this likeness of ${who === "You" ? "you" : who}`}
-      className="absolute left-2 top-2 max-w-[calc(100%-16px)] truncate rounded-md bg-surface-raised px-1.5 py-0.5 text-[11px] text-fg shadow-[var(--shadow-float)]"
+      className="absolute left-2 top-2 max-w-[calc(100%-16px)] truncate rounded-md bg-surface-raised px-1.5 py-0.5 text-11 text-fg shadow-[var(--shadow-float)]"
     >
       {who} · reference
     </span>
@@ -123,8 +123,8 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
         >
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-col">
-              <Dialog.Title className="truncate text-[13px] text-fg">{item.title}</Dialog.Title>
-              <span className="truncate text-xs text-fg-tertiary">
+              <Dialog.Title className="truncate text-13 text-fg">{item.title}</Dialog.Title>
+              <span className="truncate text-12 text-fg-tertiary">
                 {item.filename} · {formatBytes(item.size_bytes)}
                 {item.duration_ms ? ` · ${clock(item.duration_ms)}` : ""} · {timelineTime(item.created_at)}
                 {referenceCaption(item) && ` · ${referenceCaption(item)}`}
@@ -134,7 +134,7 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
             <a
               href={libraryItemUrl(item.id, true)}
               download={item.filename}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-12 text-fg hover:bg-hover"
             >
               <Icon name="download" size={14} />
               Download
@@ -182,7 +182,7 @@ function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
         item={item}
         open={open}
         onOpenChange={setOpen}
-        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-12 text-accent hover:underline">Open chat</Link>}
         trigger={
           <button
             type="button"
@@ -201,14 +201,14 @@ function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
             ) : (
               <span className="grid size-full place-items-center text-fg-tertiary"><Icon name="film" size={22} /></span>
             )}
-            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px text-[10px] text-[#fff]"><Icon name="play" size={8} />Video</span>
-            {item.duration_ms ? <span className="absolute bottom-1.5 right-1.5 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px font-mono text-[11px] text-[#fff]">{clock(item.duration_ms)}</span> : null}
+            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px text-10 text-[#fff]"><Icon name="play" size={8} />Video</span>
+            {item.duration_ms ? <span className="absolute bottom-1.5 right-1.5 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px font-mono text-11 text-[#fff]">{clock(item.duration_ms)}</span> : null}
           </button>
         }
       >
         <video src={url} poster={poster} controls autoPlay playsInline className="min-h-0 max-h-[80vh] w-full bg-[#000]" />
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <span className="truncate text-13 text-fg">{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -222,8 +222,8 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
   if (item.kind === "document") {
     return (
       <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
-        <p className="truncate text-[13px] font-medium text-fg" title={item.title}>{item.title}</p>
-        <div className="flex items-center gap-3 text-[12.5px]">
+        <p className="truncate text-13 font-medium text-fg" title={item.title}>{item.title}</p>
+        <div className="flex items-center gap-3 text-13">
           <a className="text-accent hover:underline" href={url} target="_blank" rel="noreferrer">Open</a>
           <button type="button" className="text-fg-secondary hover:text-fg" disabled={del.isPending} onClick={() => del.mutate(item.id)}>Remove</button>
         </div>
@@ -252,7 +252,7 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={item.title} className={cx("min-h-0 max-h-[80vh] w-full object-contain", diagram && "bg-white")} />
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <span className="truncate text-13 text-fg">{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -273,7 +273,7 @@ function UploadButton() {
   }
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {error && <span className="text-xs text-pill-blocked-fg">{error}</span>}
+      {error && <span className="text-12 text-pill-blocked-fg">{error}</span>}
       <input
         ref={input}
         type="file"
@@ -368,7 +368,7 @@ function Keepsakes() {
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
               <h1 className="type-display">Library</h1>
-              <p className="text-sm text-fg-secondary">
+              <p className="text-14 text-fg-secondary">
                 Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
                 Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>

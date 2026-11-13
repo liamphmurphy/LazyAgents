@@ -45,19 +45,19 @@ export const composerFrame = composerFrameFor();
  * 16px on touch screens, since iOS Safari zooms in on a focused field under 16px.
  */
 export const composerInput =
-  "!border-0 !bg-transparent !px-2 !py-1 !text-[15px] pointer-coarse:!text-[16px] focus-visible:!outline-none";
+  "!border-0 !bg-transparent !px-2 !py-1 !text-15 pointer-coarse:!text-16 focus-visible:!outline-none";
 /** A round 30px icon button in the composer's option row (add context, attach). */
 export const composerIconButton =
   "grid size-[30px] flex-none place-items-center rounded-full border border-border-strong text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
 /** A pill in the option row; `on` marks a toggle that's set. */
 export const composerPill = (on = false) =>
   cx(
-    "inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border px-3 text-13 font-medium disabled:cursor-not-allowed disabled:opacity-50",
     on ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover hover:text-fg",
   );
 /** Model and effort: plain text in the option row, since they rarely change. */
 export const composerGhost =
-  "flex h-[30px] max-w-full items-center gap-1 rounded-full px-2 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-[30px] max-w-full items-center gap-1 rounded-full px-2 text-13 text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
 
 const sendFill: Record<SendTone, string> = { accent: "bg-accent", aside: "bg-state-review", interrupt: "bg-state-human" };
 
@@ -94,7 +94,7 @@ export function SendButton({ label, disabled, title, tone = "accent" }: { label:
  */
 export function ComposerHints({ commands = true, children }: { commands?: boolean; children?: ReactNode }) {
   return (
-    <p className="text-center text-xs text-fg-tertiary pointer-coarse:hidden" data-testid="composer-hints">
+    <p className="text-center text-12 text-fg-tertiary pointer-coarse:hidden" data-testid="composer-hints">
       {children ?? `${commands ? "/ commands  ·  @ personas  ·  [[ context  ·  " : ""}Shift+Enter for a new line`}
     </p>
   );
@@ -210,7 +210,7 @@ export function AskAboutSelection({ root, onAsk }: { root: RefObject<HTMLElement
               if (question.trim() && onAsk(picked.text, question.trim(), picked.authorId, picked.author)) close();
             }
           }}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-tertiary"
+          className="min-w-0 flex-1 bg-transparent text-13 text-fg outline-none placeholder:text-fg-tertiary"
         />
       </div>
     );
@@ -223,7 +223,7 @@ export function AskAboutSelection({ root, onAsk }: { root: RefObject<HTMLElement
       // Keep the selection: a press would otherwise clear it before the click.
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => setAsking(true)}
-      className="fixed z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border-float bg-surface-raised px-2.5 py-1 text-xs font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover"
+      className="fixed z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border-float bg-surface-raised px-2.5 py-1 text-12 font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover"
     >
       <Icon name="msg" size={13} />
       Ask about this

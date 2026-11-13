@@ -62,17 +62,17 @@ function PictureCard({ name, initials, color, src }: { name: string; initials: s
               </Button>
             )}
           </div>
-          <p className="text-[11.5px] text-fg-tertiary">{AVATAR_HINT} Without one, your initials show.</p>
+          <p className="text-12 text-fg-tertiary">{AVATAR_HINT} Without one, your initials show.</p>
         </div>
       </div>
       <div aria-live="polite">
         {error && (
           <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-pill-blocked-bg px-3 py-2">
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-xs text-pill-blocked-fg">{error.title}</span>
-              <span className="text-xs text-fg-secondary">{error.hint}</span>
+              <span className="text-12 text-pill-blocked-fg">{error.title}</span>
+              <span className="text-12 text-fg-secondary">{error.hint}</span>
             </div>
-            <button type="button" aria-label="Dismiss" className="text-xs text-pill-blocked-fg" onClick={() => setError(null)}>✕</button>
+            <button type="button" aria-label="Dismiss" className="text-12 text-pill-blocked-fg" onClick={() => setError(null)}>✕</button>
           </div>
         )}
       </div>
@@ -121,13 +121,13 @@ function DetailsCard({ name, roleTitle, emails }: { name: string; roleTitle: str
           <TextInput id="profile-role" value={draft.role_title} autoComplete="organization-title" aria-invalid={!!roleError} aria-describedby="profile-role-hint" onChange={(e) => edit({ role_title: e.target.value })} />
         </Field>
         <EmailList emails={draft.emails} error={emailsError} onChange={(next) => edit({ emails: next })} />
-        {otherError && <p role="alert" className="text-xs text-pill-blocked-fg">{otherError}</p>}
+        {otherError && <p role="alert" className="text-12 text-pill-blocked-fg">{otherError}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="primary" disabled={!changes || invalid || update.isPending}>
             {update.isPending ? "Saving…" : "Save profile"}
           </Button>
           {notice && (
-            <p role="status" className="flex items-center gap-1.5 text-[13px] text-pill-done-fg">
+            <p role="status" className="flex items-center gap-1.5 text-13 text-pill-done-fg">
               <Icon name="check" size={13} /> {notice}
             </p>
           )}
@@ -164,11 +164,11 @@ function EmailList({ emails, error, onChange }: { emails: string[]; error?: stri
         {emails.map((e, i) => (
           <li key={e} className="flex min-w-0 items-center gap-2 bg-surface px-3 py-1.5">
             <Icon name="at" size={13} className="flex-none text-fg-tertiary" />
-            <span className="min-w-0 flex-1 truncate text-[13px] text-fg" title={e}>{e}</span>
+            <span className="min-w-0 flex-1 truncate text-13 text-fg" title={e}>{e}</span>
             {i === 0 ? (
-              <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-[11px] font-medium text-fg-secondary">Primary</span>
+              <span className="flex-none rounded-full bg-selected px-2 py-0.5 text-11 font-medium text-fg-secondary">Primary</span>
             ) : (
-              <button type="button" className="flex-none text-[12px] text-accent hover:underline" onClick={() => onChange(makePrimary(emails, e))}>
+              <button type="button" className="flex-none text-12 text-accent hover:underline" onClick={() => onChange(makePrimary(emails, e))}>
                 Make primary
               </button>
             )}
@@ -208,7 +208,7 @@ function EmailList({ emails, error, onChange }: { emails: string[]; error?: stri
                 }
               }}
             />
-            {addError && <span role="alert" className="text-xs text-pill-blocked-fg">{addError}</span>}
+            {addError && <span role="alert" className="text-12 text-pill-blocked-fg">{addError}</span>}
           </div>
           <Button variant="secondary" icon="plus" disabled={!adding.trim()} onClick={add}>
             Add

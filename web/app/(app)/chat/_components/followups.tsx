@@ -38,7 +38,7 @@ export function FollowupTray({
       : `Queued · sends after ${name}'s next reply`;
   return (
     <section aria-label="Queued follow-ups" data-testid="followup-tray" className="overflow-hidden rounded-xl border border-border bg-surface">
-      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-xs text-fg-secondary">
+      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-12 text-fg-secondary">
         <Icon name="clock" size={12} />
         <span className="min-w-0 truncate">{header}</span>
         <span className="ml-auto font-mono text-fg-tertiary">{items.length}</span>
@@ -46,8 +46,8 @@ export function FollowupTray({
       <ol>
         {items.map((f, i) => (
           <li key={f.id} data-testid="followup" className="flex items-center gap-2.5 border-b border-border-row py-1.5 pl-3 pr-2 last:border-b-0">
-            <span aria-hidden className="w-3.5 font-mono text-[11px] text-fg-tertiary">{i + 1}</span>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-fg-2" title={f.body}>
+            <span aria-hidden className="w-3.5 font-mono text-11 text-fg-tertiary">{i + 1}</span>
+            <span className="min-w-0 flex-1 truncate text-13 text-fg-2" title={f.body}>
               {f.body}
             </span>
             <button
@@ -55,7 +55,7 @@ export function FollowupTray({
               disabled={disabled || remove.isPending}
               title={running ? `Stop ${name} and send this now` : "Send this now"}
               onClick={() => onSendNow(f.body, () => remove.mutate(f.id))}
-              className="h-6 flex-none rounded-md px-2 text-xs text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-50"
+              className="h-6 flex-none rounded-md px-2 text-12 text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-50"
             >
               Send now
             </button>
@@ -63,7 +63,7 @@ export function FollowupTray({
               type="button"
               disabled={remove.isPending}
               onClick={() => remove.mutate(f.id, { onSuccess: () => onEdit(f.body) })}
-              className="h-6 flex-none rounded-md px-2 text-xs text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-50"
+              className="h-6 flex-none rounded-md px-2 text-12 text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-50"
             >
               Edit
             </button>
@@ -80,7 +80,7 @@ export function FollowupTray({
         ))}
       </ol>
       {remove.isError && (
-        <p role="alert" className="px-3 pb-2 text-xs text-pill-blocked-fg">
+        <p role="alert" className="px-3 pb-2 text-12 text-pill-blocked-fg">
           {remove.error instanceof Error ? remove.error.message : "Couldn’t remove it. Try again."}
         </p>
       )}

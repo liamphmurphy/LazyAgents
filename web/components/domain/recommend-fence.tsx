@@ -30,14 +30,14 @@ export const VideoPlayers = createContext<Map<string, (seconds: number) => void>
 
 const FRAME = "overflow-hidden rounded-xl border border-border bg-surface";
 const WIDTH = "w-[380px] max-w-full";
-const ACTION = "inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-[12.5px] font-medium text-fg transition-colors hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent";
+const ACTION = "inline-flex h-[30px] items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-13 font-medium text-fg transition-colors hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent";
 
 function Note({ note }: { note: string }) {
-  return note ? <p className="mt-2 text-[13px] italic text-fg-secondary">“{note}”</p> : null;
+  return note ? <p className="mt-2 text-13 italic text-fg-secondary">“{note}”</p> : null;
 }
 
 function Badge({ children }: { children: string }) {
-  return <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "rgb(0 0 0 / 0.55)", color: "#fff" }}>{children}</span>;
+  return <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-0.5 text-12 font-semibold" style={{ background: "rgb(0 0 0 / 0.55)", color: "#fff" }}>{children}</span>;
 }
 
 function OpenMark() {
@@ -95,7 +95,7 @@ function CardActions({ url, preview, messageId }: { url: string; preview?: Schem
         {video ? "Summarize video" : "Summarize page"}
       </button>
       {saved ? (
-        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 text-[12.5px] font-semibold text-accent">
+        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 text-13 font-semibold text-accent">
           <Icon name="check" size={13} />
           Saved
         </span>
@@ -105,7 +105,7 @@ function CardActions({ url, preview, messageId }: { url: string; preview?: Schem
           {save.isPending ? "Saving…" : "Save to Library"}
         </button>
       )}
-      {save.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
+      {save.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
     </div>
   );
 }
@@ -116,7 +116,7 @@ export function SaveSummary({ messageId, url }: { messageId: string; url: string
   return (
     <div className="flex flex-wrap items-center gap-2">
       {save.isSuccess ? (
-        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 text-[12.5px] font-semibold text-accent">
+        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 text-13 font-semibold text-accent">
           <Icon name="check" size={13} />
           Summary saved
         </span>
@@ -126,7 +126,7 @@ export function SaveSummary({ messageId, url }: { messageId: string; url: string
           {save.isPending ? "Saving…" : "Save summary to Library"}
         </button>
       )}
-      {save.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
+      {save.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{save.error.message || "Couldn’t save."}</span>}
     </div>
   );
 }
@@ -141,10 +141,10 @@ function CompactCard({ url, title, note, actions }: { url: string; title?: strin
   return (
     <Shell kind="link">
       <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 p-2.5 transition-colors hover:bg-hover">
-        <span aria-hidden className="grid size-8 flex-none place-items-center rounded-lg bg-surface-sunken text-sm font-bold text-fg-secondary">{host.slice(0, 1).toUpperCase()}</span>
+        <span aria-hidden className="grid size-8 flex-none place-items-center rounded-lg bg-surface-sunken text-14 font-bold text-fg-secondary">{host.slice(0, 1).toUpperCase()}</span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13px] font-semibold text-fg">{title || `${host}${new URL(url).pathname.replace(/\/$/, "")}`}</span>
-          {note ? <span className="truncate text-[12px] italic text-fg-secondary">“{note}”</span> : title && <span className="truncate text-[12px] text-fg-tertiary">{host}</span>}
+          <span className="truncate text-13 font-semibold text-fg">{title || `${host}${new URL(url).pathname.replace(/\/$/, "")}`}</span>
+          {note ? <span className="truncate text-12 italic text-fg-secondary">“{note}”</span> : title && <span className="truncate text-12 text-fg-tertiary">{host}</span>}
         </span>
         <OpenMark />
       </a>
@@ -159,10 +159,10 @@ function VideoCard({ url, preview, embed, note, actions }: { url: string; previe
       <VideoFrame embed={embed} title={preview.title} image={preview.image_url} videoId={preview.video_id} />
       <div className="p-3">
         <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 hover:underline">
-          <span className="min-w-0 flex-1 text-[14px] font-semibold text-fg">{preview.title}</span>
+          <span className="min-w-0 flex-1 text-14 font-semibold text-fg">{preview.title}</span>
           <OpenMark />
         </a>
-        <p className="mt-0.5 truncate text-xs text-fg-tertiary">{[preview.site, hostOf(url)].filter(Boolean).join(" · ")}</p>
+        <p className="mt-0.5 truncate text-12 text-fg-tertiary">{[preview.site, hostOf(url)].filter(Boolean).join(" · ")}</p>
         <Note note={note} />
       </div>
       {actions}
@@ -183,11 +183,11 @@ function SiteCard({ url, preview, note, actions }: { url: string; preview: Schem
         </span>
         <span className="block p-3">
           <span className="flex items-start gap-2">
-            <span className="min-w-0 flex-1 text-[14px] font-semibold text-fg">{preview.title}</span>
+            <span className="min-w-0 flex-1 text-14 font-semibold text-fg">{preview.title}</span>
             <OpenMark />
           </span>
-          <span className="mt-0.5 block truncate text-xs text-fg-tertiary">{preview.site || hostOf(url)}</span>
-          {note ? <Note note={note} /> : preview.description && <span className="mt-2 line-clamp-2 block text-[12.5px] text-fg-secondary">{preview.description}</span>}
+          <span className="mt-0.5 block truncate text-12 text-fg-tertiary">{preview.site || hostOf(url)}</span>
+          {note ? <Note note={note} /> : preview.description && <span className="mt-2 line-clamp-2 block text-13 text-fg-secondary">{preview.description}</span>}
         </span>
       </a>
       {actions}

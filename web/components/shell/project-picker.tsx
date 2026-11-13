@@ -49,7 +49,7 @@ export function ProjectPicker({ allowAll = true }: { allowAll?: boolean }) {
           ) : (
             <Icon name="folder" size={12} className="flex-none text-fg-tertiary" />
           )}
-          <span className="truncate text-[13px] font-medium">{current?.name ?? "All projects"}</span>
+          <span className="truncate text-13 font-medium">{current?.name ?? "All projects"}</span>
           <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-none text-fg-tertiary">
             <path d="m3 4.5 3-3 3 3M3 7.5l3 3 3-3" />
           </svg>
@@ -72,7 +72,7 @@ export function ProjectPicker({ allowAll = true }: { allowAll?: boolean }) {
               <DropdownMenu.RadioItem key={p.key} value={p.key} className={menuItem}>
                 <span aria-hidden className="size-2.5 flex-none rounded-[3px]" style={{ background: p.color }} />
                 <span className="flex-1 truncate">{p.name}</span>
-                <span className="font-mono text-xs text-fg-tertiary">{p.key}</span>
+                <span className="font-mono text-12 text-fg-tertiary">{p.key}</span>
                 <span className="grid w-3.5 place-items-center">
                   <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
                 </span>

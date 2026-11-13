@@ -63,7 +63,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={cx(
               "whitespace-nowrap rounded-[5px]",
-              layout === "column" ? "grid size-[30px] place-items-center" : small ? "h-6 px-[9px] text-xs" : "h-[26px] px-[11px] text-[12.5px]",
+              layout === "column" ? "grid size-[30px] place-items-center" : small ? "h-6 px-[9px] text-12" : "h-[26px] px-[11px] text-13",
               layout === "fill" && "flex-1",
               on ? "bg-segment-on font-medium text-fg" : "text-fg-secondary hover:text-fg",
             )}
@@ -94,7 +94,7 @@ export function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="inline-flex items-center gap-2 text-[12.5px] text-fg-secondary disabled:opacity-50"
+      className="inline-flex items-center gap-2 text-13 text-fg-secondary disabled:opacity-50"
     >
       <span className={cx("relative h-4 w-7 flex-none rounded-[8px] transition-colors", checked ? "bg-accent" : "bg-border-float")}>
         <span
@@ -127,13 +127,13 @@ export function Tabs({
   const { refs, onKeyDown } = useRovingKeys(items.length, current, (i) => onChange?.(items[i].key));
   const cls = (on: boolean) =>
     cx(
-      "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-[11px] text-[12.5px]",
+      "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-[11px] text-13",
       on ? "border-border-float bg-selected font-medium text-fg" : "border-transparent text-fg-secondary hover:bg-hover hover:text-fg",
     );
   const inner = (t: TabItem) => (
     <>
       {t.label}
-      {t.count != null && <span className="font-mono text-[11px] text-fg-tertiary">{t.count}</span>}
+      {t.count != null && <span className="font-mono text-11 text-fg-tertiary">{t.count}</span>}
     </>
   );
 

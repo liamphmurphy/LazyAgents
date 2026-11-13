@@ -72,14 +72,14 @@ export function BoardScreen() {
       {!compact && <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={boardFilters} />}
       <TicketsLayoutBar layout="board" />
       {compact && boardFilters && <ChipScroller label="Board filters">{boardFilters}</ChipScroller>}
-      {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-sm">
+      {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-14">
         <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
         <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
       </nav>}
       {!project ? <ProjectScopeState base="/tickets" scope={scope} />
         : map ? <div className="p-5"><DependencyMap key={JSON.stringify([project.key, filters])} project={project.key} epic={filters.epic} assignee={filters.assignee} includeCanceled={filters.include_canceled} onOpen={setTicket} /></div>
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} blockedOnly={blockedOnly} onOpen={setTicket} />}
-      {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
+      {ticketKey && loadFailed && <div role="alert" className="mx-5 mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-14">
         <span>Couldn&apos;t open {ticketKey}: {editor.error.message}</span>
         <button type="button" aria-label="Dismiss ticket error" onClick={() => setTicket()}>×</button>
       </div>}
@@ -94,10 +94,10 @@ function EpicHeader({ summary }: { summary: NonNullable<Board["epic"]> }) {
   return (
     <section aria-label="Epic summary" className="mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-[15px] font-semibold">{epic.name}</h1>
-        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">{{ on_track: "On track", at_risk: "At risk", off_track: "Off track" }[epic.health]}</span>
+        <h1 className="text-15 font-semibold">{epic.name}</h1>
+        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-12 text-accent">{{ on_track: "On track", at_risk: "At risk", off_track: "Off track" }[epic.health]}</span>
       </div>
-      {summary.objective && <p className="text-xs text-fg-secondary">{summary.objective}</p>}
+      {summary.objective && <p className="text-12 text-fg-secondary">{summary.objective}</p>}
       <EpicCompletion summary={summary} />
     </section>
   );
@@ -132,20 +132,20 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
   const board = moved && (blockedOnly ? onlyBlocked(moved) : moved);
   return (
     <div className="flex min-h-0 flex-1 flex-col p-5 max-sm:p-3">
-      {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
+      {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-14">
         <span>{moves.error}</span><button type="button" aria-label="Dismiss move error" onClick={moves.dismissError}>×</button>
       </div>}
       {moves.conflict && <ConflictToast {...moves.conflict} onDismiss={moves.dismissConflict} />}
       <p role="status" className="sr-only">{moves.notice ?? (Object.keys(moves.pending).length ? "Moving ticket…" : "")}</p>
-      {query.isPending && <p role="status" className="text-sm text-fg-secondary">Loading board…</p>}
-      {query.isError && <div role="alert" className="mb-4 text-sm">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
+      {query.isPending && <p role="status" className="text-14 text-fg-secondary">Loading board…</p>}
+      {query.isError && <div role="alert" className="mb-4 text-14">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
       {board?.epic && <EpicHeader summary={board.epic} />}
       {board && compact && <div ref={pager} role="group" aria-label="Status pager" className="-mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none]">
         {statuses.map((status, i) => {
           const column = board.columns.find((c) => c.status === status);
           return <button key={status} type="button" aria-current={i === page || undefined} onClick={() => showColumn(i)}
-            className={cx("flex h-[32px] flex-none items-center gap-1.5 rounded-full border px-3 text-[13px]", i === page ? "border-border-float bg-selected font-medium text-fg" : "border-border-strong text-fg-secondary")}>
-            <StatusGlyph state={status} label={false} />{STATUS_NAME[status]}<span className="font-mono text-[11px] text-fg-tertiary">{column?.count ?? 0}</span>
+            className={cx("flex h-[32px] flex-none items-center gap-1.5 rounded-full border px-3 text-13", i === page ? "border-border-float bg-selected font-medium text-fg" : "border-border-strong text-fg-secondary")}>
+            <StatusGlyph state={status} label={false} />{STATUS_NAME[status]}<span className="font-mono text-11 text-fg-tertiary">{column?.count ?? 0}</span>
           </button>;
         })}
       </div>}
@@ -167,7 +167,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
               if (card && card.status !== status) landing.current = card.key;
               if (card) void moves.move(card, status);
             }}>
-            <header className="mb-3 flex items-center gap-2 px-1 pt-1 text-xs">
+            <header className="mb-3 flex items-center gap-2 px-1 pt-1 text-12">
               <StatusGlyph state={status} label={false} /><h2 className="font-semibold">{STATUS_NAME[status]}</h2>
               <span className="ml-auto whitespace-nowrap text-fg-tertiary">{column?.count ?? 0} · {column?.points ?? 0} pts</span>
             </header>
@@ -176,8 +176,8 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
                 onMove={(target) => void moves.move(card, target)}
                 onDragStart={() => { dragging.current = card.key; }}
                 onDragEnd={() => { dragging.current = null; setOver(undefined); }} />)}
-              {!column?.cards.length && <p className="p-1 text-xs text-fg-tertiary">No tickets</p>}
-              {column?.truncated && <p className="px-1 py-2 text-xs text-fg-tertiary">Showing {column.cards.length} most recent of {column.count}</p>}
+              {!column?.cards.length && <p className="p-1 text-12 text-fg-tertiary">No tickets</p>}
+              {column?.truncated && <p className="px-1 py-2 text-12 text-fg-tertiary">Showing {column.cards.length} most recent of {column.count}</p>}
             </div>
           </section>;
         })}
@@ -192,12 +192,12 @@ function ConflictToast({ ticket, message, onDismiss }: { ticket: string; message
     const timer = setTimeout(onDismiss, 6000);
     return () => clearTimeout(timer);
   }, [ticket, message, onDismiss]);
-  return <div role="alert" aria-label="Move conflict" className="motion-rise fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-sm shadow-lg">
+  return <div role="alert" aria-label="Move conflict" className="motion-rise fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-14 shadow-lg">
     <div>
       <p className="font-semibold">{ticket} changed elsewhere</p>
-      <p className="text-xs text-fg-secondary">Board refreshed. Review it and try again. ({message})</p>
+      <p className="text-12 text-fg-secondary">Board refreshed. Review it and try again. ({message})</p>
     </div>
-    <button type="button" aria-label="Dismiss move conflict" onClick={onDismiss} className="text-base leading-none">×</button>
+    <button type="button" aria-label="Dismiss move conflict" onClick={onDismiss} className="text-16 leading-none">×</button>
   </div>;
 }
 
@@ -217,24 +217,24 @@ function TicketCard({ card, needs, showEpic, statuses, pending, onOpen, onMove, 
       if (e.key === "Enter") { e.preventDefault(); onOpen(); } else if (e.key === " ") { e.preventDefault(); setMenu(true); }
     } }}
     className={cx("rounded-lg border p-3 outline-offset-2 transition-[opacity,scale] duration-150", needs ? "border-state-human/60 bg-surface-raised shadow-sm" : "border-border bg-surface", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
-    <div className="mb-1.5 flex items-center gap-2 text-[11px]">
+    <div className="mb-1.5 flex items-center gap-2 text-11">
       <StatusGlyph state={card.status} />
       <Link href={href} onClick={open} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>
       {card.priority !== "none" && <PriorityGlyph priority={card.priority} />}
       <span className="sr-only">{PRIORITY_NAME[card.priority]}</span>
       <span className="ml-auto flex-none"><AssigneeAvatar assignee={card.assignee} /></span>
     </div>
-    <Link href={href} onClick={open} className="mb-1.5 block text-[13px] font-medium leading-snug hover:underline">{card.title}</Link>
-    <StateText t={card} needs={needs} className="mb-2 block text-[12px]" />
-    <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
+    <Link href={href} onClick={open} className="mb-1.5 block text-13 font-medium leading-snug hover:underline">{card.title}</Link>
+    <StateText t={card} needs={needs} className="mb-2 block text-12" />
+    <div className="flex flex-wrap items-center gap-2 text-11 text-fg-secondary">
       {showEpic && <EpicChip epic={card.epic} />}
       <span className={cx("font-mono", card.estimate_points == null && "text-fg-tertiary")}>{card.estimate_points == null ? "unestimated" : `${card.estimate_points} pt`}</span>
       <span className="font-mono text-fg-tertiary" aria-label={`${card.criteria_done} of ${card.criteria_total} criteria met`}>{card.criteria_done}/{card.criteria_total}</span>
-      {needs && <Link href={needs.href} className="inline-flex h-[24px] items-center rounded-md border border-pill-human-bg px-2 text-[12px] font-medium text-pill-human-fg hover:bg-pill-human-bg" aria-label={`Open what ${card.key} needs`}>Open</Link>}
+      {needs && <Link href={needs.href} className="inline-flex h-[24px] items-center rounded-md border border-pill-human-bg px-2 text-12 font-medium text-pill-human-fg hover:bg-pill-human-bg" aria-label={`Open what ${card.key} needs`}>Open</Link>}
       <DropdownMenu.Root open={menu} onOpenChange={setMenu}>
-        <DropdownMenu.Trigger asChild><button type="button" disabled={pending} aria-label={`Move ${card.key} to…`} className="ml-auto rounded px-2 py-0.5 text-base leading-none hover:bg-hover disabled:opacity-50">⋯</button></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger asChild><button type="button" disabled={pending} aria-label={`Move ${card.key} to…`} className="ml-auto rounded px-2 py-0.5 text-16 leading-none hover:bg-hover disabled:opacity-50">⋯</button></DropdownMenu.Trigger>
         <DropdownMenu.Portal><DropdownMenu.Content aria-label={`Move ${card.key}`} align="end" sideOffset={4} className={cx(floatPanel, "w-44")} onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu.Label className="px-2 py-1 text-[11px] uppercase text-fg-tertiary">Move to…</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-2 py-1 text-11 uppercase text-fg-tertiary">Move to…</DropdownMenu.Label>
           {statuses.map((status) => <DropdownMenu.Item key={status} disabled={status === card.status || pending} onSelect={() => onMove(status)} className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50">
             <StatusGlyph state={status} label={false} />{STATUS_NAME[status]}{status === card.status && <span className="ml-auto">✓</span>}
           </DropdownMenu.Item>)}

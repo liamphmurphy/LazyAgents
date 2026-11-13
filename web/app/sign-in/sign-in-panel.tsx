@@ -63,7 +63,7 @@ export function SignInPanel({ linkFailed }: { linkFailed: boolean }) {
       </EmptyState>
       <OwnerCredentialsForm action={settingUp ? "setup" : "login"} submitLabel={settingUp ? "Create sign-in" : "Sign in"} autoFocus onDone={enterApp} />
       {!settingUp && (
-        <p className="text-center text-xs text-fg-tertiary">
+        <p className="text-center text-12 text-fg-tertiary">
           Forgot it? Run <code className="font-mono">make signin</code> where Vesper runs for a one-time link.
         </p>
       )}

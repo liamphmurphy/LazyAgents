@@ -13,7 +13,7 @@ const tone = (t: PillTone) => `bg-pill-${t}-bg text-pill-${t}-fg`;
 /** Status pill: full pill, 24px, 6px leading dot ("Running", "On track"). */
 export function Pill({ tone: t, children, dot = true }: { tone: PillTone; children: ReactNode; dot?: boolean }) {
   return (
-    <span className={cx("inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] text-xs font-medium", tone(t))}>
+    <span className={cx("inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] text-12 font-medium", tone(t))}>
       {dot && <span aria-hidden className="size-1.5 rounded-full bg-current" />}
       {children}
     </span>
@@ -23,14 +23,14 @@ export function Pill({ tone: t, children, dot = true }: { tone: PillTone; childr
 /** Compact pill used inside cards. */
 export function SmallPill({ tone: t, children }: { tone: PillTone; children: ReactNode }) {
   return (
-    <span className={cx("flex-none whitespace-nowrap rounded-[10px] px-2 py-0.5 text-[11.5px] font-medium", tone(t))}>{children}</span>
+    <span className={cx("flex-none whitespace-nowrap rounded-[10px] px-2 py-0.5 text-12 font-medium", tone(t))}>{children}</span>
   );
 }
 
 /** Inline flag on rows: "Needs approval", "Blocked", "PR #482". Radius 5. */
 export function Flag({ tone: t, children }: { tone: PillTone; children: ReactNode }) {
   return (
-    <span className={cx("flex-none whitespace-nowrap rounded-[5px] px-[7px] py-px text-[11.5px] font-medium", tone(t))}>{children}</span>
+    <span className={cx("flex-none whitespace-nowrap rounded-[5px] px-[7px] py-px text-12 font-medium", tone(t))}>{children}</span>
   );
 }
 
@@ -39,7 +39,7 @@ export function MonoChip({ children, variant = "fill" }: { children: ReactNode; 
   return (
     <span
       className={cx(
-        "whitespace-nowrap rounded-[5px] px-[7px] py-0.5 font-mono text-[11px]",
+        "whitespace-nowrap rounded-[5px] px-[7px] py-0.5 font-mono text-11",
         variant === "fill" ? "bg-selected text-fg-2" : "border border-track text-fg-tertiary",
       )}
     >
@@ -65,7 +65,7 @@ export function DocTypeTag({ type, className }: { type: DocType; className?: str
 
 export function LabelChip({ name, color }: { name: string; color: string }) {
   return (
-    <span className="inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full border border-border-strong px-2 text-[11.5px] text-fg-secondary">
+    <span className="inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full border border-border-strong px-2 text-12 text-fg-secondary">
       <span aria-hidden className="size-1.5 rounded-full" style={{ background: color }} />
       {name}
     </span>
@@ -82,7 +82,7 @@ export function ScopeMode({ mode }: { mode: ScopeModeValue }) {
     denied: { dot: "blocked" as const, label: "Denied", cls: "text-pill-blocked-fg" },
   }[mode];
   return (
-    <span className={cx("inline-flex items-center gap-2 whitespace-nowrap text-[12.5px]", m.cls)}>
+    <span className={cx("inline-flex items-center gap-2 whitespace-nowrap text-13", m.cls)}>
       <Dot tone={m.dot} />
       {m.label}
     </span>

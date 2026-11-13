@@ -80,32 +80,32 @@ function SaveViewForm({ query, onSaved }: { query: string; onSaved: () => void }
   return (
           <form onSubmit={submit} className="flex flex-col gap-3">
             <Dialog.Title className="type-heading">Save view</Dialog.Title>
-            <label className="flex flex-col gap-1.5 text-xs text-fg-secondary">
+            <label className="flex flex-col gap-1.5 text-12 text-fg-secondary">
               Name
               <input
                 autoFocus
                 value={name}
                 maxLength={80}
                 onChange={(e) => { setName(e.target.value); create.reset(); }}
-                className="h-[30px] rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg outline-none focus:border-accent"
+                className="h-[30px] rounded-md border border-border-strong bg-surface px-2.5 text-13 text-fg outline-none focus:border-accent"
               />
             </label>
-            <p id="save-view-desc" className="text-xs text-fg-tertiary">Saves: {describeView(q)}</p>
+            <p id="save-view-desc" className="text-12 text-fg-tertiary">Saves: {describeView(q)}</p>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-fg-tertiary">Suggested</span>
+              <span className="text-12 text-fg-tertiary">Suggested</span>
               {SUGGESTED_VIEWS.map((s) => (
                 <button
                   key={s.name}
                   type="button"
                   title={s.hint}
                   onClick={() => { setName(s.name); setQ(s.query); create.reset(); }}
-                  className="h-[22px] rounded-full border border-border-strong px-2.5 text-[11.5px] text-fg-secondary hover:bg-hover"
+                  className="h-[22px] rounded-full border border-border-strong px-2.5 text-12 text-fg-secondary hover:bg-hover"
                 >
                   + {s.name}
                 </button>
               ))}
             </div>
-            {create.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}
+            {create.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(create.error)}</p>}
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>
                 <Button variant="ghost">Cancel</Button>
@@ -154,7 +154,7 @@ export function SavedViewMenu({
         >
           <DropdownMenu.Item className={menuItem} onSelect={() => { renaming.current = true; }}>
             Rename
-            <span className="ml-auto text-[11px] text-fg-tertiary">F2</span>
+            <span className="ml-auto text-11 text-fg-tertiary">F2</span>
           </DropdownMenu.Item>
           <DropdownMenu.Item className={menuItem} onSelect={onSaveAs}>Save as new view…</DropdownMenu.Item>
           <DropdownMenu.Item
@@ -210,9 +210,9 @@ function RenameInput({ view, onDone }: { view: SavedView; onDone: () => void }) 
           if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onDone(); }
         }}
         onBlur={() => !update.isPending && !update.isError && onDone()}
-        className="h-[26px] rounded-[5px] border border-accent bg-surface px-2 text-[12.5px] text-fg outline-none"
+        className="h-[26px] rounded-[5px] border border-accent bg-surface px-2 text-13 text-fg outline-none"
       />
-      {update.isError && <span role="alert" className="px-1 text-[11.5px] text-pill-blocked-fg">{errorText(update.error)}</span>}
+      {update.isError && <span role="alert" className="px-1 text-12 text-pill-blocked-fg">{errorText(update.error)}</span>}
     </div>
   );
 }
@@ -237,7 +237,7 @@ export function SavedViewTabs({ project }: { project?: string }) {
               href={savedViewHref(v, project)}
               aria-current={active === v.id ? "page" : undefined}
               onKeyDown={(e) => { if (e.key === "F2") { e.preventDefault(); setRenaming(v.id); } }}
-              className={cx("flex min-w-0 max-w-[180px] items-center gap-1.5 pl-2 pr-1 text-[12.5px]", active === v.id ? "font-medium text-fg" : "text-fg-secondary hover:text-fg")}
+              className={cx("flex min-w-0 max-w-[180px] items-center gap-1.5 pl-2 pr-1 text-13", active === v.id ? "font-medium text-fg" : "text-fg-secondary hover:text-fg")}
             >
               <Bookmark on={active === v.id} className={active === v.id ? "text-accent" : "text-fg-tertiary"} />
               <span className="truncate">{v.name}</span>
@@ -251,7 +251,7 @@ export function SavedViewTabs({ project }: { project?: string }) {
       <button
         type="button"
         onClick={() => setSaving(current)}
-        className="flex h-7 items-center gap-1.5 rounded-md px-2 text-left text-xs text-fg-tertiary hover:bg-hover hover:text-fg"
+        className="flex h-7 items-center gap-1.5 rounded-md px-2 text-left text-12 text-fg-tertiary hover:bg-hover hover:text-fg"
       >
         <Icon name="plus" size={12} />
         Save view
@@ -291,14 +291,14 @@ export function SavedViewHeader({ view }: { view: SavedView }) {
       {renaming ? (
         <div className="w-60"><RenameInput view={view} onDone={() => setRenaming(false)} /></div>
       ) : (
-        <h2 className="text-sm font-semibold">{view.name}</h2>
+        <h2 className="text-14 font-semibold">{view.name}</h2>
       )}
-      {edited && <span className="rounded-full bg-border-strong px-2 py-px text-[11px] text-fg-secondary">Edited</span>}
-      <span className="min-w-0 flex-1 truncate text-xs text-fg-tertiary">
+      {edited && <span className="rounded-full bg-border-strong px-2 py-px text-11 text-fg-secondary">Edited</span>}
+      <span className="min-w-0 flex-1 truncate text-12 text-fg-tertiary">
         {describeView(now)}
         {edited && ` · saved as ${describeView(saved)}`}
       </span>
-      {update.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{errorText(update.error)}</span>}
+      {update.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{errorText(update.error)}</span>}
       {edited && (
         <>
           <Button variant="ghost" className="h-[26px]" onClick={() => router.replace(savedViewHref(view, search.get("project")))}>

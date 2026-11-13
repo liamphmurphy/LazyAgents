@@ -15,8 +15,8 @@ import { SecretsList, useChatSecrets } from "./secrets";
 
 type Chat = Schemas["ChatSession"];
 
-const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover data-[state=open]:bg-hover data-[disabled]:opacity-50";
-const value = "max-w-[55%] truncate text-xs text-fg-tertiary";
+const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-13 outline-none data-[highlighted]:bg-hover data-[state=open]:bg-hover data-[disabled]:opacity-50";
+const value = "max-w-[55%] truncate text-12 text-fg-tertiary";
 const sep = "my-1 h-px bg-border-strong";
 const iconButton = "grid size-7 flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg";
 
@@ -62,7 +62,7 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
         <button type="button" aria-label="Cancel rename" className={iconButton} onClick={() => setEditing(false)}>
           <Icon name="x" size={16} />
         </button>
-        {update.isError && <span role="alert" className="truncate text-xs text-pill-blocked-fg">Couldn’t rename. Try again.</span>}
+        {update.isError && <span role="alert" className="truncate text-12 text-pill-blocked-fg">Couldn’t rename. Try again.</span>}
       </form>
     );
   }
@@ -71,7 +71,7 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
     <div className="flex min-w-0 items-center gap-1.5">
       <DropdownMenu.Root>
         {/* The heading holds the button (not the other way round) so it stays a heading named by the title. */}
-        <h1 className="min-w-0 text-[14.5px] font-semibold">
+        <h1 className="min-w-0 text-14 font-semibold">
           <DropdownMenu.Trigger asChild>
             <button
               type="button"
@@ -137,7 +137,7 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
               >
                 <Icon name="folder" size={14} />
                 <span className="flex-none">Workspace folder</span>
-                <span className="min-w-0 flex-1 truncate text-right font-mono text-[11.5px] text-fg-tertiary" dir="rtl">
+                <span className="min-w-0 flex-1 truncate text-right font-mono text-12 text-fg-tertiary" dir="rtl">
                   {/* rtl keeps the run's own folder visible when the path truncates */}
                   <bdi>{c.workspace_path}</bdi>
                 </span>
@@ -168,10 +168,10 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
             {group && (
               <>
                 <DropdownMenu.Separator className={sep} />
-                <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-xs font-medium text-fg-tertiary">Participants</DropdownMenu.Label>
+                <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-12 font-medium text-fg-tertiary">Participants</DropdownMenu.Label>
                 <div data-testid="chat-participants" className="flex flex-col">
                   {participants.map((p) => (
-                    <div key={p.id ?? p.name} className="flex h-8 items-center gap-2.5 px-2 text-[13px]">
+                    <div key={p.id ?? p.name} className="flex h-8 items-center gap-2.5 px-2 text-13">
                       <PersonaAvatar persona={p} size={18} />
                       <PersonaName persona={p} />
                     </div>
@@ -204,7 +204,7 @@ function StatusIcon({ icon, label, className }: { icon: IconName; label: string;
         </span>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content side="bottom" sideOffset={6} className={cx(floatPanel, "max-w-[280px] px-2.5 py-1.5 text-xs")}>
+        <Tooltip.Content side="bottom" sideOffset={6} className={cx(floatPanel, "max-w-[280px] px-2.5 py-1.5 text-12")}>
           {label}
         </Tooltip.Content>
       </Tooltip.Portal>

@@ -27,14 +27,14 @@ export function RestoreChat({
         icon={compact ? undefined : "refresh"}
         aria-label={`Restore ${chatTitle(chat)}`}
         // cx doesn't merge Tailwind classes, so the compact size overrides with !important.
-        className={compact ? "!h-6 !px-2 !text-xs" : undefined}
+        className={compact ? "!h-6 !px-2 !text-12" : undefined}
         disabled={update.isPending}
         onClick={() => update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, archived: false } }).then(onRestored, () => undefined)}
       >
         Restore
       </Button>
       {update.isError && (
-        <span role="alert" className="text-xs text-pill-blocked-fg">
+        <span role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(update.error)}
         </span>
       )}

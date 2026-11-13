@@ -66,7 +66,7 @@ export function Dependencies({ ticket: t }: { ticket: Ticket }) {
         onRemove={(key) => change.mutate({ list: "blocks", op: "remove", key })}
       />
       {change.isError && (
-        <p role="alert" className="px-2 text-xs text-pill-blocked-fg">
+        <p role="alert" className="px-2 text-12 text-pill-blocked-fg">
           {change.error.message}
         </p>
       )}
@@ -112,26 +112,26 @@ function DepList({
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-16 flex-col gap-1.5">
       <div className="flex items-center justify-between px-2">
-        <h2 id={`${id}-title`} className="text-[12.5px] text-fg-tertiary">
+        <h2 id={`${id}-title`} className="text-13 text-fg-tertiary">
           {title}
           {items.length > 0 && <span className="ml-1.5 font-mono">{items.length}</span>}
         </h2>
-        <Button variant="ghost" icon="plus" disabled={disabled} title={disabledReason} aria-expanded={adding} onClick={() => setAdding((v) => !v)} className="h-6 px-1.5 text-xs">
+        <Button variant="ghost" icon="plus" disabled={disabled} title={disabledReason} aria-expanded={adding} onClick={() => setAdding((v) => !v)} className="h-6 px-1.5 text-12">
           Add<span className="sr-only"> to {title}</span>
         </Button>
       </div>
-      {items.length === 0 && !adding && <p className="px-2 text-xs text-fg-tertiary">{title === "Blocks" ? "Doesn’t block other tickets." : "No blockers."}</p>}
+      {items.length === 0 && !adding && <p className="px-2 text-12 text-fg-tertiary">{title === "Blocks" ? "Doesn’t block other tickets." : "No blockers."}</p>}
       <ul className="flex flex-col">
         {items.map((d) => (
           <li key={d.key} className="group flex min-h-8 items-center gap-2 rounded-md px-2 hover:bg-hover">
             <StatusGlyph state={d.status} size={12} surface="var(--bg-panel)" label={false} />
-            <Link href={`/tickets/${d.key}`} className="flex min-w-0 flex-1 items-baseline gap-2 text-[13px]">
-              <span className="flex-none font-mono text-xs text-fg-secondary">{d.key}</span>
+            <Link href={`/tickets/${d.key}`} className="flex min-w-0 flex-1 items-baseline gap-2 text-13">
+              <span className="flex-none font-mono text-12 text-fg-secondary">{d.key}</span>
               <span className="truncate text-fg-2" title={d.title}>
                 {d.title}
               </span>
             </Link>
-            <span className="flex-none text-[11.5px] text-fg-tertiary">{STATUS_NAME[d.status]}</span>
+            <span className="flex-none text-12 text-fg-tertiary">{STATUS_NAME[d.status]}</span>
             <IconButton
               icon="x"
               size={22}
@@ -161,14 +161,14 @@ function DepList({
             }}
           />
           {shown.map((c) => (
-            <button key={c.key} type="button" onClick={() => add(c.key)} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-hover">
+            <button key={c.key} type="button" onClick={() => add(c.key)} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-13 hover:bg-hover">
               <StatusGlyph state={c.status} size={12} label={false} />
-              <span className="font-mono text-xs text-fg-tertiary">{c.key}</span>
+              <span className="font-mono text-12 text-fg-tertiary">{c.key}</span>
               <span className="truncate">{c.title}</span>
             </button>
           ))}
-          {q.length >= 2 && candidates.isSuccess && shown.length === 0 && !KEY.test(q) && <p className="px-2 text-xs text-fg-tertiary">No tickets match “{q}”.</p>}
-          <p className="text-[11.5px] text-fg-tertiary">A dispatched ticket queues until its blockers are Done.</p>
+          {q.length >= 2 && candidates.isSuccess && shown.length === 0 && !KEY.test(q) && <p className="px-2 text-12 text-fg-tertiary">No tickets match “{q}”.</p>}
+          <p className="text-12 text-fg-tertiary">A dispatched ticket queues until its blockers are Done.</p>
         </div>
       )}
     </section>

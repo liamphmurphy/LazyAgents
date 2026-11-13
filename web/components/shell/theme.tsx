@@ -36,6 +36,8 @@ function apply() {
   }
   root.dataset.palette = printing ? "dusk" : settings.palette;
   root.dataset.harnessActivity = settings.showHarnessActivity === false ? "hidden" : "visible";
+  // Print views keep the default size so paper looks the same whoever prints it.
+  root.dataset.textSize = printing ? "default" : settings.textSize ?? "default";
 }
 
 function notify() { listeners.forEach((l) => l()); }

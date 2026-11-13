@@ -180,7 +180,7 @@ export function DocScreen({ id }: { id: string }) {
       </span>
     ),
     presence: doc.data && (
-      <span data-testid="doc-presence" className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
+      <span data-testid="doc-presence" className="flex items-center gap-1.5 text-12 text-fg-tertiary">
         <PersonaAvatar persona={look} size={22} className={cx(live && "animate-pulse ring-2 ring-[#3FC1B0] motion-reduce:animate-none")} />
         {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
       </span>
@@ -209,7 +209,7 @@ export function DocScreen({ id }: { id: string }) {
       )}
       <div ref={page} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {notice && (
-          <p role="alert" className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-pill-blocked-fg">
+          <p role="alert" className="mx-auto mt-3 max-w-[720px] px-8 text-12 text-pill-blocked-fg">
             {notice}
           </p>
         )}
@@ -249,7 +249,7 @@ export function DocScreen({ id }: { id: string }) {
           />
         ) : (
           <div className="flex min-h-full flex-col bg-surface-sunken">
-            <p className="mx-auto mt-3 max-w-[720px] px-8 text-xs text-fg-tertiary">
+            <p className="mx-auto mt-3 max-w-[720px] px-8 text-12 text-fg-tertiary">
               This document has HTML or footnotes the editor can&apos;t keep, so it opens as Markdown. Edit it under Edit.
             </p>
             <CanvasView chatId={chatId} canvasId={id} live={live} readOnly={readOnly} agent={persona} page />
@@ -280,7 +280,7 @@ export function DocScreen({ id }: { id: string }) {
     outlineOpen && c ? (
       <nav aria-label="Outline" className="flex min-h-0 flex-1 flex-col gap-1 p-3">
         <div className="flex items-center justify-between px-1 pb-1">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Outline</span>
+          <span className="text-11 font-medium uppercase tracking-wide text-fg-tertiary">Outline</span>
           <button type="button" aria-label="Hide outline" title="Hide outline" onClick={() => setOutlineOpen(false)} className="grid size-6 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
             ×
           </button>
@@ -293,7 +293,7 @@ export function DocScreen({ id }: { id: string }) {
                   type="button"
                   onClick={() => jumpTo(i)}
                   style={{ paddingLeft: `${8 + (h.level - Math.min(...outline.map((x) => x.level))) * 12}px` }}
-                  className={cx("w-full truncate rounded-md py-1 pr-2 text-left text-[13px] hover:bg-hover", h.level === 1 ? "text-fg" : "text-fg-secondary")}
+                  className={cx("w-full truncate rounded-md py-1 pr-2 text-left text-13 hover:bg-hover", h.level === 1 ? "text-fg" : "text-fg-secondary")}
                 >
                   {h.text}
                 </button>
@@ -301,7 +301,7 @@ export function DocScreen({ id }: { id: string }) {
             ))}
           </ol>
         ) : (
-          <p className="px-1 text-[12px] text-fg-tertiary">No headings yet.</p>
+          <p className="px-1 text-12 text-fg-tertiary">No headings yet.</p>
         )}
       </nav>
     ) : undefined;
@@ -327,7 +327,7 @@ export function DocScreen({ id }: { id: string }) {
       id: "review",
       label: "Review",
       icon: "check",
-      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{review.left}</span>,
+      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-11 text-pill-review-fg">{review.left}</span>,
       content: <DocReviewList review={review} persona={persona} busy={reviewBusy} error={reviewError} />,
     });
 
