@@ -390,3 +390,25 @@ test("a page's Links, Outline, Calendar and History are dock tabs beside Chat, a
   await page.goto("/knowledge");
   await expect(rail(page).getByRole("button", { name: "Open Links" })).toHaveCount(0);
 });
+
+test("the explorer pins pages to the top, caps long folders with + N more, and collapses every folder", async ({ page }) => {
+  const s = await install(page);
+  const folder = Array.from({ length: 12 }, (_, i) => ({ ...s.page, id: `99999999-9999-4999-8999-${String(i).padStart(12, "0")}`, title: `Creator ${String(i).padStart(2, "0")}`, path: `People/Creator ${String(i).padStart(2, "0")}` }));
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => json(route, { columns: [], rows: [s.page, ...folder], total: folder.length + 1, has_more: false }));
+  await page.goto("/knowledge");
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  await explorer.getByRole("button", { name: "People" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(8);
+  await explorer.getByRole("button", { name: "+ 4 more" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(12);
+
+  await explorer.getByRole("link", { name: "Reading list" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Pin to top" }).click();
+  await expect(explorer.getByRole("region", { name: "Pinned" }).getByRole("link", { name: "Reading list" })).toBeVisible();
+
+  await explorer.getByRole("button", { name: "Collapse all folders" }).click();
+  await expect(explorer.getByRole("link", { name: /Creator/ })).toHaveCount(0);
+  // Pins survive a reload.
+  await page.reload();
+  await expect(explorer.getByRole("region", { name: "Pinned" }).getByRole("link", { name: "Reading list" })).toBeVisible();
+});
