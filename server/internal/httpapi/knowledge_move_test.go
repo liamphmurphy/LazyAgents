@@ -120,3 +120,28 @@ func TestKnowledgeNetworkFollowsAudience(t *testing.T) {
 		t.Fatalf("agent link missing: %s", withAgent)
 	}
 }
+
+// A page's chat can be one of the person's own chats, never someone else's.
+func TestAttachPageChatOnlyFromOwnChats(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := t.Context()
+	page := e.want("POST", "/knowledge/pages", map[string]any{"title": "Harbour", "body_md": "Notes."}, 200)
+	mine := e.newChat(nil)
+	got := e.want("PUT", "/knowledge/pages/"+page["id"].(string)+"/chat", map[string]any{"chat_id": mine["id"]}, 200)
+	if got["chat_id"] != mine["id"] {
+		t.Fatalf("chat not attached: %v", got["chat_id"])
+	}
+	other, err := e.q.CreateUser(ctx, store.CreateUserParams{WorkspaceID: e.me.WorkspaceID, Email: "other@example.com", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := e.q.GetChatSession(ctx, store.GetChatSessionParams{ID: uuid.MustParse(mine["id"].(string)), WorkspaceID: e.me.WorkspaceID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := e.q.CreateChatSession(ctx, store.CreateChatSessionParams{WorkspaceID: e.me.WorkspaceID, CreatedBy: other.ID, AgentID: own.AgentID, Title: "Theirs", Harness: "codex", Model: "test", Effort: "high"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.want("PUT", "/knowledge/pages/"+page["id"].(string)+"/chat", map[string]any{"chat_id": theirs.ID}, 404)
+}

@@ -82,6 +82,23 @@ paths:
                 paused: { type: boolean, description: "Persona writes are refused" }
       responses:
         "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/pages/{id}/chat:
+    parameters: [{ $ref: "#/components/parameters/PageID" }]
+    put:
+      tags: [knowledge-pages]
+      summary: Attach one of the person's chats to a page as its conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat_id]
+              properties:
+                chat_id: { type: string, format: uuid }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "404": { description: "No such page, or the chat isn't the person's" }
   /knowledge/pages/{id}/reviews/{version}/resolve:
     parameters:
       - { $ref: "#/components/parameters/PageID" }

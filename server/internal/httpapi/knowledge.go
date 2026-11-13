@@ -112,6 +112,29 @@ func (s *Server) knowledgeRoutes(mux *http.ServeMux) {
 		}
 		return s.knowledgePage(r.Context(), ws, id)
 	})
+	// A page's conversation: the person starts a chat from the page and it
+	// stays attached, so its persona reads and edits the page with them.
+	handle("PUT /api/v1/knowledge/pages/{id}/chat", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		id, err := knowledgeID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		var in struct {
+			ChatID uuid.UUID `json:"chat_id"`
+		}
+		if err = knowledgeJSON(r, &in); err != nil {
+			return nil, err
+		}
+		chat, err := s.Q.GetChatSession(r.Context(), store.GetChatSessionParams{ID: in.ChatID, WorkspaceID: ws})
+		if err != nil || chat.CreatedBy != u.ID {
+			return nil, apperr.ErrNotFound
+		}
+		if err = s.Q.SetPageChat(r.Context(), store.SetPageChatParams{ID: id, WorkspaceID: ws, Viewer: &u.ID, ChatID: &chat.ID}); err != nil {
+			return nil, err
+		}
+		return s.knowledgePage(r.Context(), ws, id)
+	})
 	handle("POST /api/v1/knowledge/pages/{id}/reviews/{version}/resolve", func(r *http.Request) (any, error) {
 		u, _, ws := me(r.Context())
 		id, err := knowledgeID(r, "id")
