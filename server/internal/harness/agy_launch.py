@@ -9,6 +9,7 @@ would write into a real person's home.
 """
 import json
 import os
+import shutil
 import sys
 import tempfile
 
@@ -54,6 +55,10 @@ def main():
         cfg = json.load(f)
     if cfg.get("install"):
         install(cfg)
+    # execvp's own error for a missing program names no file, which reads as a
+    # problem with the configuration above.
+    if shutil.which(program) is None:
+        raise RuntimeError(program + " isn't installed in the agent image; rebuild agent-base")
     os.execvp(program, [program, *args])
 
 
