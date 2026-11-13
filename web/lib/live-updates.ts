@@ -16,6 +16,9 @@ const prefixes: Record<string, string[]> = {
   project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
   inbox: ["inbox", "bootstrap"],
   chat: ["chats", "canvases", "videos", "dock"],
+  // A persona's patch on a design (applied with direct edit, or held as a suggestion) and its
+  // settings, mid-turn: chat.* only fires when the turn's messages land, which is too late.
+  design: ["canvases"],
   // A chat video's progress, copied every couple of seconds while it renders.
   video: ["videos"],
   // A chat's playground starting, resetting or stopping on the runner.
