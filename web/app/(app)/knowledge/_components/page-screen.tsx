@@ -7,7 +7,7 @@ import { useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
-import { fetchPages, useAttachChat, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Page } from "@/lib/api/knowledge-hooks";
+import { fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { floatPanel } from "@/components/domain/pickers";
@@ -54,12 +54,11 @@ export function PageScreen({ id }: { id: string }) {
 function Loaded({ page: p }: { page: Page }) {
   const router = useRouter();
   const save = useSavePage(p.id);
-  const attach = useAttachChat(p.id);
   const chat = useChat(p.chat_id ?? undefined).data;
   const running = chat?.state === "running";
   const persona = (chat?.speaker ?? chat?.persona)?.name ?? "Persona";
   const send = useSendChatMessage(p.chat_id ?? "");
-  const [tab, setTab] = useState<SideTab>(p.chat_id ? "chat" : "links");
+  const [tab, setTab] = useState<SideTab>("links");
   const [state, setState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
   const editor = useRef<DocEditorHandle>(null);
   const query = useSavedQuery(p.id, !!p.properties.query);
@@ -186,7 +185,7 @@ function Loaded({ page: p }: { page: Page }) {
           }
         />
       </div>
-      <PageSide page={p} tab={tab} onTab={setTab} persona={persona} onAttachChat={(chatId) => attach.mutate(chatId, { onSuccess: () => setTab("chat") })} />
+      <PageSide page={p} tab={tab} onTab={setTab} persona={persona} />
     </div>
   );
 }
