@@ -11,8 +11,8 @@ test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with uni
   const labels = NAV_GROUPS.map((g) => [g.label, g.items.map((i) => i.label)]);
   assert.deepEqual(labels, [
     ["Work", ["Runs", "Tickets", "Reports"]],
-    ["Apps", ["Docs", "Slides", "Designs", "Finance", "Library"]],
-    ["Tools", ["Workflows", "Scheduled", "Learn", "Wiki"]],
+    ["Apps", ["Knowledge", "Slides", "Designs", "Finance", "Library"]],
+    ["Tools", ["Workflows", "Scheduled", "Learn"]],
     ["You", ["Customization", "Settings"]],
   ]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
@@ -22,7 +22,7 @@ test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with uni
 });
 
 test("the Apps row is current on any page its flyout opens", () => {
-  for (const p of ["/apps/finance", "/library", "/workflows/1", "/scheduled", "/learn/2", "/wiki/agents/x"]) assert.equal(inAppsMenu(p), true, p);
+  for (const p of ["/apps/finance", "/library", "/workflows/1", "/scheduled", "/learn/2", "/knowledge/abc/the-old-harbour"]) assert.equal(inAppsMenu(p), true, p);
   for (const p of ["/", "/chat/1", "/inbox", "/tickets", "/customization"]) assert.equal(inAppsMenu(p), false, p);
 });
 

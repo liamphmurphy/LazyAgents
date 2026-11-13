@@ -29,9 +29,9 @@ export const WORK_ITEMS: NavItem[] = [
   { href: "/reports", label: "Reports", icon: "dollar" },
 ];
 
-/** Apps: a full page of their own; Docs, Slides, Designs and Finance have an Ask drawer, each backed by one of the person's spaces. */
+/** Apps: a full page of their own. Knowledge holds Docs and the wiki in one store; Slides, Designs and Finance have an Ask drawer, each backed by one of the person's spaces. */
 export const APP_ITEMS: NavItem[] = [
-  { href: "/apps/docs", label: "Docs", icon: "edit" },
+  { href: "/knowledge", label: "Knowledge", icon: "wiki", badge: "wiki" },
   { href: "/apps/slides", label: "Slides", icon: "slides" },
   { href: "/apps/designs", label: "Designs", icon: "designs" },
   { href: "/apps/finance", label: "Finance", icon: "dollar" },
@@ -43,7 +43,6 @@ export const TOOL_ITEMS: NavItem[] = [
   { href: "/workflows", label: "Workflows", icon: "graph" },
   { href: "/scheduled", label: "Scheduled", icon: "clock", badge: "scheduled" },
   { href: "/learn", label: "Learn", icon: "learn" },
-  { href: "/wiki", label: "Wiki", icon: "wiki", badge: "wiki" },
 ];
 
 export const FOOTER_ITEMS: NavItem[] = [

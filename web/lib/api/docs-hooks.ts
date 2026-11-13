@@ -9,30 +9,12 @@ export type Doc = Schemas["MyCanvas"];
 
 // Under ["canvases"], so a turn that edits a document refreshes the list (SSE chat.* invalidates it).
 const docKeys = {
-  list: ["canvases", "mine"] as const,
   one: (id: string) => ["canvases", "mine", id] as const,
 };
-
-/** Every document: text canvases from the Docs app and from any chat, most recently changed first. */
-export function useDocs() {
-  return useQuery({
-    queryKey: docKeys.list,
-    queryFn: () => unwrap(api.GET("/canvases")),
-    select: (d) => d.canvases.filter((c) => c.kind === "text"),
-  });
-}
 
 /** One document with the chat it lives in. */
 export function useDoc(id: string) {
   return useQuery({ queryKey: docKeys.one(id), queryFn: () => unwrap(api.GET("/canvases/{canvasId}", { params: { path: { canvasId: id } } })) });
-}
-
-export function useCreateDoc() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (title: string) => unwrap(api.POST("/docs", { body: { title } })),
-    onSettled: () => void qc.invalidateQueries({ queryKey: docKeys.list }),
-  });
 }
 
 /** Where a document prints from; the page opens the print dialog itself. */
