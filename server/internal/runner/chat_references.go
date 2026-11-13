@@ -95,9 +95,9 @@ func codexChatReferencePrompt(refs chatReferences) string {
 		". Whenever an image you make shows you or the person, view the matching file first and keep that likeness.)"
 }
 
-// viaCodexReferencePrompt tells a chat that asks Codex for images with
+// viaEngineReferencePrompt tells a chat that asks an image engine for images with
 // generate_image which references it may request; "" when there are none.
-func viaCodexReferencePrompt(refs map[string]store.LibraryItem) string {
+func viaEngineReferencePrompt(refs map[string]store.LibraryItem) string {
 	var have []string
 	for _, role := range referenceRoles {
 		if _, ok := refs[role]; ok {
@@ -111,7 +111,7 @@ func viaCodexReferencePrompt(refs map[string]store.LibraryItem) string {
 		". Pass \"persona\" whenever an image shows you and \"person\" whenever it shows the person, so their likeness is kept.)"
 }
 
-// imageStepReferencePrompt tells the Codex image step which attached image
+// imageStepReferencePrompt tells the image step which attached image
 // shows whom; "" when none were delivered.
 func imageStepReferencePrompt(refs chatReferences) string {
 	if len(refs.paths) == 0 {
@@ -164,5 +164,5 @@ func (r *Runner) chatTurnReferences(ctx context.Context, q *store.Queries, c run
 		r.Log.Warn("chat references", "run", c.run.ID, "err", err)
 		return nil, ""
 	}
-	return nil, viaCodexReferencePrompt(refs)
+	return nil, viaEngineReferencePrompt(refs)
 }

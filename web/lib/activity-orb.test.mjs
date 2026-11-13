@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, resetLabel, ringTone, sessionPercent, usageSub } from "./activity-orb.ts";
 
-const harness = (h, over = {}) => ({ harness: h, label: h === "codex" ? "Codex" : "Claude", running: 0, usage_available: false, windows: [], ...over });
+const harness = (h, over = {}) => ({ harness: h, label: { codex: "Codex", antigravity: "Antigravity" }[h] ?? "Claude", running: 0, usage_available: false, windows: [], ...over });
 const session = (used, resets_at) => ({ id: "five_hour", kind: "session", label: "Session", used_percent: used, resets_at });
 const weekly = (used) => ({ id: "seven_day", kind: "weekly", label: "Weekly", used_percent: used });
 const chat = (id, state, unread = 0) => ({ id, state, unread });
@@ -12,7 +12,10 @@ test("the glyph follows which harnesses are working", () => {
   assert.equal(orbGlyph([harness("claude-code"), harness("codex")]), "idle");
   assert.equal(orbGlyph([harness("claude-code", { running: 2 }), harness("codex")]), "claude");
   assert.equal(orbGlyph([harness("claude-code"), harness("codex", { running: 1 })]), "codex");
-  assert.equal(orbGlyph([harness("claude-code", { running: 1 }), harness("codex", { running: 1 })]), "both");
+  assert.equal(orbGlyph([harness("claude-code", { running: 1 }), harness("codex", { running: 1 })]), "multi");
+  assert.equal(orbGlyph([harness("claude-code"), harness("codex"), harness("antigravity", { running: 1 })]), "antigravity");
+  assert.equal(orbGlyph([harness("claude-code", { running: 1 }), harness("codex"), harness("antigravity", { running: 2 })]), "multi");
+  assert.equal(orbGlyph([harness("claude-code", { running: 1 }), harness("codex"), harness("antigravity", { running: 1, limited_until: "2026-11-09T21:20:00Z" })]), "claude");
   // A limited harness's runs have moved off it.
   assert.equal(orbGlyph([harness("claude-code", { running: 1 }), harness("codex", { running: 1, limited_until: "2026-11-09T21:20:00Z" })]), "claude");
 });
@@ -76,4 +79,13 @@ test("usage lines", () => {
 test("accessible name", () => {
   assert.equal(orbLabel([], []), "Activity: nothing running");
   assert.equal(orbLabel(["VesperBot", "Nora"], [entry("a", chat("1", "needs_you")), entry("b", chat("2", "replied", 2))]), "Activity: VesperBot, Nora working, 1 need you, 2 unread");
+});
+
+test("Antigravity's ring has no allowance to read and says so, instead of looking unchecked", () => {
+  const agy = harness("antigravity", { usage_checked_at: "2026-11-09T18:00:00Z" });
+  assert.equal(sessionPercent(agy), null);
+  assert.equal(ringTone(agy), "ok");
+  assert.match(usageSub(agy, [agy]), /^Usage unknown/);
+  // Claude's wording is unchanged.
+  assert.equal(usageSub(harness("claude-code"), []), "Usage not checked yet");
 });

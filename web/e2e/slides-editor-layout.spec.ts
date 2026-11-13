@@ -11,6 +11,38 @@ const mod = process.platform === "darwin" ? "Meta" : "Control";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
+test("a long dock conversation scrolls inside the app at desktop and overlay widths", async ({ page }) => {
+  await install(page, [{ seq: 1, body: JSON.stringify(deckWith("Quarterly review")), author: "user" }]);
+  await page.route(/\/api\/v1\/chats\/[^/]+\/messages(\?|$)/, (route) => route.fulfill({
+    json: {
+      messages: Array.from({ length: 40 }, (_, i) => ({
+        id: `message-${i}`, seq: i + 1, role: i % 2 ? "assistant" : "user",
+        body_md: `Message ${i + 1}\n\n${"A detailed discussion of the quarterly slides. ".repeat(12)}`,
+        created_at: "2026-11-12T12:00:00Z",
+      })),
+      has_more: false,
+    },
+  }));
+  await page.reload();
+  const conversation = dock(page).getByRole("log", { name: "Conversation" });
+  await expect(conversation.getByText(/^Message 40$/)).toBeVisible();
+
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1440, height: 500 }, { width: 1000, height: 500 }]) {
+    await page.setViewportSize(viewport);
+    const panel = dock(page).locator("[data-dock-panel]");
+    await expect.poll(() => panel.evaluate((el) => el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(viewport.height);
+    const scroller = conversation.locator("..");
+    expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await scroller.evaluate((el) => { el.scrollTop = 0; });
+    await expect(conversation.getByText(/^Message 1$/)).toBeVisible();
+    await scroller.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await expect(conversation.getByText(/^Message 40$/)).toBeVisible();
+    await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: /Present/ })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(viewport.height);
+  }
+});
+
 test("the deck renders in the editor layout and its dock collapses and reopens", async ({ page }) => {
   await install(page, [{ seq: 1, body: JSON.stringify(deckWith("Quarterly review")), author: "user" }]);
 

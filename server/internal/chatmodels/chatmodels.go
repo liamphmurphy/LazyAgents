@@ -23,6 +23,10 @@ import (
 var KeySecret = map[string]string{
 	agentdef.HarnessClaudeCode: "harness:anthropic",
 	agentdef.HarnessCodex:      "harness:openai",
+	// Antigravity authenticates with a Gemini API key only. Google's terms
+	// bar a tool from extracting or storing the OAuth login `agy` keeps, so
+	// there is no plan login for it, unlike Claude Code and Codex.
+	agentdef.HarnessAntigravity: "harness:google",
 }
 
 type Model struct {
@@ -41,6 +45,8 @@ const EffortDefault = "default"
 
 // fallbackEfforts are what Claude Code and Codex models offer when discovery
 // can't say (provider APIs don't report effort levels; the local CLIs do).
+// Antigravity has none: `agy --effort` depends on the model and the Gemini
+// API doesn't say which, so its models show no effort control.
 var fallbackEfforts = map[string][]string{
 	agentdef.HarnessClaudeCode: agentdef.Efforts,
 	agentdef.HarnessCodex:      agentdef.Efforts,
@@ -68,10 +74,10 @@ type Harness struct {
 	Models            []Model
 }
 
-var labels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex"}
+var labels = map[string]string{agentdef.HarnessClaudeCode: "Claude Code", agentdef.HarnessCodex: "Codex", agentdef.HarnessAntigravity: "Antigravity"}
 
 // chatHarnesses are the harnesses a chat can use, in picker order.
-var chatHarnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex}
+var chatHarnesses = []string{agentdef.HarnessClaudeCode, agentdef.HarnessCodex, agentdef.HarnessAntigravity}
 
 // Catalog lists and validates chat selections.
 type Catalog struct {

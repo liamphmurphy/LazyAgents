@@ -5,7 +5,7 @@
 import type { IconName } from "@/components/ui/icon";
 import { repoShortName } from "./persona-ui.ts";
 
-export type ComposerOptionId = "context" | "attach" | "repository" | "persona" | "send-mode" | "research" | "temporary" | "model" | "project";
+export type ComposerOptionId = "context" | "attach" | "code" | "repository" | "persona" | "send-mode" | "research" | "temporary" | "model" | "project";
 
 /** How the control opens: a menu or popover of choices, a pressed/unpressed toggle, the file chooser, or a segmented choice. */
 export type ComposerOptionOpens = "menu" | "popover" | "toggle" | "files" | "segmented";
@@ -53,6 +53,7 @@ export function composerOptions(s: ComposerOptionsState): ComposerOption[] {
   const list: ComposerOption[] = [
     { id: "context", label: "Add context", icon: "plus", opens: "menu", place: "options" },
     { id: "attach", label: "Attach files", icon: "paperclip", opens: "files", place: "options" },
+    { id: "code", label: "Code or Markdown", icon: "code", opens: "popover", place: "options" },
   ];
   if (s.code) {
     const value = s.repo ? repoShortName(s.repo) : undefined;

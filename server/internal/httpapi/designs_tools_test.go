@@ -314,6 +314,20 @@ func TestDesignPatchTools(t *testing.T) {
 	if v["author_type"] != "agent" || !strings.Contains(v["body"].(string), `"name":"Heading"`) {
 		t.Fatalf("version: %v", v)
 	}
+
+	// The result names the nodes it touched, with the id minted for a node the persona
+	// left unnamed: the editor puts the persona's cursor on them, and the persona can edit them next.
+	add := map[string]any{"op": "add_sticky", "page": "p_flows", "x": 0, "y": 0, "text": "Check copy", "why": "A note to self"}
+	out = e.call(token, "design_patch", map[string]any{"canvas_id": id, "base_version": 3, "summary": "Note", "ops": []any{add, op("Title")}})
+	nodes, _ := out["nodes"].([]any)
+	if len(nodes) != 2 || nodes[1] != "n_cart_title" {
+		t.Fatalf("nodes: %v", out)
+	}
+	minted, _ := nodes[0].(string)
+	v = e.want("GET", "/designs/"+id+"/versions/4", nil, http.StatusOK)
+	if !strings.HasPrefix(minted, "n_") || !strings.Contains(v["body"].(string), `"id":"`+minted+`"`) {
+		t.Fatalf("minted %q isn't in the version", minted)
+	}
 }
 
 // Node-anchored comments: a person's through the chat canvas comment REST,

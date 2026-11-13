@@ -97,6 +97,12 @@ func (r *Runner) finishWorkflowImageStep(ctx context.Context, c runCtx, res harn
 		r.Log.Warn("generated image usage", "run", c.run.ID, "err", err)
 		return "Couldn't record this step's images."
 	}
+	if c.spec.Harness == agentdef.HarnessAntigravity && res.SessionID != "" {
+		// Antigravity's generator saves into its own folder; copy what it made.
+		if err := collectAntigravityImages(ctx, r.Backend, wsID(c.run), res.SessionID, res.Images); err != nil {
+			r.Log.Warn("collect generated images", "run", c.run.ID, "err", err)
+		}
+	}
 	files, _, err := r.Backend.ReadOutbox(ctx, wsID(c.run))
 	if err != nil {
 		r.Log.Warn("read workflow outbox", "run", c.run.ID, "err", err)

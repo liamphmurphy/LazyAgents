@@ -58,11 +58,11 @@ export function AppearanceSection() {
   return <Card>
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="font-medium">Mode</h3><p className="type-small text-fg-tertiary">System follows your OS setting. Palette is independent of mode.</p></div>
+        <div><h3 className="type-heading">Mode</h3><p className="type-small text-fg-tertiary">System follows your OS setting. Palette is independent of mode.</p></div>
         <ThemeSwitch />
       </div>
       <fieldset>
-        <legend className="mb-2 font-medium">Color palette</legend>
+        <legend className="type-heading mb-2">Color palette</legend>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           {[...PALETTES, { id: "custom", name: "Custom", description: "Your own colors", dark: paletteTokens({ ...settings, palette: "custom" }, "dark"), light: paletteTokens({ ...settings, palette: "custom" }, "light") }].map((p) => <label key={p.id} className={cx("flex cursor-pointer flex-col gap-2 rounded-lg border p-3", settings.palette === p.id ? "border-accent bg-selected" : "border-border hover:bg-hover")}>
             <span className="flex items-center gap-2"><input type="radio" aria-label={p.name} name="color-palette" value={p.id} checked={settings.palette === p.id} onChange={() => update({ ...settings, palette: p.id })} className="accent-accent" /><span className="text-[13px] font-medium">{p.name}</span></span>
@@ -102,18 +102,18 @@ export function AppearanceSection() {
         <p className="text-xs text-fg-tertiary">Editing the {editMode} variant. Switch Mode above to see it across the app. Hover states, tints, and diagram text follow your base colors unless overridden.</p>
         <PalettePreview colors={colors} />
         <div className="grid items-start gap-4 xl:grid-cols-[1fr_280px]">
-          <div className="flex flex-col gap-4">{GROUPS.map((g) => <fieldset key={g.label}><legend className="mb-2 text-sm font-medium">{g.label}</legend><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{g.keys.map(field)}</div></fieldset>)}
+          <div className="flex flex-col gap-4">{GROUPS.map((g) => <fieldset key={g.label}><legend className="type-heading mb-2">{g.label}</legend><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{g.keys.map(field)}</div></fieldset>)}
             <details><summary className="cursor-pointer text-sm font-medium">Advanced color overrides</summary><div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">{advanced.map(field)}</div></details>
           </div>
           <div className="order-first flex flex-col gap-3 rounded-lg border border-border bg-surface-raised p-3 xl:sticky xl:top-4 xl:order-last">
             <label className="flex flex-col gap-1 text-xs">Color to edit<select aria-label="Color to edit" value={activeKey} onChange={(e) => setActiveKey(e.target.value)} className="w-full rounded-md border border-border bg-surface p-1.5 text-fg">{[...GROUPS, { label: "Advanced overrides", keys: advanced }].map((g) => <optgroup key={g.label} label={g.label}>{g.keys.map((key) => <option key={key} value={key}>{title(key)}</option>)}</optgroup>)}</select></label>
-            <h4 className="text-sm font-medium">{title(activeKey)}</h4>
+            <h4 className="type-heading">{title(activeKey)}</h4>
             <ColorEditor key={`${editMode}-${activeKey}`} value={colors[activeKey].slice(0, 7)} onChange={setColor} />
             <Button variant="outline" disabled={!overrides[activeKey]} onClick={resetColor}>Reset this color</Button>
             <Button variant="ghost" onClick={() => update({ ...settings, custom: { ...settings.custom, [editMode]: {} } })}>Reset {editMode} colors</Button>
           </div>
         </div>
-        <div role="status" aria-label="Palette contrast" className="rounded-lg border border-border p-3 text-xs">
+        <div role="status" aria-label="Palette contrast" className="rounded-xl border border-border p-3 text-xs">
           {warnings.length ? <><p className="font-medium">{warnings.length} text combinations fall below 4.5:1 contrast.</p><ul className="mt-2 flex flex-col gap-1">{warnings.map((w) => <li key={w.name}>{w.name}: {w.ratio.toFixed(2)}:1</li>)}</ul></> : <p>Text contrast passes 4.5:1 on the preview surfaces.</p>}
         </div>
       </div>}

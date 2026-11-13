@@ -96,7 +96,7 @@ function Portrait({ persona }: { persona: { name: string; color: string; avatar_
 /** What the person has allowed this persona to do, spelled out. */
 function Permissions({ capabilities }: { capabilities?: Schemas["PersonaCapabilities"] }) {
   const granted = CAPABILITIES.filter((c) => capabilities?.[c.key]);
-  if (!granted.length) return <p className="text-[11.5px] text-fg-tertiary">No extra permissions</p>;
+  if (!granted.length) return <p className="text-xs text-fg-tertiary">No extra permissions</p>;
   return (
     <ul aria-label="Permissions" data-testid="persona-permissions" className="flex flex-wrap gap-1">
       {granted.map((c) => (
@@ -133,27 +133,24 @@ export function PersonaProfile({ p, memories, onEdit, onDelete }: { p: Persona; 
       <Portrait persona={p} />
       <div className="flex min-w-0 flex-1 basis-64 flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <PersonaName persona={p} className="truncate text-lg" />
+          <PersonaName persona={p} className="truncate type-display" />
           {p.is_default && <DefaultBadge />}
         </div>
-        <p className="text-xs text-fg-secondary">{stats.join(" · ")}</p>
+        <p className="text-sm text-fg-secondary">{stats.join(" · ")}</p>
         <Permissions capabilities={p.capabilities} />
       </div>
-      <div className="flex flex-col items-end gap-2">
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={onEdit} aria-label={`Edit ${p.name}`}>Edit</Button>
-          <Button variant="outline" disabled={create.isPending} onClick={newChat}>New chat</Button>
-        </div>
-        <div className="flex items-center gap-3">
-          {!p.is_default && (
-            <button type="button" className={link} disabled={setDefault.isPending} onClick={() => setDefault.mutate(p.id)}>
-              Set as default
-            </button>
-          )}
-          <button type="button" className="text-xs text-pill-blocked-fg hover:underline" onClick={onDelete} aria-label={`Delete ${p.name}`}>
-            Delete
+      {/* Actions get their own row so a long name or stats line never crowds them. */}
+      <div className="flex basis-full flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={onEdit} aria-label={`Edit ${p.name}`}>Edit</Button>
+        <Button variant="outline" disabled={create.isPending} onClick={newChat}>New chat</Button>
+        {!p.is_default && (
+          <button type="button" className={cx(link, "ml-2")} disabled={setDefault.isPending} onClick={() => setDefault.mutate(p.id)}>
+            Set as default
           </button>
-        </div>
+        )}
+        <button type="button" className={cx("text-xs text-pill-blocked-fg hover:underline", p.is_default && "ml-2")} onClick={onDelete} aria-label={`Delete ${p.name}`}>
+          Delete
+        </button>
       </div>
       {setDefault.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(setDefault.error)}</p>}
       {create.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}

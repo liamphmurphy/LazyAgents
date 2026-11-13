@@ -69,14 +69,15 @@ failure or Ctrl-C):
 
 ### Fake harness and the PATH guard
 
-`RUNNER_CLAUDE_BIN` and `RUNNER_CODEX_BIN` point at
+`RUNNER_CLAUDE_BIN`, `RUNNER_CODEX_BIN` and `RUNNER_ANTIGRAVITY_BIN` point at
 symlinks to the built fake in `$TMP/bin`. The API and runner run under
 `env -i` with `PATH=$TMP/bin:/usr/bin:/bin` (`git` is symlinked in). Before
 anything starts, the script requires `command -v claude|codex` to
-resolve inside `$TMP/bin` under that PATH and refuses to start otherwise, so a
+resolve inside `$TMP/bin` under that PATH (`agy` too) and refuses to start otherwise, so a
 real, logged-in CLI (`~/.local/bin`, `~/.nix-profile/bin`, `/opt/homebrew/bin`)
 cannot be reached. Claude/Codex model lists come from the fake answering the
-same discovery protocol the local catalog uses.
+same discovery protocol the local catalog uses, and Antigravity's from the fake
+answering `agy models`.
 
 ## Run locally
 

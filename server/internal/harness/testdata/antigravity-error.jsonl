@@ -1,0 +1,2 @@
+{"event":"init","init":{"cwd":"/workspace","tools":[],"permission_mode":"request-review"}}
+{"event":"result","result":{"conversation_id":"conv-2","status":"ERROR","error":"RESOURCE_EXHAUSTED: You exceeded your quota for this model","duration_seconds":0.8,"num_turns":0}}

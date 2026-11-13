@@ -24,9 +24,9 @@ export function RepositorySourcesSection() {
   const error = save.error ?? remove.error ?? sources.error;
   return <div className="flex flex-col gap-3">
     <p className="text-sm text-fg-secondary">Save a single repository or all repositories under a GitHub username or organization. Every coding persona can find them by name. Access comes from your GitHub credential.</p>
-    <div className="rounded-lg border border-border p-3">
+    <div className="rounded-xl border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-fg">From your GitHub connection</h3>
+        <h3 className="type-heading">From your GitHub connection</h3>
         <button type="button" disabled={presets.isFetching} onClick={() => presets.refetch()} className="text-xs text-accent">Refresh GitHub choices</button>
       </div>
       {presets.isPending && <p className="mt-2 text-sm text-fg-secondary">Finding your GitHub account and organizations…</p>}

@@ -138,10 +138,22 @@ test("presence follows the persona's design calls on this canvas while its turn 
     { key: 2, tool: "mcp__lazyagents__design_patch", input: { canvas_id: "c1", ops: [{ op: "set_node", id: "n_c" }, { op: "add_node", parent: "n_a", node: { id: "n_d" } }] }, done: false },
     { key: 3, tool: "mcp__lazyagents__design_patch", input: { canvas_id: "other", ops: [{ op: "remove_node", id: "n_z" }] }, done: false },
   ];
-  assert.deepEqual(presenceOf(calls, "c1", true), { busy: true, tool: "design_patch", nodes: ["n_c", "n_a", "n_d"] });
+  assert.deepEqual(presenceOf(calls, "c1", true), { busy: true, tool: "design_patch", nodes: ["n_c", "n_a", "n_d"], around: ["n_c", "n_a", "n_d"] });
   assert.equal(presenceOf(calls, "c1", false), undefined);
   assert.equal(presenceOf(calls, "nope", true), undefined);
   const list = [...calls.slice(0, 1), { key: 4, tool: "design_list", input: { canvas_id: "c1" }, done: true }];
-  assert.deepEqual(presenceOf(list, "c1", true), { busy: false, tool: "design_list", nodes: ["n_a", "n_b"] });
+  assert.deepEqual(presenceOf(list, "c1", true), { busy: false, tool: "design_list", nodes: ["n_a", "n_b"], around: ["n_a", "n_b"] });
   assert.deepEqual(nodesOf({ node_id: "n_q" }), ["n_q"]);
+});
+
+test("presence follows the nodes a finished patch added, by the ids the server minted", () => {
+  // The persona left the new nodes unnamed, so its input only names their parent.
+  const input = { canvas_id: "c1", ops: [{ op: "add_node", parent: "n_frame", node: { type: "rect" } }, { op: "add_sticky", page: "p_1", x: 0, y: 0, text: "Hi" }] };
+  const result = { canvas_id: "c1", applied: true, version: 4, ops: 2, nodes: ["n_minted1", "n_minted2"] };
+  const call = (output) => [{ key: 1, tool: "mcp__lazyagents__design_patch", input, done: true, output }];
+  assert.deepEqual(presenceOf(call(JSON.stringify(result)), "c1", true), { busy: false, tool: "design_patch", nodes: ["n_minted1", "n_minted2"], around: ["n_frame"] });
+  // Codex passes the MCP envelope through.
+  assert.deepEqual(presenceOf(call(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(result) }] })), "c1", true)?.nodes, ["n_minted1", "n_minted2"]);
+  // A result without nodes (an older server, an error, a clipped output) falls back to the input.
+  assert.deepEqual(presenceOf(call("Error: this design is at version 5"), "c1", true)?.nodes, ["n_frame"]);
 });

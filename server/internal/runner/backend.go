@@ -92,7 +92,7 @@ type Fake struct {
 }
 
 // harnessPrograms are the CLIs adapters invoke.
-var harnessPrograms = map[string]bool{"claude": true, "codex": true}
+var harnessPrograms = map[string]bool{"claude": true, "codex": true, "agy": true}
 
 func (l *Fake) Name() string { return "fake" }
 

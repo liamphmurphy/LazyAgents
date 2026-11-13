@@ -104,7 +104,7 @@ func setupWith(t *testing.T, mk backendFor) env {
 	}
 	// Belt and braces: only the fake can be found as claude or codex, so a
 	// bug in binary substitution can't reach a real, logged-in CLI.
-	for _, name := range []string{"claude", "codex"} {
+	for _, name := range []string{"claude", "codex", "agy"} {
 		if err := os.Symlink(bin, filepath.Join(dir, name)); err != nil {
 			t.Fatal(err)
 		}
@@ -119,14 +119,14 @@ func setupWith(t *testing.T, mk backendFor) env {
 	}
 	safe := dir + ":/usr/bin:/bin"
 	for _, p := range filepath.SplitList(safe)[1:] {
-		for _, name := range []string{"claude", "codex"} {
+		for _, name := range []string{"claude", "codex", "agy"} {
 			if _, err := os.Stat(filepath.Join(p, name)); err == nil {
 				t.Fatalf("a real %s is on the test PATH (%s); refusing to run", name, p)
 			}
 		}
 	}
 	t.Setenv("PATH", safe)
-	var backend runner.Backend = &runner.Fake{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin}}
+	var backend runner.Backend = &runner.Fake{Dir: filepath.Join(dir, "work"), Bins: map[string]string{"claude": bin, "codex": bin, "agy": filepath.Join(dir, "agy")}}
 	mcpURL := ts.URL + "/mcp"
 	if mk != nil {
 		backend, mcpURL = mk(t, dir, bin, ts.URL)

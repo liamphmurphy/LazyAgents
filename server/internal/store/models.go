@@ -265,6 +265,7 @@ type ChatImageJob struct {
 	AttachmentID   *uuid.UUID
 	FollowupTurnID *uuid.UUID
 	ReferenceRoles []string
+	Harness        string
 }
 
 type ChatMessage struct {
@@ -1027,6 +1028,7 @@ type Persona struct {
 	CanCreateSvgs       bool
 	CanCreateWorkflows  bool
 	CanCreateConnectors bool
+	ImageEngine         string
 }
 
 type PersonaProposal struct {
@@ -1586,4 +1588,5 @@ type Workspace struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	HostFolderWorkspaces bool
+	ImageEngine          string
 }

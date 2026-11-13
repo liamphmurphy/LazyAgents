@@ -17,12 +17,17 @@ function entry(persona: S["PersonaSummary"], c: S["PersonaDockChat"]): S["Person
   return { persona, state: c.state, unread: c.unread, last_activity_at: c.last_activity_at, chats: [c] };
 }
 
-function harnesses(over: { claude?: Partial<S["HarnessActivity"]>; codex?: Partial<S["HarnessActivity"]> } = {}): S["HarnessActivity"][] {
+/** Antigravity is listed only when a test gives it: older servers don't send it, and its ring is a bare track either way. */
+function harnesses(over: { claude?: Partial<S["HarnessActivity"]>; codex?: Partial<S["HarnessActivity"]>; agy?: Partial<S["HarnessActivity"]> } = {}): S["HarnessActivity"][] {
+  const agy: S["HarnessActivity"][] = over.agy
+    ? [{ harness: "antigravity", label: "Antigravity", running: 0, usage_available: false, usage_checking: false, usage_checked_at: new Date().toISOString(), windows: [], ...over.agy }]
+    : [];
   return [
     { harness: "claude-code", label: "Claude", running: 1, plan: "max", usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "five_hour", kind: "session", label: "Session", used_percent: 38, resets_at: inHours(3) }, { id: "seven_day", kind: "weekly", label: "Weekly", used_percent: 61, resets_at: inHours(80) }], ...over.claude },
     { harness: "codex", label: "Codex", running: 0, plan: "plus", usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "codex_300", kind: "session", label: "Session", used_percent: 46, resets_at: inHours(3) }], ...over.codex },
+    ...agy,
   ];
 }
 
@@ -190,7 +195,8 @@ test("rings wear each harness's colour, warn near the limit, and sweep while a c
   await page.goto("/board?project=WEB");
 
   const rings = orb(page).locator(".orb-btn .orb-ring");
-  await expect(rings).toHaveCount(2);
+  // Claude, Codex, then Antigravity's, which stays a bare track when the server sends nothing for it.
+  await expect(rings).toHaveCount(3);
   await expect(rings.nth(0)).toHaveAttribute("data-tone", "warn");
   await expect(rings.nth(1)).toHaveAttribute("data-tone", "ok");
   // Only Codex is being checked; its ring has no figure yet.
@@ -228,4 +234,52 @@ test("with reduced motion the checking sweep is hidden rather than frozen", asyn
   await installOrb(page, state);
   await page.goto("/board?project=WEB");
   await expect(orb(page).locator(".orb-btn .orb-sweep")).toBeHidden();
+});
+
+test("Antigravity lifts off in the orb, has a bare third ring, and says its usage is unknown", async ({ page }) => {
+  const state = { dock: { personas: [entry(vesperBot, chat("c1", "Gemini spike", "working", "antigravity"))], harnesses: harnesses({ claude: { running: 0 }, agy: { running: 1 } }) } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+
+  await expect(orb(page).locator(".orb-btn .orb-lift")).toHaveCount(1);
+  await expect(orb(page).locator(".orb-btn .orb-robot, .orb-btn .orb-orbit")).toHaveCount(0);
+  // Three rings, outermost Claude: Antigravity's has nothing to show.
+  const rings = orb(page).locator(".orb-btn .orb-ring");
+  await expect(rings).toHaveCount(3);
+  expect(await rings.nth(2).evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+
+  await orbButton(page).click();
+  const panel = orb(page).locator("#orb-panel");
+  await expect(panel.getByRole("button", { name: /VesperBot/ })).toContainText("Working");
+  await expect(panel.locator(".orb-urow").nth(2)).toContainText("Antigravity");
+  await expect(panel.locator(".orb-urow").nth(2)).toContainText("—");
+  await expect(panel.locator(".orb-usub").nth(2)).toContainText("Usage unknown");
+  const dot = await panel.locator(".orb-ulabel i").nth(2).evaluate((el) => {
+    const probe = document.createElement("i");
+    probe.style.color = "var(--orb-antigravity)";
+    el.parentElement!.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return { want, got: getComputedStyle(el).backgroundColor };
+  });
+  expect(dot.got).toBe(dot.want);
+});
+
+test("several harnesses working share the orb, one small glyph each", async ({ page }) => {
+  const state = { dock: { personas: [], harnesses: harnesses({ claude: { running: 1 }, codex: { running: 1 }, agy: { running: 1 } }) } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+  await expect(orb(page).locator(".orb-btn .orb-robot")).toHaveCount(1);
+  await expect(orb(page).locator(".orb-btn .orb-orbit")).toHaveCount(1);
+  await expect(orb(page).locator(".orb-btn .orb-lift")).toHaveCount(1);
+});
+
+test("with reduced motion the lift-off holds still", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const state = { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, agy: { running: 1 } }) } };
+  await installOrb(page, state);
+  await page.goto("/board?project=WEB");
+  const names = await orb(page).locator(".orb-btn .orb-lift circle, .orb-btn .orb-lift ellipse").evaluateAll((els) => els.map((el) => getComputedStyle(el).animationName));
+  expect(names.length).toBeGreaterThan(0);
+  expect(new Set(names)).toEqual(new Set(["none"]));
 });

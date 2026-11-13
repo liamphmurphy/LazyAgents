@@ -47,8 +47,11 @@ func CodexAuthRefreshed(current, next string) bool {
 }
 
 func subscriptionLogin(harness, key string) bool {
-	if harness == agentdef.HarnessClaudeCode {
+	switch harness {
+	case agentdef.HarnessClaudeCode:
 		return ClaudeOAuthToken(key)
+	case agentdef.HarnessAntigravity:
+		return false // an API key only: see KeySecret
 	}
 	_, ok := ParseCodexAuth(key)
 	return ok

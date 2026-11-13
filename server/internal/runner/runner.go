@@ -1678,7 +1678,7 @@ func (r *Runner) watch(ctx context.Context, c runCtx, proc Process, p harness.Pa
 	// At turn end, the final value. A Claude turn that never reached a request
 	// (a rejected resume, an early crash) keeps the last known size; a Codex
 	// turn writes 0, since its context is unknown.
-	if n := res.Usage.ContextTokens; n > 0 || c.spec.Harness == agentdef.HarnessCodex {
+	if n := res.Usage.ContextTokens; n > 0 || c.spec.Harness == agentdef.HarnessCodex || c.spec.Harness == agentdef.HarnessAntigravity {
 		write(context.WithoutCancel(ctx), n)
 	}
 	return res, raw, code, err

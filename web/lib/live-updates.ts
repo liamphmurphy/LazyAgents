@@ -1,0 +1,35 @@
+// Which cached queries a server change hint (/events) makes stale. Each hint's
+// type is "entity.verb"; the entity picks the query key prefixes to refetch.
+
+const prefixes: Record<string, string[]> = {
+  planning: ["planning", "inbox", "bootstrap"],
+  metrics: ["dashboard", "agent-overviews"],
+  ticket: ["planning", "tickets", "boards", "inbox", "bootstrap", "knowledge", "search"],
+  epic: ["projects", "planning", "bootstrap", "tickets", "boards", "epics", "inbox", "search"],
+  activity: ["tickets", "inbox", "bootstrap"],
+  approval: ["tickets", "runs", "inbox", "bootstrap"],
+  // "dock" is the activity orb: which harnesses are running.
+  run: ["planning", "runs", "boards", "tickets", "agents", "inbox", "bootstrap", "runner", "search", "dock"],
+  agent: ["agents", "bootstrap", "search"],
+  artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
+  knowledge: ["knowledge", "wiki"],
+  project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
+  inbox: ["inbox", "bootstrap"],
+  chat: ["chats", "canvases", "videos", "dock"],
+  // A persona's patch on a design (applied with direct edit, or held as a suggestion) and its
+  // settings, mid-turn: chat.* only fires when the turn's messages land, which is too late.
+  design: ["canvases"],
+  // A chat video's progress, copied every couple of seconds while it renders.
+  video: ["videos"],
+  // A chat's playground starting, resetting or stopping on the runner.
+  playground: ["playgrounds"],
+  // A persona edit changes the name, color and avatar every chat using it embeds.
+  persona: ["personas", "chats", "dock"],
+};
+
+/** The query key prefixes a change hint of this type invalidates. */
+export function invalidatedBy(type: string): string[] {
+  if (type === "run.events") return ["runs"];
+  const keys = prefixes[type.split(".")[0]] ?? [];
+  return type === "video.updated" ? keys : [...keys, "dashboard", "epics", "agent-overviews"];
+}

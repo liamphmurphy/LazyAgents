@@ -1,6 +1,6 @@
 -- name: CreateChatImageJob :one
-INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, reference_roles)
-VALUES ($1, $2, $3, $4, $5, $6, coalesce(sqlc.narg(reference_roles)::text[], '{}')) RETURNING *;
+INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, harness, reference_roles)
+VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce(sqlc.narg(reference_roles)::text[], '{}')) RETURNING *;
 
 -- name: CountChatImageJobsForTurn :one
 SELECT count(*)::int FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2;

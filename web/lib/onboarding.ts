@@ -45,7 +45,7 @@ export function assistantLine(step: WizardStep, hour: number): string {
     case 1:
       return "First, how should I address you, and what do you do? Every persona will know this from the first message.";
     case 2:
-      return "Next, I need a mind to run on. Connect Claude Code, Codex or both.";
+      return "Next, I need a mind to run on. Connect Claude Code, Codex, Antigravity or any mix.";
     case 3:
       return "Lastly, who else would you like to talk to? Describe them in your own words and I’ll draft them.";
     default:
@@ -63,21 +63,41 @@ export function prefillName(name: string | undefined): string {
   return !name || name === "Local user" ? "" : name;
 }
 
-export type HarnessId = "claude-code" | "codex";
+export type HarnessId = "claude-code" | "codex" | "antigravity";
 export type CredentialKind = "subscription" | "api_key";
 
-export const HARNESS_CARDS: { id: HarnessId; label: string; note?: string }[] = [
-  { id: "claude-code", label: "Claude Code" },
-  { id: "codex", label: "Codex", note: "Currently required for native AI image generation." },
+export type HarnessCard = {
+  id: HarnessId;
+  label: string;
+  /** Who runs it and how it signs in, under the name. */
+  by: string;
+  /** Makes images (a badge on the card). */
+  images?: boolean;
+  /** Takes no subscription login: Google's terms bar Vesper from storing Antigravity's. */
+  apiKeyOnly?: boolean;
+};
+
+export const HARNESS_CARDS: HarnessCard[] = [
+  { id: "claude-code", label: "Claude Code", by: "Anthropic · subscription or API key" },
+  { id: "codex", label: "Codex", by: "OpenAI · subscription or API key", images: true },
+  { id: "antigravity", label: "Antigravity", by: "Google · Gemini API key", images: true, apiKeyOnly: true },
 ];
+
+/** The secret each harness's credential is stored under (chatmodels.KeySecret). */
+export const HARNESS_SECRETS: Record<HarnessId, string> = { "claude-code": "harness:anthropic", codex: "harness:openai", antigravity: "harness:google" };
+
+/** Harnesses that can make images. */
+export const IMAGE_HARNESSES: readonly HarnessId[] = ["codex", "antigravity"];
 
 /** The shapes runner/prepare.go recognises: a setup-token or auth.json login, else an API key. */
 export function credentialPlaceholder(h: HarnessId, kind: CredentialKind): string {
+  if (h === "antigravity") return "GEMINI_API_KEY";
   if (h === "codex") return kind === "subscription" ? "Paste auth.json" : "OPENAI_API_KEY";
   return kind === "subscription" ? "Paste setup-token" : "ANTHROPIC_API_KEY";
 }
 
 export function credentialHelp(h: HarnessId, kind: CredentialKind): string {
+  if (h === "antigravity") return "A Gemini API key (AIza…) from Google AI Studio.";
   if (h === "codex") return kind === "subscription" ? "The contents of ~/.codex/auth.json after `codex login`." : "An OpenAI API key (sk-…).";
   return kind === "subscription" ? "Run `claude setup-token` and paste the token (sk-ant-oat…)." : "An Anthropic API key (sk-ant-…).";
 }
@@ -90,7 +110,7 @@ export function setupHarness(verified: readonly HarnessId[]): HarnessId | undefi
 
 export function harnessHint(verified: readonly HarnessId[]): string {
   if (!verified.length) return "Connect at least one to continue.";
-  return verified.includes("codex") ? "" : "Image generation stays off until Codex is connected.";
+  return verified.some((h) => IMAGE_HARNESSES.includes(h)) ? "" : "Image generation stays off until Codex or Antigravity is connected.";
 }
 
 export const PERSONA_EXAMPLES = ["A blunt senior engineer who pairs with me", "A dry-witted D&D dungeon master", "A calm health coach"];

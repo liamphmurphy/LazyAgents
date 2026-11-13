@@ -27,6 +27,7 @@ const paths = {
   pr: <><circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle cx="11.5" cy="12.5" r="1.5" /><path d="M4.5 5v6M11.5 11V6.5a2 2 0 0 0-2-2H7.5" /></>,
   lock: <><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" /></>,
   key: <><circle cx="5.5" cy="10.5" r="2.5" /><path d="m7.3 8.7 5.2-5.2M10.5 5.5l1.5 1.5" /></>,
+  code: <path d="m5.5 4.5-3.5 3.5 3.5 3.5M10.5 4.5l3.5 3.5-3.5 3.5" />,
   terminal: <><rect x="2" y="3" width="12" height="10" rx="2" /><path d="m5 7 2 1.5L5 10M8.5 10.5h2.5" /></>,
   msg: <path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5V11.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z" />,
   bolt: <path d="M9 2 4 9h4l-1 5 5-7H8z" />,

@@ -170,6 +170,35 @@ func Creates(op Op) []string {
 	return out
 }
 
+// Touches lists the node each op is about, in op order and without repeats:
+// the root it adds, else the node it changes. Run it after MintIDs, so a node
+// the persona left unnamed is listed by the id it was given. Pages, links and
+// tokens aren't nodes, so ops only about them add nothing.
+func Touches(ops []Op) []string {
+	var out []string
+	add := func(v any) bool {
+		s, ok := v.(string)
+		if !ok || !strings.HasPrefix(s, "n_") {
+			return false
+		}
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+		return true
+	}
+	for _, op := range ops {
+		if created := Creates(op); len(created) > 0 && add(created[0]) {
+			continue
+		}
+		for _, k := range []string{"id", "node", "from"} {
+			if add(op[k]) {
+				break
+			}
+		}
+	}
+	return out
+}
+
 // refs lists the ids an op points at (other than those it creates).
 func refs(op Op) []string {
 	var out []string

@@ -76,7 +76,7 @@ export function SecretsSection() {
         </Banner>
       ))}
       {notice && (
-        <p role="status" className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-pill-done-fg">
+        <p role="status" className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-[13px] text-pill-done-fg">
           <Icon name="check" size={13} /> {notice}
         </p>
       )}
@@ -234,7 +234,7 @@ function ConnectionRow({
           ) : (
             <SmallPill tone={c.required ? "human" : "neutral"}>Not set</SmallPill>
           )}
-          {on && <span className="text-[11px] text-fg-tertiary">Updated {ago(state.secret.updated_at)}</span>}
+          {on && <span className="text-xs text-fg-tertiary">Updated {ago(state.secret.updated_at)}</span>}
         </span>
         <span className="flex min-w-[200px] flex-[2] flex-col gap-1">
           <span className="flex flex-wrap gap-1.5" aria-label={`${on ? "Unlocks" : "Would unlock"}: ${c.unlocks.join(", ")}`}>
@@ -251,9 +251,9 @@ function ConnectionRow({
             ))}
           </span>
           {on ? (
-            <span className="text-[11px] text-fg-tertiary">{state.secret.last_used_at ? `Used ${ago(state.secret.last_used_at)}` : "Not used yet"}</span>
+            <span className="text-xs text-fg-tertiary">{state.secret.last_used_at ? `Used ${ago(state.secret.last_used_at)}` : "Not used yet"}</span>
           ) : (
-            !editing && <span className="text-[11px] text-fg-tertiary">{c.without}</span>
+            !editing && <span className="text-xs text-fg-tertiary">{c.without}</span>
           )}
         </span>
         {!editing && !signInId && (
@@ -418,7 +418,7 @@ function SecretForm({
           </Button>
         </div>
       </div>
-      {hint && <p className="text-[11.5px] text-fg-tertiary">{hint}</p>}
+      {hint && <p className="text-xs text-fg-tertiary">{hint}</p>}
       {set.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{set.error.message}</p>}
     </form>
   );
@@ -487,7 +487,7 @@ function SignInPanel({
     );
   }
   return (
-    <div aria-label={`${label} sign-in`} className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface px-3.5 py-3 text-[13px]">
+    <div aria-label={`${label} sign-in`} className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-[13px]">
       {v.step === "starting" && <p className="text-fg-secondary">Starting a sign-in container…</p>}
       {v.step === "verifying" && <p className="text-fg-secondary">Checking the code and saving the login…</p>}
       {v.step === "open" && (
@@ -545,7 +545,7 @@ function SignInPanel({
         </>
       )}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-fg-tertiary">Runs in a throwaway container. The login is stored encrypted and never shown here.</span>
+        <span className="text-xs text-fg-tertiary">Runs in a throwaway container. The login is stored encrypted and never shown here.</span>
         <Button variant="ghost" onClick={stop}>Cancel</Button>
       </div>
     </div>

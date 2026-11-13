@@ -22,6 +22,7 @@ type Skill = { name: string; description: string; body: string };
 const HARNESSES = [
   { name: "claude-code", label: "Claude Code", tool_gating: true, permission_prompt: true, native_cost: true, resume: true },
   { name: "codex", label: "Codex", tool_gating: false, permission_prompt: false, native_cost: true, resume: true },
+  { name: "antigravity", label: "Antigravity", tool_gating: true, permission_prompt: false, native_cost: false, resume: true },
 ];
 const PROJECT = { id: "00000000-0000-4000-8000-0000000000a1", key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 };
 const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;

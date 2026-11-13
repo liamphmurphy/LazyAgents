@@ -299,7 +299,7 @@ design_proposals(id uuid PK, canvas_id → chat_canvases ON DELETE CASCADE, chat
   - The server mints missing ids, then dry-runs the ops against `base_seq`. Any error rejects the whole patch with the op index, as Slides does.
   - Every op must carry a `why` (≤ 280 chars), and the patch a `summary`.
   - The design body is untouched.
-  - The tool returns `{proposal_id, ops: n, pending_review: true}`, and the space instructions tell the persona to wait for the person.
+  - The tool returns `{proposal_id, ops: n, nodes, pending_review: true}`, and the space instructions tell the persona to wait for the person. `nodes` lists the node each op is about, in op order, with the ids minted for nodes the persona left unnamed.
 - **Dependencies:** op *j* depends on op *i* when it references an id that *i* creates (a child added to a new frame, or a link to a new frame). Review groups dependents under their parent. Accepting *j* accepts *i*. Rejecting *i* rejects *j*.
 - **Review** (`designs-review.svg`, `web/lib/designs/review.ts`):
   - Each op is a change, with a numbered pin on the canvas and its `why`. Added changes are outlined green, changed ones amber, and removed ones red and dashed.
@@ -319,7 +319,7 @@ design_proposals(id uuid PK, canvas_id → chat_canvases ON DELETE CASCADE, chat
   - The editor receives the version over realtime and three-way merges it with unsaved local edits (§3.6). The person's unsaved edits are never overwritten.
   - **Undo** works on the persona's version as one step: the client inverts the per-node diff and saves a new version, as Slides undo does.
 - **Pause** (`persona_paused`) makes `design_patch` and `design_import` fail with "Liam paused persona edits on this design" until the person resumes.
-- **Presence** ("H is editing", named cursor, Follow/Pause) comes from the persona's in-flight tool calls on this canvas, the run's activity events, and the node ids of its last read and patch. No new transport.
+- **Presence** ("H is editing", named cursor, Follow/Pause) comes from the persona's in-flight tool calls on this canvas, the run's activity events, and the node ids of its last read and patch (a finished patch's `nodes`, so the cursor finds nodes it added). The cursor walks those nodes in order. No new transport.
 - **Selection context:** chat messages sent from the editor carry `{design, page, selection: [ids], viewport: {x, y, w, h, zoom}}` through the existing chat context. The space instructions tell the persona to treat "this" as the selection.
 
 ### 3.8 Shared rendering module
@@ -365,7 +365,7 @@ All tools take `canvas_id`, check ownership like `canvas_read`, and refuse non-d
 | `design_outline` | 4 | `canvas_id, page?, depth? (default 3)` | Compact tree `{id, type, name, box, children?, child_count}`, with boxes computed by the worker | design-view |
 | `design_read` | 4 | `canvas_id, node_ids[] \| page` | Full nodes, with tokens shown as `{token, value}`, instance overrides and links touching them | design-view |
 | `design_render` | 4 | `canvas_id, node_id \| page, scale? (1–3, default 1)` | MCP image content (PNG), plus `{w, h}` | design-view |
-| `design_patch` | 4 | `canvas_id, base_version, summary, ops[] (each with why)` | `{proposal_id, pending_review}`, or `{version}` when direct edit is on. 409 on a stale base. | design |
+| `design_patch` | 4 | `canvas_id, base_version, summary, ops[] (each with why)` | `{proposal_id, nodes, pending_review}`, or `{version, nodes}` when direct edit is on. 409 on a stale base. | design |
 | `design_comments` | 4 | `canvas_id, open_only?` | Threads with node anchors | design-view |
 | `design_comment` / `design_reply` | 4 | `canvas_id, node_id, body` / `comment_id, body` | The comment | design |
 | `design_create` | 5 | `title, project?, starter? (blank\|mobile-flow\|web-flow\|diagram\|wireframe)` | `{canvas_id, url}`; opens beside the chat | design |

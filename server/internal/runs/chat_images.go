@@ -56,7 +56,8 @@ func ChatReferences(ctx context.Context, q *store.Queries, chat store.ChatSessio
 
 // QueueChatImage records a generate_image request from a chat turn on a
 // harness that can't make images itself. The runner creates the image with a
-// one-shot Codex step once the turn's reply is done. The capability is read
+// one-shot step on the image engine (Codex or Antigravity) once the turn's reply
+// is done. The capability is read
 // fresh from the chat's persona, so turning images off applies at once.
 // references asks for the persona's and/or the person's likeness; each must
 // have a reference image in the person's Library.
@@ -81,14 +82,14 @@ func (s *Service) QueueChatImage(ctx context.Context, ws, runID uuid.UUID, promp
 // insertChatImageJob.
 type chatImageRequest struct {
 	ws, runID, turnID, chatID uuid.UUID
-	prompt, model             string
+	prompt, harness, model    string
 	roles                     []string
 }
 
 // prepareChatImage checks a request to make an image in a chat turn: the
 // prompt, the references, that the run is answering a message on a harness
-// that can't make images itself, the persona's capability and that Codex is
-// available. It reads without locking; insertChatImageJob enforces the per-turn
+// that can't make images itself, the persona's capability and that an image
+// engine is available. It reads without locking; insertChatImageJob enforces the per-turn
 // cap under the chat's lock.
 func (s *Service) prepareChatImage(ctx context.Context, ws, runID uuid.UUID, prompt string, references []string) (chatImageRequest, error) {
 	var none chatImageRequest
@@ -159,26 +160,17 @@ func (s *Service) prepareChatImage(ctx context.Context, ws, runID uuid.UUID, pro
 	if err != nil {
 		return none, err
 	}
-	model, reason := "", "Codex isn't available"
-	for _, h := range catalog {
-		if h.Harness != agentdef.HarnessCodex {
-			continue
-		}
-		if !h.Available {
-			reason = h.UnavailableReason
-			break
-		}
-		for _, m := range h.Models {
-			if model == "" || m.Default {
-				model = m.ID
-			}
-		}
-		if model == "" {
-			reason = "no Codex models are available"
-		}
+	personaEngine, err := chatPersonaImageEngine(ctx, q, chat)
+	if err != nil {
+		return none, err
 	}
-	if model == "" {
-		return none, apperr.Conflict("Image generation needs Codex: %s", reason)
+	preference, err := ImageEnginePreference(ctx, q, ws, personaEngine)
+	if err != nil {
+		return none, err
+	}
+	engine, model, reason := PickImageEngine(catalog, preference)
+	if reason != "" {
+		return none, apperr.Conflict("Image generation isn't available: %s. The person can connect one in Settings.", reason)
 	}
 	turn, err := q.RunningChatTurn(ctx, run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -192,7 +184,7 @@ func (s *Service) prepareChatImage(ctx context.Context, ws, runID uuid.UUID, pro
 	if turn.Trigger == TriggerImageFollowup {
 		return none, apperr.Conflict("generate_image isn't available while you react to the images you already asked for. Tell the person what came of them; make another only when they ask in a new message.")
 	}
-	return chatImageRequest{ws: ws, runID: run.ID, turnID: turn.ID, chatID: chat.ID, prompt: prompt, model: model, roles: roles}, nil
+	return chatImageRequest{ws: ws, runID: run.ID, turnID: turn.ID, chatID: chat.ID, prompt: prompt, harness: engine, model: model, roles: roles}, nil
 }
 
 // insertChatImageJob queues a prepared request. The caller holds the chat's
@@ -205,7 +197,7 @@ func insertChatImageJob(ctx context.Context, tq *store.Queries, req chatImageReq
 	if n >= MaxChatImageJobsPerTurn {
 		return store.ChatImageJob{}, apperr.Conflict("You can request at most %d images in one reply; tell the person to ask again for more.", MaxChatImageJobsPerTurn)
 	}
-	return tq.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: req.ws, RunID: req.runID, TurnID: req.turnID, ChatID: req.chatID, Prompt: req.prompt, Model: req.model, ReferenceRoles: req.roles})
+	return tq.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: req.ws, RunID: req.runID, TurnID: req.turnID, ChatID: req.chatID, Prompt: req.prompt, Model: req.model, Harness: req.harness, ReferenceRoles: req.roles})
 }
 
 // ChatImagesOn reports whether the chat's persona may make images right now.

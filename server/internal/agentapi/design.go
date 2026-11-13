@@ -224,9 +224,9 @@ type DesignPatchIn struct {
 
 func proposeOut(cv uuid.UUID, p designs.Proposed, n int) map[string]any {
 	if p.Version != nil {
-		return map[string]any{"canvas_id": cv, "proposal_id": p.Proposal.ID, "version": p.Version.Seq, "applied": true, "ops": n}
+		return map[string]any{"canvas_id": cv, "proposal_id": p.Proposal.ID, "version": p.Version.Seq, "applied": true, "ops": n, "nodes": p.Nodes}
 	}
-	return map[string]any{"canvas_id": cv, "proposal_id": p.Proposal.ID, "ops": n, "pending_review": true,
+	return map[string]any{"canvas_id": cv, "proposal_id": p.Proposal.ID, "ops": n, "nodes": p.Nodes, "pending_review": true,
 		"next": "The design is unchanged until the person reviews these. Tell them what you suggested in a sentence, then wait for their review."}
 }
 

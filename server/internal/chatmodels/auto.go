@@ -81,7 +81,7 @@ const (
 )
 
 var (
-	smallModel = regexp.MustCompile(`\b(haiku|mini|nano)\b`)
+	smallModel = regexp.MustCompile(`\b(haiku|mini|nano|flash|lite)\b`)
 	largeModel = regexp.MustCompile(`\b(fable|max|pro)\b`)
 )
 

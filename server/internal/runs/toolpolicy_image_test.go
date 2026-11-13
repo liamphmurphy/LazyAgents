@@ -51,7 +51,7 @@ func TestToolPolicyImageJobs(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT id FROM run_turns WHERE run_id=$1", runID).Scan(&turnID); err != nil {
 		t.Fatal(err)
 	}
-	job, err := q.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: me.WorkspaceID, RunID: runID, TurnID: turnID, ChatID: chat.ID, Prompt: "a logo"})
+	job, err := q.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: me.WorkspaceID, RunID: runID, TurnID: turnID, ChatID: chat.ID, Prompt: "a logo", Harness: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestToolPolicyImageJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oj, err := q.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: me.WorkspaceID, RunID: other.ID, TurnID: turnID, ChatID: chat.ID, Prompt: "x"})
+	oj, err := q.CreateChatImageJob(ctx, store.CreateChatImageJobParams{WorkspaceID: me.WorkspaceID, RunID: other.ID, TurnID: turnID, ChatID: chat.ID, Prompt: "x", Harness: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
