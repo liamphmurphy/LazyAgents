@@ -271,3 +271,17 @@ LIMIT 1;
 
 -- name: RunParentID :one
 SELECT parent_run_id FROM runs WHERE id = $1;
+
+-- name: RunEfficiencyEvents :many
+-- The main agent's tool calls and results plus setup lifecycle events, slim:
+-- what get_run's efficiency summary is computed from.
+SELECT seq, type, at,
+  coalesce(payload->>'state', '')::text AS state,
+  coalesce(payload->>'id', '')::text AS call_id,
+  coalesce(payload->>'tool', '')::text AS tool,
+  coalesce(payload->'input'->>'command', '')::text AS command,
+  coalesce((payload->>'context_tokens')::bigint, 0)::bigint AS context_tokens
+FROM run_events
+WHERE run_id = $1 AND type IN ('lifecycle', 'tool_call', 'tool_result')
+  AND coalesce((payload->>'subagent')::boolean, false) = false
+ORDER BY seq;

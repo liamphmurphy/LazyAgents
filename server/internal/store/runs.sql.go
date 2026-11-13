@@ -1666,6 +1666,61 @@ func (q *Queries) ReleaseApprovalExecution(ctx context.Context, id uuid.UUID) er
 	return err
 }
 
+const runEfficiencyEvents = `-- name: RunEfficiencyEvents :many
+SELECT seq, type, at,
+  coalesce(payload->>'state', '')::text AS state,
+  coalesce(payload->>'id', '')::text AS call_id,
+  coalesce(payload->>'tool', '')::text AS tool,
+  coalesce(payload->'input'->>'command', '')::text AS command,
+  coalesce((payload->>'context_tokens')::bigint, 0)::bigint AS context_tokens
+FROM run_events
+WHERE run_id = $1 AND type IN ('lifecycle', 'tool_call', 'tool_result')
+  AND coalesce((payload->>'subagent')::boolean, false) = false
+ORDER BY seq
+`
+
+type RunEfficiencyEventsRow struct {
+	Seq           int64
+	Type          string
+	At            time.Time
+	State         string
+	CallID        string
+	Tool          string
+	Command       string
+	ContextTokens int64
+}
+
+// The main agent's tool calls and results plus setup lifecycle events, slim:
+// what get_run's efficiency summary is computed from.
+func (q *Queries) RunEfficiencyEvents(ctx context.Context, runID uuid.UUID) ([]RunEfficiencyEventsRow, error) {
+	rows, err := q.db.Query(ctx, runEfficiencyEvents, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunEfficiencyEventsRow{}
+	for rows.Next() {
+		var i RunEfficiencyEventsRow
+		if err := rows.Scan(
+			&i.Seq,
+			&i.Type,
+			&i.At,
+			&i.State,
+			&i.CallID,
+			&i.Tool,
+			&i.Command,
+			&i.ContextTokens,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const runParentID = `-- name: RunParentID :one
 SELECT parent_run_id FROM runs WHERE id = $1
 `
