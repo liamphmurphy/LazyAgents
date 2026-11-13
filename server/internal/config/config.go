@@ -84,6 +84,9 @@ type Runner struct {
 	// limit (RUNNER_MAX_HOLD_S, RUNNER_MAX_HOLD_ATTEMPTS).
 	MaxHold         time.Duration
 	MaxHoldAttempts int
+	// RepoMap gives ticket runs a generated map of their repository at its
+	// base commit as a context file (RUNNER_REPO_MAP, default off).
+	RepoMap bool
 
 	// HostWorkspaces is the absolute folder that checkouts go in when a person
 	// turns on host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR, docker
@@ -261,6 +264,9 @@ func Load() (Config, error) {
 	}
 	if r.MaxHoldAttempts < 1 {
 		return c, fmt.Errorf("config: RUNNER_MAX_HOLD_ATTEMPTS must be at least 1")
+	}
+	if r.RepoMap, err = boolEnv("RUNNER_REPO_MAP", false); err != nil {
+		return c, err
 	}
 	c.Runner = r
 	if c.PRSyncInterval, err = intEnv("PR_SYNC_INTERVAL_S", 60); err != nil {

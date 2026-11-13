@@ -88,6 +88,7 @@ services:
       # Its containers are this stack's alone: cleanup never touches the dev stack's.
       RUNNER_STACK: lazyagents
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-2}
+      RUNNER_REPO_MAP: ${RUNNER_REPO_MAP:-false}
       RUNNER_CHAT_IDLE_TTL_S: ${RUNNER_CHAT_IDLE_TTL_S:-14400}
       RUNNER_MAX_HOLD_S: ${RUNNER_MAX_HOLD_S:-86400}
       RUNNER_MAX_HOLD_ATTEMPTS: ${RUNNER_MAX_HOLD_ATTEMPTS:-12}
