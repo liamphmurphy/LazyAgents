@@ -174,7 +174,7 @@ func (ClaudeCode) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	if effort := spec.HarnessOptions["effort"]; effort != "" {
 		argv = append(argv, "--effort", effort)
 	}
-	files := SkillFiles(spec.Skills, true)
+	files := SkillFiles(spec.Skills)
 	if len(t.InlineImages) > 0 {
 		input, err := claudeImageMessage(t.Prompt, t.InlineImages)
 		if err != nil {
