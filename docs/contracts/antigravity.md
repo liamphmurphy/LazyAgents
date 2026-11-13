@@ -93,7 +93,16 @@ in the turn container (`agy-launch.py` from `.lazyagents/agy-config.json`):
    (`runs.CheckTool`), answering `auto_approve` only when Vesper says `allow`.
    An action with no rule is "ask", which headless `agy` denies, so an unloaded
    hook leaves a turn able to do nothing but what the allow rules name
-   (`mcp(<server>/*)` for Vesper's own tools).
+   (`mcp(<server>/*)` for Vesper's own tools). Workspace reads and writes are
+   not asked about by default, which is why writes need the static deny rule.
+
+Consequence: **a scope set to `requires_approval` is denied for the whole turn**,
+because the deny rule is written before the turn and can't be lifted by one
+approved action as the hook can for Claude Code and Codex. So
+`Capabilities[antigravity].PermissionPrompt` is false, and a run on Antigravity
+that needs approval for `repo:write` or `tests:run` can ask a person with
+`request_approval` but can't act on the answer within a turn. Use Claude Code or
+Codex for those runs until the hook's behaviour is verified.
 
 Tool names are renamed to Claude Code's vocabulary before the policy sees them
 (`antigravityTool` / `canonical`; a test runs both). **Unverified:** the real tool

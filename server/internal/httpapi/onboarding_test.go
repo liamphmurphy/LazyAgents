@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -159,6 +160,21 @@ func TestVerifyHarnessAgainstFakeHarness(t *testing.T) {
 		if out["ok"] != true || len(models) != 1 || models[0].(map[string]any)["id"] != model {
 			t.Fatalf("%s: %v", harness, out)
 		}
+	}
+	// Antigravity: the fake answers `agy models`, and only under the name agy.
+	agy := filepath.Join(dir, "agy")
+	if err := os.Symlink(bin, agy); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RUNNER_ANTIGRAVITY_BIN", agy)
+	out := e.want("POST", "/harness/antigravity/verify", nil, http.StatusOK)
+	models, _ := out["models"].([]any)
+	if out["ok"] != true || len(models) != 2 || models[0].(map[string]any)["id"] != "gemini-3.8-flash-medium" {
+		t.Fatalf("antigravity: %v", out)
+	}
+	t.Setenv("RUNNER_ANTIGRAVITY_BIN", "")
+	if out := e.want("POST", "/harness/antigravity/verify", nil, http.StatusOK); out["ok"] != false || out["error"] == nil {
+		t.Fatalf("antigravity without a stand-in must be unavailable, not an error: %v", out)
 	}
 	// Runs here use the CLI sign-in, so there is no key to paste.
 	e.invalid("POST", "/harness/claude-code/verify", map[string]any{"kind": "subscription", "credential": "sk-ant-oat01-x"}, "credential", "sign-ins on its host")
