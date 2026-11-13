@@ -142,3 +142,11 @@ RETURNING *;
 UPDATE personas SET image_engine = sqlc.arg(image_engine), revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
+
+-- name: SetPersonaTicketEdits :one
+-- Whether its ticket edits wait for the person ('ask') or apply at once
+-- ('allow'). Apart from UpdatePersona like the image engine, so "Always allow"
+-- on a chat card needn't know the revision; it bumps the revision like any edit.
+UPDATE personas SET ticket_edits = sqlc.arg(ticket_edits), revision = revision + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
+RETURNING *;

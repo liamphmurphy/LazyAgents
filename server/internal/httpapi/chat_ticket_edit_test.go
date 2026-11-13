@@ -40,6 +40,7 @@ func TestChatUpdatesExistingTickets(t *testing.T) {
 		t.Fatal(err)
 	}
 	chat, _ = q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: ws})
+	allowTicketEdits(t, q, chat)
 	runID := *chat.CurrentRunID
 	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: runID, State: "running"}); err != nil {
 		t.Fatal(err)
@@ -92,8 +93,12 @@ func TestChatUpdatesExistingTickets(t *testing.T) {
 		t.Fatalf("missing revision = %d %v", code, out)
 	}
 	cur, _ := tracker.Get(ctx, q, ws, tk.Key)
-	if code, out := call("update_ticket", map[string]any{"ticket": tk.Key, "revision": cur.Revision, "status": "canceled"}); code != 409 {
+	// Only a person cancels: even a persona allowed to edit tickets proposes it.
+	if code, out := call("update_ticket", map[string]any{"ticket": tk.Key, "revision": cur.Revision, "status": "canceled"}); code != 200 || out["state"] != "proposed" {
 		t.Fatalf("cancel from chat = %d %v", code, out)
+	}
+	if after, _ := tracker.Get(ctx, q, ws, tk.Key); after.Status == "canceled" {
+		t.Fatal("a proposed cancel applied without the person")
 	}
 
 	// Linking the PR hands the ticket to PR sync, which closes it on merge.

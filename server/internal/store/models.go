@@ -1033,6 +1033,7 @@ type Persona struct {
 	CanCreateWorkflows  bool
 	CanCreateConnectors bool
 	ImageEngine         string
+	TicketEdits         string
 }
 
 type PersonaProposal struct {
@@ -1409,6 +1410,23 @@ type TicketArtifact struct {
 	ArtifactID uuid.UUID
 	Relation   string
 	CreatedAt  time.Time
+}
+
+type TicketChangeRequest struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	ChatID      uuid.UUID
+	PersonaID   *uuid.UUID
+	AgentID     uuid.UUID
+	TicketID    uuid.UUID
+	Tool        string
+	Arguments   json.RawMessage
+	Changes     json.RawMessage
+	State       string
+	Error       *string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
 }
 
 type TicketDependency struct {

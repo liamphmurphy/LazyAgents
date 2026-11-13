@@ -3766,6 +3766,45 @@ paths:
       responses:
         "204": { description: Decided }
         default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/ticket-changes:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listTicketChangeRequests
+      summary: Ticket edits a persona proposed in this chat, waiting for the person
+      tags: [tickets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketChangeRequestList" }
+        default: { $ref: "#/components/responses/Error" }
+  /ticket-changes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: decideTicketChangeRequest
+      summary: Apply once, always allow (applies it and lets the persona edit tickets without asking) or decline
+      description: |
+        Applying runs the edit as the persona that proposed it, with the
+        person's approval recorded on the ticket's timeline. When the ticket
+        changed since the proposal (a stale revision, a run that has since
+        started), nothing is applied: the request is marked failed and the
+        response is a 409 or 422 naming why.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketChangeDecision" }
+      responses:
+        "200":
+          description: Decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketChangeRequest" }
+        default: { $ref: "#/components/responses/Error" }
   /chats/{id}/connector-proposals:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -9246,6 +9285,38 @@ components:
       required: [decision]
       properties:
         decision: { type: string, enum: [allow, always, deny] }
+    TicketChange:
+      type: object
+      description: One line of a proposed ticket edit, as it was when proposed.
+      required: [field, label, after]
+      properties:
+        field: { type: string, enum: [title, description, status, priority, estimate, epic, agent, requires_mockup, labels, due_date, criteria, pr_url, comment, blocked_by] }
+        label: { type: string, description: "Display name of the field" }
+        before: { type: string, description: "Absent for a comment, which only adds" }
+        after: { type: string }
+    TicketChangeRequest:
+      type: object
+      required: [id, ticket_key, ticket_title, tool, changes, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        ticket_key: { type: string }
+        ticket_title: { type: string }
+        tool: { type: string, enum: [update_ticket, comment_ticket, update_ticket_blockers] }
+        changes: { type: array, items: { $ref: "#/components/schemas/TicketChange" } }
+        state: { type: string, enum: [pending, applied, declined, failed] }
+        error: { type: string, description: "Why applying it failed" }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+    TicketChangeRequestList:
+      type: object
+      required: [requests]
+      properties:
+        requests: { type: array, items: { $ref: "#/components/schemas/TicketChangeRequest" } }
+    TicketChangeDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [allow, always, deny], description: "allow applies it once; always applies it and lets the persona edit tickets without asking; deny declines it" }
     ConnectorProposal:
       type: object
       required: [id, name, url, auth_kind, reason, created_at]
@@ -9472,6 +9543,7 @@ components:
         connectors: { type: boolean, description: "Propose new MCP connectors from a chat; each is added only when the person approves it and signs in. Absent in a request means unchanged (false for a new persona)." }
         svg: { type: boolean, description: "Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona)." }
         workflows: { type: boolean, description: "Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona)." }
+        ticket_edits: { type: string, enum: [ask, allow], description: "Whether the persona's ticket edits from a chat (update_ticket, comment_ticket, update_ticket_blockers) wait for the person on a card (ask) or apply at once (allow). Canceling, or reopening a canceled ticket, always asks. Absent in a request means unchanged (ask for a new persona)." }
     PersonaSummary:
       type: object
       description: What a chat needs to render its persona. Absent on a chat means the built-in Assistant.

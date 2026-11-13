@@ -37,7 +37,17 @@ func toPersonaSummary(p store.Persona) *api.PersonaSummary {
 }
 
 func toPersonaCapabilities(p store.Persona) *api.PersonaCapabilities {
-	return &api.PersonaCapabilities{Code: p.CanCode, Images: p.CanGenerateImages, ImageEngine: &p.ImageEngine, Personas: &p.CanCreatePersonas, Svg: &p.CanCreateSvgs, Workflows: &p.CanCreateWorkflows, Connectors: &p.CanCreateConnectors}
+	tickets := api.PersonaCapabilitiesTicketEdits(p.TicketEdits)
+	return &api.PersonaCapabilities{Code: p.CanCode, Images: p.CanGenerateImages, ImageEngine: &p.ImageEngine, Personas: &p.CanCreatePersonas, Svg: &p.CanCreateSvgs, Workflows: &p.CanCreateWorkflows, Connectors: &p.CanCreateConnectors, TicketEdits: &tickets}
+}
+
+// ticketEditsArg is the capabilities object's ticket_edits; absent means unchanged.
+func ticketEditsArg(c *api.PersonaCapabilities) *string {
+	if c == nil || c.TicketEdits == nil {
+		return nil
+	}
+	v := string(*c.TicketEdits)
+	return &v
 }
 
 // imageEngineArg is the capabilities object's image engine; absent means unchanged.
@@ -136,7 +146,7 @@ func (s *Server) CreatePersona(ctx context.Context, req api.CreatePersonaRequest
 	p, err := s.personas().Create(ctx, personaOwner(ctx), personas.NewInput{
 		Name: b.Name, Tone: toneArg(b.Tone), Color: b.Color, Instructions: b.CustomInstructions, IsDefault: deref(b.IsDefault),
 		Code: code, Images: images, Personas: makers, SVG: svg, Workflows: workflows, Connectors: connectors, Repos: b.Repos,
-		ImageEngine: imageEngineArg(b.Capabilities),
+		ImageEngine: imageEngineArg(b.Capabilities), TicketEdits: ticketEditsArg(b.Capabilities),
 	})
 	if err != nil {
 		return nil, err
@@ -166,7 +176,7 @@ func (s *Server) UpdatePersona(ctx context.Context, req api.UpdatePersonaRequest
 	p, err := s.personas().Update(ctx, personaOwner(ctx), req.Id, personas.Patch{
 		Revision: int32(b.Revision), Name: b.Name, Tone: toneArg(b.Tone), Color: b.Color, Instructions: b.CustomInstructions,
 		Code: code, Images: images, Personas: makers, SVG: svg, Workflows: workflows, Connectors: connectors, Repos: b.Repos,
-		ImageEngine: imageEngineArg(b.Capabilities),
+		ImageEngine: imageEngineArg(b.Capabilities), TicketEdits: ticketEditsArg(b.Capabilities),
 	})
 	if err != nil {
 		return nil, err

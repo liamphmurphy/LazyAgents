@@ -100,7 +100,7 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	// Agent API (docs/dev/plan.md §5.2): bearer agent tokens, not the local user.
-	deps := agentapi.Deps{Q: s.Q, Runs: s.Runs, Tracker: s.Tracker, Wiki: s.Wiki, Connectors: s.connectors(), Secrets: s.userSecrets(), Designs: s.designs()}
+	deps := s.agentDeps()
 	mux.Handle("/mcp", agentapi.MCPHandler(deps, s.Version, s.Log))
 	mux.Handle("/mcp/connectors/{slug}", agentapi.ConnectorHandler(deps, s.Version))
 	// More specific than {slug}, so it wins; no connector slug can contain "_".
