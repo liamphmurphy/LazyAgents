@@ -668,7 +668,11 @@ func (r *Runner) sweepChatVideos(ctx context.Context) {
 		r.Log.Warn("sweep chat videos", "err", err)
 		return
 	}
-	for _, k := range keys {
+	audio, err := r.q().DeleteDetachedChatAudioJobs(ctx, 50)
+	if err != nil {
+		r.Log.Warn("sweep chat audio", "err", err)
+	}
+	for _, k := range append(keys, audio...) {
 		if err := r.Attachments.Delete(ctx, r.Cfg.AttachmentBucket, k); err != nil {
 			r.Log.Warn("delete chat video object", "key", k, "err", err)
 		}

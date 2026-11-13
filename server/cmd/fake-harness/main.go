@@ -50,6 +50,8 @@
 //	                    (comma-separated) is passed as generate_image references.
 //	chat-video          chat turn; a prompt "video: <title>" renders a tiny video
 //	                    through the video tools (see fakeVideo; FAKE_VIDEO_STEP)
+//	chat-audio          chat turn; a prompt "audio: <title>" renders a tiny WAV
+//	                    through the audio tools (see fakeAudio; FAKE_AUDIO_STEP)
 //	workflow-image      a workflow step: see the handler below
 //	slow                wait for SIGINT (pause), then end the turn
 //	delegate            claim, delegate to @scribe, end the turn; the delegated run
@@ -704,6 +706,20 @@ func main() {
 		if title, ok := strings.CutPrefix(prompt, "video: "); ok {
 			title, _, _ = strings.Cut(title, "\n\n(Vesper:")
 			reply = fakeVideo(call, title, os.Getenv("FAKE_VIDEO_STEP"))
+		}
+		text(reply)
+		result(false, reply)
+		return
+	}
+	// chat-audio: "audio: <title>" renders a tiny WAV through the audio tools,
+	// as FAKE_AUDIO_STEP says: ok (default), ogg (a file the server can't
+	// decode), fail (fail_audio), unfinished (ends at check) or empty
+	// (finishes without writing the file).
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-audio" {
+		reply := "Chat reply: " + prompt
+		if title, ok := strings.CutPrefix(prompt, "audio: "); ok {
+			title, _, _ = strings.Cut(title, "\n\n(Vesper:")
+			reply = fakeAudio(call, title, os.Getenv("FAKE_AUDIO_STEP"))
 		}
 		text(reply)
 		result(false, reply)

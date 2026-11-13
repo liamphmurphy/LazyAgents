@@ -2097,11 +2097,14 @@ export interface paths {
         get: operations["listLibraryItems"];
         put?: never;
         /**
-         * Add an image of your own to your Library
-         * @description Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
-         *     Library, e.g. a photo to use as their reference image. It counts
-         *     against the same storage cap as generated images. 422 for another
-         *     type, an empty file, one over the limit or a full Library.
+         * Add an image or audio file of your own to your Library
+         * @description Stores one image (PNG, JPEG, GIF or WebP) or audio file (MP3, WAV,
+         *     OGG or M4A), up to 25 MB, in the caller's Library, e.g. a photo to use
+         *     as their reference image or a voice memo. It counts against the same
+         *     storage cap as generated images. An audio file is checked against its
+         *     name, and its length and waveform are read for WAV and MP3. 422 for
+         *     another type, a file that isn't what its name says, an empty file,
+         *     one over the limit or a full Library.
          */
         post: operations["uploadLibraryItem"];
         delete?: never;
@@ -2212,7 +2215,11 @@ export interface paths {
         delete: operations["deleteLibraryItem"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename an item in your Library
+         * @description 404 unless it is yours. 422 for an empty or over-long title.
+         */
+        patch: operations["renameLibraryItem"];
         trace?: never;
     };
     "/library/{itemId}/reference": {
@@ -2678,6 +2685,54 @@ export interface paths {
          * @description Supports a single byte Range, so players can seek.
          */
         get: operations["getChatVideoContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chat's audio, oldest first
+         * @description Audio a coding chat renders with code during its turn (MIDI through a
+         *     soundfont, a synth script, ffmpeg). Each follows its stages (compose,
+         *     render, check, save) as the agent and its renderer report them; a
+         *     finished one is also kept in the Library.
+         */
+        get: operations["listChatAudio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/audio/{audioId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                audioId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A finished audio file, for playing or downloading
+         * @description Supports a single byte Range, so players can seek.
+         */
+        get: operations["getChatAudioContent"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8274,8 +8329,69 @@ export interface components {
         ChatVideos: {
             videos: components["schemas"]["ChatVideo"][];
         };
+        /**
+         * @description compose: the music or sound is being written; render: the renderer is running; check: measuring the file (a persona can't listen, so the checks are numbers); save: storing it
+         * @enum {string}
+         */
+        ChatAudioStage: "compose" | "render" | "check" | "save";
+        ChatAudioOutput: {
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            duration_ms?: number;
+        };
+        ChatAudio: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description The planned length */
+            duration_ms: number;
+            /** @description How it was made, e.g. MIDI → FluidSynth; empty until named */
+            method: string;
+            stage: components["schemas"]["ChatAudioStage"];
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+            /**
+             * @description Why a failed job failed: stopped when the person stopped the reply
+             * @enum {string}
+             */
+            failure_kind?: "error" | "stopped";
+            error?: string;
+            /** @description The failing command's output */
+            error_log?: string;
+            /** @description The renderer, relative to the chat's workspace; empty until named */
+            script_path: string;
+            checks: components["schemas"]["ChatVideoCheck"][];
+            percent: number;
+            stage_note: string;
+            /** Format: uuid */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The reply it belongs to, once that reply is stored; absent while the turn runs
+             */
+            message_id?: string;
+            /**
+             * Format: uuid
+             * @description Its copy in the Library, while that exists
+             */
+            library_item_id?: string;
+            /** @description The waveform of a finished file the server could decode */
+            peaks?: number[];
+            output?: components["schemas"]["ChatAudioOutput"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ChatAudios: {
+            audio: components["schemas"]["ChatAudio"][];
+        };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video";
+        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video" | "audio";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -8323,7 +8439,7 @@ export interface components {
             link_status?: components["schemas"]["LibraryLinkStatus"];
             /** @description For a link: a saved summary, as markdown */
             summary?: string;
-            /** @description For a video: its length */
+            /** @description For a video or audio: its length */
             duration_ms?: number;
             /** @description For a video: frame width in pixels */
             width?: number;
@@ -8331,6 +8447,10 @@ export interface components {
             height?: number;
             /** @description For a video: a poster image is served at /library/{itemId}/poster */
             has_poster?: boolean;
+            /** @description For generated audio: how it was made, e.g. MIDI → FluidSynth; absent for an upload */
+            method?: string;
+            /** @description For audio: the waveform, one value (0-255) per bucket. Absent when the server can't decode the format (OGG, M4A); duration_ms is absent then too. */
+            peaks?: number[];
             /** Format: date-time */
             created_at: string;
         };
@@ -12848,6 +12968,37 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    renameLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The renamed item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     setLibraryReference: {
         parameters: {
             query?: never;
@@ -13626,6 +13777,71 @@ export interface operations {
                 };
                 content: {
                     "video/mp4": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            416: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatAudio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat's audio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAudios"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatAudioContent: {
+        parameters: {
+            query?: {
+                /** @description Serve as an attachment instead of inline */
+                download?: boolean;
+            };
+            header?: {
+                /** @description One byte range, e.g. bytes=0-1023 */
+                Range?: string;
+            };
+            path: {
+                id: components["parameters"]["ChatId"];
+                audioId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The audio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The requested range of the audio */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             404: components["responses"]["Error"];

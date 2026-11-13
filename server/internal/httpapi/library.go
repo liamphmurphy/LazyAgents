@@ -40,6 +40,19 @@ func toLibraryItem(l store.ListLibraryItemsRow) api.LibraryItem {
 		hasPoster := l.PosterKey != nil
 		out.HasPoster = &hasPoster
 	}
+	if l.Kind == "audio" {
+		out.DurationMs = intp(l.DurationMs)
+		if l.Method != "" {
+			out.Method = &l.Method
+		}
+		if len(l.Peaks) > 0 {
+			peaks := make([]int, len(l.Peaks))
+			for i, b := range l.Peaks {
+				peaks[i] = int(b)
+			}
+			out.Peaks = &peaks
+		}
+	}
 	source := api.LibraryItemSource(l.Source)
 	out.Source = &source
 	// A persona reference whose persona was deleted stands for nobody.
@@ -83,7 +96,7 @@ func (s *Server) GetLibraryItemContent(ctx context.Context, req api.GetLibraryIt
 		return nil, err
 	}
 	download := req.Params.Download != nil && *req.Params.Download
-	if l.Kind == "video" {
+	if l.Kind == "video" || l.Kind == "audio" {
 		// Players seek with byte ranges.
 		resp, err := s.serveRanged(ctx, l.BlobKey, l.ContentType, l.SizeBytes, l.Filename, !download, req.Params.Range)
 		if err != nil {
@@ -143,12 +156,15 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 		return nil, err
 	}
 	name := runs.ChatAttachmentName(f.file.Name)
+	if runs.AudioNameType(name) != "" {
+		return s.uploadLibraryAudio(ctx, u.ID, ws, f, name)
+	}
 	ct, err := runs.ChatAttachmentType(name, f.file.Size, head[:n])
 	if err != nil {
 		return nil, err
 	}
 	if _, ok := runs.GeneratedImageType(head[:n]); !ok {
-		return nil, apperr.Invalid("file", "%s isn't supported: the Library takes PNG, JPEG, GIF or WebP images", name)
+		return nil, apperr.Invalid("file", "%s isn't supported: the Library takes PNG, JPEG, GIF or WebP images and MP3, WAV, OGG or M4A audio", name)
 	}
 	// A soft cap: two concurrent uploads can each pass the check.
 	stored, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
@@ -177,6 +193,73 @@ func (s *Server) UploadLibraryItem(ctx context.Context, req api.UploadLibraryIte
 	source := api.LibraryItemSource(l.Source)
 	return api.UploadLibraryItem201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
 		Source: &source, CreatedAt: l.CreatedAt}, nil
+}
+
+// uploadLibraryAudio stores an audio file the person added. The file is read
+// for its length and waveform here, so a tile never decodes audio in the browser.
+func (s *Server) uploadLibraryAudio(ctx context.Context, userID, ws uuid.UUID, f *form, name string) (api.UploadLibraryItemResponseObject, error) {
+	if f.file.Size <= 0 {
+		return nil, apperr.Invalid("file", "the file is empty")
+	}
+	if f.file.Size > runs.MaxChatAttachmentBytes {
+		return nil, apperr.Invalid("file", "audio files are limited to 25 MB")
+	}
+	info, err := runs.ReadAudioInfo(name, f.tmp, f.file.Size)
+	if errors.Is(err, runs.ErrNotAudio) {
+		return nil, apperr.Invalid("file", "%s isn't the %s audio file its name says", name, strings.TrimPrefix(path.Ext(name), "."))
+	} else if err != nil {
+		return nil, err
+	}
+	if _, err := f.tmp.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	stored, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: userID})
+	if err != nil {
+		return nil, err
+	}
+	if stored+f.file.Size > runs.MaxGeneratedImageStorageBytes {
+		return nil, apperr.Invalid("file", "your Library is full (1 GB): remove items you no longer need")
+	}
+	title := strings.TrimSpace(strings.TrimSuffix(name, path.Ext(name)))
+	if title == "" {
+		title = "Uploaded audio"
+	}
+	if r := []rune(title); len(r) > runs.MaxLibraryTitleRunes {
+		title = string(r[:runs.MaxLibraryTitleRunes])
+	}
+	key := runs.ChatAttachmentKey(ws, userID)
+	if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, f.tmp, f.file.Size, info.ContentType); err != nil {
+		return nil, err
+	}
+	var duration *int32
+	if info.DurationMS > 0 {
+		d := int32(info.DurationMS)
+		duration = &d
+	}
+	l, err := s.Q.CreateLibraryAudio(ctx, store.CreateLibraryAudioParams{WorkspaceID: ws, UserID: userID, Title: title, Filename: name, ContentType: info.ContentType,
+		SizeBytes: f.file.Size, BlobKey: key, Source: "upload", DurationMs: duration, Peaks: info.Peaks})
+	if err != nil {
+		_ = s.Blobs.Delete(context.WithoutCancel(ctx), s.ArtifactBucket, key)
+		return nil, err
+	}
+	out := toLibraryItem(libraryRow(l))
+	return api.UploadLibraryItem201JSONResponse(out), nil
+}
+
+// RenameLibraryItem retitles one of the caller's items.
+func (s *Server) RenameLibraryItem(ctx context.Context, req api.RenameLibraryItemRequestObject) (api.RenameLibraryItemResponseObject, error) {
+	u, _, ws := me(ctx)
+	title := strings.TrimSpace(req.Body.Title)
+	if n := len([]rune(title)); n < 1 || n > runs.MaxLibraryTitleRunes {
+		return nil, apperr.Invalid("title", "provide 1–%d characters", runs.MaxLibraryTitleRunes)
+	}
+	l, err := s.Q.RenameLibraryItem(ctx, store.RenameLibraryItemParams{ID: req.ItemId, WorkspaceID: ws, UserID: u.ID, Title: title})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return api.RenameLibraryItem200JSONResponse(toLibraryItem(libraryRow(l))), nil
 }
 
 // SaveLibraryDiagram keeps an SVG from one of the caller's assistant replies.
@@ -300,4 +383,13 @@ func intp(v *int32) *int {
 	}
 	n := int(*v)
 	return &n
+}
+
+// libraryRow widens a bare item to the row a listing returns, with no chat,
+// persona or project to name.
+func libraryRow(l store.LibraryItem) store.ListLibraryItemsRow {
+	return store.ListLibraryItemsRow{ID: l.ID, WorkspaceID: l.WorkspaceID, UserID: l.UserID, Kind: l.Kind, Title: l.Title, Filename: l.Filename, ContentType: l.ContentType,
+		SizeBytes: l.SizeBytes, BlobKey: l.BlobKey, ChatID: l.ChatID, MessageID: l.MessageID, PersonaID: l.PersonaID, CreatedAt: l.CreatedAt, Reference: l.Reference,
+		ReferencePersonaID: l.ReferencePersonaID, Source: l.Source, Url: l.Url, Note: l.Note, Site: l.Site, VideoID: l.VideoID, LinkStatus: l.LinkStatus, Summary: l.Summary,
+		DurationMs: l.DurationMs, Width: l.Width, Height: l.Height, PosterKey: l.PosterKey, Peaks: l.Peaks, Method: l.Method}
 }

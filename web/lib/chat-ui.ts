@@ -285,6 +285,7 @@ export type ChatStatusKind =
   | "repo-search"
   | "repo-attach"
   | "video-render"
+  | "audio-render"
   | "finance"
   | "finance-sort"
   | "persona"
@@ -501,6 +502,14 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("video-render", "finishing the video");
     case "fail_video":
       return status("video-render", "reporting a failed render");
+    case "start_audio":
+      return status("audio-render", "setting up audio");
+    case "update_audio":
+      return status("audio-render", "rendering audio");
+    case "finish_audio":
+      return status("audio-render", "finishing the audio");
+    case "fail_audio":
+      return status("audio-render", "reporting a failed render");
     case "finance_summary":
       return status("finance", "summing up your finances");
     case "finance_query":
