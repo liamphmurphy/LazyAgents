@@ -49,6 +49,14 @@ export const CONNECTIONS: Connection[] = [
     signIn: "codex",
   },
   {
+    name: "harness:google",
+    label: "Google (Gemini API key)",
+    icon: "key",
+    unlocks: ["Antigravity"],
+    without: "Optional. Antigravity runs and its image generation stay off.",
+    required: false,
+  },
+  {
     name: "git:ssh",
     label: "GitHub SSH key",
     icon: "key",

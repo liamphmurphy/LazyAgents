@@ -59,7 +59,19 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           <label className="flex items-center gap-2 text-[13px] text-fg-2">
             <input type="checkbox" checked={!!c.images} disabled={!!c.agent_handle} onChange={(e) => config({ images: e.target.checked || undefined })} /> Generate images
           </label>
-          {c.images && <p className="text-[12px] text-fg-tertiary">Always runs on Codex, as a persona allowed to generate images. Later steps can see the images.</p>}
+          {c.images && (
+            <>
+              <Labeled label="Image engine">
+                <select aria-label="Image engine" className={SELECT} value={c.image_engine ?? ""} onChange={(e) => config({ image_engine: e.target.value || undefined })}>
+                  <option value="">The persona&apos;s, else the workspace&apos;s</option>
+                  <option value="auto">Auto (first connected)</option>
+                  <option value="codex">Codex</option>
+                  <option value="antigravity">Antigravity</option>
+                </select>
+              </Labeled>
+              <p className="text-[12px] text-fg-tertiary">Runs as a persona allowed to generate images. Later steps can see the images.</p>
+            </>
+          )}
           <label className="flex items-center gap-2 text-[13px] text-fg-2">
             <input type="checkbox" aria-label="Check" checked={!!c.check} onChange={(e) => config({ check: e.target.checked || undefined, retry_from: undefined, max_attempts: undefined })} /> This step is a check (pass or fail)
           </label>

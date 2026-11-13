@@ -13,6 +13,7 @@ import { Toggle } from "@/components/ui/controls";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AppearanceSection } from "./appearance-section";
 import { BackupSection } from "./backup-section";
+import { ImageEngineSection } from "./image-engine-section";
 import { ProjectsSection } from "./projects/projects-screen";
 import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
@@ -36,6 +37,7 @@ export function SettingsScreen() {
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
     { id: "workspace", label: "Workspace", health: !secrets.data ? "unknown" : secrets.data.key_configured ? "ok" : "attention" },
     { id: "secrets", label: "Provider credentials", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
+    { id: "images", label: "Image engine", health: "idle" },
     { id: "repositories", label: "Repository discovery", health: "idle" },
     { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
@@ -76,6 +78,9 @@ export function SettingsScreen() {
             lead="Values are write-only. They are stored encrypted, injected only into runs whose scopes allow them, and never shown or returned by the API."
           >
             <SecretsSection />
+          </Section>
+          <Section id="images" title="Image engine" lead="Which harness makes the images personas and workflows ask for.">
+            <ImageEngineSection />
           </Section>
           <Section id="repositories" title="Repositories & GitHub owners"><RepositorySourcesSection /></Section>
           <Section id="projects" title="Projects" lead="One project maps to one GitHub repository. Without one, runs start in an empty workspace and can’t push.">

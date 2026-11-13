@@ -1041,6 +1041,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/image-engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which engine makes images, and which are connected
+         * @description Images are made by Codex or Antigravity. engine is the workspace's
+         *     choice (auto uses the first connected, Codex first); a persona or a
+         *     workflow step may override it. options says whether each engine can
+         *     make an image right now.
+         */
+        get: operations["getImageEngine"];
+        /** Choose the workspace's image engine */
+        put: operations["updateImageEngine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runner/environment": {
         parameters: {
             query?: never;
@@ -6090,7 +6114,7 @@ export interface components {
         /** @enum {string} */
         ScopeMode: "allowed" | "requires_approval" | "denied";
         /** @enum {string} */
-        Harness: "claude-code" | "codex";
+        Harness: "claude-code" | "codex" | "antigravity";
         Budget: {
             /** @description Go duration, e.g. 2h */
             max_runtime?: string;
@@ -6883,6 +6907,19 @@ export interface components {
             /** @description Where this runner keeps host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR); absent when it has none */
             host_workspaces_dir?: string;
         };
+        ImageEngineSettings: {
+            /** @enum {string} */
+            engine: "auto" | "codex" | "antigravity";
+            options: {
+                /** @enum {string} */
+                engine: "codex" | "antigravity";
+                label: string;
+                /** @description Connected, with a model to run the image step on */
+                available: boolean;
+                /** @description Why it isn't available */
+                reason?: string;
+            }[];
+        };
         RunnerSettings: {
             host_folder_workspaces: boolean;
         };
@@ -7578,8 +7615,10 @@ export interface components {
                 persona_id?: string;
                 agent_handle?: string;
                 web?: boolean;
-                /** @description agent: generate images. The step runs on Codex as a persona allowed to make images */
+                /** @description agent: generate images. The step runs as a persona allowed to make images, on image_engine */
                 images?: boolean;
+                /** @description agent with images: auto (default; the first connected of Codex and Antigravity), codex or antigravity. Defaults to the persona's, then the workspace's, engine */
+                image_engine?: string;
                 /** @description agent: reports pass or fail, and nothing after it runs unless it passes */
                 check?: boolean;
                 show?: string[];
@@ -8718,8 +8757,10 @@ export interface components {
         PersonaCapabilities: {
             /** @description Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs */
             code: boolean;
-            /** @description Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step) */
+            /** @description Generate images with an image engine (Codex or Antigravity); works with any chat model (a chat on another harness hands the image to a one-off step on the engine) */
             images: boolean;
+            /** @description Which engine makes this persona's images: codex, antigravity or auto (the first connected, Codex first). Empty inherits the workspace's choice (GET /image-engine). Absent in a request means unchanged. */
+            image_engine?: string;
             /** @description Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona). */
             personas?: boolean;
             /** @description Propose new MCP connectors from a chat; each is added only when the person approves it and signs in. Absent in a request means unchanged (false for a new persona). */
@@ -8746,7 +8787,7 @@ export interface components {
             id: string;
             title: string;
             state: components["schemas"]["PersonaDockState"];
-            /** @description The harness the chat's current turn runs on (claude-code or codex), after any fallback */
+            /** @description The harness the chat's current turn runs on (claude-code, codex or antigravity), after any fallback */
             harness: string;
             unread: number;
             /** @description Last line of the latest reply */
@@ -8771,7 +8812,7 @@ export interface components {
         };
         PersonaDock: {
             personas: components["schemas"]["PersonaDockEntry"][];
-            /** @description Claude Code then Codex: what each is running and how much of its plan allowance is left */
+            /** @description Claude Code, Codex, then Antigravity: what each is running and how much of its plan allowance is left (Antigravity has none to read: usage_available is false) */
             harnesses: components["schemas"]["HarnessActivity"][];
         };
         /** @description One plan allowance window, as the harness CLI reports it. */
@@ -8787,7 +8828,7 @@ export interface components {
             resets_at?: string;
         };
         HarnessActivity: {
-            /** @description claude-code or codex */
+            /** @description claude-code, codex or antigravity */
             harness: string;
             label: string;
             /** @description Runs and chat turns working on this harness now */
@@ -10644,6 +10685,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunnerStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getImageEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The choice and the engines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageEngineSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateImageEngine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    engine: "auto" | "codex" | "antigravity";
+                };
+            };
+        };
+        responses: {
+            /** @description The saved choice and the engines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageEngineSettings"];
                 };
             };
             default: components["responses"]["Error"];

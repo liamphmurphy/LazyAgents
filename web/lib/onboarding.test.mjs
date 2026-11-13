@@ -22,7 +22,7 @@ test("the Assistant greets by time of day", () => {
   assert.match(assistantLine(0, 8), /^Good morning\./);
   assert.match(assistantLine(0, 14), /^Good afternoon\./);
   assert.match(assistantLine(0, 22), /^Good evening\./);
-  assert.match(assistantLine(2, 9), /Claude Code, Codex or both/);
+  assert.match(assistantLine(2, 9), /Claude Code, Codex, Antigravity or any mix/);
 });
 
 test("profile helpers", () => {
@@ -34,10 +34,13 @@ test("profile helpers", () => {
 
 test("harness hint and placeholders", () => {
   assert.equal(harnessHint([]), "Connect at least one to continue.");
-  assert.equal(harnessHint(["claude-code"]), "Image generation stays off until Codex is connected.");
+  assert.equal(harnessHint(["claude-code"]), "Image generation stays off until Codex or Antigravity is connected.");
   assert.equal(harnessHint(["codex"]), "");
+  assert.equal(harnessHint(["claude-code", "antigravity"]), "");
   assert.equal(credentialPlaceholder("codex", "subscription"), "Paste auth.json");
   assert.equal(credentialPlaceholder("claude-code", "api_key"), "ANTHROPIC_API_KEY");
+  // Antigravity takes a Gemini key whichever kind is asked for: it has no subscription login.
+  assert.equal(credentialPlaceholder("antigravity", "subscription"), "GEMINI_API_KEY");
 });
 
 test("setup prompts carry the marker and the person's words", () => {

@@ -14,6 +14,8 @@ export type GraphNode = {
     agent_handle?: string;
     web?: boolean;
     images?: boolean;
+    /** auto, codex or antigravity; absent follows the persona's, then the workspace's, engine. */
+    image_engine?: string;
     check?: boolean;
     show?: string[];
     retry_from?: string;
@@ -54,7 +56,7 @@ export function nodeSummary(n: GraphNode): string {
       return "Sharpens the request";
     case "agent":
       if (c.check) return c.retry_from ? `Check · re-runs ${c.retry_from}` : "Check";
-      if (c.images) return "Persona · images · Codex";
+      if (c.images) return `Persona · images · ${imageEngineName(c.image_engine)}`;
       return c.agent_handle ? `@${c.agent_handle}` : c.web ? "Persona · web" : "Persona · read-only";
     case "gate":
       if (c.requires_check) return `Needs ${c.requires_check} to pass`;
@@ -177,4 +179,18 @@ export function failedGateCheck<S extends { node_id: string; state: string; chec
 /** Reviews left before Request changes stops being offered. */
 export function canRequestChanges(gate: GraphNode, attempt: number): boolean {
   return !!gate.config.retry_from && attempt < (gate.config.max_attempts || 3);
+}
+
+/** The engine an images step names, as a node's summary line reads it. */
+export function imageEngineName(engine: string | undefined): string {
+  switch (engine) {
+    case "codex":
+      return "Codex";
+    case "antigravity":
+      return "Antigravity";
+    case "auto":
+      return "Auto engine";
+    default:
+      return "default engine";
+  }
 }

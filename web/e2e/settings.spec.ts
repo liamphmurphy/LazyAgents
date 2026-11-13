@@ -424,3 +424,20 @@ test("GitHub presets refresh after credentials change", async ({ page }) => {
   await expect(section.getByRole("button", { name: "Add all repositories under previous-account" })).toHaveCount(0);
   expect(mock.api.unhandled).toEqual([]);
 });
+
+// Images can be made by Codex or Antigravity: Auto, or one of them, saved for the workspace.
+test("image engine: auto by default, shows what is connected, and saves the choice", async ({ page }) => {
+  const mock = await installSettingsApi(page);
+  await page.goto("/settings#images");
+  const section = page.locator("#images");
+  const group = section.getByRole("radiogroup", { name: "Image engine" });
+  await expect(group.getByRole("radio", { name: /^Auto/ })).toHaveAttribute("aria-checked", "true");
+  await expect(group.getByRole("radio", { name: /^Auto/ })).toContainText("Use the first connected: Codex.");
+  await expect(group.getByRole("radio", { name: /^Codex/ })).toContainText("Connected");
+  await expect(group.getByRole("radio", { name: /^Antigravity/ })).toContainText("Not connected: no harness:google secret");
+  await group.getByRole("radio", { name: /^Antigravity/ }).click();
+  await expect(group.getByRole("radio", { name: /^Antigravity/ })).toHaveAttribute("aria-checked", "true");
+  await page.reload();
+  await expect(page.locator("#images").getByRole("radio", { name: /^Antigravity/ })).toHaveAttribute("aria-checked", "true");
+  expect(mock.api.unhandled).toEqual([]);
+});

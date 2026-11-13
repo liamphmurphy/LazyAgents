@@ -15,6 +15,7 @@ import {
   draftBullets,
   draftPrompt,
   HARNESS_CARDS,
+  HARNESS_SECRETS,
   harnessHint,
   initialOf,
   PERSONA_EXAMPLES,
@@ -22,6 +23,7 @@ import {
   refinePrompt,
   setupHarness,
   type CredentialKind,
+  type HarnessCard as HarnessCardInfo,
   type HarnessId,
   type WizardStep,
 } from "@/lib/onboarding";
@@ -192,7 +194,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
           <input ref={input} type="file" accept={PHOTO_TYPES.join(",")} aria-label="Profile photo" className="sr-only" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <div className="min-w-0 flex-1">
-          <div className="grid grid-cols-2 gap-2.5 max-sm:grid-cols-1">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2.5">
             <label className="block">
               <span className="mb-[5px] block text-xs text-fg-secondary">Your name</span>
               <input className={field} value={name} maxLength={80} autoFocus onChange={(e) => setName(e.target.value)} />
@@ -227,15 +229,18 @@ function AboutYou({ onNext }: { onNext: () => void }) {
 
 type Verified = Partial<Record<HarnessId, number>>;
 
-function HarnessCard({ id, label, note, paste, stored, verified, onVerified }: {
-  id: HarnessId; label: string; note?: string;
+function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, stored, verified, onVerified }: HarnessCardInfo & {
   /** Whether a credential can be pasted here: runs use stored keys, and secrets are on. */
   paste: boolean;
+  /** Runs use the server host's own CLI sign-in: nothing to paste, only to check. */
+  hostLogins: boolean;
   /** This workspace already has a key for it. */
   stored: boolean;
   verified?: number; onVerified: (models: number) => void;
 }) {
-  const [kind, setKind] = useState<CredentialKind>("subscription");
+  // Antigravity has no subscription login to store (Google's terms bar it), so its card is a key field alone.
+  const [pickedKind, setKind] = useState<CredentialKind>("subscription");
+  const kind: CredentialKind = apiKeyOnly ? "api_key" : pickedKind;
   const [value, setValue] = useState("");
   const [error, setError] = useState<string>();
   const [checking, setChecking] = useState(false);
@@ -276,20 +281,28 @@ function HarnessCard({ id, label, note, paste, stored, verified, onVerified }: {
   const ok = verified !== undefined;
   return (
     <section aria-label={label} data-verified={ok || undefined} className={cx("rounded-[10px] border border-border bg-surface-sunken p-3 transition-[border-color,box-shadow] duration-[400ms]", ok && "wizard-verified")}>
-      <h3 className="text-[14px] font-semibold">{label}</h3>
-      <p className="mb-2.5 mt-0.5 min-h-[52px] text-xs text-fg-tertiary">
-        Chat, coding and agent runs.{note && <> <em className="not-italic text-[var(--brand-star)]">{note}</em></>}
+      <h3 className="flex items-center gap-2 text-[14px] font-semibold">
+        {label}
+        {images && <span data-testid={`${id}-images`} className="rounded-full bg-[color-mix(in_srgb,var(--brand-star)_22%,transparent)] px-2 py-px text-[10.5px] font-semibold text-[var(--brand-star)]">Images</span>}
+      </h3>
+      <p className="mt-0.5 text-xs text-fg-tertiary">{by}</p>
+      <p className="mb-2.5 mt-1 min-h-[52px] text-xs text-fg-tertiary">
+        {apiKeyOnly
+          ? hostLogins
+            ? "Runs use the agy sign-in on this host. Sign it in there, then Verify checks it. Nothing to paste."
+            : "Chat, coding and agent runs on a Gemini API key. Vesper never reads, copies or stores the Google sign-in agy keeps: Google’s terms don’t allow it."
+          : "Chat, coding and agent runs."}
       </p>
       {paste && (
         <>
-          <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
+          {!apiKeyOnly && <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
             {(["subscription", "api_key"] as const).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
                 className={cx("h-[22px] flex-1 rounded-[5px] text-xs transition-colors", kind === k ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg")}>
                 {k === "subscription" ? "Subscription" : "API key"}
               </button>
             ))}
-          </div>
+          </div>}
           <input type="password" autoComplete="off" spellCheck={false} aria-label={`${label} credential`} className={field}
             placeholder={credentialPlaceholder(id, kind)} title={credentialHelp(id, kind)} value={value} onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) run(); }} />
@@ -328,7 +341,7 @@ function ConnectHarness({ onNext }: { onNext: (verified: HarnessId[]) => void })
     <>
       {hostLogins ? (
         <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
-          This server runs Claude Code and Codex with the <code>claude</code> and <code>codex</code> sign-ins on its host. Sign the CLI in there, then Verify checks it.
+          This server runs Claude Code, Codex and Antigravity with the <code>claude</code>, <code>codex</code> and <code>agy</code> sign-ins on its host. Sign the CLI in there, then Verify checks it.
         </p>
       ) : secretsOff ? (
         <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
@@ -337,7 +350,7 @@ function ConnectHarness({ onNext }: { onNext: (verified: HarnessId[]) => void })
       ) : null}
       <div className="grid grid-cols-2 gap-2.5 max-sm:grid-cols-1">
         {HARNESS_CARDS.map((c) => (
-          <HarnessCard key={c.id} {...c} paste={!hostLogins && !secretsOff} stored={has(c.id === "codex" ? "harness:openai" : "harness:anthropic")}
+          <HarnessCard key={c.id} {...c} paste={!hostLogins && !secretsOff} hostLogins={hostLogins} stored={has(HARNESS_SECRETS[c.id])}
             verified={verified[c.id]} onVerified={(n) => setVerified((v) => ({ ...v, [c.id]: n }))} />
         ))}
       </div>
@@ -550,7 +563,7 @@ export function WelcomeWizard({ only, onDone }: { only?: "harness"; onDone: (per
     if (!only) setWizardStep(4);
     onDone(id);
   };
-  const line = only ? "Chats need a mind to run on again: connect Claude Code, Codex or both." : assistantLine(step, hour);
+  const line = only ? "Chats need a mind to run on again: connect Claude Code, Codex, Antigravity or any mix." : assistantLine(step, hour);
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="welcome-wizard">
       <div className="mx-auto flex w-full max-w-[600px] flex-1 flex-col items-center justify-center px-6 py-10">

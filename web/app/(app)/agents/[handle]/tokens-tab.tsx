@@ -1,5 +1,6 @@
 "use client";
 
+import { antigravityMcpConfig } from "@/lib/harnesses";
 import { useState } from "react";
 import type { AgentDetail } from "@/lib/api/client";
 import { useAgentTokens, useCreateToken, useRevokeToken } from "@/lib/api/hooks";
@@ -22,8 +23,8 @@ function Command({ label, text }: { label: string; text: string }) {
 }
 
 /**
- * Tokens for unmanaged sessions (docs/dev/plan.md §1): someone runs Claude Code or
- * Codex themselves and attaches it to this agent's identity. Vesper
+ * Tokens for unmanaged sessions (docs/dev/plan.md §1): someone runs Claude Code,
+ * Codex or Antigravity themselves and attaches it to this agent's identity. Vesper
  * can't enforce budgets or isolation on those, only brokered scopes.
  */
 export function TokensTab({ detail }: { detail: AgentDetail }) {
@@ -37,7 +38,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
   return (
     <div className="flex flex-col gap-4">
       <Banner tone="human" title="Unmanaged sessions">
-        A token lets a Claude Code or Codex session you run yourself act as {detail.agent.name}: same instructions, same Agent API. Vesper
+        A token lets a Claude Code, Codex or Antigravity session you run yourself act as {detail.agent.name}: same instructions, same Agent API. Vesper
         can&apos;t enforce budgets, isolation or harness rules on those sessions; only brokered scopes still need approval.
       </Banner>
 
@@ -52,6 +53,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
             label="Codex"
             text={`export LAZYAGENTS_TOKEN=${minted.token}\ncodex mcp add lazyagents --url ${minted.mcp_url} --bearer-token-env-var LAZYAGENTS_TOKEN`}
           />
+          <Command label="Antigravity: add to ~/.gemini/config/mcp_config.json" text={antigravityMcpConfig(minted.mcp_url, minted.token)} />
           <p className="text-xs text-fg-tertiary">The Agent API at /mcp arrives with the rest of Phase 4; tokens you mint now will work with it.</p>
         </Card>
       )}
@@ -76,7 +78,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
           <div className="p-4"><Skeleton className="h-16" /></div>
         ) : list.data.tokens.length === 0 ? (
           <EmptyState icon="key" title="No tokens yet" className="py-8">
-            Create one to connect a local Claude Code or Codex session as {detail.agent.name}.
+            Create one to connect a local Claude Code, Codex or Antigravity session as {detail.agent.name}.
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">

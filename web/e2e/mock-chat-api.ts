@@ -148,6 +148,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const dock: Record<string, unknown>[] = [];
   // Assistant personas (ADR: Assistant personas): private to the caller, at most one default.
   const personas: MockPersona[] = [...(opts.personas ?? [])];
+  let imageEngine = "auto";
   const repositorySources: { kind: "repository" | "organization"; name: string }[] = personas.flatMap((p) => p.repos.map((name) => ({ kind: "repository" as const, name })));
   // Personas the chat's personas proposed (several personas in one chat).
   const proposals: MockProposal[] = [];
@@ -641,6 +642,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
     }
 
+    if (path === "/image-engine") {
+      if (method === "PUT") imageEngine = String(body().engine);
+      return json({ engine: imageEngine, options: [
+        { engine: "codex", label: "Codex", available: true },
+        { engine: "antigravity", label: "Antigravity", available: false, reason: "no harness:google secret" },
+      ] });
+    }
     if (path === "/planning-sessions" && method === "GET") return json({ sessions: [], has_more: false });
     if (path === "/repositories/presets" && method === "GET") return json({ owners: [{ login: "liamphmurphy", organization: false }, { login: "acme", organization: true }] });
     if (path === "/repositories/sources") {
