@@ -18,7 +18,7 @@ import { EditorLayout } from "@/components/shell/editor-layout";
 import { AccountsDialog } from "./accounts-dialog";
 import { AskPanel, useFinanceAsk } from "./ask-panel";
 import { ImportDialog } from "./import-dialog";
-import { Toast, useToast } from "./motion";
+import { toast } from "@/components/ui/toast";
 import { CashFlow, Kpis, Recurring, Review, Spending } from "./sections";
 
 const errorText = (e: unknown) =>
@@ -40,7 +40,8 @@ export function FinanceScreen() {
   const openChat = () => setShowChat((n) => n + 1);
   const ask = useFinanceAsk(data?.space_id);
   const refresh = useRefreshFinance();
-  const { toast, show } = useToast();
+  // One Finance message at a time: a new one replaces the last.
+  const show = (title: React.ReactNode, tone: "success" | "error" = "success") => toast({ id: "finance", title, tone });
   const categorize = useCategorize();
   const [saveRules, setSaveRules] = useState(true);
   // Rows sliding out of the review queue while their category saves.
@@ -220,7 +221,6 @@ export function FinanceScreen() {
               />
             </>
           )}
-          <Toast toast={toast} />
         </>
       }
     />

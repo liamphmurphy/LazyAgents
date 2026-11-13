@@ -135,7 +135,6 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
       {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-14">
         <span>{moves.error}</span><button type="button" aria-label="Dismiss move error" onClick={moves.dismissError}>×</button>
       </div>}
-      {moves.conflict && <ConflictToast {...moves.conflict} onDismiss={moves.dismissConflict} />}
       <p role="status" className="sr-only">{moves.notice ?? (Object.keys(moves.pending).length ? "Moving ticket…" : "")}</p>
       {query.isPending && <p role="status" className="text-14 text-fg-secondary">Loading board…</p>}
       {query.isError && <div role="alert" className="mb-4 text-14">Couldn&apos;t load board: {query.error.message} <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></div>}
@@ -184,21 +183,6 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
       </div>}
     </div>
   );
-}
-
-/** Stale-revision moves: the board already refetched, so this only explains why the card snapped back. */
-function ConflictToast({ ticket, message, onDismiss }: { ticket: string; message: string; onDismiss: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, 6000);
-    return () => clearTimeout(timer);
-  }, [ticket, message, onDismiss]);
-  return <div role="alert" aria-label="Move conflict" className="motion-rise fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-4 rounded-lg border border-border-float bg-surface-raised p-3 text-14 shadow-lg">
-    <div>
-      <p className="font-semibold">{ticket} changed elsewhere</p>
-      <p className="text-12 text-fg-secondary">Board refreshed. Review it and try again. ({message})</p>
-    </div>
-    <button type="button" aria-label="Dismiss move conflict" onClick={onDismiss} className="text-16 leading-none">×</button>
-  </div>;
 }
 
 /** A board card: the list row's content (status, key, title, state, epic, agent) stacked, plus the move menu. */

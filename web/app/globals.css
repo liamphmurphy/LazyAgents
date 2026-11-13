@@ -918,6 +918,9 @@
 .motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
 .motion-rise { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
 .motion-page { animation: motion-fade-in var(--motion-fast) ease-out; }
+/* Toasts (components/ui/toast.tsx) rise in; leaving ones fade before the store drops them. */
+.motion-toast[data-state="open"] { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
+.motion-toast[data-state="closed"] { animation: motion-fade-out var(--motion-exit) ease-in both; }
 /* The menu's Apps flyout: slides out of its row, then its tiles follow in reading order (--i). */
 .motion-flyout { transform-origin: var(--radix-popper-transform-origin); }
 .motion-flyout[data-state="open"] { animation: motion-flyout-in var(--motion-base) var(--motion-ease) both; }
@@ -981,6 +984,7 @@
   .motion-pop,
   .motion-pop-child svg,
   .motion-rise,
+  .motion-toast,
   .motion-slide,
   .motion-page { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .motion-flyout[data-state="open"] { animation-name: motion-fade-in !important; }
@@ -1158,16 +1162,14 @@
 .fin-row > * { min-height: 0; overflow: hidden; }
 .fin-row[data-leaving="true"] { grid-template-rows: 0fr; opacity: 0; transform: translateX(24px); }
 .fin-step { animation: motion-rise 380ms var(--motion-ease) both; }
-.fin-toast { animation: fin-toast 280ms var(--motion-ease) both; }
 .fin-progress { animation: fin-progress 1100ms ease-in-out infinite alternate; }
 @keyframes fin-grow { from { transform: scaleY(0); } }
 @keyframes fin-fill { from { transform: scaleX(0); } }
 @keyframes fin-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-@keyframes fin-toast { from { opacity: 0; transform: translateY(16px); } }
 @keyframes fin-progress { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .fin-bar, .fin-fill, .fin-spark, .fin-spark-dot, .fin-step, .fin-toast { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .fin-bar, .fin-fill, .fin-spark, .fin-spark-dot, .fin-step { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .fin-row { transition-duration: 1ms !important; }
   .fin-progress { animation: none; transform: none; width: 100%; opacity: 0.6; }
 }

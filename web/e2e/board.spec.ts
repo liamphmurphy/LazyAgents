@@ -124,14 +124,15 @@ for (const status of [409, 422]) test(`${status} rolls back optimistic move and 
   await expect(column(page, "done").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   await expect.poll(() => api.patches.length).toBe(1);
   release();
-  const alert = status === 409 ? page.getByRole("alert", { name: "Move conflict" }) : screen(page).getByRole("alert").filter({ hasText: message });
+  // A conflict is a toast (the board refetched, so it only explains the snap-back); other errors stay inline.
+  const alert = status === 409 ? page.getByRole("region", { name: "Notifications" }).getByText("WEB-1 changed elsewhere").locator("../..") : screen(page).getByRole("alert").filter({ hasText: message });
   await expect(alert).toContainText(message);
   if (status === 409) await expect(alert).toContainText("WEB-1 changed elsewhere");
   await expect(column(page, "todo").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   await expect(column(page, "done").getByRole("article", { name: "Ticket WEB-1" })).toHaveCount(0);
   await expect(card(page)).toHaveAttribute("aria-busy", "false");
   expect(api.tickets[0].status).toBe("todo");
-  await page.getByRole("button", { name: status === 409 ? "Dismiss move conflict" : "Dismiss move error" }).click();
+  await alert.getByRole("button", { name: status === 409 ? "Dismiss notification" : "Dismiss move error" }).click();
   await expect(alert).toHaveCount(0);
 });
 
@@ -141,7 +142,7 @@ test("stale displayed card is refreshed without sending a PATCH", async ({ page 
   await expect(card(page)).toBeVisible();
   api.editTicket("WEB-1", { status: "in_review", title: "Agent changed this" });
   await move(page, "WEB-1", "Done");
-  await expect(page.getByRole("alert", { name: "Move conflict" })).toContainText("Ticket changed elsewhere");
+  await expect(page.getByRole("region", { name: "Notifications" })).toContainText("Ticket changed elsewhere");
   await expect(column(page, "in_review").getByRole("article", { name: "Ticket WEB-1" })).toContainText("Agent changed this");
   expect(api.patches).toEqual([]);
 });
@@ -154,7 +155,7 @@ test("an intervening revision change rejects PATCH and keeps the newer server st
   await expect.poll(() => api.patches.length).toBe(1);
   api.editTicket("WEB-1", { status: "in_review" });
   release();
-  await expect(page.getByRole("alert", { name: "Move conflict" })).toContainText("Revision changed elsewhere");
+  await expect(page.getByRole("region", { name: "Notifications" })).toContainText("Revision changed elsewhere");
   await expect(column(page, "in_review").getByRole("article", { name: "Ticket WEB-1" })).toBeVisible();
   expect(api.tickets[0].status).toBe("in_review");
 });

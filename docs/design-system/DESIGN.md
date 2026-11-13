@@ -468,6 +468,7 @@ Every screen uses these patterns rather than a blank page or a spinner.
   * `⌘K` command menu, `C` new ticket, `⌘↵` submit a composer, `⌘S` save a definition.
   * In the Inbox: `A` approve, `D` deny, `J`/`K` next and previous.
   * Bulk selection is checkbox on hover, then shift-click.
+* Feedback for an action is a toast: `toast()` from `components/ui/toast.tsx` (store in `lib/toast.ts`) from any handler or hook. They stack bottom-centre (at most three, newest last), pause while hovered or focused, and errors stay longer. Inline errors next to a form field stay inline; a toast is for what just happened elsewhere or out of sight.
 * Dialogs trap focus, close on `esc`, and return focus to whatever opened them. The command menu uses `role="combobox"` with a `listbox` of `option`s.
 * Status must never rely on color alone. Glyph shapes differ (dashed, ring, half, three-quarter, filled) and pills always carry text.
 * Small text never goes dimmer than `--text-tertiary`.

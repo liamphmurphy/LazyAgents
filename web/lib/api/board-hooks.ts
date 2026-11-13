@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "../toast";
 import { ApiError, api, unwrap, type TicketPatch } from "./client";
 import { keys } from "./hooks";
 import { moveRevision, type BoardCard, type BoardStatus, type PendingMove } from "../board";
@@ -24,16 +25,12 @@ export function useBoardMoves() {
   const locks = useRef(new Set<string>());
   const [pending, setPending] = useState<Record<string, PendingMove>>({});
   const [error, setError] = useState<string>();
-  // A 409 (or a card that went stale before PATCH) is shown as a toast after the refetch.
-  const [conflict, setConflict] = useState<{ ticket: string; message: string }>();
   const [notice, setNotice] = useState<string>();
-  const dismissConflict = useCallback(() => setConflict(undefined), []);
 
   async function move(card: BoardCard, status: BoardStatus) {
     if (card.status === status || locks.current.has(card.key)) return;
     locks.current.add(card.key);
     setError(undefined);
-    setConflict(undefined);
     setNotice(undefined);
     setPending((p) => ({ ...p, [card.key]: { card, status } }));
     try {
@@ -46,7 +43,8 @@ export function useBoardMoves() {
       setNotice(`Moved ${card.key}.`);
     } catch (e) {
       const stale = (e instanceof ApiError && e.status === 409) || (e instanceof Error && !(e instanceof ApiError) && e.message.startsWith("Ticket changed elsewhere"));
-      if (stale) setConflict({ ticket: card.key, message: e instanceof Error ? e.message : "" });
+      // The refetch below snaps the card back; the toast says why.
+      if (stale) toast({ id: "board-conflict", tone: "error", title: `${card.key} changed elsewhere`, description: `Board refreshed. Review it and try again. (${e instanceof Error ? e.message : ""})` });
       else setError(`Couldn't move ${card.key}: ${e instanceof Error ? e.message : "Request failed. Try again."}`);
       setPending((p) => {
         const next = { ...p };
@@ -71,9 +69,8 @@ export function useBoardMoves() {
   }
 
   return {
-    pending, move, error, notice, conflict,
+    pending, move, error, notice,
     dismissError: () => setError(undefined),
-    dismissConflict,
   };
 }
 
