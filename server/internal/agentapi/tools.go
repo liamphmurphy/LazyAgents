@@ -690,6 +690,9 @@ func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (an
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(in.Body) == "" {
+		return nil, apperr.Invalid("body", "is empty; to clear a page's text, ask the person")
+	}
 	res, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note, BaseID: in.BaseVersion, Properties: in.Properties})
 	if err != nil {
 		return nil, err

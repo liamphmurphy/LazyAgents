@@ -147,7 +147,10 @@ func (s *Service) resolve(ctx context.Context, ws uuid.UUID, typ string, c Conte
 	}
 	if c.BodyMD != nil {
 		body := strings.ReplaceAll(*c.BodyMD, "\r\n", "\n")
-		if strings.TrimSpace(body) == "" {
+		// A Knowledge page may be empty, as a new note in Obsidian is; every
+		// other artifact needs text. write_note still refuses an empty body,
+		// so a persona can't blank a page.
+		if strings.TrimSpace(body) == "" && typ != "note" {
 			return resolved{}, noop, apperr.Invalid("body_md", "is empty")
 		}
 		if len(body) > MaxMarkdownBytes {

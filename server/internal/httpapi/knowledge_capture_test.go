@@ -75,3 +75,24 @@ func TestLiteratureNotesFromSavedLinksAndTranscripts(t *testing.T) {
 		t.Fatalf("transcript literature note %v", page)
 	}
 }
+
+// A new Knowledge page or capture may start empty, as an Obsidian note does;
+// a persona still can't blank a page with write_note.
+func TestEmptyPagesAllowedButNotBlankedByPersonas(t *testing.T) {
+	e := newChatEnv(t)
+	page := e.want("POST", "/knowledge/pages", map[string]any{"title": "Untitled", "body_md": ""}, 200)
+	if page["body_md"] != "" {
+		t.Fatalf("empty page body %q", page["body_md"])
+	}
+	e.want("POST", "/knowledge/capture", map[string]any{"title": "Call the harbour master"}, 200)
+
+	chat := e.newChat(nil)
+	token := e.canvasToken(uuid.MustParse(chat["id"].(string)))
+	filled := e.want("POST", "/knowledge/pages", map[string]any{"title": "Keep", "path": "Keep", "body_md": "Text to keep.", "audience": "shared"}, 200)
+	if code, out := e.tool(token, "write_note", map[string]any{"path": "Keep", "body": "  ", "mode": "replace"}); code == 200 {
+		t.Fatalf("write_note blanked a page: %v", out)
+	}
+	if again := e.want("GET", "/knowledge/pages/"+filled["id"].(string), nil, 200); again["body_md"] != "Text to keep." {
+		t.Fatalf("page changed: %v", again["body_md"])
+	}
+}
