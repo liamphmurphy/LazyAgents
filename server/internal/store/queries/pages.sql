@@ -133,3 +133,10 @@ SELECT EXISTS(SELECT 1 FROM artifact_versions newer WHERE newer.artifact_id=a.id
  OR EXISTS(SELECT 1 FROM page_comments c WHERE c.artifact_id=a.id AND c.created_at>sqlc.arg(applied_at)::timestamptz)
 FROM artifacts a JOIN artifact_versions v ON v.artifact_id=a.id AND v.id=sqlc.arg(version_id)
 WHERE a.id=sqlc.arg(id) AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid);
+
+-- name: CopyCanvasCommentsToPage :exec
+-- Save to Knowledge moves a chat canvas's comments onto the page it becomes.
+INSERT INTO page_comments(id,artifact_id,parent_id,seq,author_type,author_id,body,anchor,target_lost,status,suggestion,sent_in_message_id,created_at,updated_at)
+SELECT c.id,a.id,c.parent_id,c.seq,c.author_type,c.author_id,c.body,c.anchor,c.target_lost,c.status,c.suggestion,c.sent_in_message_id,c.created_at,c.updated_at
+FROM chat_canvas_comments c JOIN artifacts a ON a.id=sqlc.arg(artifact_id) AND a.workspace_id=sqlc.arg(workspace_id)
+WHERE c.canvas_id=sqlc.arg(canvas_id) AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid);

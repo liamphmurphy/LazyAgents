@@ -42,6 +42,31 @@ func (q *Queries) ClearKnowledgeAssetDeletion(ctx context.Context, blobKey strin
 	return err
 }
 
+const copyCanvasCommentsToPage = `-- name: CopyCanvasCommentsToPage :exec
+INSERT INTO page_comments(id,artifact_id,parent_id,seq,author_type,author_id,body,anchor,target_lost,status,suggestion,sent_in_message_id,created_at,updated_at)
+SELECT c.id,a.id,c.parent_id,c.seq,c.author_type,c.author_id,c.body,c.anchor,c.target_lost,c.status,c.suggestion,c.sent_in_message_id,c.created_at,c.updated_at
+FROM chat_canvas_comments c JOIN artifacts a ON a.id=$1 AND a.workspace_id=$2
+WHERE c.canvas_id=$3 AND artifact_visible(a.audience,a.owner_user_id,$4::uuid)
+`
+
+type CopyCanvasCommentsToPageParams struct {
+	ArtifactID  uuid.UUID
+	WorkspaceID uuid.UUID
+	CanvasID    uuid.UUID
+	Viewer      *uuid.UUID
+}
+
+// Save to Knowledge moves a chat canvas's comments onto the page it becomes.
+func (q *Queries) CopyCanvasCommentsToPage(ctx context.Context, arg CopyCanvasCommentsToPageParams) error {
+	_, err := q.db.Exec(ctx, copyCanvasCommentsToPage,
+		arg.ArtifactID,
+		arg.WorkspaceID,
+		arg.CanvasID,
+		arg.Viewer,
+	)
+	return err
+}
+
 const deleteUndoneImportVersion = `-- name: DeleteUndoneImportVersion :exec
 DELETE FROM artifact_versions v USING artifacts a WHERE v.id=$1 AND v.artifact_id=a.id AND a.id=$2
 AND a.current_version_id IS DISTINCT FROM v.id AND artifact_visible(a.audience,a.owner_user_id,$3::uuid)

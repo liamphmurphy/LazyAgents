@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -219,8 +220,65 @@ func (s *Server) knowledgeRoutes(mux *http.ServeMux) {
 		}
 		return s.knowledgePage(r.Context(), ws, res.Note.ID)
 	})
+	handle("POST /api/v1/knowledge/pages/from-canvas", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		var in struct {
+			ChatID   uuid.UUID `json:"chat_id"`
+			CanvasID uuid.UUID `json:"canvas_id"`
+			Folder   string    `json:"folder"`
+		}
+		if err := knowledgeJSON(r, &in); err != nil {
+			return nil, err
+		}
+		res, err := s.Wiki.MoveCanvasToPage(r.Context(), ws, u.ID, in.ChatID, in.CanvasID, in.Folder)
+		if err != nil {
+			return nil, err
+		}
+		return s.knowledgePage(r.Context(), ws, res.Note.ID)
+	})
+	handle("GET /api/v1/knowledge/legacy", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		id, err := s.legacyPage(r.Context(), ws, u.ID, r.URL.Query().Get("path"))
+		if err != nil {
+			return nil, err
+		}
+		a, _, err := wiki.OpenPage(r.Context(), s.Q, ws, id.String())
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"id": a.ID, "url": wiki.PageURL(a.ID, a.Title)}, nil
+	})
 	s.knowledgeAssetRoutes(mux)
 	s.knowledgeImportRoutes(mux)
+}
+
+// legacyPage maps an address from before the merge, /apps/docs/<canvas id> or
+// /wiki/<page path>, to the page that now holds it, so old links and
+// bookmarks keep working. Visibility is the caller's, as for any page read.
+func (s *Server) legacyPage(ctx context.Context, ws, user uuid.UUID, path string) (uuid.UUID, error) {
+	if rest, ok := strings.CutPrefix(path, "/apps/docs/"); ok {
+		canvasID, err := uuid.Parse(strings.SplitN(rest, "/", 2)[0])
+		if err != nil {
+			return uuid.Nil, apperr.ErrNotFound
+		}
+		a, err := s.Q.GetDocPageRedirect(ctx, store.GetDocPageRedirectParams{CanvasID: canvasID, WorkspaceID: ws, Viewer: &user})
+		if err != nil {
+			return uuid.Nil, err
+		}
+		return a.ID, nil
+	}
+	if rest, ok := strings.CutPrefix(path, "/wiki/"); ok && rest != "" {
+		pagePath, err := url.PathUnescape(rest)
+		if err != nil {
+			return uuid.Nil, apperr.Invalid("path", "is not a valid address")
+		}
+		a, _, err := wiki.OpenPage(ctx, s.Q, ws, pagePath)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		return a.ID, nil
+	}
+	return uuid.Nil, apperr.Invalid("path", "must start with /apps/docs/ or /wiki/")
 }
 
 type knowledgePageInput struct {
