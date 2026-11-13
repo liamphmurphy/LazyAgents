@@ -16,6 +16,7 @@ import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
 import { PersonaAvatar, PersonaAvatarButton, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
 import { hoverReveal } from "@/lib/reveal";
+import { useEntrances } from "@/components/ui/motion";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -215,7 +216,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
     update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, title: t } }).then(() => setEditing(false), () => undefined);
   }
   return (
-    <li className="flex flex-col">
+    <li data-enter-key={chat.id} className="flex flex-col">
       {editing ? (
         <form onSubmit={save} className="flex items-center gap-1 px-1 py-1">
           <TextInput
@@ -363,6 +364,9 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
   const groups = list && view === "active" && !query ? groupByDay(list) : [];
   // While finding, the row stays on top, so the box keeps focus as results replace the days.
   const onTop = finding || groups.length === 0;
+  // A conversation started elsewhere (another tab, a persona) rises in at the top.
+  const nav = useRef<HTMLElement>(null);
+  useEntrances(nav);
   return (
     <aside aria-label="Chat history" className={cx("flex min-h-0 flex-1 flex-col gap-1.5", !fill && "max-[799px]:max-h-64")}>
       {fill && (
@@ -370,7 +374,7 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
       )}
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       {between}
-      <nav aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
+      <nav ref={nav} aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
         {onTop && headingRow(view === "archived" ? "Archived" : "Chats")}
         {query ? (
           <ChatSearchResults query={deferredQuery} onPick={() => undefined} />

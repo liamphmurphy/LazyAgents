@@ -6,6 +6,7 @@ import { cx } from "@/lib/cx";
 // Mirrors --motion-* in globals.css, for animations that have to start from script.
 const BASE = 200;
 const SLOW = 320;
+// el.animate() takes no var(), so this restates --motion-ease.
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;

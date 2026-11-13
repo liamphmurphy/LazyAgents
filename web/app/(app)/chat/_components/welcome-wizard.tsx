@@ -279,7 +279,7 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
   const busy = verify.isPending || checking;
   const ok = verified !== undefined;
   return (
-    <section aria-label={label} data-verified={ok || undefined} className={cx("rounded-[10px] border border-border bg-surface-sunken p-3 transition-[border-color,box-shadow] duration-[400ms]", ok && "wizard-verified")}>
+    <section aria-label={label} data-verified={ok || undefined} className={cx("rounded-[10px] border border-border bg-surface-sunken p-3 transition-[border-color,box-shadow] duration-(--motion-slow)", ok && "wizard-verified")}>
       <h3 className="flex items-center gap-2 text-14 font-semibold">
         {label}
         {images && <span data-testid={`${id}-images`} className="rounded-full bg-[color-mix(in_srgb,var(--brand-star)_22%,transparent)] px-2 py-px text-11 font-semibold text-[var(--brand-star)]">Images</span>}

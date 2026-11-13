@@ -148,7 +148,7 @@ export function RunGraphView({ d, childDetails, onOpenTurn, onOpenEvent }: {
         onDoubleClick={() => activate(item)}
         onKeyDown={(e) => keyDown(e, item)}
         className={cx(
-          "text-left text-12 transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
+          "text-left text-12 transition-colors duration-(--motion-base) focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent",
           className,
           !gate && "rounded-lg border px-2.5 py-1.5",
           !gate && TONE[l.status],

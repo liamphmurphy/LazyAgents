@@ -76,7 +76,7 @@ export function ComposerSheet({
           style={dy ? { transform: `translateY(${dy}px)` } : undefined}
           className={cx(
             "fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border-float bg-surface-raised pb-safe shadow-[var(--shadow-float)] outline-none",
-            drag === null && "transition-transform duration-200",
+            drag === null && "transition-transform duration-(--motion-base)",
           )}
         >
           <div

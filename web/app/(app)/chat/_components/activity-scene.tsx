@@ -853,7 +853,7 @@ export function ActivityScene({ current, previous, stopping }: { current: ChatSt
       ref={stage}
       aria-hidden
       data-stopping={stopping || undefined}
-      className={`relative h-14 w-[132px] flex-none transition-[filter,opacity] duration-500 motion-reduce:transition-none @max-[420px]:w-[88px] @max-[300px]:hidden ${stopping ? "opacity-50 grayscale" : ""}`}
+      className={`relative h-14 w-[132px] flex-none transition-[filter,opacity] duration-(--motion-progress) motion-reduce:transition-none @max-[420px]:w-[88px] @max-[300px]:hidden ${stopping ? "opacity-50 grayscale" : ""}`}
     >
       {previous && <SceneLayer key={`out-${previous}`} kind={previous} leaving />}
       <SceneLayer key={current} kind={current} />

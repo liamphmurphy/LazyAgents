@@ -154,7 +154,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
         {statuses.map((status) => {
           const column = board.columns.find((c) => c.status === status);
           return <section key={status} aria-label={STATUS_NAME[status]} data-testid={`column-${status}`}
-            className={cx("rounded-lg border p-2 transition-colors duration-150", compact ? "w-full flex-none snap-start" : "min-w-[220px] flex-1", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
+            className={cx("rounded-lg border p-2 transition-colors duration-(--motion-fast)", compact ? "w-full flex-none snap-start" : "min-w-[220px] flex-1", over === status ? "border-accent bg-accent-soft" : "border-transparent bg-surface-sunken")}
             onDragOver={(e) => { if (dragging.current) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(status); } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(undefined); }}
             onDrop={(e) => {
@@ -200,7 +200,7 @@ function TicketCard({ card, needs, showEpic, statuses, pending, onOpen, onMove, 
     onKeyDown={(e) => { if (e.target === e.currentTarget && !pending) {
       if (e.key === "Enter") { e.preventDefault(); onOpen(); } else if (e.key === " ") { e.preventDefault(); setMenu(true); }
     } }}
-    className={cx("rounded-lg border p-3 outline-offset-2 transition-[opacity,scale] duration-150", needs ? "border-state-human/60 bg-surface-raised shadow-sm" : "border-border bg-surface", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
+    className={cx("rounded-lg border p-3 outline-offset-2 transition-[opacity,scale] duration-(--motion-fast)", needs ? "border-state-human/60 bg-surface-raised shadow-sm" : "border-border bg-surface", lifted && "scale-[0.98] opacity-40", pending ? "opacity-60" : "cursor-grab hover:border-border-strong")}>
     <div className="mb-1.5 flex items-center gap-2 text-11">
       <StatusGlyph state={card.status} />
       <Link href={href} onClick={open} className="font-mono text-fg-tertiary hover:text-fg">{card.key}</Link>

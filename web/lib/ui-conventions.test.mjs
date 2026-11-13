@@ -34,3 +34,13 @@ test("loading is a skeleton or a Spinner, never the word on screen or a hand-rol
   // components/ui/loading.tsx: LoadingLines / LoadingText for sections and values, Spinner in buttons.
   assert.deepEqual(offenders(/Loading(…|\.\.\.)|animate-spin/, (path) => path === "components/ui/loading.tsx"), []);
 });
+
+test("motion uses the --motion-* tokens, not one-off durations and curves", () => {
+  // duration-(--motion-fast|base|slow|exit|progress); curves are --motion-ease, --motion-travel or --motion-spring.
+  // components/ui/motion.tsx restates --motion-ease for el.animate(), which can't read a var().
+  assert.deepEqual(offenders(/(?<![\w-])duration-(\d+|\[\d+m?s\])(?![\w-])|cubic-bezier\(/, (path, line) => path === "components/ui/motion.tsx" && line.includes("const EASE")), []);
+  const css = readFileSync(join(web, "app/globals.css"), "utf8");
+  const tokens = css.slice(css.indexOf(":root {\n  --motion-fast"));
+  const curves = (text) => text.match(/cubic-bezier\([^)]*\)/g) ?? [];
+  assert.equal(curves(css).length, curves(tokens.slice(0, tokens.indexOf("}"))).length, "every cubic-bezier in globals.css is a --motion-* definition");
+});

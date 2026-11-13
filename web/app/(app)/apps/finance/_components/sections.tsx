@@ -101,7 +101,7 @@ export function Kpis({ data, range, reviewLeft, onBalances }: { data: FinanceOve
           <>
             <Pill tone={reviewLeft ? "warn" : "good"}>{reviewLeft ? "uncategorized" : "all clear"}</Pill>
             <span aria-hidden className="h-1 w-[84px] overflow-hidden rounded bg-track">
-              <span className={cx("block h-full rounded transition-[width] duration-700", reviewLeft ? "bg-state-progress" : "bg-state-done")} style={{ width: `${categorized * 100}%` }} />
+              <span className={cx("block h-full rounded transition-[width] duration-(--motion-progress)", reviewLeft ? "bg-state-progress" : "bg-state-done")} style={{ width: `${categorized * 100}%` }} />
             </span>
           </>
         }

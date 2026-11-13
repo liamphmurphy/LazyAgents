@@ -270,7 +270,7 @@ export function TicketRunCard({ run, scene, onReview, handoff }: { run: TicketRu
       {live && run.approval && <ApprovalPanel run={run} approval={run.approval} />}
       {live && (
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
-          <div className={cx("h-full rounded-full transition-[width,background-color] duration-500", waiting ? "bg-state-human" : "bg-accent")} style={{ width: `${Math.max(pct, 4)}%` }} />
+          <div className={cx("h-full rounded-full transition-[width,background-color] duration-(--motion-progress)", waiting ? "bg-state-human" : "bg-accent")} style={{ width: `${Math.max(pct, 4)}%` }} />
         </div>
       )}
       <p className="truncate text-12 text-fg-tertiary">

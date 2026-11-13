@@ -84,7 +84,7 @@ export function ImportDialog({ open, onOpenChange, accounts, onImported }: { ope
         <Dialog.Content
           aria-describedby={undefined}
           className={cx(
-            "motion-dialog fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] -translate-x-1/2 flex-col overflow-y-auto rounded-2xl border border-border-float bg-surface-raised px-[22px] pb-[18px] pt-[20px] shadow-[var(--shadow-float)] outline-none transition-[width] duration-300",
+            "motion-dialog fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] -translate-x-1/2 flex-col overflow-y-auto rounded-2xl border border-border-float bg-surface-raised px-[22px] pb-[18px] pt-[20px] shadow-[var(--shadow-float)] outline-none transition-[width] duration-(--motion-slow)",
             pending && !result ? "w-[min(780px,calc(100%-32px))]" : "w-[min(480px,calc(100%-32px))]",
           )}
         >

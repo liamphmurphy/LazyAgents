@@ -12,7 +12,7 @@ export function WebSearchPill({ runId, since, until }: { runId?: string; since?:
   if (r.queries.length === 0 && r.sources.length === 0) return null;
   const n = r.sources.length;
   return (
-    <details data-testid="web-search" className="motion-details group w-full max-w-[min(720px,100%)] rounded-lg border border-border bg-surface text-13">
+    <details data-testid="web-search" className="group w-full max-w-[min(720px,100%)] rounded-lg border border-border bg-surface text-13">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-fg-secondary">
         <Icon name="search" size={14} className="text-fg-tertiary" />
         <span>

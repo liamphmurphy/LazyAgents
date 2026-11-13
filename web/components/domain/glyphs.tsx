@@ -58,7 +58,8 @@ export function StatusGlyph({
       role={label ? "img" : undefined}
       aria-label={label ? STATUS_LABEL[state] : undefined}
       aria-hidden={label ? undefined : true}
-      className="inline-block flex-none rounded-full"
+      // A state change recolours in place rather than snapping (pies swap shape instantly).
+      className="inline-block flex-none rounded-full transition-[background-color,border-color] duration-(--motion-base)"
       style={{ width: size, height: size, ...styles[state] }}
     />
   );

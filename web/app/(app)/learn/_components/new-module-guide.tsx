@@ -246,7 +246,7 @@ export function NewModuleGuide() {
           <div className="flex gap-1 px-[18px] pt-3" aria-hidden>
             {STEPS.map((s, i) => (
               <span key={s} className="h-1 flex-1 overflow-hidden rounded-full bg-track">
-                <span className={cx("block h-full origin-left rounded-full bg-accent transition-transform duration-300 ease-out motion-reduce:transition-none", i <= step ? "scale-x-100" : "scale-x-0")} />
+                <span className={cx("block h-full origin-left rounded-full bg-accent transition-transform duration-(--motion-slow) ease-out motion-reduce:transition-none", i <= step ? "scale-x-100" : "scale-x-0")} />
               </span>
             ))}
           </div>

@@ -13,7 +13,7 @@ const tone = (t: PillTone) => `bg-pill-${t}-bg text-pill-${t}-fg`;
 /** Status pill: full pill, 24px, 6px leading dot ("Running", "On track"). */
 export function Pill({ tone: t, children, dot = true }: { tone: PillTone; children: ReactNode; dot?: boolean }) {
   return (
-    <span className={cx("inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] text-12 font-medium", tone(t))}>
+    <span className={cx("inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] text-12 font-medium transition-colors duration-(--motion-base)", tone(t))}>
       {dot && <span aria-hidden className="size-1.5 rounded-full bg-current" />}
       {children}
     </span>
@@ -23,14 +23,14 @@ export function Pill({ tone: t, children, dot = true }: { tone: PillTone; childr
 /** Compact pill used inside cards. */
 export function SmallPill({ tone: t, children }: { tone: PillTone; children: ReactNode }) {
   return (
-    <span className={cx("flex-none whitespace-nowrap rounded-[10px] px-2 py-0.5 text-12 font-medium", tone(t))}>{children}</span>
+    <span className={cx("flex-none whitespace-nowrap rounded-[10px] px-2 py-0.5 text-12 font-medium transition-colors duration-(--motion-base)", tone(t))}>{children}</span>
   );
 }
 
 /** Inline flag on rows: "Needs approval", "Blocked", "PR #482". Radius 5. */
 export function Flag({ tone: t, children }: { tone: PillTone; children: ReactNode }) {
   return (
-    <span className={cx("flex-none whitespace-nowrap rounded-[5px] px-[7px] py-px text-12 font-medium", tone(t))}>{children}</span>
+    <span className={cx("flex-none whitespace-nowrap rounded-[5px] px-[7px] py-px text-12 font-medium transition-colors duration-(--motion-base)", tone(t))}>{children}</span>
   );
 }
 

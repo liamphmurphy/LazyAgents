@@ -194,7 +194,7 @@ function Rendering({ chatId, v, onStop }: { chatId: string; v: ChatVideo; onStop
         {v.stage === "render" && <div className="video-sweep" aria-hidden />}
       </div>
       <div className="mb-1.5 mt-2.5 h-1 overflow-hidden rounded-sm bg-track" role="progressbar" aria-label="Render progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-        <div className="h-full bg-gradient-to-r from-accent to-state-review transition-[width] duration-500" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-gradient-to-r from-accent to-state-review transition-[width] duration-(--motion-progress)" style={{ width: `${pct}%` }} />
       </div>
       <div className="flex items-center gap-2 text-12 text-fg-tertiary">
         {v.stage === "render" ? (

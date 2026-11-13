@@ -12,7 +12,7 @@ import { DispatchDialog } from "@/components/domain/dispatch-dialog";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Kbd, Skeleton, TextArea } from "@/components/ui/primitives";
-import { usePulse } from "@/components/ui/motion";
+import { useEntrances, usePulse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { KIND, approvalId, isOpen, nextSelection, step, trayAction, trayItems, waited, type TrayTab } from "@/lib/inbox";
 import { withMention } from "@/lib/run-question";
@@ -154,6 +154,8 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
   if (current !== sel.id || at !== sel.index) setSel({ id: current, index: at });
   const keys = useRef<Record<string, RowKeys>>({});
   const listRef = useRef<HTMLDivElement>(null);
+  // Something new that needs you rises in; switching tabs replaces the list, which stays still.
+  useEntrances(listRef);
 
   // The tray opens with the first row focused, so J/K, A and D work at once.
   const focused = useRef(false);
@@ -322,6 +324,7 @@ function Row({
   return (
     <li
       data-tray-row={item.id}
+      data-enter-key={item.id}
       aria-current={selected ? "true" : undefined}
       aria-label={`${kind.label}: ${item.title}`}
       tabIndex={selected ? 0 : -1}

@@ -26,7 +26,7 @@ const STATE_PILL: Record<string, string> = {
 
 export function RunStatePill({ state }: { state: string }) {
   const ref = usePulse<HTMLSpanElement>(state);
-  return <span ref={ref} className={cx("flex-none rounded-full px-2 py-0.5 text-12 font-medium transition-colors duration-200", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
+  return <span ref={ref} className={cx("flex-none rounded-full px-2 py-0.5 text-12 font-medium transition-colors duration-(--motion-base)", STATE_PILL[state])}>{RUN_STATE_LABEL[state] ?? state}</span>;
 }
 
 /** Confirms a run: a persona's suggestion or a /workflow pick. Nothing starts until Run. */

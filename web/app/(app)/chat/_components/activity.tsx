@@ -258,7 +258,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
   const newest = calls.at(-1);
   return (
     <div data-testid="chat-status-card" data-awaiting={awaiting || undefined} data-quiet={quiet || undefined}
-      className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-300 ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : quiet ? "border-[var(--state-progress)]/50" : "border-border"}`}>
+      className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-(--motion-slow) ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : quiet ? "border-[var(--state-progress)]/50" : "border-border"}`}>
       <div className="flex h-[72px] items-center gap-3 px-3.5">
         <span className={`flex-none ${awaiting ? "" : "motion-safe:animate-pulse"}`}>
           <PersonaAvatar persona={persona} size={28} />
@@ -292,7 +292,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
         )}
       </div>
       {/* Always mounted so the panel can animate open and shut instead of popping in. */}
-      <div className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${awaiting ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+      <div className={`grid transition-[grid-template-rows] duration-(--motion-slow) ease-out motion-reduce:transition-none ${awaiting ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
         <div className="overflow-hidden">
           <div role="group" aria-label="Waiting for your approval" className="flex flex-col gap-2 px-3.5 pb-3">
             <ConnectorApprovalCards chatId={chatId} disabled={disabled} />

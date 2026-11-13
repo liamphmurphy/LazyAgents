@@ -626,7 +626,7 @@ export function CommandMenu() {
                       onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
                       onMouseMove={() => setActive(i)}
                       className={cx(
-                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-14 transition-colors duration-100",
+                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-14 transition-colors duration-(--motion-fast)",
                         i === index ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
                       )}
                     >
@@ -634,7 +634,7 @@ export function CommandMenu() {
                       <span
                         aria-hidden
                         className={cx(
-                          "grid size-6 flex-none place-items-center rounded-md border text-12 transition-colors duration-100",
+                          "grid size-6 flex-none place-items-center rounded-md border text-12 transition-colors duration-(--motion-fast)",
                           i === index ? "border-transparent bg-accent-soft text-accent" : "border-border-subtle bg-surface-sunken text-fg-tertiary",
                         )}
                       >
