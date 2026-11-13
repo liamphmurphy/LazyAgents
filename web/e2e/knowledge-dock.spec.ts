@@ -327,3 +327,17 @@ test("the dock keeps every Knowledge chat: New starts another in place and the s
   await items.filter({ hasText: /ago|just now/ }).last().click();
   await expect.poll(stored).toBe(firstId);
 });
+
+test("the shell fits the viewport: a long tree and an open chat leave the composer and explorer footer on screen", async ({ page }) => {
+  const s = await install(page);
+  // Enough pages that the explorer tree is taller than the window.
+  const many = Array.from({ length: 60 }, (_, i) => ({ ...s.page, id: `77777777-7777-4777-8777-${String(i).padStart(12, "0")}`, title: `Note ${i}`, path: `Note ${i}` }));
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => json(route, { columns: [], rows: [s.page, ...many], total: many.length + 1, has_more: false }));
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  const composer = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(composer).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("button", { name: /Quick capture/ })).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+});

@@ -206,7 +206,8 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={shell}>
       <KnowledgeChatProvider>
-      <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 bg-bg md:h-dvh">
+      {/* flex-none, as in EditorLayout: in the app shell's column a flex-1 child grows to its content and ignores h-dvh. */}
+      <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
           <TabStrip tabs={tabs} active={active} onClose={close} />
