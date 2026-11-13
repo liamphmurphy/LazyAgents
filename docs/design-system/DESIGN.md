@@ -77,6 +77,17 @@ Mode and palette are independent. See [PALETTES.md](PALETTES.md) for the ten add
 
 The palette is taken from the Vesper mark: a dusk gradient from `--brand-deep` `#2B2366` through `--brand-violet` `#7864D9` to the evening star `--brand-star` `#F2A97E`. Neutrals carry a slight violet tint instead of pure grey, and the accent is the mark's violet lightened for contrast (`#9B8CFF` on `--bg` is about 7:1; `--text-on-accent` `#120F24` on it is about 6.8:1). The brand gradient is for the logo, the welcome glow and persona portraits only. It never fills a control and never stands for a state, so the peach star can't be mistaken for amber.
 
+### Dusk brand layer
+
+The mark's gradient (`--brand-deep` → `--brand-violet` → `--brand-star`) appears only on portraits and decoration, never on a control or as a state's colour, and always beside words that say what's happening (`globals.css`, "The Dusk brand layer"):
+
+* `dusk-aura`: a persona's portrait on the live chat status card while it works. A 2px dusk ring circles it and a violet glow breathes behind it. Off while it waits on you, is quiet or is stopping.
+* `dusk-shimmer`: the status line ("Gwen is thinking…") while it works. A band of starlight crosses the words.
+* `dusk-tile`: `EmptyState`'s icon tile, lit violet from the top-left with the mark's four-point star on its corner.
+* `live-sheen`: a neutral white sheen across a progress bar that's still moving (a ticket run, a run's plan, research). The bar keeps its state colour.
+
+Under reduced motion they hold still: the ring and tile stay, the shimmer becomes plain text, and the sheen goes.
+
 ### Workflow states
 
 | State | Token | Dark | Glyph |

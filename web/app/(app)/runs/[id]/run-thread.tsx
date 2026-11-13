@@ -82,7 +82,7 @@ function NowLine({ d }: { d: RunDetail }) {
             aria-valuetext={`${p.done} of ${p.total} steps done`}
             className="h-[3px] overflow-hidden rounded-full bg-surface-sunken"
           >
-            <div className={cx("h-full rounded-full", run.state === "waiting" ? "bg-state-human" : "bg-state-done")} style={{ width: `${pct}%` }} />
+            <div className={cx("h-full rounded-full", run.state === "waiting" ? "bg-state-human" : run.state === "running" ? "live-sheen bg-state-done" : "bg-state-done")} style={{ width: `${pct}%` }} />
           </div>
         </div>
       )}

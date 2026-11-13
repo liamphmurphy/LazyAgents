@@ -260,11 +260,11 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
     <div data-testid="chat-status-card" data-awaiting={awaiting || undefined} data-quiet={quiet || undefined}
       className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-(--motion-slow) ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : quiet ? "border-[var(--state-progress)]/50" : "border-border"}`}>
       <div className="flex h-[72px] items-center gap-3 px-3.5">
-        <span className={`flex-none ${awaiting ? "" : "motion-safe:animate-pulse"}`}>
+        <span data-testid="persona-aura" className={`flex-none ${awaiting || stopping || quiet ? "" : "dusk-aura"}`}>
           <PersonaAvatar persona={persona} size={28} />
         </span>
         <div className="min-w-0 flex-1">
-          <p role="status" aria-live="polite" className={`truncate text-14 ${awaiting ? "text-pill-human-fg" : "text-fg"}`} data-testid="chat-status">
+          <p role="status" aria-live="polite" className={`truncate text-14 ${awaiting ? "text-pill-human-fg" : stopping || quiet ? "text-fg" : "dusk-shimmer"}`} data-testid="chat-status">
             {stopping
               ? "Stopping…"
               : awaiting

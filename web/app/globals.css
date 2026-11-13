@@ -1009,6 +1009,79 @@ details[open]::details-content { height: auto; }
   ::view-transition-new(*) { animation: none !important; }
 }
 
+/*
+ * The Dusk brand layer: the mark's gradient (--brand-*) on portraits and decoration only, never
+ * on a control or as the colour of a state (tokens.css). Each piece sits beside words that
+ * already say what's happening, so none of it carries meaning on its own.
+ */
+
+/* A persona's portrait while it works: the mark's dusk light circling it, breathing softly. */
+.dusk-aura { position: relative; isolation: isolate; display: inline-grid; border-radius: 999px; }
+.dusk-aura::before,
+.dusk-aura::after { content: ""; position: absolute; border-radius: 999px; pointer-events: none; z-index: -1; }
+.dusk-aura::before {
+  inset: -3px;
+  background: conic-gradient(var(--brand-deep), var(--brand-violet), var(--brand-star), var(--brand-violet), var(--brand-deep));
+  /* Only a 2px ring shows; the mask is round, so it can turn without its edge moving. */
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  animation: dusk-turn 3.2s linear infinite;
+}
+.dusk-aura::after {
+  inset: -7px;
+  z-index: -2;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--brand-violet) 38%, transparent), transparent);
+  animation: dusk-breathe 2.4s ease-in-out infinite;
+}
+@keyframes dusk-turn { to { transform: rotate(1turn); } }
+@keyframes dusk-breathe { 50% { opacity: 0.45; transform: scale(0.92); } }
+
+/* "Gwen is thinking…": a band of starlight crosses the words, left to right. */
+.dusk-shimmer {
+  background: linear-gradient(100deg, var(--text) 42%, color-mix(in srgb, var(--brand-star) 75%, var(--text)) 50%, var(--text) 58%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: dusk-shimmer 2.6s linear infinite;
+}
+@keyframes dusk-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* A live progress bar: a neutral sheen says it's still moving. Its colour stays the state's. */
+.live-sheen { position: relative; overflow: hidden; }
+.live-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.38), transparent);
+  transform: translateX(-100%);
+  animation: live-sheen 1.8s var(--motion-ease) infinite;
+}
+@keyframes live-sheen { to { transform: translateX(100%); } }
+
+/* EmptyState's icon tile: lit from the top-left in dusk violet, with the mark's star on its corner. */
+.dusk-tile {
+  position: relative;
+  border-color: color-mix(in srgb, var(--brand-violet) 42%, var(--border-strong));
+  background: radial-gradient(130% 130% at 25% 0%, color-mix(in srgb, var(--brand-violet) 24%, var(--surface)), var(--surface) 72%);
+  color: color-mix(in srgb, var(--brand-violet) 55%, var(--text));
+}
+.dusk-tile::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  background: var(--brand-star);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+}
+
+/* Still, not gone: the ring, the words and the bars stay, they just don't move. */
+@media (prefers-reduced-motion: reduce) {
+  .dusk-aura::before, .dusk-aura::after, .live-sheen::after { animation: none; }
+  .live-sheen::after { display: none; }
+  .dusk-shimmer { animation: none; background: none; color: inherit; }
+}
+
 /* The New Learning Module dialog (new-module-guide.tsx). */
 .guide-stage { --guide-shift: 32px; }
 .guide-stage[data-direction="back"] { --guide-shift: -32px; }

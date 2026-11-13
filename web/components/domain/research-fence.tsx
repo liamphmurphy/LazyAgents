@@ -206,7 +206,7 @@ function ProgressCard({ job, chatId }: { job: Job; chatId: string }) {
         <h4 className="text-14 font-semibold text-fg">{job.title}</h4>
         <span className="flex-none text-12 text-fg-tertiary">{minutesLabel(now - Date.parse(job.created_at))} · {spendLabel(job.spent_usd, job.max_cost_usd)}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.round(pct * 100)}%` }} /></div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className={cx("h-full rounded-full bg-accent transition-[width] duration-(--motion-progress)", reading && "live-sheen")} style={{ width: `${Math.round(pct * 100)}%` }} /></div>
       <ul className="flex flex-col gap-1.5">
         {job.tasks.map((t) => (
           <li key={t.label} data-testid="research-task" className={cx("flex items-center gap-2.5 rounded-lg border bg-surface-sunken px-2.5 py-1.5", t.state === "running" ? "border-accent" : "border-border")}>

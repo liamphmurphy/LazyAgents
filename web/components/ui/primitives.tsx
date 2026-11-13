@@ -97,7 +97,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cx("flex flex-col items-center gap-2.5 px-4 text-center", compact ? "py-6" : "py-12", className)}>
-      <span className={cx("mb-1 grid place-items-center rounded-lg border border-border-strong bg-selected text-fg-secondary", compact ? "size-8" : "size-10")}>
+      <span aria-hidden className={cx("dusk-tile mb-1 grid place-items-center rounded-lg border", compact ? "size-8" : "size-10")}>
         <Icon name={icon} size={compact ? 15 : 18} />
       </span>
       <h3 className="type-heading text-fg">{title}</h3>
