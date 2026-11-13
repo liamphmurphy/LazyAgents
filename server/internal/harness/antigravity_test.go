@@ -383,3 +383,35 @@ func TestAntigravitySkillsAreNative(t *testing.T) {
 		t.Fatalf("the index would point at files that aren't there:\n%s", md)
 	}
 }
+
+// TestAgyLauncherNamesAMissingBinary: an agent image built without agy must say
+// so, not fail with execvp's bare "No such file or directory".
+func TestAgyLauncherNamesAMissingBinary(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "agy-launch.py")
+	if err := os.WriteFile(script, agyLauncher, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "agy-config.json"), []byte(`{"install": false}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	python, _ := exec.LookPath("python3")
+	cmd := exec.Command(python, "-I", script, "agy", "-p", "hi")
+	cmd.Env = []string{"PATH=" + t.TempDir()} // an empty PATH: no agy anywhere
+	out, err := cmd.Output()
+	if code := cmd.ProcessState.ExitCode(); err == nil || code != 1 {
+		t.Fatalf("exit = %d, err = %v", code, err)
+	}
+	var line struct {
+		Result struct{ Status, Error string } `json:"result"`
+	}
+	if err := json.Unmarshal(out, &line); err != nil {
+		t.Fatalf("stdout %q: %v", out, err)
+	}
+	if line.Result.Status != "ERROR" || line.Result.Error != "Vesper Antigravity setup: agy isn't installed in the agent image; rebuild agent-base" {
+		t.Fatalf("result = %+v", line.Result)
+	}
+}
