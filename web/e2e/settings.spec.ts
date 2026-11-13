@@ -103,6 +103,23 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
 
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
 
+test("a full load hydrates Settings after the shell's data arrives and lands on the #section", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await installSettingsApi(page);
+  // Hold back only the Settings chunk so the shell's queries always resolve before it hydrates.
+  await page.route("**/_next/static/chunks/**", async (route) => {
+    const response = await route.fetch();
+    const body = await response.body();
+    if (body.includes("Everything runs depend on")) await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ response, body });
+  });
+  await page.goto("/settings#appearance");
+  await expect(page.getByRole("link", { name: /Workspace/ }).getByRole("img", { name: "Configured" })).toBeVisible();
+  expect(errors).toEqual([]);
+  await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeInViewport();
+});
+
 test("SSH private keys keep their line breaks when replaced or added as an override", async ({ page }) => {
   const mock = await installSettingsApi(page);
   const privateKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }).toString();
