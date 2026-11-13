@@ -89,7 +89,7 @@ test("the Links tab lists saved links, filters them, plays videos and removes on
   await links.first().getByRole("button", { name: "Play A talk" }).click();
   await expect(links.first().locator("iframe")).toHaveAttribute("src", /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
 
-  await page.getByRole("button", { name: "All" }).click();
+  await page.getByRole("button", { name: "All", exact: true }).click();
   await page.getByRole("button", { name: "Remove Routes" }).click();
   await expect(links).toHaveCount(1);
   expect(api.deleted).toEqual(["link-2"]);

@@ -163,36 +163,39 @@ export function Sidebar() {
   if (!expanded || editorRail) {
     return (
       <aside aria-label="Main menu" onTransitionEnd={settle} className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pt-3 min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh", toggled && "motion-sidebar")}>
-        <span title="Vesper" className="grid size-[30px] place-items-center">
-          <Mark />
-        </span>
-        <div className="flex flex-col items-center gap-1">
-          <MenuSettings rail active={navActive} settingsNeedYou={settingsNeedYou} />
-          {!editorRail && <ToggleButton expanded={false} onToggle={() => toggle(true)} />}
-          <NewConversationButton id={viewed ?? undefined} rail />
-          <button
-            type="button"
-            aria-label="Search"
-            title="Search (⌘K)"
-            onClick={searchEvent}
-            className="grid size-[30px] place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg"
-          >
-            <Icon name="search" size={14} strokeWidth={1.6} />
-          </button>
-          <NeedsYou variant="rail" count={counts.inbox} />
-        </div>
+        {/* Primary spans the header too, so Settings and Customization stay in the navigation landmark. */}
         <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
-          <div className="flex w-full flex-col gap-px">
-            {WORK_ITEMS.map((n) => (
-              <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
-                <Icon name={n.icon} />
-                {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
-              </NavLink>
-            ))}
-            <AppsMenu rail counts={counts} onNewSpace={newSpace} />
+          <span title="Vesper" className="grid size-[30px] place-items-center">
+            <Mark />
+          </span>
+          <div className="flex flex-col items-center gap-1">
+            <MenuSettings rail active={navActive} settingsNeedYou={settingsNeedYou} />
+            {!editorRail && <ToggleButton expanded={false} onToggle={() => toggle(true)} />}
+            <NewConversationButton id={viewed ?? undefined} rail />
+            <button
+              type="button"
+              aria-label="Search"
+              title="Search (⌘K)"
+              onClick={searchEvent}
+              className="grid size-[30px] place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg"
+            >
+              <Icon name="search" size={14} strokeWidth={1.6} />
+            </button>
+            <NeedsYou variant="rail" count={counts.inbox} />
           </div>
-          <SpaceRail viewed={viewed} />
-          <PersonaRail id={viewed ?? undefined} viewed={viewed} />
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
+            <div className="flex w-full flex-col gap-px">
+              {WORK_ITEMS.map((n) => (
+                <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
+                  <Icon name={n.icon} />
+                  {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+                </NavLink>
+              ))}
+              <AppsMenu rail counts={counts} onNewSpace={newSpace} />
+            </div>
+            <SpaceRail viewed={viewed} />
+            <PersonaRail id={viewed ?? undefined} viewed={viewed} />
+          </div>
         </nav>
         <HarnessFooter rail />
         <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
@@ -201,37 +204,40 @@ export function Sidebar() {
   }
   return (
     <aside aria-label="Main menu" data-expanded onTransitionEnd={settle} className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-4 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pt-3 min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh", toggled && "motion-sidebar")}>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
-            <Mark />
-            <span className="text-[14px] font-semibold tracking-[-0.01em]">Vesper</span>
-          </span>
-          <div className="flex items-center gap-0.5">
-            <MenuSettings active={navActive} settingsNeedYou={settingsNeedYou} />
-            <ToggleButton expanded onToggle={() => toggle(false)} />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <NewConversationButton id={viewed ?? undefined} />
-          <button
-            type="button"
-            aria-label="Search"
-            title="Search (⌘K)"
-            onClick={searchEvent}
-            className="grid size-[34px] flex-none place-items-center rounded-[9px] border border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg"
-          >
-            <Icon name="search" size={15} strokeWidth={1.6} />
-          </button>
-        </div>
-        <NeedsYou variant="expanded" count={counts.inbox} />
-      </div>
-      {/* Work and Spaces on top, as in other chat apps; the history fills the rest and scrolls. */}
+      {/* Primary spans the header too, so Settings and Customization stay in the navigation landmark. */}
       <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-4">
-        <WorkGroup counts={counts} active={navActive} onNewSpace={newSpace} />
-        <SidebarSpaces viewed={viewed} hideWhenEmpty />
-        <ChatHistory id={viewed ?? undefined} viewed={viewed} />
-        <SetupProgress />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
+              <Mark />
+              <span className="text-[14px] font-semibold tracking-[-0.01em]">Vesper</span>
+            </span>
+            <div className="flex items-center gap-0.5">
+              <MenuSettings active={navActive} settingsNeedYou={settingsNeedYou} />
+              <ToggleButton expanded onToggle={() => toggle(false)} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <NewConversationButton id={viewed ?? undefined} />
+            <button
+              type="button"
+              aria-label="Search"
+              title="Search (⌘K)"
+              onClick={searchEvent}
+              className="grid size-[34px] flex-none place-items-center rounded-[9px] border border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              <Icon name="search" size={15} strokeWidth={1.6} />
+            </button>
+          </div>
+          <NeedsYou variant="expanded" count={counts.inbox} />
+        </div>
+        {/* Work and Spaces on top, as in other chat apps; the history fills the rest and scrolls. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <WorkGroup counts={counts} active={navActive} onNewSpace={newSpace} />
+          <SidebarSpaces viewed={viewed} hideWhenEmpty />
+          <ChatHistory id={viewed ?? undefined} viewed={viewed} />
+          <SetupProgress />
+        </div>
       </nav>
       <HarnessFooter />
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
