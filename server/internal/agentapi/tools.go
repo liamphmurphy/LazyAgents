@@ -677,7 +677,25 @@ func writeNote(ctx context.Context, d Deps, c agents.Caller, in WriteNoteIn) (an
 	if err != nil {
 		return nil, err
 	}
-	res, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note})
+	save := wiki.Save{Path: in.Path, Body: in.Body, Mode: in.Mode, Note: in.Note, RunID: c.RunID}
+	var res wiki.Result
+	if c.RunID != nil {
+		run, e := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
+		if e != nil {
+			return nil, e
+		}
+		if run.Purpose == "chat" {
+			chat, e := d.Q.ChatSessionForRun(ctx, c.RunID)
+			if e != nil {
+				return nil, e
+			}
+			res, err = d.Wiki.PersonaWrite(ctx, c.Agent, chat.ID, c.RunID, save)
+		} else {
+			res, err = d.Wiki.AgentWrite(ctx, c.Agent, scopes, save)
+		}
+	} else {
+		res, err = d.Wiki.AgentWrite(ctx, c.Agent, scopes, save)
+	}
 	if err != nil {
 		return nil, err
 	}

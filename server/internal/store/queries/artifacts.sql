@@ -35,12 +35,14 @@ SELECT v.* FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
 WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
 
 -- name: ListArtifactVersions :many
+-- Resolved suggestion rows are decision records; their human-authored result
+-- is the published history entry. They retain the reserved suggestion label.
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
-  review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
-FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC;
+  review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins, persona_id, changes
+FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' AND NOT (label = 'suggestion' AND changes IS NOT NULL) ORDER BY seq DESC;
 
 -- name: CountPublishedVersions :one
-SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published';
+SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' AND NOT (label = 'suggestion' AND changes IS NOT NULL);
 
 -- name: InsertSection :exec
 INSERT INTO artifact_sections (version_id, position, level, anchor, heading) VALUES ($1, $2, $3, $4, $5);

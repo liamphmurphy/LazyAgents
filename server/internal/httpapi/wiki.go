@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -144,6 +145,17 @@ func (s *Server) ListWikiSuggestions(ctx context.Context, req api.ListWikiSugges
 			Id: r.ID, ArtifactId: r.ArtifactID, Path: deref(r.Path), Title: r.Title, BodyMd: deref(r.BodyMd), CurrentBodyMd: cur,
 			Author: dir.actor(r.CreatedByType, &r.CreatedByID), CreatedAt: r.CreatedAt, NewPage: r.CurrentVersionID == nil,
 			Stale: r.CurrentVersionID != nil && (r.BasedOnVersionID == nil || *r.BasedOnVersionID != *r.CurrentVersionID),
+		}
+		applied := r.State == artifacts.Published
+		sg.Applied = &applied
+		sg.PersonaId = r.PersonaID
+		if len(r.Changes) > 0 {
+			var changes []wiki.Change
+			if err := json.Unmarshal(r.Changes, &changes); err != nil {
+				return nil, err
+			}
+			cs := same[[]api.PageChange](changes)
+			sg.Changes = &cs
 		}
 		if r.Note != "" {
 			sg.Note = &r.Note
@@ -399,4 +411,31 @@ func nonEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func (s *Server) ResolvePageSuggestion(ctx context.Context, req api.ResolvePageSuggestionRequestObject) (api.ResolvePageSuggestionResponseObject, error) {
+	u, _, ws := me(ctx)
+	changes, err := s.Wiki.ResolveSuggestion(ctx, ws, u.ID, req.Id, req.VersionId, same[wiki.Resolution](req.Body))
+	if err != nil {
+		return nil, err
+	}
+	return api.ResolvePageSuggestion200JSONResponse(same[[]api.PageChange](changes)), nil
+}
+func (s *Server) SetPagePersonaEdits(ctx context.Context, req api.SetPagePersonaEditsRequestObject) (api.SetPagePersonaEditsResponseObject, error) {
+	_, _, ws := me(ctx)
+	if err := s.Wiki.SetPersonaEdits(ctx, ws, req.Id, req.Body.Direct, req.Body.Paused); err != nil {
+		return nil, err
+	}
+	return api.SetPagePersonaEdits204Response{}, nil
+}
+func (s *Server) RestorePageVersion(ctx context.Context, req api.RestorePageVersionRequestObject) (api.RestorePageVersionResponseObject, error) {
+	u, _, ws := me(ctx)
+	if _, err := s.Wiki.RestoreVersion(ctx, ws, u.ID, req.Id, req.VersionId); err != nil {
+		return nil, err
+	}
+	a, err := s.noteDetail(ctx, ws, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	return api.RestorePageVersion200JSONResponse(a), nil
 }

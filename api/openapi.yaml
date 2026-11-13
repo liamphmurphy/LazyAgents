@@ -1701,6 +1701,76 @@ paths:
               schema: { $ref: "#/components/schemas/Artifact" }
         default: { $ref: "#/components/responses/Error" }
 
+  /pages/{id}/suggestions/{versionId}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: resolvePageSuggestion
+      summary: Resolve individual changes on the current head as the signed-in person
+      description: Decisions apply atomically and create at most one human version per request. Undecided changes remain pending; rest resolves all remaining changes. Missing or ambiguous targets become stale. Repeated decisions return 409. Rejected and stale changes emit feedback in the originating chat or ticket. Workspace authorization applies; missing pages or versions return 404.
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PageResolution" }
+      responses:
+        "200":
+          description: Persisted changes with decision states and reasons
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PageChange" } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /pages/{id}/persona-edits:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    put:
+      operationId: setPagePersonaEdits
+      summary: Set direct-edit and pause switches as the signed-in person
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                direct: { type: boolean }
+                paused: { type: boolean }
+      responses:
+        "204": { description: Updated }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /pages/{id}/versions/{versionId}/restore:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: restorePageVersion
+      summary: Restore a published version body and properties as a new human-authored version
+      tags: [wiki]
+      responses:
+        "200":
+          description: The restored page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /wiki/suggestions:
     get:
       operationId: listWikiSuggestions
@@ -6901,6 +6971,8 @@ components:
       type: object
       required: [id, seq, label, note, content, created_by, created_at]
       properties:
+        persona_id: { type: string, format: uuid }
+        changes: { type: array, items: { $ref: "#/components/schemas/PageChange" } }
         id: { type: string, format: uuid }
         seq: { type: integer }
         label: { type: string }
@@ -6937,6 +7009,9 @@ components:
       type: object
       required: [id, type, title, summary, author, current_version, body_md, outline, read_by, versions, tickets, suggestions, created_at, updated_at]
       properties:
+        persona_direct: { type: boolean }
+        persona_paused: { type: boolean }
+        chat_session_id: { type: string, format: uuid }
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/ArtifactType" }
         title: { type: string }
@@ -7670,10 +7745,43 @@ components:
           format: uuid
           description: The version the editor started from; a save over a newer version is refused (409)
         note: { type: string }
+    PageChange:
+      type: object
+      required: [i, kind, before, after, context_before, context_after, why, state]
+      properties:
+        i: { type: integer }
+        kind: { type: string, enum: [body, property] }
+        before: { description: Old text or property value, nullable: true }
+        after: { description: New text or property value, nullable: true }
+        context_before: { type: string }
+        context_after: { type: string }
+        key: { type: string }
+        why: { type: string }
+        state: { type: string, enum: [pending, applied, accepted, rejected, stale] }
+        reason: { type: string }
+        decided_by: { type: string, format: uuid }
+        decided_at: { type: string, format: date-time }
+    PageResolution:
+      type: object
+      properties:
+        decisions:
+          type: array
+          items:
+            type: object
+            required: [i, accept]
+            properties:
+              i: { type: integer, minimum: 0 }
+              accept: { type: boolean }
+              reason: { type: string }
+        rest: { type: string, enum: [accept, reject] }
+        reason: { type: string, description: Reason for rest decisions }
     WikiSuggestion:
       type: object
       required: [id, artifact_id, path, title, body_md, current_body_md, author, created_at, stale, new_page]
       properties:
+        applied: { type: boolean, description: Already applied directly and waiting for review }
+        persona_id: { type: string, format: uuid }
+        changes: { type: array, items: { $ref: "#/components/schemas/PageChange" } }
         id: { type: string, format: uuid }
         artifact_id: { type: string, format: uuid }
         path: { type: string }

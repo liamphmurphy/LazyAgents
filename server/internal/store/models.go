@@ -114,6 +114,9 @@ type Artifact struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	Path             *string
+	PersonaDirect    bool
+	PersonaPaused    bool
+	ChatSessionID    *uuid.UUID
 }
 
 type ArtifactAlias struct {
@@ -166,6 +169,10 @@ type ArtifactVersion struct {
 	ReviewNote       string
 	ReviewPins       json.RawMessage
 	Properties       json.RawMessage
+	Changes          []byte
+	PersonaID        *uuid.UUID
+	SourceChatID     *uuid.UUID
+	SourceRunID      *uuid.UUID
 }
 
 type BrowserSession struct {
