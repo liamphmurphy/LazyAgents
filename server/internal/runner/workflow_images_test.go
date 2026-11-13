@@ -269,3 +269,53 @@ func TestWorkflowImageToolPolicy(t *testing.T) {
 		t.Fatalf("past the limit: %s", got)
 	}
 }
+
+// An image step set to Antigravity runs on agy: its generator saves into agy's
+// own folder, so the runner collects the file, and the step's instructions say
+// not to copy it. Verify then sees that image.
+func TestWorkflowImageStepOnAntigravity(t *testing.T) {
+	e := newWFImageEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("FAKE_IMAGE_CONTENT", "good")
+	run := e.startGraph(t, runs.WorkflowGraph{Nodes: []runs.WorkflowNode{
+		{ID: "start", Type: runs.NodeTrigger, Title: "Start"},
+		{ID: "gen", Type: runs.NodeAgent, Title: "Generate", Config: runs.WorkflowConfig{Prompt: "Draw a map", Images: true, ImageEngine: runs.EngineAntigravity}},
+		{ID: "check", Type: runs.NodeAgent, Title: "Verify", Config: runs.WorkflowConfig{Prompt: "Check it against the request"}},
+		{ID: "ok", Type: runs.NodeGate, Title: "Approve"},
+		{ID: "post", Type: runs.NodeChat, Title: "Post"},
+	}, Edges: []runs.WorkflowEdge{{From: "start", To: "gen"}, {From: "gen", To: "check"}, {From: "check", To: "ok"}, {From: "ok", To: "post"}}})
+	e.waitGate(run.ID, 1)
+	calls := e.calls()
+	if len(calls) != 2 || calls[0].Harness != "antigravity" || calls[0].Model != "antigravity-main" || calls[1].Harness != "claude" {
+		t.Fatalf("%+v", calls)
+	}
+	if !strings.Contains(calls[0].Prompt, "don't copy it") || strings.Contains(calls[0].Prompt, "with cp") {
+		t.Fatalf("an agy step must not be told to copy: %s", calls[0].Prompt)
+	}
+	if !strings.HasPrefix(e.steps(run.ID)["check"].Output, "PASS: looked at 1") {
+		t.Fatalf("the collected image didn't reach Verify: %q", e.steps(run.ID)["check"].Output)
+	}
+}
+
+// A step that names an engine that isn't connected fails with its name, not
+// with Codex's.
+func TestWorkflowImageStepNamesAMissingEngine(t *testing.T) {
+	e := newWFImageEnv(t)
+	e.runs.ModelDiscovery = func(_ context.Context, h, _ string) ([]chatmodels.Model, error) {
+		if h == agentdef.HarnessAntigravity {
+			return nil, context.DeadlineExceeded
+		}
+		return []chatmodels.Model{{ID: h + "-main", Default: true}}, nil
+	}
+	run := e.startGraph(t, runs.WorkflowGraph{Nodes: []runs.WorkflowNode{
+		{ID: "start", Type: runs.NodeTrigger, Title: "Start"},
+		{ID: "gen", Type: runs.NodeAgent, Title: "Generate", Config: runs.WorkflowConfig{Prompt: "Draw", Images: true, ImageEngine: runs.EngineAntigravity}},
+		{ID: "ok", Type: runs.NodeGate, Title: "Approve"},
+		{ID: "post", Type: runs.NodeChat, Title: "Post"},
+	}, Edges: []runs.WorkflowEdge{{From: "start", To: "gen"}, {From: "gen", To: "ok"}, {From: "ok", To: "post"}}})
+	e.waitRun(run.ID, "failed")
+	step := e.steps(run.ID)["gen"]
+	if !strings.Contains(step.Note, "Antigravity") || strings.Contains(step.Note, "Codex") {
+		t.Fatalf("step note = %q", step.Note)
+	}
+}

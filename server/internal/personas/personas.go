@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/memory"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -53,6 +54,9 @@ type NewInput struct {
 	// whether it may propose workflows and edits to them.
 	Code, Images, Personas, SVG, Workflows, Connectors *bool
 	Repos                                              *[]string
+	// ImageEngine is the harness that makes this persona's images; "" (or nil)
+	// inherits the workspace's choice.
+	ImageEngine *string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
@@ -65,6 +69,16 @@ type Patch struct {
 	Code, Images, Personas, SVG, Workflows, Connectors *bool
 	// Repos replaces the whole list; existing chats keep the repo they chose.
 	Repos *[]string
+	// ImageEngine changes the image engine ("" inherits the workspace's).
+	ImageEngine *string
+}
+
+// checkImageEngine accepts "" (inherit), "auto" or an image-capable harness.
+func checkImageEngine(engine *string) error {
+	if engine == nil || *engine == "" || *engine == "auto" || slices.Contains(agentdef.ImageHarnesses, *engine) {
+		return nil
+	}
+	return apperr.Invalid("capabilities.image_engine", "must be empty, auto, %s", strings.Join(agentdef.ImageHarnesses, " or "))
 }
 
 func normName(s string) (string, error) {
@@ -175,6 +189,9 @@ func (s *Service) Create(ctx context.Context, o Owner, in NewInput) (store.Perso
 // CreateLocked is Create inside the caller's transaction, which must already
 // hold the owner's persona lock (LockPersonaOwner).
 func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (store.Persona, error) {
+	if err := checkImageEngine(in.ImageEngine); err != nil {
+		return store.Persona{}, err
+	}
 	var out store.Persona
 	name, err := normName(in.Name)
 	if err != nil {
@@ -231,6 +248,9 @@ func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (
 				return out, e
 			}
 		}
+		if in.ImageEngine != nil && *in.ImageEngine != "" {
+			out, err = q.SetPersonaImageEngine(ctx, store.SetPersonaImageEngineParams{ID: out.ID, WorkspaceID: o.WorkspaceID, UserID: o.UserID, ImageEngine: *in.ImageEngine})
+		}
 	}
 	return out, nameTaken(err)
 }
@@ -277,6 +297,9 @@ func LockOwner(ctx context.Context, q *store.Queries, o Owner) error {
 // chats get chat.updated.
 func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (store.Persona, error) {
 	var out store.Persona
+	if err := checkImageEngine(p.ImageEngine); err != nil {
+		return out, err
+	}
 	if p.Name != nil {
 		name, err := normName(*p.Name)
 		if err != nil {
@@ -331,6 +354,11 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		}
 		if err != nil {
 			return nameTaken(err)
+		}
+		if p.ImageEngine != nil && *p.ImageEngine != out.ImageEngine {
+			if out, err = q.SetPersonaImageEngine(ctx, store.SetPersonaImageEngineParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, ImageEngine: *p.ImageEngine}); err != nil {
+				return err
+			}
 		}
 		for _, repo := range repos {
 			if e := q.AddRepositorySource(ctx, store.AddRepositorySourceParams{WorkspaceID: o.WorkspaceID, UserID: o.UserID, Kind: "repository", Name: repo}); e != nil {

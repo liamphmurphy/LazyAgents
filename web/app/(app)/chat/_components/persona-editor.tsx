@@ -330,7 +330,7 @@ function Toggle({ id, checked, onChange, title, hint }: { id: string; checked: b
 
 // ---- editor ----
 
-type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; personas: boolean; svg: boolean; workflows: boolean; connectors: boolean; repos: string[] };
+type Draft = { name: string; tone: PersonaTone; instructions: string; makeDefault: boolean; code: boolean; images: boolean; imageEngine: string; personas: boolean; svg: boolean; workflows: boolean; connectors: boolean; repos: string[] };
 
 const draftOf = (p?: Persona): Draft => ({
   name: p?.name ?? "",
@@ -339,6 +339,7 @@ const draftOf = (p?: Persona): Draft => ({
   makeDefault: p?.is_default ?? false,
   code: p?.capabilities.code ?? false,
   images: p?.capabilities.images ?? false,
+  imageEngine: p?.capabilities.image_engine ?? "",
   personas: p?.capabilities.personas ?? false,
   svg: p?.capabilities.svg ?? false,
   workflows: p?.capabilities.workflows ?? false,
@@ -408,7 +409,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
           color: color.color,
           custom_instructions: draft.instructions,
           is_default: draft.makeDefault,
-          capabilities: { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors },
+          capabilities: { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors },
           repos: draft.repos,
         });
       } else {
@@ -421,13 +422,14 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
         if (
           draft.code !== p.capabilities.code ||
           draft.images !== p.capabilities.images ||
+          draft.imageEngine !== (p.capabilities.image_engine ?? "") ||
           draft.personas !== (p.capabilities.personas ?? false) ||
           draft.svg !== (p.capabilities.svg ?? false) ||
           draft.workflows !== (p.capabilities.workflows ?? false) ||
           draft.connectors !== (p.capabilities.connectors ?? false) ||
           !sameList(draft.repos, p.repos)
         ) {
-          patch.capabilities = { code: draft.code, images: draft.images, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors };
+          patch.capabilities = { code: draft.code, images: draft.images, image_engine: draft.imageEngine, personas: draft.personas, svg: draft.svg, workflows: draft.workflows, connectors: draft.connectors };
           patch.repos = draft.repos;
         }
         if (Object.keys(patch).length > 1) p = await update.mutateAsync({ id: p.id, patch });
@@ -574,8 +576,20 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     checked={draft.images}
                     onChange={(v) => set({ images: v })}
                     title="Generate images"
-                    hint="Creates images with Codex; works with any model in the chat. Images appear in the conversation."
+                    hint="Creates images with Codex or Antigravity; works with any model in the chat. Images appear in the conversation."
                   />
+                  {draft.images && (
+                    <label htmlFor="persona-image-engine" className="flex items-center gap-2 pl-[26px] text-xs text-fg-secondary">
+                      Image engine
+                      <select id="persona-image-engine" value={draft.imageEngine} onChange={(e) => set({ imageEngine: e.target.value })}
+                        className="h-[26px] rounded-md border border-border-strong bg-surface px-2 text-[12.5px] text-fg focus:border-accent focus:outline-none">
+                        <option value="">Workspace setting</option>
+                        <option value="auto">Auto</option>
+                        <option value="codex">Codex</option>
+                        <option value="antigravity">Antigravity</option>
+                      </select>
+                    </label>
+                  )}
                   <Toggle
                     id="persona-svg"
                     checked={draft.svg}

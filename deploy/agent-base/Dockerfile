@@ -63,6 +63,22 @@ RUN npm install -g --no-fund --no-audit \
       @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION} \
  && npm cache clean --force
 
+# Antigravity (agy). Google publishes no npm package and no pinned release: the
+# install script fetches whatever is current, so a rebuild can change it (record
+# `agy --version` from the image when you verify the adapter). A failed install
+# leaves the image without agy rather than failing the build; Antigravity is then
+# unavailable and says so. Pass --build-arg INSTALL_ANTIGRAVITY=false to omit it.
+ARG INSTALL_ANTIGRAVITY=true
+RUN if [ "$INSTALL_ANTIGRAVITY" = true ]; then \
+      mkdir -p /opt/agy-home \
+   && curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+   && HOME=/opt/agy-home bash /tmp/agy-install.sh --skip-aliases --skip-path \
+   && ln -s /opt/agy-home/.local/bin/agy /usr/local/bin/agy \
+   && chmod -R a+rX /opt/agy-home \
+   || echo "agy install failed: Antigravity will be unavailable in this image"; \
+      rm -f /tmp/agy-install.sh; \
+    fi
+
 # Browser system libraries are installed once in the image. Browser revisions
 # follow each project's Playwright lockfile and live in the persistent cache.
 ARG PLAYWRIGHT_VERSION=1.64.1

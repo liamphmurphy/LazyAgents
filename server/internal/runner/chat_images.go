@@ -17,10 +17,10 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// DefaultChatImageTimeout bounds one Codex image step.
+// DefaultChatImageTimeout bounds one image step (Codex or Antigravity).
 const DefaultChatImageTimeout = 5 * time.Minute
 
-// imageStepPrompt wraps a job's prompt for the one-shot Codex step: this,
+// imageStepPrompt wraps a job's prompt for the one-shot image step: this,
 // then any reference images' note, then "Request: " and the prompt.
 const imageStepPrompt = "Generate exactly one image for this request with your image generation tool, then stop: Vesper collects it from where your tool saved it. Don't copy it or do anything else. "
 
@@ -66,6 +66,23 @@ func classifyImageFailure(res harness.Result, sensitive map[string]string) (mode
 	return false, ""
 }
 
+// engineLabel names an image engine for the person.
+func engineLabel(engine string) string {
+	if engine == agentdef.HarnessAntigravity {
+		return "Antigravity"
+	}
+	return "Codex"
+}
+
+// imageEngine is the harness a job runs on; rows from before engines existed
+// have none.
+func imageEngine(job store.ChatImageJob) string {
+	if job.Harness == agentdef.HarnessAntigravity {
+		return agentdef.HarnessAntigravity
+	}
+	return agentdef.HarnessCodex
+}
+
 // clipReason makes s one line of at most maxImageReasonRunes runes.
 func clipReason(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
@@ -88,15 +105,16 @@ func imageFailureMessage(kind, reason string) string {
 }
 
 // imageStepSpec is the frozen-spec equivalent of ChatSpec for an image-only
-// Codex chat: read-only plus the outbox permission profile, image generation
-// on, no web, no scopes, no resumed session.
-func imageStepSpec(chat agentdef.Resolved, model string) agentdef.Resolved {
+// chat on an image engine (harness: Codex or Antigravity): read-only plus, for
+// Codex, the outbox permission profile, image generation on, no web, no
+// scopes, no resumed session.
+func imageStepSpec(chat agentdef.Resolved, engine, model string) agentdef.Resolved {
 	s := chat
 	s.Scopes = slices.Clone(chat.Scopes)
 	for i := range s.Scopes {
 		s.Scopes[i].Mode = agentdef.Denied
 	}
-	s.Harness, s.Model = agentdef.HarnessCodex, model
+	s.Harness, s.Model = engine, model
 	s.HarnessOptions = map[string]string{"sandbox": "read-only", "readonly": "true", agentdef.OptionImageGeneration: "true"}
 	s.Setup, s.MCPServers, s.Fallbacks, s.Repository, s.Skills = []string{}, []agentdef.MCPServer{}, nil, nil, nil
 	s.Instructions = imageStepInstructions
@@ -167,20 +185,22 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	// log is read by more people than the chat is.
 	r.event(ctx, c.run.ID, "tool_call", map[string]any{"id": job.ID.String(), "tool": "image_generation", "input": map[string]any{}})
 
-	spec := imageStepSpec(c.spec, job.Model)
+	engine := imageEngine(job)
+	label := engineLabel(engine)
+	spec := imageStepSpec(c.spec, engine, job.Model)
 	plan, err := PlanSecrets(ctx, q, c.run.WorkspaceID, &c.project.ID, spec)
 	if err != nil {
 		r.Log.Warn("image step secrets", "run", c.run.ID, "err", err)
-		return finish("Codex isn't set up")
+		return finish(label + " isn't set up")
 	}
 	plan = ChatSecretPlan(plan, spec)
 	if key, _ := HarnessKey(spec); r.Cfg.RequireHarnessKey && !hasSecret(plan, key.Secret) {
-		return finish("Codex isn't set up")
+		return finish(label + " isn't set up")
 	}
 	env, err := SecretEnv(ctx, r.Secrets, c.run.WorkspaceID, &c.project.ID, plan)
 	if err != nil {
 		r.Log.Warn("image step secrets", "run", c.run.ID, "err", err)
-		return finish("Codex isn't set up")
+		return finish(label + " isn't set up")
 	}
 	ScrubChatGitEnv(env, "")
 	cacheDir := ""
@@ -191,13 +211,16 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	// Only the likenesses the request asked for are in the workspace while
 	// the step runs (loadChatReferences blanks the rest).
 	refs := r.loadChatReferences(ctx, q, c.run, job.ReferenceRoles)
-	h := harness.Codex{Prices: r.Cfg.ModelPrices}
+	var h harness.Harness = harness.Codex{Prices: r.Cfg.ModelPrices}
+	if engine == agentdef.HarnessAntigravity {
+		h = harness.Antigravity{}
+	}
 	inv, err := h.Invocation(harness.Workspace{
 		DependencyCacheDir: cacheDir, Dir: r.Backend.WorkspaceDir(wsID(c.run)), MCPURL: r.Cfg.MCPURL, Token: token, TokenEnv: tokenEnv, ContainerSandbox: r.Backend.Name() == "docker",
 	}, harness.Turn{Spec: spec, Prompt: imageStepPrompt + imageStepReferencePrompt(refs) + "Request: " + job.Prompt, Images: refs.images()})
 	if err != nil {
 		r.Log.Warn("image step invocation", "run", c.run.ID, "err", err)
-		return finish("Codex couldn't be started")
+		return finish(label + " couldn't be started")
 	}
 	files := map[string][]byte{
 		".lazyagents/agents-section.md": []byte(imageStepInstructions),
@@ -228,15 +251,16 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	})
 	if err != nil {
 		r.Log.Warn("start image step", "run", c.run.ID, "err", err)
-		return finish("Codex couldn't be started")
+		return finish(label + " couldn't be started")
 	}
 	timeout := r.Cfg.ChatImageTimeout
 	if timeout <= 0 {
 		timeout = DefaultChatImageTimeout
 	}
 	start := time.Now()
-	// The Codex thread is the job's, never the run's resumable session: the
-	// policy hook lets the step copy from that thread's directory only.
+	// The thread (Codex) or conversation (Antigravity) is the job's, never the
+	// run's resumable session: the policy hook lets a Codex step copy from its
+	// thread's directory only.
 	thread := ""
 	res, _, code, waitErr := r.watchSession(ctx, c, proc, h.NewParser(spec.Model), sensitive, timeout, func(s string) {
 		thread = s
@@ -262,7 +286,7 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 	case code != 0 && time.Since(start) >= timeout:
 		return finish("timed out")
 	case res.UsageLimited:
-		return finish("Codex has hit its usage limit")
+		return finish(label + " has hit its usage limit")
 	}
 	failed := waitErr != nil || code != 0 || res.IsError
 	newInOutbox := func() error {
@@ -283,7 +307,13 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 		// the step's own copy got past the policy hook depends on how its model
 		// phrased it. Only when the step left nothing, so no image shows twice.
 		if err == nil && len(produced) == 0 && thread != "" {
-			if cerr := collectGeneratedImages(ctx, r.Backend, wsID(c.run), thread); cerr != nil {
+			var cerr error
+			if engine == agentdef.HarnessAntigravity {
+				cerr = collectAntigravityImages(ctx, r.Backend, wsID(c.run), thread, res.Images)
+			} else {
+				cerr = collectGeneratedImages(ctx, r.Backend, wsID(c.run), thread)
+			}
+			if cerr != nil {
 				r.Log.Warn("collect generated images", "run", c.run.ID, "job", job.ID, "err", cerr)
 			}
 			err = newInOutbox()
@@ -302,16 +332,16 @@ func (r *Runner) runChatImageJob(ctx context.Context, c runCtx, turn store.RunTu
 			}
 			return record(imageFailModeration, clipReason("rejected by moderation: "+detail))
 		}
-		// What Codex said is the only trace of why a clean exit left nothing
+		// What the engine said is the only trace of why a clean exit left nothing
 		// behind (a copy the policy hook denied, an image saved elsewhere).
 		said := clipReason(redact(cmp.Or(res.Error, res.Final), sensitive))
 		r.Log.Warn("image step made no image", "run", c.run.ID, "job", job.ID, "exit", code, "wait_err", waitErr, "is_error", res.IsError, "said", said)
 		if failed {
-			return finish("Codex couldn't finish the image")
+			return finish(label + " couldn't finish the image")
 		}
 		// The reason is followed by a period wherever it is shown.
 		if said = strings.TrimRight(said, ". "); said != "" {
-			return finish(clipReason("no image was produced; Codex said: " + said))
+			return finish(clipReason("no image was produced; " + label + " said: " + said))
 		}
 		return finish("no image was produced")
 	}

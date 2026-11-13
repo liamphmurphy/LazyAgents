@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ancestors, canConnect, canRequestChanges, diffGraphs, failedGateCheck, gateSources, isWorkflowRunFence, newNodeId, parentChecks, parseWorkflowRun, removeNode } from "./workflows.ts";
+import { imageEngineName, nodeSummary, ancestors, canConnect, canRequestChanges, diffGraphs, failedGateCheck, gateSources, isWorkflowRunFence, newNodeId, parentChecks, parseWorkflowRun, removeNode } from "./workflows.ts";
 
 const node = (id, type, config = {}) => ({ id, type, title: id, config });
 const graph = {
@@ -79,4 +79,13 @@ test("a tied gate stays shut unless its check passed", () => {
 test("removing a check clears gates tied to it", () => {
   const g = { nodes: [node("check", "agent", { check: true }), node("ok", "gate", { requires_check: "check" })], edges: [{ from: "check", to: "ok" }] };
   assert.equal(removeNode(g, "check").nodes[0].config.requires_check, undefined);
+});
+
+test("an images step's summary names its engine", () => {
+  const step = (image_engine) => ({ id: "gen", type: "agent", title: "Gen", config: { images: true, image_engine } });
+  assert.equal(nodeSummary(step("codex")), "Persona · images · Codex");
+  assert.equal(nodeSummary(step("antigravity")), "Persona · images · Antigravity");
+  assert.equal(nodeSummary(step("auto")), "Persona · images · Auto engine");
+  assert.equal(nodeSummary(step(undefined)), "Persona · images · default engine");
+  assert.equal(imageEngineName("something-new"), "default engine");
 });

@@ -1,9 +1,11 @@
-// Command fake-harness stands in for the `claude` and `codex` CLIs in runner
+// Command fake-harness stands in for the `claude`, `codex` and `agy` CLIs in runner
 // tests and demos without API keys (docs/dev/plan.md §10). Invoked as `claude -p …`
 // it emits Claude's stream-json and reads the MCP server from --mcp-config;
 // invoked as `codex exec [resume] … --json` it emits Codex's JSONL and reads
-// the server from -c mcp_servers.lazyagents.* overrides. Either way it does
-// real work through the Vesper MCP server.
+// the server from -c mcp_servers.lazyagents.* overrides; invoked as agy (and
+// `agy models`) it runs the Claude script and prints it as agy's stream-json
+// (agy.go), reading the server from .lazyagents/agy-config.json. Whichever
+// CLI it plays, it does real work through the Vesper MCP server.
 //
 // FAKE_HARNESS_MODE picks the first turn's script:
 //
@@ -128,6 +130,10 @@ var (
 )
 
 func emit(v map[string]any) {
+	if agy {
+		translateToAgy(v)
+		return
+	}
 	if !codex {
 		v["session_id"] = session
 		if m, ok := v["message"].(map[string]any); ok && v["type"] == "assistant" && m["usage"] == nil {
@@ -202,6 +208,11 @@ func main() {
 	var mcpURL, tokenEnv, mcpApproval string
 	var images []string // codex --image files (comma-separated)
 	args := os.Args[1:]
+	agy = filepath.Base(os.Args[0]) == "agy"
+	if agy && len(args) > 0 && args[0] == "models" {
+		agyModels()
+		return
+	}
 	// Chat model discovery for `claude` (chatmodels.DiscoverLocal) and the
 	// usage check (usage.Probe): answer control requests, then wait for EOF.
 	// Real turns persist their session, control-only checks don't.
@@ -307,7 +318,10 @@ func main() {
 		result(true, "MCP tool call requires approval, but approval policy is never")
 		os.Exit(1)
 	}
-	for i := 0; !codex && i < len(args); i++ {
+	if agy {
+		prompt, model, resume = agyArgs(args)
+	}
+	for i := 0; !codex && !agy && i < len(args); i++ {
 		switch args[i] {
 		case "-p", "--print":
 			if i+1 < len(args) {
@@ -373,6 +387,10 @@ func main() {
 		}
 		line, _ := json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "full_prompt": prompt, "images": strings.Join(imageFiles, "\n"),
 			"mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": map[bool]string{true: "codex", false: "claude"}[codex]})
+		if agy {
+			line, _ = json.Marshal(map[string]any{"request": request, "cwd": wd, "resume": resume, "prompt": firstLine(prompt), "full_prompt": prompt, "images": "",
+				"mode": os.Getenv("FAKE_HARNESS_MODE"), "model": model, "harness": "antigravity"})
+		}
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			f.Close()
@@ -440,6 +458,10 @@ func main() {
 		return
 	}
 
+	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" && agy && strings.HasPrefix(prompt, "Generate exactly one image") {
+		agyImageStep()
+		return
+	}
 	if os.Getenv("FAKE_HARNESS_MODE") == "chat-image" && codex && strings.HasPrefix(prompt, "Generate exactly one image") {
 		switch os.Getenv("FAKE_IMAGE_STEP") {
 		case "fail":
@@ -493,6 +515,14 @@ func main() {
 			URL     string            `json:"url"`
 			Headers map[string]string `json:"headers"`
 		}{"lazyagents": {URL: mcpURL, Headers: map[string]string{"Authorization": "Bearer " + os.Getenv(tokenEnv)}}}
+	} else if agy {
+		var url string
+		var headers map[string]string
+		url, headers, err = agyMCP()
+		cfg.MCPServers = map[string]struct {
+			URL     string            `json:"url"`
+			Headers map[string]string `json:"headers"`
+		}{"lazyagents": {URL: url, Headers: headers}}
 	} else {
 		var raw []byte
 		raw, err = os.ReadFile(cfgPath)
@@ -587,7 +617,18 @@ func main() {
 				if strings.Contains(prompt, "asked for changes to the previous attempt") {
 					content = "revised"
 				}
-				_ = os.WriteFile(".lazyagents/outbox/map-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\n"+content), 0o644)
+				if agy {
+					// agy's generator saves into its own folder; the runner collects it.
+					dir := filepath.Join(os.Getenv("HOME"), ".gemini", "antigravity-cli", "artifacts", session)
+					name := "map-" + newUUID() + ".png"
+					_ = os.MkdirAll(dir, 0o755)
+					_ = os.WriteFile(filepath.Join(dir, name), []byte("\x89PNG\r\n\x1a\n"+content), 0o644)
+					agyStep++
+					agyStepUpdate("ACTIVE", "tool", map[string]any{"tool_name": "generate_image", "tool_info": map[string]any{"name": "generate_image", "parameters": map[string]any{"prompt": "map"}}})
+					agyLine("step_update", map[string]any{"conversation_id": session, "step_index": agyStep, "state": "DONE", "step_type": "tool", "tool_info": map[string]any{"output": "Saved " + filepath.Join(dir, name)}})
+				} else {
+					_ = os.WriteFile(".lazyagents/outbox/map-"+newUUID()+".png", []byte("\x89PNG\r\n\x1a\n"+content), 0o644)
+				}
 				submit("Made the map. ![map](.lazyagents/outbox/map.png)")
 			}
 		} else {

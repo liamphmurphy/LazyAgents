@@ -43,11 +43,20 @@ func Stricter(a, b Mode) Mode {
 }
 
 const (
-	HarnessClaudeCode = "claude-code"
-	HarnessCodex      = "codex"
+	HarnessClaudeCode  = "claude-code"
+	HarnessCodex       = "codex"
+	HarnessAntigravity = "antigravity"
 )
 
-var Harnesses = []string{HarnessClaudeCode, HarnessCodex}
+var Harnesses = []string{HarnessClaudeCode, HarnessCodex, HarnessAntigravity}
+
+// CanMakeImages reports whether a harness has a built-in image generator a
+// one-shot image step can use (ImageHarnesses, in preference order).
+func CanMakeImages(harness string) bool { return slices.Contains(ImageHarnesses, harness) }
+
+// ImageHarnesses are the harnesses that can generate images, in the order
+// "Auto" prefers them.
+var ImageHarnesses = []string{HarnessCodex, HarnessAntigravity}
 
 // Budget is an optional runaway guard (no spend caps in v1). Zero = unset.
 type Budget struct {
@@ -179,10 +188,11 @@ func invalid(field, format string, a ...any) error {
 // ADR "Assistant web access".
 const OptionWebSearch = "web_search"
 
-// OptionImageGeneration ("true") turns on Codex's built-in image generation
-// for a chat. Only the Personal Assistant's chat spec sets it, for a persona
-// with the images capability; definitions can't, and Codex runs without it
-// have the feature switched off. Claude Code never receives it.
+// OptionImageGeneration ("true") turns on a harness's built-in image generation
+// for a chat (Codex's image tool, Antigravity's generator). Only the Personal
+// Assistant's chat spec sets it, for a persona with the images capability;
+// definitions can't, and Codex runs without it have the feature switched off.
+// Claude Code never receives it.
 const OptionImageGeneration = "image_generation"
 
 // OptionNoTools ("true") makes a turn answer from its prompt alone: no MCP

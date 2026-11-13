@@ -970,6 +970,7 @@
   --orb-bar: var(--text-2);
   --orb-claude: var(--brand-star);
   --orb-codex: var(--brand-violet);
+  --orb-antigravity: var(--state-review);
   --orb-idle: var(--text-tertiary);
   --orb-hover: var(--command-on);
   --orb-divider: var(--border-subtle);
@@ -1077,8 +1078,16 @@
 @keyframes orb-blink { 0%, 90%, 96%, 100% { transform: none; } 92%, 94% { transform: scaleY(0.15); } }
 @keyframes orb-bob { 0%, 49% { transform: none; } 50%, 100% { transform: translateY(calc(var(--u) * -0.5px)); } }
 @keyframes orb-step { 0%, 49% { transform: translateY(calc(var(--u) * -1px)); } 50%, 100% { transform: none; } }
+/* Antigravity lifts off: the core floats over a shadow that narrows as it rises, and particles drift up off it. */
+.orb-lift * { transform-box: fill-box; transform-origin: center; }
+.orb-lift-core { animation: orb-lift-bob 1.6s ease-in-out infinite; }
+.orb-lift-shadow { animation: orb-lift-shadow 1.6s ease-in-out infinite; }
+.orb-lift-p { opacity: 0.6; animation: orb-lift-rise 1.8s ease-out infinite backwards; }
+@keyframes orb-lift-bob { 50% { transform: translateY(-2.5px); } }
+@keyframes orb-lift-shadow { 50% { transform: scaleX(0.7); opacity: 0.18; } }
+@keyframes orb-lift-rise { 0% { transform: translateY(0); opacity: 0; } 25% { opacity: 0.9; } 100% { transform: translateY(-9px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .orb-root .orb-btn, .orb-root .orb-robot *, .orb-root .orb-orbit { animation: none !important; }
+  .orb-root .orb-btn, .orb-root .orb-robot *, .orb-root .orb-orbit, .orb-root .orb-lift * { animation: none !important; }
   .orb-root .orb-ring, .orb-root .orb-track i { transition: none; animation: none; }
   /* A still arc would read as usage; the panel still says it's checking. */
   .orb-root .orb-sweep { display: none; }

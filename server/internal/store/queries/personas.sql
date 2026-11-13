@@ -133,3 +133,10 @@ UPDATE personas SET
   revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
+
+-- name: SetPersonaImageEngine :one
+-- The engine ('' inherits the workspace's) is changed apart from UpdatePersona so
+-- the optimistic update keeps its shape; it bumps the revision like any edit.
+UPDATE personas SET image_engine = sqlc.arg(image_engine), revision = revision + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
+RETURNING *;

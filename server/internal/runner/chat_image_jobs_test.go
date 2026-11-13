@@ -356,3 +356,66 @@ func TestChatImageFollowupFailureFailsChat(t *testing.T) {
 		t.Fatalf("next turn %+v", reply)
 	}
 }
+
+// With the workspace's image engine set to Antigravity, the same Claude chat's
+// image comes from a one-shot agy step. agy saves into its own folder, so the
+// runner collects the file (named in the generator's tool output) into the
+// outbox; the job records the harness that made it.
+func TestChatImageJobMakesImageWithAntigravity(t *testing.T) {
+	e := setup(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if _, err := e.pool.Exec(e.ctx, "UPDATE workspaces SET image_engine = 'antigravity' WHERE id = $1", e.ws); err != nil {
+		t.Fatal(err)
+	}
+	chat, logPath := e.imageChat(t, "ok", "image: a red fox")
+	run := e.chatRun(chat.ID)
+	job := e.imageJob(run.ID)
+	var harness string
+	if err := e.pool.QueryRow(e.ctx, "SELECT harness FROM chat_image_jobs WHERE id = $1", job.ID).Scan(&harness); err != nil {
+		t.Fatal(err)
+	}
+	if job.State != "done" || harness != agentdef.HarnessAntigravity || job.Model != "antigravity-main" || job.FailureKind != nil {
+		t.Fatalf("job %+v harness %q", job, harness)
+	}
+	msgs := e.chatMsgs(chat.ID)
+	atts, err := e.q.ListChatAttachmentsForMessages(e.ctx, []uuid.UUID{msgs[1].ID})
+	if err != nil || len(atts) != 1 || atts[0].Source != "generated" || atts[0].ContentType != "image/png" || !strings.HasPrefix(atts[0].Filename, "agy-") {
+		t.Fatalf("attachments %+v %v", atts, err)
+	}
+	var step map[string]string
+	for _, l := range readLog(t, logPath) {
+		if l["harness"] == "antigravity" {
+			step = l
+		}
+	}
+	if step == nil || step["resume"] != "" || step["model"] != "antigravity-main" || !strings.HasPrefix(step["prompt"], "Generate exactly one image") || step["request"] != "a red fox" {
+		t.Fatalf("agy step %+v", step)
+	}
+	// The collector reads only from under the harness's home.
+	if _, err := os.Stat(filepath.Join(home, ".gemini", "antigravity-cli", "artifacts")); err != nil {
+		t.Fatalf("the step saved nothing under its home: %v", err)
+	}
+}
+
+// An Antigravity step that makes nothing, or a persona that prefers an engine
+// that isn't connected, fails with that engine's name.
+func TestChatImageJobFailureNamesTheEngine(t *testing.T) {
+	e := setup(t)
+	t.Setenv("HOME", t.TempDir())
+	if _, err := e.pool.Exec(e.ctx, "UPDATE workspaces SET image_engine = 'antigravity' WHERE id = $1", e.ws); err != nil {
+		t.Fatal(err)
+	}
+	chat, _ := e.imageChat(t, "fail", "image: a fox")
+	job := e.imageJob(e.chatRun(chat.ID).ID)
+	if job.State != "failed" || job.Error == nil || *job.Error != "Antigravity couldn't finish the image" {
+		t.Fatalf("job %+v", job)
+	}
+	found := false
+	for _, m := range e.chatMsgs(chat.ID) {
+		found = found || (m.Role == "system" && m.BodyMd == "Couldn't create the image: Antigravity couldn't finish the image.")
+	}
+	if !found {
+		t.Fatalf("the person was not told which engine failed: %+v", e.chatMsgs(chat.ID))
+	}
+}

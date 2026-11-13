@@ -15,8 +15,9 @@ The first boot creates an empty workspace with one local user and an Assistant
 with all persona permissions enabled. A signed-in browser acts as that user.
 The first visit opens the Welcome Wizard in the new-chat welcome, hosted by
 your Assistant: your name, what you do and an optional photo; a harness to run
-on (Claude Code or Codex, as a subscription login or an API key, verified by
-listing its models; Codex is needed for native image generation); and a first
+on (Claude Code, Codex or Antigravity, as a subscription login or an API key, verified by
+listing its models; Antigravity takes only a Gemini API key; Codex or Antigravity is needed for
+image generation); and a first
 persona, described in your own words and drafted by the Assistant. It shows
 until you finish it; afterwards only its harness step comes back, whenever no
 harness is connected. Settings → Run setup again starts it over. Ticket agents use your profile's primary email for
@@ -59,11 +60,12 @@ and otherwise reads the dev database, linking to Next on `WEB_URL`
 
 Assign a ticket to an agent, then **Review & dispatch** it. The `runner`
 service runs each turn in a container from `vesper/agent-base` (built by
-compose, with Claude Code and Codex installed). Before dispatching:
+compose, with Claude Code, Codex and Antigravity installed). Before dispatching:
 
 - set `SECRETS_KEY` in `.env` (`openssl rand -base64 32`);
 - add the harness key in **Settings → Connections & secrets**: `harness:anthropic`
-  for Claude Code, `harness:openai` for Codex. Runs bill that key. To use a
+  for Claude Code, `harness:openai` for Codex, `harness:google` (a Gemini API key from Google
+  AI Studio) for Antigravity. Runs bill that key. To use a
   Claude or ChatGPT plan instead, use `make start` from a checkout;
 - add `git:pat` (a GitHub token) and a repo URL for the project, if agents should
   clone, push and open PRs. Open PRs are polled every 60s: merged → Done.
@@ -175,8 +177,8 @@ home directory (harness sessions, the SSH key) stays in a volume.
 Select a project, open **Chat** in the sidebar, and choose **New chat**. Select
 a harness/model, type a message, and send with Enter (Shift+Enter adds a newline).
 Chats appear in the history panel so you can return to the conversation later.
-Keep a runner online. It requires `harness:anthropic` for Claude Code and
-`harness:openai` for Codex in **Settings → Connections & secrets**.
+Keep a runner online. It requires `harness:anthropic` for Claude Code,
+`harness:openai` for Codex and `harness:google` for Antigravity in **Settings → Connections & secrets**.
 Unavailable models are disabled in the picker.
 
 Change the picker before sending to use a different model or harness for the
@@ -231,7 +233,8 @@ An agent definition can carry **skills**: reusable playbooks (a name, a one-line
 written into the run workspace as native skills (`.claude/skills/<name>/SKILL.md`,
 git-excluded), so the agent loads a skill's body only when a task matches its
 description. On Codex they use native discovery under
-`.agents/skills/<name>/SKILL.md`. Edit them in the agent's
+`.agents/skills/<name>/SKILL.md`. Antigravity has no documented skills folder, so it gets the
+same playbooks under `.lazyagents/skills/` with an index in `AGENTS.md`. Edit them in the agent's
 **Skills** card.
 
 `examples/skills/` holds a starter library, and
@@ -497,7 +500,9 @@ workspace is kept, and files with nowhere to push stay on disk.
 `RUNNER_BACKEND=fake` is for tests and disposable instances only (the e2e
 stack, playgrounds): turns run on the host with no isolation, every harness is
 a stand-in binary (`server/cmd/fake-harness`), and the runner and API refuse to
-start unless `RUNNER_CLAUDE_BIN` and `RUNNER_CODEX_BIN` both name one. It needs
+start unless `RUNNER_CLAUDE_BIN` and `RUNNER_CODEX_BIN` both name one (`RUNNER_ANTIGRAVITY_BIN`
+is optional: without it Antigravity is simply unavailable; name a symlink called `agy`, which
+is how the fake knows to speak agy). It needs
 no provider keys, and shares download caches under `$RUNNER_DATA_DIR/cache`.
 Set the same `RUNNER_BACKEND` on the API and its runners.
 
@@ -554,7 +559,7 @@ trade-offs.
 |---|---|
 | `api/openapi.yaml` | REST contract. Go server interfaces and the TS client are generated from it. |
 | `server/` | Go module: the `vesper` binary (`serve`, `runner`, `migrate`) |
-| `server/internal/harness/` | Claude Code and Codex adapters: invocation and stream parsing |
+| `server/internal/harness/` | Claude Code, Codex and Antigravity adapters: invocation and stream parsing |
 | `server/internal/runner/` | Queue, workspaces (Docker or local), turns, guards |
 | `deploy/agent-base/` | The image managed runs execute in |
 | `server/migrations/` | goose SQL, embedded and applied on boot |
@@ -605,6 +610,24 @@ flag. It does not disable the sandbox or shell approval policy. Like the CLI's
 own tool rules, hooks provide best-effort enforcement, not isolation from a
 malicious program; Docker remains the isolation boundary. `python3` is required by both adapters and is
 included in the runner image.
+
+Antigravity has no hook-listing command to preflight with. Its turns fail closed a
+different way: `agy` only runs what the deny rules, the allow rules for Vesper's own
+tools and the policy hook leave it, so a hook that doesn't load leaves a turn able
+to do (almost) nothing. See [contracts/antigravity.md](contracts/antigravity.md),
+which also lists what is still unverified against the real CLI.
+
+### Antigravity
+
+Antigravity (`agy`) runs on a **Gemini API key**, stored as `harness:google`. Google's
+terms don't let a tool extract or store the OAuth login `agy` keeps, so Vesper never
+reads it: there is no plan login and no sign-in button, and the Welcome Wizard shows a
+key field only. The agent image installs `agy` at build time (unpinned: Google
+publishes no release pin; set `--build-arg INSTALL_ANTIGRAVITY=false` to leave it out).
+It reports tokens but no cost and no plan allowance, so its runs show an unknown cost
+and the activity orb shows "Usage unknown". It is an image engine like Codex:
+**Settings → Image engine** picks Codex, Antigravity or Auto, a persona can override
+it, and a workflow image step can name one.
 
 Repository-authorized Codex turns use a workspace permission profile that also
 allows writes to `.git`, so staging and committing work headlessly. Planning

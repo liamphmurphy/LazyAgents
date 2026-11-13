@@ -1350,6 +1350,44 @@ paths:
               schema: { $ref: "#/components/schemas/RunnerStatus" }
         default: { $ref: "#/components/responses/Error" }
 
+  /image-engine:
+    get:
+      operationId: getImageEngine
+      summary: Which engine makes images, and which are connected
+      description: |
+        Images are made by Codex or Antigravity. engine is the workspace's
+        choice (auto uses the first connected, Codex first); a persona or a
+        workflow step may override it. options says whether each engine can
+        make an image right now.
+      tags: [workspace]
+      responses:
+        "200":
+          description: The choice and the engines
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageEngineSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: updateImageEngine
+      summary: Choose the workspace's image engine
+      tags: [workspace]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [engine]
+              properties:
+                engine: { type: string, enum: [auto, codex, antigravity] }
+      responses:
+        "200":
+          description: The saved choice and the engines
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageEngineSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
   /runner/environment:
     get:
       operationId: getRunnerEnvironment
@@ -6992,7 +7030,7 @@ components:
       enum: [allowed, requires_approval, denied]
     Harness:
       type: string
-      enum: [claude-code, codex]
+      enum: [claude-code, codex, antigravity]
     Budget:
       type: object
       properties:
@@ -7689,6 +7727,21 @@ components:
         version: { type: string }
         heartbeat_at: { type: string, format: date-time }
         host_workspaces_dir: { type: string, description: "Where this runner keeps host-folder workspaces (RUNNER_HOST_WORKSPACES_DIR); absent when it has none" }
+    ImageEngineSettings:
+      type: object
+      required: [engine, options]
+      properties:
+        engine: { type: string, enum: [auto, codex, antigravity] }
+        options:
+          type: array
+          items:
+            type: object
+            required: [engine, label, available]
+            properties:
+              engine: { type: string, enum: [codex, antigravity] }
+              label: { type: string }
+              available: { type: boolean, description: "Connected, with a model to run the image step on" }
+              reason: { type: string, description: "Why it isn't available" }
     RunnerSettings:
       type: object
       required: [host_folder_workspaces]
@@ -8356,7 +8409,8 @@ components:
             persona_id: { type: string }
             agent_handle: { type: string }
             web: { type: boolean }
-            images: { type: boolean, description: "agent: generate images. The step runs on Codex as a persona allowed to make images" }
+            images: { type: boolean, description: "agent: generate images. The step runs as a persona allowed to make images, on image_engine" }
+            image_engine: { type: string, description: "agent with images: auto (default; the first connected of Codex and Antigravity), codex or antigravity. Defaults to the persona's, then the workspace's, engine" }
             check: { type: boolean, description: "agent: reports pass or fail, and nothing after it runs unless it passes" }
             show: { type: array, items: { type: string } }
             retry_from: { type: string, description: "gate: the step Request changes re-runs. agent with check: the step re-run automatically on failure" }
@@ -9369,7 +9423,8 @@ components:
       required: [code, images]
       properties:
         code: { type: boolean, description: "Clone the chat's repo, edit and run code, commit and push its own work branch, open PRs" }
-        images: { type: boolean, description: "Generate images with Codex image generation; works with any chat model (non-Codex chats hand the image to a one-off Codex step)" }
+        images: { type: boolean, description: "Generate images with an image engine (Codex or Antigravity); works with any chat model (a chat on another harness hands the image to a one-off step on the engine)" }
+        image_engine: { type: string, description: "Which engine makes this persona's images: codex, antigravity or auto (the first connected, Codex first). Empty inherits the workspace's choice (GET /image-engine). Absent in a request means unchanged." }
         personas: { type: boolean, description: "Propose new personas from a chat; each is created only when the person approves it, with every capability off. Absent in a request means unchanged (false for a new persona)." }
         connectors: { type: boolean, description: "Propose new MCP connectors from a chat; each is added only when the person approves it and signs in. Absent in a request means unchanged (false for a new persona)." }
         svg: { type: boolean, description: "Show SVG images in chat replies; a reply from a persona without it keeps its SVG as plain code. Absent in a request means unchanged (false for a new persona)." }
@@ -9394,7 +9449,7 @@ components:
         id: { type: string, format: uuid }
         title: { type: string }
         state: { $ref: "#/components/schemas/PersonaDockState" }
-        harness: { type: string, description: "The harness the chat's current turn runs on (claude-code or codex), after any fallback" }
+        harness: { type: string, description: "The harness the chat's current turn runs on (claude-code, codex or antigravity), after any fallback" }
         unread: { type: integer }
         last_line: { type: string, description: "Last line of the latest reply" }
         last_seq: { type: integer, format: int64, description: "Sequence of the latest reply, for marking the chat read" }
@@ -9414,7 +9469,7 @@ components:
       required: [personas, harnesses]
       properties:
         personas: { type: array, items: { $ref: "#/components/schemas/PersonaDockEntry" } }
-        harnesses: { type: array, items: { $ref: "#/components/schemas/HarnessActivity" }, description: "Claude Code then Codex: what each is running and how much of its plan allowance is left" }
+        harnesses: { type: array, items: { $ref: "#/components/schemas/HarnessActivity" }, description: "Claude Code, Codex, then Antigravity: what each is running and how much of its plan allowance is left (Antigravity has none to read: usage_available is false)" }
     UsageWindow:
       type: object
       description: One plan allowance window, as the harness CLI reports it.
@@ -9429,7 +9484,7 @@ components:
       type: object
       required: [harness, label, running, usage_available, usage_checking, windows]
       properties:
-        harness: { type: string, description: "claude-code or codex" }
+        harness: { type: string, description: "claude-code, codex or antigravity" }
         label: { type: string }
         running: { type: integer, description: Runs and chat turns working on this harness now }
         limited_until: { type: string, format: date-time, description: "Present while the harness is out of allowance; runs fall back to another harness until then" }

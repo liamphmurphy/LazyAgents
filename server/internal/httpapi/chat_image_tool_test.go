@@ -36,7 +36,7 @@ func TestGenerateImageTool(t *testing.T) {
 	codexUp := true
 	tr := &tracker.Service{Pool: pool}
 	rs := &runs.Service{Pool: pool, Tracker: tr, Artifacts: arts, ModelDiscovery: func(_ context.Context, h, _ string) ([]chatmodels.Model, error) {
-		if h == agentdef.HarnessCodex && !codexUp {
+		if (h == agentdef.HarnessCodex || h == agentdef.HarnessAntigravity) && !codexUp {
 			return nil, errors.New("down")
 		}
 		return []chatmodels.Model{{ID: h + "-m1"}, {ID: h + "-m2", Default: true}}, nil
@@ -116,7 +116,7 @@ func TestGenerateImageTool(t *testing.T) {
 	exec("UPDATE runs SET harness='claude' WHERE id=$1", runID)
 
 	codexUp = false
-	reject("codex unavailable", map[string]any{"prompt": "a fox"}, 409, "Image generation needs Codex: ")
+	reject("no image engine", map[string]any{"prompt": "a fox"}, 409, "Image generation isn't available: no image engine is connected (Codex isn't available")
 	codexUp = true
 
 	code, out := call(token, map[string]any{"prompt": "a red fox, watercolor"})

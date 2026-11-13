@@ -115,7 +115,7 @@ export function SkillsTab({
       </Card>
       <p className="text-xs text-fg-tertiary">
         Click a skill to edit its description and instructions (agent skills only). Project additions and removals belong to that project&apos;s override. The agent sees each
-        description and loads the full playbook only when a task matches; on Claude Code they are native skills, and Codex reads the same playbooks via{" "}
+        description and loads the full playbook only when a task matches; on Claude Code they are native skills, and Codex and Antigravity read the same playbooks via{" "}
         <code className="inline">AGENTS.md</code>.
       </p>
     </div>

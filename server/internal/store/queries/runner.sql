@@ -331,3 +331,9 @@ WHERE id = (
   FOR UPDATE SKIP LOCKED
 )
 RETURNING *;
+
+-- name: WorkspaceImageEngine :one
+SELECT image_engine FROM workspaces WHERE id = $1;
+
+-- name: SetWorkspaceImageEngine :exec
+UPDATE workspaces SET image_engine = $2, updated_at = now() WHERE id = $1;
