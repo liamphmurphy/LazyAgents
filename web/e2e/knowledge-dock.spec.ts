@@ -111,6 +111,7 @@ test("Ask a Persona captures unsaved selected text without sending", async ({ pa
   await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toBeVisible();
   expect(s.chat.posted).toHaveLength(0);
   expect(s.chat.created).toHaveLength(1);
+  expect(s.chat.created[0].hidden).toBe(true);
   await input.fill("Explain this");
   await input.press("Enter");
   await expect.poll(() => s.chat.posted.length).toBe(1);
@@ -232,6 +233,7 @@ test("switching persona keeps the draft and page context inside Knowledge", asyn
   await page.getByRole("menuitemradio", { name: /Nova/ }).click();
   await expect(input).toHaveValue("Read this page");
   await expect(dock(page).getByRole("button", { name: "Persona for this conversation: Nova" })).toBeVisible();
+  expect(s.chat.created.map((chat) => chat.hidden)).toEqual([true, true]);
   expect(new URL(page.url()).pathname).toBe(`/knowledge/${P}`);
   expect(s.chat.posted).toHaveLength(0);
   await input.press("Enter");

@@ -134,7 +134,7 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
   };
   const start = () => {
     create.mutate(
-      { title: page?.title ?? "Knowledge" },
+      { title: page?.title ?? "Knowledge", hidden: true },
       { onSuccess: (c) => { void selectChat(c.id).catch(() => { /* attach.error keeps the chat available with Retry. */ }); } },
     );
   };
@@ -165,6 +165,7 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
     return blocks.length && !body.endsWith(suffix) ? `${body}${suffix}` : body;
   };
   const context: ConversationContext = {
+    hidden: true,
     composer: (
       <div className="flex flex-wrap gap-1.5 text-xs text-fg-secondary" aria-label="Knowledge context">
         {page && <span className="max-w-full truncate rounded-md border border-border bg-surface px-2 py-1" title={page.path ?? page.title}>Viewing: {page.title}</span>}

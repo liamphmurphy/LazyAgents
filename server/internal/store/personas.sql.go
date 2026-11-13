@@ -393,8 +393,10 @@ func (q *Queries) NotifyChatsUpdated(ctx context.Context, ids []string) error {
 }
 
 const personaChatCounts = `-- name: PersonaChatCounts :many
-SELECT persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions
-WHERE persona_id = ANY($1::uuid[]) AND NOT hidden GROUP BY persona_id
+SELECT c.persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions c
+WHERE c.persona_id = ANY($1::uuid[]) AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
+GROUP BY c.persona_id
 `
 
 type PersonaChatCountsRow struct {
@@ -402,7 +404,7 @@ type PersonaChatCountsRow struct {
 	N         int32
 }
 
-// Chats (archived included, hidden ones not) per persona.
+// Personal chats (archived included, hidden and app conversations not) per persona.
 func (q *Queries) PersonaChatCounts(ctx context.Context, ids []uuid.UUID) ([]PersonaChatCountsRow, error) {
 	rows, err := q.db.Query(ctx, personaChatCounts, ids)
 	if err != nil {

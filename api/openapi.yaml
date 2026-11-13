@@ -2312,9 +2312,10 @@ paths:
           in: query
           description: |
             Only chats in this space: a space id of the caller's (each chat then
-            carries a `preview`), `all` for chats in any space or none, or
+            carries a `preview`), `all` for personal chats in any space or none, or
             `none` (the default) for chats outside every space. 422 for an
-            unknown id.
+            unknown id. App conversations are returned only for an explicit
+            app space id, keeping them out of normal history.
           schema: { type: string, pattern: "^(all|none|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$" }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
       responses:

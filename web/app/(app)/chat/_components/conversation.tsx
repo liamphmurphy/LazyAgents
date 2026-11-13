@@ -441,6 +441,8 @@ function dropDraft(id: string) {
  * (Designs, Docs, Slides, Finance) leave it unset and keep the switch.
  */
 export type ConversationContext = {
+  /** Replacement conversations keep the host's visibility. */
+  hidden?: boolean;
   composer: ReactNode;
   prepare: (body: Schemas["NewChatMessage"]) => Promise<Schemas["NewChatMessage"]>;
   /** Queues and asides accept text only, so the host supplies a snapshot. */
@@ -744,7 +746,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     if (!c) return;
     const old = c;
     create.mutate(
-      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), harness: old.harness, model: old.auto_model ? "auto" : old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
+      { ...(old.project ? { project: old.project } : {}), ...(personaId ? { persona_id: personaId } : {}), ...(temporary ? { temporary } : {}), ...(context?.hidden ? { hidden: true } : {}), harness: old.harness, model: old.auto_model ? "auto" : old.model, ...(old.effort ? { effort: old.effort } : {}), ...(repo ? { repo_url: repo } : {}) },
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
