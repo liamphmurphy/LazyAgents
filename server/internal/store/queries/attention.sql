@@ -141,6 +141,7 @@ FROM needle CROSS JOIN LATERAL (
  SELECT 'chat',c.id,c.title,'/chat/'||c.id,'',c.title
  FROM chat_sessions c LEFT JOIN projects p ON p.id=c.project_id
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden
+ AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id=c.space_id AND sp.app IS NOT NULL)
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
  -- Ticket runs only: chat and workflow runs have their own pages.

@@ -759,6 +759,10 @@ type KnowledgeAssetDeletion struct {
 	CreatedAt time.Time
 }
 
+type KnowledgeHiddenChatBackfill struct {
+	ChatID uuid.UUID
+}
+
 type KnowledgeImport struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID

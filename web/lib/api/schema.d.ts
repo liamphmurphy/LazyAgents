@@ -12034,9 +12034,10 @@ export interface operations {
                 persona_id?: string;
                 /**
                  * @description Only chats in this space: a space id of the caller's (each chat then
-                 *     carries a `preview`), `all` for chats in any space or none, or
+                 *     carries a `preview`), `all` for personal chats in any space or none, or
                  *     `none` (the default) for chats outside every space. 422 for an
-                 *     unknown id.
+                 *     unknown id. App conversations are returned only for an explicit
+                 *     app space id, keeping them out of normal history.
                  */
                 space?: string;
                 offset?: number;

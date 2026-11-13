@@ -92,9 +92,11 @@ WHERE id = (
 );
 
 -- name: PersonaChatCounts :many
--- Chats (archived included, hidden ones not) per persona.
-SELECT persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions
-WHERE persona_id = ANY(sqlc.arg(ids)::uuid[]) AND NOT hidden GROUP BY persona_id;
+-- Personal chats (archived included, hidden and app conversations not) per persona.
+SELECT c.persona_id::uuid AS persona_id, count(*)::int AS n FROM chat_sessions c
+WHERE c.persona_id = ANY(sqlc.arg(ids)::uuid[]) AND NOT c.hidden
+  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id = c.space_id AND sp.app IS NOT NULL)
+GROUP BY c.persona_id;
 
 -- name: PersonaChatIDs :many
 -- Chats that show the persona: as host or as a participant.

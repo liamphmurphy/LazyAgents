@@ -117,7 +117,7 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
       ? `I'm working on the Knowledge page [[${page.path ?? page.title}]]. Read it with read_page and help me with it.`
       : "I'm in Knowledge, my notes and documents. Help me find, connect and write pages: search_knowledge before answering.";
     create.mutate(
-      { title: page?.title ?? "Knowledge", message: { body } },
+      { title: page?.title ?? "Knowledge", hidden: true, message: { body } },
       {
         onSuccess: (c) => {
           if (page) attach.mutate(c.id);
