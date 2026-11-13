@@ -1,0 +1,429 @@
+openapi: 3.1.0
+info:
+  title: Vesper Knowledge API
+  version: "1"
+  description: |
+    The Knowledge surface: pages (Docs and the wiki in one store), reviews of
+    persona changes, capture and daily notes, saved queries, attachments and
+    Obsidian vault imports. These routes are mounted by hand in
+    server/internal/httpapi/knowledge*.go beside the generated API in
+    openapi.yaml, because uploads stream and several responses are open-ended.
+
+    Every route acts as the signed-in person. Pages they can't see answer 404,
+    the same as pages that don't exist.
+servers:
+  - url: /api/v1
+tags:
+  - name: knowledge-pages
+  - name: knowledge-capture
+  - name: knowledge-imports
+paths:
+  /knowledge/pages:
+    get:
+      tags: [knowledge-pages]
+      summary: List or search pages
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: "Text search" }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: folder, in: query, schema: { type: string } }
+        - { name: audience, in: query, schema: { $ref: "#/components/schemas/Audience" } }
+        - { name: include_agent, in: query, schema: { type: boolean }, description: "Include agent-internal pages (the Agent knowledge view)" }
+        - { name: orphans, in: query, schema: { type: boolean }, description: "Only pages with no links in or out" }
+        - { name: unresolved, in: query, schema: { type: boolean }, description: "Only pages with unresolved links" }
+        - { name: limit, in: query, schema: { type: integer, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: "Matching pages", content: { application/json: { schema: { $ref: "#/components/schemas/PageTable" } } } }
+    post:
+      tags: [knowledge-pages]
+      summary: Create a page
+      description: New pages are private unless audience says otherwise. With template, the body comes from that template.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PageInput" } } } }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "422": { description: "Invalid title, path or audience" }
+  /knowledge/query:
+    post:
+      tags: [knowledge-pages]
+      summary: Run a page query (the saved-query filter, unsaved)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PageQuery" } } } }
+      responses:
+        "200": { description: "Rows, table-shaped for Sheets later", content: { application/json: { schema: { $ref: "#/components/schemas/PageTable" } } } }
+  /knowledge/pages/{id}:
+    parameters: [{ $ref: "#/components/parameters/PageID" }]
+    get:
+      tags: [knowledge-pages]
+      summary: Read a page with its embeds, pending reviews and history
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "404": { description: "No such page, or not visible" }
+    put:
+      tags: [knowledge-pages]
+      summary: Edit a page as the person
+      description: Pass base_version_id from the page you edited; a stale base is refused. Only the person changes audience.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PageInput" } } } }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "409": { description: "The page moved on since base_version_id" }
+  /knowledge/pages/{id}/controls:
+    parameters: [{ $ref: "#/components/parameters/PageID" }]
+    put:
+      tags: [knowledge-pages]
+      summary: Set persona edit controls
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direct, paused]
+              properties:
+                direct: { type: boolean, description: "Persona changes apply at once and are reviewed afterwards" }
+                paused: { type: boolean, description: "Persona writes are refused" }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/pages/{id}/reviews/{version}/resolve:
+    parameters:
+      - { $ref: "#/components/parameters/PageID" }
+      - { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: "The suggested version" }
+    post:
+      tags: [knowledge-pages]
+      summary: Accept or reject a suggestion change by change
+      description: |
+        Accepted changes apply to the current head as one version authored by
+        the person. A change whose target text is gone is marked stale and
+        skipped. Rejected and stale changes go back to the persona in the
+        page's chat with their reasons.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisions]
+              properties:
+                decisions: { type: array, items: { $ref: "#/components/schemas/ReviewDecision" } }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "409": { description: "Already decided" }
+  /knowledge/pages/{id}/restore/{version}:
+    parameters:
+      - { $ref: "#/components/parameters/PageID" }
+      - { name: version, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [knowledge-pages]
+      summary: Restore an earlier version as a new version
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/pages/{id}/query:
+    parameters: [{ $ref: "#/components/parameters/PageID" }]
+    get:
+      tags: [knowledge-pages]
+      summary: Run the saved query stored in a page's properties
+      responses:
+        "200": { description: "Rows", content: { application/json: { schema: { $ref: "#/components/schemas/PageTable" } } } }
+  /knowledge/pages/{id}/file:
+    parameters: [{ $ref: "#/components/parameters/PageID" }]
+    post:
+      tags: [knowledge-capture]
+      summary: File an inbox item into a folder, or merge it into a page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                folder: { type: string }
+                merge: { type: string, format: uuid, description: "Append to this page and remove the inbox item" }
+      responses:
+        "200": { description: "The filed or merged page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/pages/from-canvas:
+    post:
+      tags: [knowledge-pages]
+      summary: Save to Knowledge — move a chat's text canvas into a private page
+      description: |
+        Every canvas version (with its author), its comments and its chat move
+        to the page, and the canvas is deleted. A Doc the migration already
+        moved returns its existing page.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chat_id, canvas_id]
+              properties:
+                chat_id: { type: string, format: uuid }
+                canvas_id: { type: string, format: uuid }
+                folder: { type: string }
+      responses:
+        "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+        "404": { description: "No such canvas in the person's chat" }
+        "422": { description: "Not a text canvas, or empty" }
+  /knowledge/legacy:
+    get:
+      tags: [knowledge-pages]
+      summary: Resolve an old /apps/docs/<id> or /wiki/<path> address to its page
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string }, example: /apps/docs/01a1c3be-5c1b-7d81-8892-f4aba282294a }
+      responses:
+        "200":
+          description: The page now holding that address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  url: { type: string, example: /knowledge/01a1.../old-doc }
+        "404": { description: "Nothing there, or not visible" }
+        "422": { description: "Not a legacy address" }
+  /knowledge/templates:
+    get:
+      tags: [knowledge-capture]
+      summary: Built-in templates (Daily, Permanent note, and the D&D set)
+      responses:
+        "200":
+          description: Template bodies by name; {{title}}, {{date}} and {{properties.key}} are filled on use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates: { type: object, additionalProperties: { type: string } }
+  /knowledge/daily:
+    post:
+      tags: [knowledge-capture]
+      summary: Open a daily note, creating it from the template on first use
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date: { type: string, format: date, description: "Defaults to today (UTC)" }
+                folder: { type: string }
+                template: { type: string }
+      responses:
+        "200": { description: "The daily page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/capture:
+    post:
+      tags: [knowledge-capture]
+      summary: Capture a fleeting note into the inbox
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PageInput" } } } }
+      responses:
+        "200": { description: "The inbox page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+  /knowledge/assets:
+    post:
+      tags: [knowledge-pages]
+      summary: Upload an attachment (stored by content hash, reused when identical)
+      parameters:
+        - { name: X-Filename, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary, maxLength: 536870912 } } }
+      responses:
+        "201":
+          description: The attachment; embed it with ![[ref]]
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  ref: { type: string, example: "attachment:01a1.../map.png" }
+                  url: { type: string }
+  /knowledge/assets/{id}:
+    get:
+      tags: [knowledge-pages]
+      summary: Download an attachment the person can see
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: "The file", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "404": { description: "Not found or not visible" }
+  /knowledge/imports:
+    post:
+      tags: [knowledge-imports]
+      summary: Upload a zipped Obsidian vault and start a dry run
+      description: Streams to the blob store (2 GB by default). Nothing is written until the import is confirmed.
+      parameters:
+        - { name: folder, in: query, schema: { type: string }, description: "Destination folder" }
+      requestBody:
+        required: true
+        content: { application/zip: { schema: { type: string, format: binary } } }
+      responses:
+        "202": { description: "The queued job", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+    get:
+      tags: [knowledge-imports]
+      summary: The person's imports, newest first
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imports: { type: array, items: { $ref: "#/components/schemas/ImportJob" } }
+  /knowledge/imports/{id}:
+    get:
+      tags: [knowledge-imports]
+      summary: An import's state, dry-run plan, progress and report
+      parameters: [{ $ref: "#/components/parameters/ImportID" }]
+      responses:
+        "200": { description: "The job", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+  /knowledge/imports/{id}/confirm:
+    post:
+      tags: [knowledge-imports]
+      summary: Confirm a previewed import with a conflict policy
+      parameters: [{ $ref: "#/components/parameters/ImportID" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              properties:
+                policy: { type: string, enum: [skip, replace, keep_both] }
+      responses:
+        "202": { description: "The job, now importing", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+  /knowledge/imports/{id}/undo:
+    post:
+      tags: [knowledge-imports]
+      summary: Undo an import batch
+      description: Removes the pages it created, restores the pages it replaced and releases its attachments.
+      parameters: [{ $ref: "#/components/parameters/ImportID" }]
+      responses:
+        "200": { description: "The job, now undone", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+components:
+  parameters:
+    PageID: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    ImportID: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    Audience:
+      type: string
+      enum: [private, shared, agent]
+      description: private (the person and personas), shared (also ticket and epic runs), agent (agent memory, hidden from default views)
+    Properties:
+      type: object
+      additionalProperties: true
+      description: Frontmatter-style properties; tags and aliases are lists
+    PageInput:
+      type: object
+      properties:
+        title: { type: string }
+        path: { type: string }
+        body_md: { type: string }
+        properties: { $ref: "#/components/schemas/Properties" }
+        audience: { type: string, enum: [private, shared] }
+        base_version_id: { type: string, format: uuid }
+        note: { type: string, description: "One line on what changed" }
+        template: { type: string }
+    Page:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        path: { type: string }
+        audience: { $ref: "#/components/schemas/Audience" }
+        body_md: { type: string }
+        version_id: { type: string, format: uuid }
+        seq: { type: integer }
+        properties: { $ref: "#/components/schemas/Properties" }
+        direct: { type: boolean }
+        paused: { type: boolean }
+        chat_id: { type: [string, "null"], format: uuid, description: "The page's chat, when it is the viewer's" }
+        url: { type: string }
+        embeds: { type: array, items: { $ref: "#/components/schemas/Embed" } }
+        reviews:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              state: { type: string }
+              review_state: { type: [string, "null"] }
+              changes: { type: array, items: { type: object, additionalProperties: true } }
+              author_id: { type: string, format: uuid }
+              created_at: { type: string, format: date-time }
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              seq: { type: integer }
+              label: { type: string }
+              note: { type: string }
+              author_type: { type: string, enum: [user, agent] }
+              author_id: { type: string, format: uuid }
+              created_at: { type: string, format: date-time }
+    Embed:
+      type: object
+      properties:
+        ref: { type: string, description: "The embed as written, e.g. \"![[Page#^block]]\"" }
+        kind: { type: string, enum: [page, file, image, video, design, unresolved] }
+        title: { type: string }
+        markdown: { type: string, description: "Resolved page, heading or block text" }
+        url: { type: string }
+        content_type: { type: string }
+        available: { type: boolean }
+        data: { type: object, additionalProperties: true, description: "The Designs frame node" }
+    PageQuery:
+      type: object
+      properties:
+        text: { type: string }
+        folder: { type: string }
+        tag: { type: string }
+        audience: { $ref: "#/components/schemas/Audience" }
+        properties: { $ref: "#/components/schemas/Properties" }
+        after: { type: string, format: date-time }
+        before: { type: string, format: date-time }
+        links_to: { type: string, format: uuid }
+        orphans: { type: boolean }
+        unresolved: { type: boolean }
+        include_agent: { type: boolean }
+        limit: { type: integer, maximum: 200 }
+        offset: { type: integer }
+    PageTable:
+      type: object
+      properties:
+        columns: { type: array, items: { type: string } }
+        has_more: { type: boolean }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              title: { type: string }
+              path: { type: string }
+              audience: { $ref: "#/components/schemas/Audience" }
+              summary: { type: string }
+              properties: { $ref: "#/components/schemas/Properties" }
+              updated_at: { type: string, format: date-time }
+              version_id: { type: [string, "null"], format: uuid }
+              pending: { type: integer, description: "Pending persona suggestions" }
+              unresolved: { type: integer, description: "Unresolved outgoing links" }
+    ReviewDecision:
+      type: object
+      required: [index, accept]
+      properties:
+        index: { type: integer, description: "The change's position in the suggestion" }
+        accept: { type: boolean }
+        reason: { type: string, description: "Sent to the persona with a rejection" }
+    ImportJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [queued, scanning, preview, queued_commit, importing, done, failed, undone] }
+        folder: { type: string }
+        policy: { type: [string, "null"], enum: [skip, replace, keep_both, null] }
+        plan: { type: object, additionalProperties: true, description: "The dry-run report (notes, attachments, links, renames, conflicts, unsupported)" }
+        report: { type: object, additionalProperties: true }
+        files_done: { type: integer }
+        error: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
