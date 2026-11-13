@@ -11,7 +11,6 @@ import (
 
 func explorerSpec(opts ...string) agentdef.Resolved {
 	s := spec("repo:write", "allowed", "tests:run", "allowed")
-	s.HarnessOptions[agentdef.OptionExplorer] = "true"
 	for i := 0; i+1 < len(opts); i += 2 {
 		s.HarnessOptions[opts[i]] = opts[i+1]
 	}
@@ -45,7 +44,9 @@ func TestClaudeExplorerInvocation(t *testing.T) {
 }
 
 func TestClaudeExplorerOnlyForLeads(t *testing.T) {
-	base, _ := ClaudeCode{}.Invocation(ws, Turn{Spec: spec("repo:write", "allowed", "tests:run", "allowed"), Prompt: "go", Lead: true})
+	// The explorer is on by default; explorer: "false" gives the invocation
+	// a run had before it existed.
+	base, _ := ClaudeCode{}.Invocation(ws, Turn{Spec: explorerSpec(agentdef.OptionExplorer, "false"), Prompt: "go", Lead: true})
 	codex := explorerSpec()
 	codex.Harness, codex.Model = agentdef.HarnessCodex, "gpt-5-codex"
 	codexOff := spec("repo:write", "allowed", "tests:run", "allowed")
@@ -55,11 +56,12 @@ func TestClaudeExplorerOnlyForLeads(t *testing.T) {
 		turn Turn
 		want Invocation
 	}{
-		"option off": {ClaudeCode{}, Turn{Spec: spec("repo:write", "allowed", "tests:run", "allowed"), Prompt: "go", Lead: true}, base},
-		"delegated":  {ClaudeCode{}, Turn{Spec: explorerSpec(), Prompt: "go"}, base},
-		"readonly":   {ClaudeCode{}, Turn{Spec: explorerSpec("readonly", "true"), Prompt: "go", Lead: true}, Invocation{}},
-		"no tools":   {ClaudeCode{}, Turn{Spec: explorerSpec(agentdef.OptionNoTools, "true"), Prompt: "go", Lead: true}, Invocation{}},
-		"codex":      {Codex{}, Turn{Spec: codex, Prompt: "go", Lead: true}, Invocation{}},
+		"option off":             {ClaudeCode{}, Turn{Spec: explorerSpec(agentdef.OptionExplorer, "false"), Prompt: "go", Lead: true}, base},
+		"option true, delegated": {ClaudeCode{}, Turn{Spec: explorerSpec(agentdef.OptionExplorer, "true"), Prompt: "go"}, base},
+		"delegated":              {ClaudeCode{}, Turn{Spec: explorerSpec(), Prompt: "go"}, base},
+		"readonly":               {ClaudeCode{}, Turn{Spec: explorerSpec("readonly", "true"), Prompt: "go", Lead: true}, Invocation{}},
+		"no tools":               {ClaudeCode{}, Turn{Spec: explorerSpec(agentdef.OptionNoTools, "true"), Prompt: "go", Lead: true}, Invocation{}},
+		"codex":                  {Codex{}, Turn{Spec: codex, Prompt: "go", Lead: true}, Invocation{}},
 	} {
 		inv, err := c.h.Invocation(ws, c.turn)
 		if err != nil {
@@ -130,11 +132,11 @@ func TestClaudeSubagentMessagesAreNotTheReply(t *testing.T) {
 
 func TestExplorerInAgentsMD(t *testing.T) {
 	const line = "Use the explorer sub agent"
-	if !strings.Contains(string(AgentsMD("", explorerSpec(), nil, "T-1")), line) {
-		t.Error("lead with the option: no explorer line")
+	if !strings.Contains(string(AgentsMD("", spec(), nil, "T-1")), line) {
+		t.Error("lead by default: no explorer line")
 	}
-	if strings.Contains(string(AgentsMD("", spec(), nil, "T-1")), line) {
-		t.Error("lead without the option mentions the explorer")
+	if strings.Contains(string(AgentsMD("", explorerSpec(agentdef.OptionExplorer, "false"), nil, "T-1")), line) {
+		t.Error("lead with explorer: false mentions the explorer")
 	}
 	if strings.Contains(string(SubagentAgentsMD("", explorerSpec(), nil, "T-1")), line) {
 		t.Error("delegated run mentions the explorer")

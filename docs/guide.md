@@ -209,6 +209,14 @@ independent review before Done** in an agent's Runtime settings to enforce an
 approval gate for every ticket that agent runs. Acceptance criteria, scopes, and
 human approvals remain required.
 
+A main agent's ticket run on Claude Code (the lead, not a delegated sub agent)
+gets one read-only sub agent, `explorer`, that searches and reads code on a
+cheap model (`explorer_model`, default `haiku-5.5`) and returns only its
+conclusions, keeping file dumps out of the lead's context. It is on by default;
+set the harness option `explorer` to `"false"` in an agent's definition to turn
+it off. Sub agent runs, chats, `readonly` or `no_tools` agents, and Codex or
+Antigravity runs never get it.
+
 Managed `claim_ticket` responses include the ticket (`ticket_details`, same as `get_ticket`) but no longer repeat instructions and memory already
 available in the workspace. Agents are instructed to read only relevant context
 and reuse it on resume. New definitions default to **Selective** memory: at most
