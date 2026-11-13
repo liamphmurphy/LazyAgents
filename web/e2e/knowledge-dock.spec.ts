@@ -300,3 +300,30 @@ test("Ask a Persona on a folder attaches its path and pages", async ({ page }) =
   expect(s.chat.posted[0].body.context_refs ?? []).toEqual([]);
   await expect(dock(page).getByRole("button", { name: "Remove folder Campaign" })).toHaveCount(0);
 });
+
+test("the dock keeps every Knowledge chat: New starts another in place and the switcher goes back", async ({ page }) => {
+  const s = await install(page);
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  const switcher = dock(page).getByTestId("dock-chat-switcher");
+  await expect(switcher).toBeVisible();
+  await expect.poll(() => s.chat.created.length).toBe(1);
+  const stored = () => page.evaluate(() => window.localStorage.getItem("vesper.knowledge.chat"));
+  await expect.poll(stored).not.toBeNull();
+  const firstId = await stored();
+
+  // New starts a second chat in the dock, without leaving Knowledge.
+  await switcher.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect.poll(() => s.chat.created.length).toBe(2);
+  await expect(page).toHaveURL(/\/knowledge$/);
+  await expect(switcher.getByRole("button", { name: /^Switch chat/ })).toContainText("2");
+
+  // The switcher lists both and opens the first again.
+  await switcher.getByRole("button", { name: /^Switch chat/ }).click();
+  const items = page.getByRole("menuitem");
+  await expect(items.filter({ hasText: /ago|just now/ })).toHaveCount(2);
+  await expect.poll(stored).not.toBe(firstId);
+  await items.filter({ hasText: /ago|just now/ }).last().click();
+  await expect.poll(stored).toBe(firstId);
+});

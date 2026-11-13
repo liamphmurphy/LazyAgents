@@ -1,12 +1,18 @@
 package wiki
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"net/http"
+	"path"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -86,4 +92,59 @@ func (s *Service) SweepKnowledgeAssets(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// PersonaAssetLimit bounds what a persona attaches to a page in one call: it
+// is read into memory, unlike the person's streamed uploads.
+const PersonaAssetLimit = 25 << 20
+
+// StoreAssetBytes stores a file a persona made (an SVG, a chart) as one of the
+// person's Knowledge assets, typed from its content as uploads are.
+func (s *Service) StoreAssetBytes(ctx context.Context, ws, user uuid.UUID, filename string, data []byte) (store.KnowledgeAsset, error) {
+	if len(data) == 0 {
+		return store.KnowledgeAsset{}, apperr.Invalid("data", "is empty")
+	}
+	if len(data) > PersonaAssetLimit {
+		return store.KnowledgeAsset{}, apperr.Invalid("data", "is over the %d MB limit", PersonaAssetLimit>>20)
+	}
+	filename = path.Base(strings.ReplaceAll(strings.TrimSpace(filename), "\\", "/"))
+	if filename == "." || filename == "/" || filename == "" {
+		filename = "attachment"
+	}
+	typ := http.DetectContentType(data)
+	if strings.EqualFold(path.Ext(filename), ".svg") && strings.Contains(string(data[:min(len(data), 512)]), "<svg") {
+		// Sniffing reads an SVG as text; the viewer serves it as a download either way.
+		typ = "image/svg+xml"
+	}
+	sum := sha256.Sum256(data)
+	return s.StoreKnowledgeAsset(ctx, ws, user, fmt.Sprintf("%x", sum), filename, typ, int64(len(data)), bytes.NewReader(data))
+}
+
+// StoreAttachmentAsset copies a file the person sent in chat into their
+// Knowledge assets, so a persona can embed it in a page.
+func (s *Service) StoreAttachmentAsset(ctx context.Context, ws, user, attachment uuid.UUID) (store.KnowledgeAsset, error) {
+	objects, bucket, err := s.vaultObjects()
+	if err != nil {
+		return store.KnowledgeAsset{}, err
+	}
+	a, err := store.New(s.Pool).GetChatAttachment(ctx, store.GetChatAttachmentParams{ID: attachment, WorkspaceID: ws, UserID: user})
+	if err != nil {
+		return store.KnowledgeAsset{}, apperr.ErrNotFound
+	}
+	if a.MessageID == nil {
+		return store.KnowledgeAsset{}, apperr.Invalid("attachment_id", "send this file in chat before attaching it")
+	}
+	if a.SizeBytes > PersonaAssetLimit {
+		return store.KnowledgeAsset{}, apperr.Invalid("attachment_id", "is over the %d MB limit; the person can upload it in the Knowledge app", PersonaAssetLimit>>20)
+	}
+	object, err := objects.Open(ctx, bucket, a.BlobKey)
+	if err != nil {
+		return store.KnowledgeAsset{}, err
+	}
+	defer object.Close()
+	data, err := io.ReadAll(io.LimitReader(object, PersonaAssetLimit+1))
+	if err != nil {
+		return store.KnowledgeAsset{}, err
+	}
+	return s.StoreAssetBytes(ctx, ws, user, a.Filename, data)
 }

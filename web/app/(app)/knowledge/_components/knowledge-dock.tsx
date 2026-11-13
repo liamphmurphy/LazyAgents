@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Conversation, type ConversationContext } from "@/app/(app)/chat/_components/conversation";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
 import { isTyping } from "@/components/shell/shortcuts";
+import { DockChatSwitcher, type DockChatSection } from "@/components/domain/dock-chat-switcher";
+import { useAddDockChat, useDockChats, type DockScope } from "@/lib/api/dock-hooks";
 import { provideChatRefs, useChat, useCreateChat } from "@/lib/api/hooks";
 import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledge-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
@@ -21,6 +23,8 @@ const APP = "knowledge";
 const TABS = ["chat"];
 /** The chat for screens that aren't a page (Home, Graph, Connect). A page's own chat is the one it's attached to. */
 const GENERAL_CHAT_KEY = "vesper.knowledge.chat";
+/** Where the dock keeps the chats for screens that aren't a page. */
+const APP_SCOPE: DockScope = "app:knowledge";
 
 /** The screen a Knowledge address shows when it isn't a page, as the persona is told it. */
 function screenOf(pathname: string): string {
@@ -147,24 +151,50 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
 }
 
 function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: string; page?: Page; screen?: string; loadingPage: boolean; onGeneral: (id: string) => void }) {
-  const router = useRouter();
   const create = useCreateChat();
   const attach = useAttachChat(page?.id ?? "");
+  const addDockChat = useAddDockChat();
   const { attachments, request, remove, readDraft, claimRequest } = useKnowledgeChat();
   const [created, setCreated] = useState<string>();
   const id = created ?? chatId;
   const host = useRef<HTMLDivElement>(null);
+  const pageScope: DockScope | undefined = page ? `page:${page.id}` : undefined;
+  const pageChats = useDockChats(pageScope);
+  const appChats = useDockChats(APP_SCOPE);
+  // A general chat picked before the dock kept a list joins it the first time it shows.
+  const appList = appChats.data?.chats;
+  useEffect(() => {
+    if (!page && id && appList && !appList.some((c) => c.id === id) && !addDockChat.isPending) addDockChat.mutate({ scope: APP_SCOPE, chatId: id });
+  }, [page, id, appList, addDockChat]);
   const selectChat = async (next: string) => {
     setCreated(next);
+    // A page records the chat in its dock list as it attaches it (SetPageChat).
     if (page) await attach.mutateAsync(next);
-    else onGeneral(next);
+    else {
+      onGeneral(next);
+      await addDockChat.mutateAsync({ scope: APP_SCOPE, chatId: next });
+    }
   };
   const start = () => {
     create.mutate(
       { title: page?.title ?? "Knowledge", hidden: true },
       { onSuccess: (c) => { void selectChat(c.id).catch(() => { /* attach.error keeps the chat available with Retry. */ }); } },
     );
-  };
+  };  const sections: DockChatSection[] = page
+    ? [{ label: "This page", chats: pageChats.data?.chats ?? [] }, { label: "Elsewhere in Knowledge", chats: (appList ?? []).filter((c) => !pageChats.data?.chats.some((p) => p.id === c.id)) }]
+    : [{ label: "Knowledge", chats: appList ?? [] }];
+  const known = sections.flatMap((s) => s.chats);
+  const switcher = (
+    <DockChatSwitcher
+      current={known.find((c) => c.id === id)}
+      sections={sections}
+      newLabel={page ? "New chat about this page" : "New chat"}
+      onSelect={(next) => { if (next !== id) void selectChat(next).catch(() => { /* attach.error offers Retry. */ }); }}
+      onNew={() => start()}
+      creating={create.isPending}
+    />
+  );
+
 
   // Only an explicit Ask action creates an empty conversation; opening the rail does not.
   useEffect(() => {
@@ -240,11 +270,14 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   if (loadingPage) return <div className="p-4"><Skeleton className="h-4 w-2/3" /></div>;
   if (id) return (
     <div ref={host} className="flex min-h-0 flex-1 flex-col">
+      {switcher}
       {attach.error && <p role="alert" className="p-2 text-xs text-state-blocked">Couldn’t link this chat to the page. <button className="underline" onClick={() => attach.mutate(id)}>Retry</button></p>}
-      <Conversation key={id} id={id} onNew={() => router.push("/chat")} onReplace={selectChat} context={context} />
+      <Conversation key={id} id={id} onNew={start} onReplace={selectChat} context={context} />
     </div>
   );
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
+    {known.length > 0 && switcher}
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <Icon name="msg" size={22} className="text-fg-tertiary" />
       {context.composer}
@@ -255,6 +288,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
         {page ? "Start a chat about this page" : "Start a chat"}
       </Button>
       {create.error && <p className="text-xs text-state-blocked">{create.error.message}</p>}
+    </div>
     </div>
   );
 }

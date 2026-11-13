@@ -613,9 +613,9 @@ test("a chat's model shows the catalog's label, even when it is the definition's
 test("every chat tool the server offers has a scene of its own", () => {
   // The server refuses chat tools missing from chatTools; nothing here forced the UI to keep
   // up, so new tools silently showed the idle dots. Read the list from the source of truth.
-  const source = readFileSync(new URL("../../server/internal/agentapi/chat.go", import.meta.url), "utf8");
-  const list = /var chatTools = \[\]string\{([^}]*)\}/.exec(source)?.[1];
-  assert.ok(list, "chatTools not found in chat.go");
+  const source = readFileSync(new URL("../../server/internal/runs/chat_tools.go", import.meta.url), "utf8");
+  const list = /var ChatTools = \[\]string\{([^}]*)\}/.exec(source)?.[1];
+  assert.ok(list, "ChatTools not found in runs/chat_tools.go");
   const tools = [...list.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
   assert.ok(tools.length > 40, `parsed only ${tools.length} chat tools`);
   // Bookkeeping that isn't work the person would want pictured.

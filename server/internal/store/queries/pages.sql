@@ -4,9 +4,17 @@ WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id)
 AND artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) RETURNING *;
 
 -- name: SetPageChat :exec
-UPDATE artifacts SET chat_session_id = sqlc.narg(chat_id)
-WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id)
-AND artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid);
+-- The page opens on this chat from now on, and its dock lists it (dock_chats).
+WITH page AS (
+  UPDATE artifacts a SET chat_session_id = sqlc.narg(chat_id)
+  WHERE a.id = sqlc.arg(id)::uuid AND a.workspace_id = sqlc.arg(workspace_id)::uuid
+  AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)
+  RETURNING a.id, a.workspace_id
+)
+INSERT INTO dock_chats (workspace_id, user_id, scope, chat_id)
+SELECT page.workspace_id, c.created_by, 'page:' || page.id, c.id
+FROM page JOIN chat_sessions c ON c.id = sqlc.narg(chat_id)::uuid AND c.workspace_id = page.workspace_id
+ON CONFLICT (user_id, scope, chat_id) DO UPDATE SET attached_at = now();
 
 -- name: SetPageChanges :one
 UPDATE artifact_versions v SET changes = sqlc.arg(changes), review_state = sqlc.narg(review_state)

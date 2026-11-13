@@ -204,8 +204,9 @@ func (e env) postSh(id uuid.UUID, command string) string {
 	return e.say(id, "sh: "+command).BodyMd
 }
 
-// Turning a capability on or off ends the segment, so the next message runs
-// with the new spec; an unchanged persona keeps resuming.
+// Turning a capability that shapes the workspace on or off (here Codex image
+// generation, whose outbox the segment's setup makes) ends the segment, so the
+// next message runs with the new spec; an unchanged persona keeps resuming.
 func TestCapabilityChangeEndsSegment(t *testing.T) {
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "chat")
@@ -439,5 +440,66 @@ func TestChatSVGFenceFollowsCapability(t *testing.T) {
 	}
 	if got, err := runs.GateSVGFences(e.ctx, q, e.chat(chat.ID), reply); err != nil || got != reply {
 		t.Fatalf("with the capability: %q, %v", got, err)
+	}
+}
+
+// What a segment can refresh without a new workspace (Vesper's instructions,
+// and its tool list after an update) reaches the next message in place: the
+// CLI session resumes, and the model is told what changed so it doesn't rely
+// on what it concluded earlier in the conversation.
+func TestChatRefreshesToolsAndInstructionsInPlace(t *testing.T) {
+	e := setup(t)
+	t.Setenv("FAKE_HARNESS_MODE", "chat")
+	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "Notes", Message: &runs.ChatMessageInput{Body: "one"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.until("first reply", func() bool { return e.chat(chat.ID).State == "idle" })
+	first := e.chatRun(chat.ID)
+	if !slices.Equal(first.ChatToolNames, runs.ChatTools) {
+		t.Fatalf("a fresh segment records its tools: %v", first.ChatToolNames)
+	}
+	// As if the segment started before Vesper gained delete_page, with older instructions.
+	if _, err := e.pool.Exec(e.ctx, `UPDATE runs SET chat_tool_names = array_remove(chat_tool_names, 'delete_page'),
+		resolved_spec = jsonb_set(resolved_spec, '{instructions}', '"Older instructions."') WHERE id = $1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	reply := e.say(chat.ID, "two")
+	second := e.chatRun(chat.ID)
+	if second.ID != first.ID || !strings.Contains(reply.BodyMd, "resumed=true") {
+		t.Fatalf("a refresh must keep the segment and its session: same=%v %q", second.ID == first.ID, reply.BodyMd)
+	}
+	if spec, _ := runs.Spec(second); spec.Instructions == "Older instructions." || spec.Instructions == "" {
+		t.Fatalf("instructions weren't refreshed: %q", spec.Instructions)
+	}
+	if !slices.Contains(second.ChatToolNames, "delete_page") {
+		t.Fatalf("tool list not recorded after the notice: %v", second.ChatToolNames)
+	}
+	var input string
+	if err := e.pool.QueryRow(e.ctx, `SELECT input_message FROM run_turns WHERE run_id = $1 ORDER BY seq DESC LIMIT 1`, first.ID).Scan(&input); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(input, "New: delete_page.") || !strings.Contains(input, "instructions were updated") || !strings.HasSuffix(input, "two") {
+		t.Fatalf("turn input doesn't announce the change: %q", input)
+	}
+	var refreshed int
+	if err := e.pool.QueryRow(e.ctx, `SELECT count(*) FROM run_events WHERE run_id = $1 AND payload->>'state' = 'chat_capabilities_refreshed'`, first.ID).Scan(&refreshed); err != nil || refreshed != 1 {
+		t.Fatalf("refresh events %d, %v", refreshed, err)
+	}
+	var stored string
+	if err := e.pool.QueryRow(e.ctx, `SELECT body_md FROM chat_messages WHERE session_id = $1 AND role = 'user' ORDER BY seq DESC LIMIT 1`, chat.ID).Scan(&stored); err != nil || stored != "two" {
+		t.Fatalf("the person's message must be stored as written: %q, %v", stored, err)
+	}
+
+	var note string
+	if err := e.pool.QueryRow(e.ctx, `SELECT body_md FROM chat_messages WHERE session_id = $1 AND role = 'system' ORDER BY seq DESC LIMIT 1`, chat.ID).Scan(&note); err != nil || !strings.Contains(note, "new tools: delete_page") {
+		t.Fatalf("the person isn't shown the refresh: %q, %v", note, err)
+	}
+
+	// Nothing changed since: the next message carries no notice.
+	e.say(chat.ID, "three")
+	if err := e.pool.QueryRow(e.ctx, `SELECT input_message FROM run_turns WHERE run_id = $1 ORDER BY seq DESC LIMIT 1`, first.ID).Scan(&input); err != nil || input != "three" {
+		t.Fatalf("unchanged segment got a notice: %q, %v", input, err)
 	}
 }
