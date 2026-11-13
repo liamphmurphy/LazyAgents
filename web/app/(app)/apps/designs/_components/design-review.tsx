@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useCanvasActions, useCanvasComments } from "@/lib/api/canvas-hooks";
 import type { DesignProposal } from "@/lib/api/designs-hooks";
 import { cx } from "@/lib/cx";
 import { find, labelOf } from "@/lib/designs/edit";
-import { applyOps, classify, decide, decideRest, dependencies, preview, resolveBody, undecided, type Change, type ChangeKind, type Decisions, type DesignOp } from "@/lib/designs/review";
+import type { LaidPage } from "@/lib/designs/layout";
+import { LaidNodeSvg } from "@/lib/designs/render";
+import { applyOps, classify, decide, decideRest, dependencies, newConnectorOps, preview, resolveBody, undecided, type Change, type ChangeKind, type Decisions, type DesignOp, type Ghosts } from "@/lib/designs/review";
 import type { Design } from "@/lib/designs/schema";
 import { Button } from "@/components/ui/button";
 import type { Camera } from "./design-canvas";
@@ -140,6 +142,50 @@ export function ReviewOverlay({ review, mode, page, camera }: { review: Review; 
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+/** How much of a ghost's surroundings its clip lets through, in page units: room for its stroke and shadow. */
+const GHOST_PAD = 4;
+
+/**
+ * Pending suggestions on the live canvas, outside review: each layer they add
+ * drawn faded from the design with every suggestion applied (clipped to that
+ * layer, so nothing else is drawn twice), the connectors they add or reroute,
+ * and dashed outlines in the review's colours. View only; Review is where
+ * they're accepted. `now` is the working copy's page, `laid` the suggested one.
+ */
+export function GhostLayer({ ghosts, now, laid, page, camera, assetUrl }: { ghosts: Ghosts; now: LaidPage; laid: LaidPage; page: string; camera: Camera; assetUrl: (a: string) => string }) {
+  const uid = `gh${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const wires = useMemo(() => newConnectorOps(now, laid), [now, laid]);
+  const added = ghosts.added.filter((a) => a.page === page);
+  const marked = ghosts.changes.filter((c) => c.kind !== "added" && c.page === page && c.box);
+  if (!added.length && !marked.length && !wires.length) return null;
+  const toScreen = (b: { x: number; y: number; w: number; h: number }) => ({ x: b.x * camera.z + camera.x, y: b.y * camera.z + camera.y, w: b.w * camera.z, h: b.h * camera.z });
+  const outline = (key: string, box: { x: number; y: number; w: number; h: number }, color: string, extra: Record<string, string>) => {
+    const b = toScreen(box);
+    return <rect key={key} {...extra} x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={3} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />;
+  };
+  return (
+    <svg aria-hidden className="pointer-events-none absolute inset-0 z-[4] h-full w-full" data-testid="suggestion-ghosts">
+      <defs>
+        <clipPath id={`${uid}clip`}>
+          {added.map((a) => <rect key={a.target} x={a.box.x - GHOST_PAD} y={a.box.y - GHOST_PAD} width={a.box.w + 2 * GHOST_PAD} height={a.box.h + 2 * GHOST_PAD} />)}
+        </clipPath>
+      </defs>
+      <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.z})`}>
+        <g opacity={0.55}>
+          {added.length > 0 && (
+            <g clipPath={`url(#${uid}clip)`}>
+              {laid.nodes.map((n) => <LaidNodeSvg key={n.id} ops={n.ops} uid={`${uid}${n.id}`} assetUrl={assetUrl} />)}
+            </g>
+          )}
+          {wires.length > 0 && <g data-ghost-wires={wires.length}><LaidNodeSvg ops={wires} uid={`${uid}conn`} assetUrl={assetUrl} /></g>}
+        </g>
+      </g>
+      {added.map((a) => outline(a.target, a.box, KIND_COLOR.added, { "data-ghost": a.target }))}
+      {marked.map((c) => outline(`m${c.i}`, c.box!, KIND_COLOR[c.kind], { "data-ghost-kind": c.kind }))}
     </svg>
   );
 }
