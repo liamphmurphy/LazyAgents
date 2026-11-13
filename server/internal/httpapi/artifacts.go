@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 // ---------------------------------------------------------------- forms ---
@@ -153,6 +155,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 		return api.Artifact{}, err
 	}
 	out := api.Artifact{
+		PersonaDirect: &a.PersonaDirect, PersonaPaused: &a.PersonaPaused, ChatSessionId: a.ChatSessionID,
 		Id: a.ID, Type: api.ArtifactType(a.Type), Title: a.Title, DisplayId: artifacts.DisplayID(a.Type, a.Number),
 		Summary: a.Summary, Path: a.Path, Author: dir.actor(a.AuthorType, &a.AuthorID),
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -222,6 +225,15 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 			Id: v.ID, Seq: int(v.Seq), Label: v.Label, Note: v.Note, CreatedAt: v.CreatedAt,
 			CreatedBy: dir.actor(v.CreatedByType, &v.CreatedByID),
 			Content:   contentOf(isMD, &v.ContentType, &v.SizeBytes, v.Filename, nSections),
+		}
+		av.PersonaId = v.PersonaID
+		if len(v.Changes) > 0 {
+			var changes []wiki.Change
+			if err := json.Unmarshal(v.Changes, &changes); err != nil {
+				return out, err
+			}
+			cs := same[[]api.PageChange](changes)
+			av.Changes = &cs
 		}
 		if v.ReviewState != nil {
 			av.Review = &api.MockupReview{State: api.MockupReviewState(*v.ReviewState), Note: v.ReviewNote, ReviewedAt: v.ReviewedAt, Pins: reviewPins(v.ReviewPins)}
@@ -573,6 +585,7 @@ func (s *Server) GetArtifactContent(ctx context.Context, req api.GetArtifactCont
 func (s *Server) AttachArtifact(ctx context.Context, req api.AttachArtifactRequestObject) (api.AttachArtifactResponseObject, error) {
 	_, actor, ws := me(ctx)
 	rel := "context"
+
 	if req.Body.Relation != nil {
 		rel = string(*req.Body.Relation)
 	}

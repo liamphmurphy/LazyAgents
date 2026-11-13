@@ -227,7 +227,7 @@ func (q *Queries) CountBacklinks(ctx context.Context, targetID *uuid.UUID) (int3
 
 const countSuggestions = `-- name: CountSuggestions :one
 SELECT count(*)::int FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
+WHERE ar.workspace_id = $1 AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending'))
 `
 
 func (q *Queries) CountSuggestions(ctx context.Context, workspaceID uuid.UUID) (int32, error) {
@@ -395,7 +395,7 @@ func (q *Queries) ExportNotes(ctx context.Context, workspaceID uuid.UUID) ([]Exp
 }
 
 const findArtifactByTitle = `-- name: FindArtifactByTitle :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type <> 'note' AND lower(title) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE workspace_id = $1 AND type <> 'note' AND lower(title) = lower($2)
 ORDER BY updated_at DESC LIMIT 1
 `
 
@@ -424,6 +424,9 @@ func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTit
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -460,7 +463,7 @@ func (q *Queries) FindEpicByName(ctx context.Context, arg FindEpicByNameParams) 
 }
 
 const findNoteByAlias = `-- name: FindNoteByAlias :one
-SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
+SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path, ar.persona_direct, ar.persona_paused, ar.chat_session_id FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
 WHERE al.workspace_id = $1 AND lower(al.path) = lower($2)
 ORDER BY al.created_at DESC LIMIT 1
 `
@@ -490,12 +493,15 @@ func (q *Queries) FindNoteByAlias(ctx context.Context, arg FindNoteByAliasParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const findNotesByTitle = `-- name: FindNotesByTitle :many
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(title) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(title) = lower($2)
   AND current_version_id IS NOT NULL
 ORDER BY length(path), path
 `
@@ -532,6 +538,9 @@ func (q *Queries) FindNotesByTitle(ctx context.Context, arg FindNotesByTitlePara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Path,
+			&i.PersonaDirect,
+			&i.PersonaPaused,
+			&i.ChatSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -628,7 +637,7 @@ func (q *Queries) FindPatterns(ctx context.Context, arg FindPatternsParams) ([]F
 
 const getNoteByPath = `-- name: GetNoteByPath :one
 
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(path) = lower($2)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(path) = lower($2)
 `
 
 type GetNoteByPathParams struct {
@@ -657,6 +666,9 @@ func (q *Queries) GetNoteByPath(ctx context.Context, arg GetNoteByPathParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -1014,7 +1026,7 @@ func (q *Queries) ListArtifactUnlinkedReaders(ctx context.Context, artifactID uu
 const listNotes = `-- name: ListNotes :many
 SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
   (ar.current_version_id IS NOT NULL)::bool AS published,
-  (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
+  (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending')))::int AS suggestions
 FROM artifacts ar
 WHERE ar.workspace_id = $1 AND ar.type = 'note'
   AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower($2)))
@@ -1070,9 +1082,9 @@ func (q *Queries) ListNotes(ctx context.Context, arg ListNotesParams) ([]ListNot
 
 const listSuggestions = `-- name: ListSuggestions :many
 SELECT v.id, v.artifact_id, v.label, v.note, v.body_md, v.created_by_type, v.created_by_id, v.created_at,
-  v.based_on_version_id, ar.path, ar.title, ar.current_version_id
+  v.based_on_version_id, v.changes, v.persona_id, v.state, ar.path, ar.title, ar.current_version_id
 FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
+WHERE ar.workspace_id = $1 AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending'))
   AND ($2::uuid IS NULL OR v.artifact_id = $2)
 ORDER BY v.created_at
 `
@@ -1092,6 +1104,9 @@ type ListSuggestionsRow struct {
 	CreatedByID      uuid.UUID
 	CreatedAt        time.Time
 	BasedOnVersionID *uuid.UUID
+	Changes          []byte
+	PersonaID        *uuid.UUID
+	State            string
 	Path             *string
 	Title            string
 	CurrentVersionID *uuid.UUID
@@ -1117,6 +1132,9 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 			&i.CreatedByID,
 			&i.CreatedAt,
 			&i.BasedOnVersionID,
+			&i.Changes,
+			&i.PersonaID,
+			&i.State,
 			&i.Path,
 			&i.Title,
 			&i.CurrentVersionID,
@@ -1141,7 +1159,7 @@ func (q *Queries) LockNotePaths(ctx context.Context, dollar_1 uuid.UUID) error {
 }
 
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties, v.changes, v.persona_id, v.source_chat_id, v.source_run_id FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -1177,6 +1195,10 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewNote,
 		&i.ReviewPins,
 		&i.Properties,
+		&i.Changes,
+		&i.PersonaID,
+		&i.SourceChatID,
+		&i.SourceRunID,
 	)
 	return i, err
 }
@@ -1590,7 +1612,7 @@ func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledg
 }
 
 const setNotePath = `-- name: SetNotePath :one
-UPDATE artifacts SET path = $2, title = $3 WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path
+UPDATE artifacts SET path = $2, title = $3 WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, persona_direct, persona_paused, chat_session_id
 `
 
 type SetNotePathParams struct {
@@ -1619,6 +1641,9 @@ func (q *Queries) SetNotePath(ctx context.Context, arg SetNotePathParams) (Artif
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Path,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }

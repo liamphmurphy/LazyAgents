@@ -34,7 +34,7 @@ UPDATE artifacts SET path = $2, title = $3 WHERE id = $1 RETURNING *;
 -- name: ListNotes :many
 SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
   (ar.current_version_id IS NOT NULL)::bool AS published,
-  (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
+  (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending')))::int AS suggestions
 FROM artifacts ar
 WHERE ar.workspace_id = $1 AND ar.type = 'note'
   AND (sqlc.narg(tag)::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower(sqlc.narg(tag))))
@@ -159,15 +159,15 @@ LIMIT 12;
 -- name: ListSuggestions :many
 -- Pending agent edits to shared notes, oldest first.
 SELECT v.id, v.artifact_id, v.label, v.note, v.body_md, v.created_by_type, v.created_by_id, v.created_at,
-  v.based_on_version_id, ar.path, ar.title, ar.current_version_id
+  v.based_on_version_id, v.changes, v.persona_id, v.state, ar.path, ar.title, ar.current_version_id
 FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
+WHERE ar.workspace_id = $1 AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending'))
   AND (sqlc.narg(artifact_id)::uuid IS NULL OR v.artifact_id = sqlc.narg(artifact_id))
 ORDER BY v.created_at;
 
 -- name: CountSuggestions :one
 SELECT count(*)::int FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested';
+WHERE ar.workspace_id = $1 AND (v.state = 'suggested' OR (v.state = 'published' AND v.changes IS NOT NULL AND v.review_state = 'pending'));
 
 -- name: LockSuggestion :one
 SELECT v.* FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id

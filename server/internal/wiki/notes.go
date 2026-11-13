@@ -50,6 +50,10 @@ const (
 
 // Save is one write to a note.
 type Save struct {
+	Persona    bool // set only by PersonaWrite
+	PersonaID  *uuid.UUID
+	ChatID     *uuid.UUID
+	RunID      *uuid.UUID
 	Title      *string
 	Properties artifacts.Properties
 	Tags       *[]string
@@ -160,6 +164,9 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 			return Result{}, err
 		}
 		v, err := latestVersion(ctx, q, a)
+		if err == nil {
+			v, err = recordChanges(ctx, q, a, v, in, "", artifacts.Properties{})
+		}
 		return Result{Note: a, Version: v, Created: true, State: state}, err
 	} else if err != nil {
 		return Result{}, err
@@ -169,6 +176,15 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	}
 	if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: a.ID, WorkspaceID: ws}); err != nil {
 		return Result{}, err
+	}
+	if in.Persona {
+		if a.PersonaPaused {
+			return Result{}, apperr.Conflict("persona edits are paused for this page")
+		}
+		state = artifacts.Suggested
+		if a.PersonaDirect {
+			state = artifacts.Published
+		}
 	}
 	cur, curID, err := current(ctx, q, a)
 	if err != nil {
@@ -216,6 +232,10 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 		return Result{}, err
 	}
 	v, err := artifacts.AddVersionTx(ctx, q, a, r, by, artifacts.NewVersion{Note: in.Note, State: state, BasedOn: curID, Properties: raw})
+	if err != nil {
+		return Result{}, err
+	}
+	v, err = recordChanges(ctx, q, a, v, in, cur, artifacts.DecodeProperties(oldRaw))
 	if err != nil {
 		return Result{}, err
 	}
@@ -352,54 +372,44 @@ func (s *Service) addToIndex(ctx context.Context, q *store.Queries, agent store.
 
 // ------------------------------------------------------------ suggestions
 
-// Decide accepts or rejects a suggested version. Accepting publishes it as
-// the next version, even if the page moved on since (the UI warns).
+// DecideSuggestion retains the legacy whole-suggestion API by resolving all
+// remaining changes against the current head.
 func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uuid.UUID, accept bool) (store.Artifact, error) {
 	var a store.Artifact
 	err := s.tx(ctx, ws, func(q *store.Queries) error {
 		v, err := q.LockSuggestion(ctx, store.LockSuggestionParams{ID: versionID, WorkspaceID: ws})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
-		} else if err != nil {
-			return err
 		}
-		if v.State != artifacts.Suggested {
-			return apperr.Conflict("this suggestion was already %s", v.State)
-		}
-		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: v.ArtifactID, WorkspaceID: ws}); err != nil {
-			return err
-		}
-		if !accept {
-			if err := q.DecideVersion(ctx, store.DecideVersionParams{ID: v.ID, State: artifacts.Rejected, DecidedByID: &userID}); err != nil {
-				return err
-			}
-			// A page that only ever existed as this suggestion goes away.
-			if a.CurrentVersionID == nil {
-				rest, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID})
-				if err != nil {
-					return err
-				}
-				if len(rest) == 0 {
-					return q.DeleteArtifact(ctx, store.DeleteArtifactParams{ID: a.ID, WorkspaceID: ws})
-				}
-			}
-			return nil
-		}
-		n, err := q.CountPublishedVersions(ctx, a.ID)
 		if err != nil {
 			return err
 		}
-		if err := q.RelabelVersion(ctx, store.RelabelVersionParams{ID: v.ID, Label: fmt.Sprintf("v%d", n+1)}); err != nil {
+		a, err = pageLock(ctx, q, ws, v.ArtifactID)
+		if err != nil {
 			return err
 		}
-		if err := q.DecideVersion(ctx, store.DecideVersionParams{ID: v.ID, State: artifacts.Published, DecidedByID: &userID}); err != nil {
-			return err
+		rest := "reject"
+		if accept {
+			rest = "accept"
 		}
-		if err := artifacts.Publish(ctx, q, a, v); err != nil {
+		var changes []Change
+		if err = s.resolveTx(ctx, q, a, userID, versionID, Resolution{Rest: rest}, &changes); err != nil {
 			return err
 		}
 		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
-		return err
+		if err != nil {
+			return err
+		}
+		if a.CurrentVersionID == nil {
+			remaining, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID})
+			if err != nil {
+				return err
+			}
+			if len(remaining) == 0 {
+				return q.DeleteArtifact(ctx, store.DeleteArtifactParams{ID: a.ID, WorkspaceID: ws})
+			}
+		}
+		return nil
 	})
 	return a, err
 }
