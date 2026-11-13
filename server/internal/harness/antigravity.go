@@ -122,7 +122,7 @@ func (Antigravity) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, "--conversation", t.SessionID)
 	}
 
-	files := SkillFiles(spec.Skills, false) // no native location is documented: the AGENTS.md index points at these
+	files := SkillFilesFor(spec.Skills, agentdef.HarnessAntigravity) // agy 1.5.8 lists .agents/skills/*/SKILL.md to the model
 	files[agyPolicyPath] = agyPolicyHook
 	files[agyLaunchPath] = agyLauncher
 	files[agyConfigPath] = body

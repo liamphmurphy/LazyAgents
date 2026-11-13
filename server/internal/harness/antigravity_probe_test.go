@@ -61,8 +61,13 @@ func TestAgyProbe(t *testing.T) {
 			agyReply{text: "Done."},
 		)
 		p.policy.deny("Bash", "Agent")
-		out := p.run(t, readOnlyChat(), "antigravity-turn.jsonl")
+		spec := readOnlyChat()
+		spec.Skills = []agentdef.Skill{{Name: "probe-skill", Description: "Zebra-unicorn probe skill.", Body: "Say zebra."}}
+		out := p.run(t, spec, "antigravity-turn.jsonl")
 
+		if !strings.Contains(p.gemini.firstRequest(), "probe-skill (") || !strings.Contains(p.gemini.firstRequest(), "Zebra-unicorn probe skill.") {
+			t.Error("agy must list the skill Vesper wrote under .agents/skills to the model")
+		}
 		if got := p.policy.tools(); strings.Join(got, " ") != "mcp__lazyagents__list_tickets Read Bash Write Agent" {
 			t.Errorf("the hook must send Vesper's tool names, got %v", got)
 		}
@@ -236,13 +241,23 @@ type agyGemini struct {
 	url     string
 	mu      sync.Mutex
 	replies []agyReply
+	first   []byte
 }
 
 func (g *agyGemini) script(r ...agyReply) { g.replies = r }
 
-func (g *agyGemini) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	_, _ = io.Copy(io.Discard, r.Body)
+func (g *agyGemini) firstRequest() string {
 	g.mu.Lock()
+	defer g.mu.Unlock()
+	return string(g.first)
+}
+
+func (g *agyGemini) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	g.mu.Lock()
+	if g.first == nil {
+		g.first = body
+	}
 	reply := agyReply{text: "done"}
 	if len(g.replies) > 0 {
 		reply, g.replies = g.replies[0], g.replies[1:]

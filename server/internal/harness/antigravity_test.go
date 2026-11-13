@@ -2,6 +2,7 @@ package harness
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -361,5 +362,24 @@ func TestAntigravityToolNamesInEvents(t *testing.T) {
 	tool, input := antigravityTool("call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "list_tickets", "Arguments": map[string]any{"q": "x"}})
 	if tool != "mcp__lazyagents__list_tickets" || input["q"] != "x" {
 		t.Fatalf("call_mcp_tool → %s %v", tool, input)
+	}
+}
+
+// agy 1.5.8 lists .agents/skills/<name>/SKILL.md to the model, as Codex reads
+// it (TestAgyProbe checks the real CLI), so skills go there and the chat's
+// AGENTS.md doesn't point at a copy elsewhere.
+func TestAntigravitySkillsAreNative(t *testing.T) {
+	s := spec("repo:read", "allowed")
+	s.Skills = []agentdef.Skill{{Name: "review", Description: "Review a diff", Body: "Read it all."}}
+	inv, _ := agyInvocation(t, s, Turn{Prompt: "go"})
+	if len(inv.Files[".agents/skills/review/SKILL.md"]) == 0 || !strings.Contains(string(inv.Files[SkillsExcludeFile]), "/.agents/skills/review/") {
+		t.Fatalf("files = %v", slices.Collect(maps.Keys(inv.Files)))
+	}
+	if _, ok := inv.Files[".lazyagents/skills/review/SKILL.md"]; ok {
+		t.Fatal("a second copy outside the native location")
+	}
+	s.Harness = agentdef.HarnessAntigravity
+	if md := string(ChatAgentsMD(s, nil, "PAY", "", nil)); strings.Contains(md, "## Skills") {
+		t.Fatalf("the index would point at files that aren't there:\n%s", md)
 	}
 }

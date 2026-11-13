@@ -67,7 +67,7 @@ func skillsIndex(skills []agentdef.Skill) string {
 // SkillFilesFor installs native skills for the selected harness.
 func SkillFilesFor(skills []agentdef.Skill, name string) map[string][]byte {
 	files := SkillFiles(skills, true)
-	if name != agentdef.HarnessCodex {
+	if name != agentdef.HarnessCodex && name != agentdef.HarnessAntigravity { // both discover .agents/skills
 		return files
 	}
 	out := map[string][]byte{}
