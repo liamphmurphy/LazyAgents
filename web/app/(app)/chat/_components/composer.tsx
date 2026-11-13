@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { addChip, chipFromTarget, removeChip, type Chip } from "@/lib/chat-context";
 import { CHAT_COMMANDS, commandMenu, literalBody, parseCommand } from "@/lib/chat-commands";
@@ -11,10 +11,13 @@ import { LinkEditor } from "@/components/domain/link-editor";
 import { LiveRunStrip } from "@/components/shell/live-run-strip";
 import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-chips";
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
-import { ComposerHints, composerFrameFor, composerInput, SendButton, type SendTone } from "./reply-tools";
+import { ComposerHints, composerFrameFor, composerIconButton, composerInput, SendButton, type SendTone } from "./reply-tools";
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
 import { ComposerSheet } from "./composer-sheet";
 import { useCompact } from "@/lib/viewport";
+import { detectLanguage, isBigPaste, messageWithSnippets, offerAsSnippet, withoutPaste } from "@/lib/snippets";
+import { Icon } from "@/components/ui/icon";
+import { CodeButton, newSnippetDraft, PasteOffer, SnippetBubble, SnippetChips, snippetFile, type PasteOfferState, type SnippetDraft, type Snippets } from "./snippets";
 
 /** A / command's action; a returned string is why it couldn't run. */
 export type CommandRun = () => string | void;
@@ -32,10 +35,10 @@ export type ComposerCommands = {
 
 /**
  * The one message box, for a conversation and for the welcome before its first message:
- * [[ context and Add context, files, @ persona mentions, / commands. Its controls come from
+ * [[ context and Add context, files, code snippets, @ persona mentions, / commands. Its controls come from
  * the caller's composerOptions list: the "options" ones on the left, the "actions" ones on the
  * right before the caller's actions (Stop) and Send; controls holds each one's control, while
- * Add context and Attach are the composer's own. Its parent owns the draft, chips and files so
+ * Add context, Attach and Code are the composer's own. Its parent owns the draft, chips, files and snippets so
  * it can send them, clear them and seed them from links. Below COMPACT the row under the box is
  * just + (a sheet listing every option, "header" ones too), the model chip, the actions and Send.
  */
@@ -44,6 +47,7 @@ export function Composer({
   onText,
   inputRef,
   files,
+  snippets,
   chips,
   onChips,
   onSubmit,
@@ -66,9 +70,11 @@ export function Composer({
   onText: (text: string) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   files: ReturnType<typeof useAttachments>;
+  /** Code and Markdown snippets, sent as fenced blocks after the text. */
+  snippets: Snippets;
   chips: Chip[];
   onChips: (update: (chips: Chip[]) => Chip[]) => void;
-  /** A message that isn't a command, with a leading // already reduced to /. */
+  /** A message that isn't a command, with a leading // already reduced to / and the snippets' blocks after it. */
   onSubmit: (body: string) => void;
   commands: ComposerCommands;
   /** Who @ can mention; inChat marks the ones already in the conversation. */
@@ -106,6 +112,25 @@ export function Composer({
     setSeenSheetSignal(sheetSignal);
     setSheet(true);
   }
+
+  // The snippet bubble's draft (open while set), and the last paste into the message box worth offering as a snippet or file.
+  const [snippetDraft, setSnippetDraft] = useState<SnippetDraft | null>(null);
+  const [paste, setPaste] = useState<PasteOfferState | null>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const pastedFiles = useRef(0);
+  const offer = paste && text.includes(paste.text) ? paste : null;
+  const saveSnippet = (d: SnippetDraft) => {
+    if (d.key === undefined) snippets.add(d.text, d.lang);
+    else snippets.update(d.key, d.text, d.lang);
+    setSnippetDraft(null);
+  };
+  const attachPasted = (pasted: string, lang: string) => files.add([snippetFile(pasted, lang, ++pastedFiles.current)]);
+  const takeBackPaste = (o: PasteOfferState) => {
+    const rest = withoutPaste(text, o);
+    if (rest !== null) onText(rest);
+    setPaste(null);
+    inputRef.current?.focus();
+  };
 
   const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
     const chip = chipFromTarget(t);
@@ -170,6 +195,8 @@ export function Composer({
       <AddContext key={o.id} onPick={attach} onClosed={() => inputRef.current?.focus()} disabled={disabled} compact create={create} />
     ) : o.id === "attach" ? (
       <AttachButton key={o.id} onFiles={files.add} disabled={disabled} compact />
+    ) : o.id === "code" ? (
+      <CodeButton key={o.id} open={!!snippetDraft} onToggle={() => setSnippetDraft((d) => (d ? null : newSnippetDraft()))} disabled={disabled} count={snippets.items.length} />
     ) : (
       <Fragment key={o.id}>{controls[o.id]}</Fragment>
     );
@@ -194,13 +221,26 @@ export function Composer({
         disabled={disabled}
         compact
       />
+    ) : o.id === "code" ? (
+      <button
+        type="button"
+        aria-label="Add code or Markdown"
+        disabled={disabled}
+        onClick={() => {
+          setSheet(false);
+          setSnippetDraft(newSnippetDraft());
+        }}
+        className={composerIconButton}
+      >
+        <Icon name="code" size={14} />
+      </button>
     ) : (
       controls[o.id]
     );
   const submitComposer = () => {
     const command = parseCommand(text);
     if (command) runTyped(command);
-    else onSubmit(literalBody(text));
+    else onSubmit(messageWithSnippets(literalBody(text), snippets.items));
   };
 
   return (
@@ -213,7 +253,15 @@ export function Composer({
       )}
       <form
         data-dock-avoid=""
-        onPaste={files.onPaste}
+        onPaste={(e) => {
+          files.onPaste(e);
+          // Only the message box: a paste into the snippet bubble stays in the bubble.
+          if (e.defaultPrevented || e.target !== inputRef.current) return;
+          const pasted = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
+          const big = isBigPaste(pasted);
+          const lang = big ? detectLanguage(pasted) : offerAsSnippet(pasted);
+          setPaste(lang ? { text: pasted, start: inputRef.current.selectionStart, lang, big } : null);
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           submitComposer();
@@ -222,7 +270,37 @@ export function Composer({
       >
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => onChips((cs) => removeChip(cs, k))} disabled={disabled} />
-        <div className={composerFrameFor(send.tone)}>
+        <SnippetChips snippets={snippets} disabled={disabled} onEdit={(x) => setSnippetDraft({ key: x.key, text: x.text, lang: x.lang, picked: true })} />
+        {offer && (
+          <PasteOffer
+            offer={offer}
+            onSnippet={() => {
+              takeBackPaste(offer);
+              snippets.add(offer.text, offer.lang);
+            }}
+            onAttach={() => {
+              takeBackPaste(offer);
+              attachPasted(offer.text, offer.lang);
+            }}
+            onDismiss={() => {
+              setPaste(null);
+              inputRef.current?.focus();
+            }}
+          />
+        )}
+        <SnippetBubble
+          anchor={frame}
+          draft={snippetDraft}
+          onDraft={setSnippetDraft}
+          onSave={saveSnippet}
+          onAttach={(d) => {
+            attachPasted(d.text, d.lang);
+            if (d.key !== undefined) snippets.remove(d.key);
+            setSnippetDraft(null);
+          }}
+          onClosed={() => inputRef.current?.focus()}
+        />
+        <div ref={frame} className={composerFrameFor(send.tone)}>
           <div className="relative">
             {commandItems.length > 0 && (
               <ul
@@ -351,9 +429,9 @@ export function Composer({
               <ComposerSheet
                 open={sheet}
                 onOpenChange={setSheet}
-                options={options.filter((o) => controls[o.id] || o.id === "context" || o.id === "attach")}
+                options={options.filter((o) => controls[o.id] || o.id === "context" || o.id === "attach" || o.id === "code")}
                 control={sheetControl}
-                counts={{ context: chips.length, attach: files.items.length }}
+                counts={{ context: chips.length, attach: files.items.length, code: snippets.items.length }}
               />
               <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
                 {options.filter((o) => o.id === "model").map(control)}
