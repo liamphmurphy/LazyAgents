@@ -121,6 +121,7 @@ type ArtifactAlias struct {
 	ArtifactID  uuid.UUID
 	Path        string
 	CreatedAt   time.Time
+	Kind        string
 }
 
 type ArtifactRead struct {
@@ -164,6 +165,7 @@ type ArtifactVersion struct {
 	ReviewedAt       *time.Time
 	ReviewNote       string
 	ReviewPins       json.RawMessage
+	Properties       json.RawMessage
 }
 
 type BrowserSession struct {
@@ -893,6 +895,11 @@ type MetricSnapshot struct {
 	Range       string
 	Payload     json.RawMessage
 	GeneratedAt time.Time
+}
+
+type PageTag struct {
+	ArtifactID uuid.UUID
+	Tag        string
 }
 
 type Persona struct {

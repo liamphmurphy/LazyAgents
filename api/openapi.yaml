@@ -1563,6 +1563,11 @@ paths:
       operationId: listWikiPages
       summary: Every wiki page (the page tree), with pending suggestion counts
       tags: [wiki]
+      parameters:
+        - name: tag
+          in: query
+          description: Filter by an exact case-insensitive tag (including inline tags)
+          schema: { type: string }
       responses:
         "200":
           description: Pages, sorted by path
@@ -6935,6 +6940,9 @@ components:
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/ArtifactType" }
         title: { type: string }
+        properties: { $ref: "#/components/schemas/PageProperties" }
+        tags: { type: array, items: { type: string }, description: Explicit tags; response also includes inline body tags }
+        aliases: { type: array, items: { type: string }, description: Link names; old moved paths are preserved separately }
         display_id: { type: string }
         summary: { type: string }
         project: { $ref: "#/components/schemas/Project" }
@@ -7613,6 +7621,10 @@ components:
           type: array
           description: Reads not tied to a run that still exists (older data), per agent
           items: { $ref: "#/components/schemas/ArtifactReader" }
+    PageProperties:
+      type: object
+      description: 'Versioned frontmatter. Values are text, number, checkbox (boolean), list of strings, date (YYYY-MM-DD string), or link ([[path]] string). Omitted metadata is inherited; provided maps and arrays replace their field. Only published metadata is indexed. Invalid types or alias collisions return 422. Metadata inherits the page audience.'
+      additionalProperties: {}
     WikiPageSummary:
       type: object
       required: [id, path, title, author, updated_at, published, suggestions]
@@ -7633,15 +7645,25 @@ components:
         suggestions: { type: integer, description: Pending suggestions across the wiki }
     NewWikiPage:
       type: object
-      required: [path, body_md]
+      required: [body_md]
       properties:
-        path: { type: string, minLength: 1, maxLength: 300 }
+        path: { type: string, maxLength: 300, description: Optional explicit unique path; otherwise derived from title with a numeric suffix }
+        title: { type: string, description: Free display text; duplicate titles are allowed }
         body_md: { type: string }
+        properties: { $ref: "#/components/schemas/PageProperties" }
+        tags: { type: array, items: { type: string }, description: Explicit tags; response also includes inline body tags }
+        aliases: { type: array, items: { type: string }, description: Link names; old moved paths are preserved separately }
+
         project_key: { type: string }
     WikiPageSave:
       type: object
       properties:
+        title: { type: string, description: Change the display title independently of the path }
         body_md: { type: string }
+        properties: { $ref: "#/components/schemas/PageProperties" }
+        tags: { type: array, items: { type: string }, description: Explicit tags; response also includes inline body tags }
+        aliases: { type: array, items: { type: string }, description: Link names; old moved paths are preserved separately }
+
         path: { type: string, description: Move the page here; the old path keeps resolving }
         base_version_id:
           type: string

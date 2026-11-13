@@ -20,7 +20,7 @@ ORDER BY al.created_at DESC LIMIT 1;
 
 -- name: AddAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path) VALUES ($1, $2, $3)
-ON CONFLICT (workspace_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, created_at = now();
+ON CONFLICT (workspace_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now();
 
 -- name: DeleteAlias :exec
 DELETE FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower(sqlc.arg(path));
@@ -37,6 +37,7 @@ SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar
   (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
 FROM artifacts ar
 WHERE ar.workspace_id = $1 AND ar.type = 'note'
+  AND (sqlc.narg(tag)::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower(sqlc.narg(tag))))
 ORDER BY lower(ar.path);
 
 -- name: DeleteLinksFromSource :exec
@@ -176,7 +177,7 @@ WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v;
 UPDATE artifact_versions SET state = $2, decided_by_id = $3, decided_at = now() WHERE id = $1;
 
 -- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
@@ -332,3 +333,25 @@ JOIN artifact_versions v ON v.id = r.version_id
 JOIN agents a ON a.id = r.agent_id
 WHERE v.artifact_id = $1 AND (r.run_id IS NULL OR NOT EXISTS (SELECT 1 FROM runs ru WHERE ru.id = r.run_id))
 GROUP BY a.id ORDER BY max(r.read_at) DESC;
+
+-- name: LockNotePaths :exec
+SELECT pg_advisory_xact_lock(hashtextextended('note-paths:' || $1::uuid::text, 0));
+
+-- name: DeletePageTags :exec
+DELETE FROM page_tags WHERE artifact_id = $1;
+
+-- name: AddPageTags :exec
+INSERT INTO page_tags (artifact_id, tag) SELECT sqlc.arg(artifact_id)::uuid, unnest(sqlc.arg(tags)::text[]) ON CONFLICT DO NOTHING;
+
+-- name: PageTags :many
+SELECT tag FROM page_tags WHERE artifact_id = $1 ORDER BY tag;
+
+-- name: DeletePropertyAliases :exec
+DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias';
+
+-- name: AddPropertyAlias :exec
+INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
+ON CONFLICT (workspace_id, path) DO NOTHING;
+
+-- name: SetPageTitle :one
+UPDATE artifacts SET title = $3 WHERE id = $1 AND workspace_id = $2 RETURNING *;

@@ -155,9 +155,9 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 }
 
 const createArtifactVersion = `-- name: CreateArtifactVersion :one
-INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state)
-VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
+INSERT INTO artifact_versions (artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, state, based_on_version_id, review_state, properties)
+VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM artifact_versions WHERE artifact_id = $1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, coalesce($14::jsonb, '{}'::jsonb))
+RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins, properties
 `
 
 type CreateArtifactVersionParams struct {
@@ -174,6 +174,7 @@ type CreateArtifactVersionParams struct {
 	State            string
 	BasedOnVersionID *uuid.UUID
 	ReviewState      *string
+	Properties       []byte
 }
 
 func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactVersionParams) (ArtifactVersion, error) {
@@ -191,6 +192,7 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		arg.State,
 		arg.BasedOnVersionID,
 		arg.ReviewState,
+		arg.Properties,
 	)
 	var i ArtifactVersion
 	err := row.Scan(
@@ -216,6 +218,7 @@ func (q *Queries) CreateArtifactVersion(ctx context.Context, arg CreateArtifactV
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
 	)
 	return i, err
 }
@@ -304,7 +307,7 @@ func (q *Queries) GetArtifact(ctx context.Context, arg GetArtifactParams) (Artif
 }
 
 const getArtifactVersion = `-- name: GetArtifactVersion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
 WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3
 `
 
@@ -340,6 +343,7 @@ func (q *Queries) GetArtifactVersion(ctx context.Context, arg GetArtifactVersion
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
 	)
 	return i, err
 }
@@ -1002,7 +1006,7 @@ func (q *Queries) NextADRNumber(ctx context.Context, workspaceID uuid.UUID) (int
 
 const reviewArtifactVersion = `-- name: ReviewArtifactVersion :one
 UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4, review_pins = $5
-WHERE id = $1 RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
+WHERE id = $1 RETURNING id, artifact_id, seq, label, body_md, blob_key, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at, state, based_on_version_id, decided_by_id, decided_at, review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins, properties
 `
 
 type ReviewArtifactVersionParams struct {
@@ -1045,6 +1049,7 @@ func (q *Queries) ReviewArtifactVersion(ctx context.Context, arg ReviewArtifactV
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
 	)
 	return i, err
 }

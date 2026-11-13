@@ -69,13 +69,13 @@ func TestBareLinkToNestedPage(t *testing.T) {
 	}
 	is("Ledger notes", "Ledger notes") // but a new link takes the shorter one
 
-	// 6. Gap: after a rename to a new name, the old full path is an alias, but
-	// the old bare name is not.
+	// 6. Moving a page now preserves its display title as well as the old
+	// full path, so both forms keep resolving.
 	if _, err := e.svc.Rename(e.ctx, e.ws, shallow.Note.ID, "Ops/Hot partitions"); err != nil {
 		t.Fatal(err)
 	}
 	is("Ops/Partition gotchas", "Ops/Hot partitions")
-	is("Partition gotchas", "Abc/Partition gotchas") // another page with the name
+	is("Partition gotchas", "Ops/Hot partitions") // unchanged title on the shortest path
 	if _, err := e.svc.Rename(e.ctx, e.ws, deep.Note.ID, "Payments/Ledger/Trigger locks"); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestBareLinkToNestedPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	is("Runbooks/Deep/Failover drill", "Runbooks/Deep/Region failover")
-	is("Failover drill", "") // a new bare link to the old name is a ghost
+	is("Failover drill", "Runbooks/Deep/Region failover") // display title is unchanged
 
 	// 7. A name a ticket key or ADR id would match is never a page name.
 	e.save(t, "Glossary/PAY-214", "a page named like a ticket")

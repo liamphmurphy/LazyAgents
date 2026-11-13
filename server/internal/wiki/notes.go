@@ -5,6 +5,7 @@
 package wiki
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,8 +29,16 @@ type Service struct {
 	Tracker   *tracker.Service
 }
 
-func (s *Service) tx(ctx context.Context, fn func(q *store.Queries) error) error {
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return fn(store.New(tx)) })
+// Namespace lock precedes row locks for every wiki write. This keeps path
+// allocation and alias replacement atomic without reversing lock order.
+func (s *Service) tx(ctx context.Context, ws uuid.UUID, fn func(q *store.Queries) error) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		q := store.New(tx)
+		if err := q.LockNotePaths(ctx, ws); err != nil {
+			return err
+		}
+		return fn(q)
+	})
 }
 
 // Write modes for a note save.
@@ -41,6 +50,10 @@ const (
 
 // Save is one write to a note.
 type Save struct {
+	Title      *string
+	Properties artifacts.Properties
+	Tags       *[]string
+	Aliases    *[]string
 	Path       string
 	Body       string
 	Mode       string     // default replace
@@ -93,6 +106,12 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if err != nil {
 		return Result{}, err
 	}
+	if in.Path == "" && in.Title != nil {
+		in.Path, err = artifacts.DerivedNotePath(ctx, q, ws, *in.Title)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	path, err := artifacts.ValidNotePath(in.Path)
 	if err != nil {
 		return Result{}, err
@@ -107,7 +126,29 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 		}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		a, err := s.Artifacts.CreateNoteTx(ctx, q, ws, by, path, in.ProjectKey, in.Body, state)
+		props := in.Properties
+		if props == nil {
+			props = artifacts.Properties{}
+		}
+		if in.Tags != nil {
+			props["tags"] = *in.Tags
+		}
+		if in.Aliases != nil {
+			props["aliases"] = *in.Aliases
+		}
+		raw, err := artifacts.NormalizeProperties(props)
+		if err != nil {
+			return Result{}, err
+		}
+		title := ""
+		if in.Title != nil {
+			title = *in.Title
+		}
+		a, err := s.Artifacts.CreateNoteTx(ctx, q, ws, by, path, in.ProjectKey, in.Body, state, artifacts.NoteMetadata{Title: title, Properties: raw})
+		if err != nil {
+			return Result{}, err
+		}
+		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
 		if err != nil {
 			return Result{}, err
 		}
@@ -129,15 +170,51 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if in.BaseID != nil && curID != nil && *in.BaseID != *curID {
 		return Result{}, apperr.Conflict("this page changed since you opened it; reload to see the latest version")
 	}
+	oldProps := artifacts.Properties{}
+	if curID != nil {
+		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *curID, ArtifactID: a.ID, WorkspaceID: ws})
+		if err != nil {
+			return Result{}, err
+		}
+		oldProps = artifacts.DecodeProperties(v.Properties)
+	}
+	oldRaw, _ := artifacts.NormalizeProperties(oldProps)
+	props := in.Properties
+	if props == nil {
+		props = oldProps
+	}
+	if in.Tags != nil {
+		props["tags"] = *in.Tags
+	}
+	if in.Aliases != nil {
+		props["aliases"] = *in.Aliases
+	}
+	raw, err := artifacts.NormalizeProperties(props)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if in.Title != nil && state == artifacts.Published {
+		if strings.TrimSpace(*in.Title) == "" {
+			return Result{}, apperr.Invalid("title", "must not be empty")
+		}
+		a, err = q.SetPageTitle(ctx, store.SetPageTitleParams{ID: a.ID, WorkspaceID: ws, Title: *in.Title})
+		if err != nil {
+			return Result{}, err
+		}
+		if err := links.ResolvePending(ctx, q, ws); err != nil {
+			return Result{}, err
+		}
+	}
 	body := apply(cur, in.Body, mode)
-	if body == cur && state == artifacts.Published {
+	if body == cur && bytes.Equal(raw, oldRaw) && state == artifacts.Published {
 		return Result{Note: a, State: state}, nil // nothing changed: no empty version
 	}
 	r, err := artifacts.Markdown(body)
 	if err != nil {
 		return Result{}, err
 	}
-	v, err := artifacts.AddVersionTx(ctx, q, a, r, by, artifacts.NewVersion{Note: in.Note, State: state, BasedOn: curID})
+	v, err := artifacts.AddVersionTx(ctx, q, a, r, by, artifacts.NewVersion{Note: in.Note, State: state, BasedOn: curID, Properties: raw})
 	if err != nil {
 		return Result{}, err
 	}
@@ -161,7 +238,7 @@ func latestVersion(ctx context.Context, q *store.Queries, a store.Artifact) (sto
 // no "New version" ceremony).
 func (s *Service) SaveAsUser(ctx context.Context, ws, userID uuid.UUID, in Save) (Result, error) {
 	var res Result
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err := s.tx(ctx, ws, func(q *store.Queries) error {
 		var err error
 		res, err = s.write(ctx, q, ws, artifacts.Actor{Type: "user", ID: userID}, in, artifacts.Published)
 		return err
@@ -228,7 +305,7 @@ func (s *Service) AgentWrite(ctx context.Context, agent store.Agent, scopes map[
 	case Suggest:
 		in.BaseID = nil
 		var res Result
-		err := s.tx(ctx, func(q *store.Queries) error {
+		err := s.tx(ctx, ws, func(q *store.Queries) error {
 			var err error
 			res, err = s.write(ctx, q, ws, artifacts.Actor{Type: "agent", ID: agent.ID}, in, artifacts.Suggested)
 			return err
@@ -236,7 +313,7 @@ func (s *Service) AgentWrite(ctx context.Context, agent store.Agent, scopes map[
 		return res, err
 	}
 	var res Result
-	err = s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, ws, func(q *store.Queries) error {
 		var err error
 		if res, err = s.write(ctx, q, ws, artifacts.Actor{Type: "agent", ID: agent.ID}, in, artifacts.Published); err != nil {
 			return err
@@ -278,7 +355,7 @@ func (s *Service) addToIndex(ctx context.Context, q *store.Queries, agent store.
 // the next version, even if the page moved on since (the UI warns).
 func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uuid.UUID, accept bool) (store.Artifact, error) {
 	var a store.Artifact
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err := s.tx(ctx, ws, func(q *store.Queries) error {
 		v, err := q.LockSuggestion(ctx, store.LockSuggestionParams{ID: versionID, WorkspaceID: ws})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
@@ -317,14 +394,8 @@ func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uu
 		if err := q.DecideVersion(ctx, store.DecideVersionParams{ID: v.ID, State: artifacts.Published, DecidedByID: &userID}); err != nil {
 			return err
 		}
-		first := a.CurrentVersionID == nil
 		if err := artifacts.Publish(ctx, q, a, v); err != nil {
 			return err
-		}
-		if first {
-			if err := links.ResolvePending(ctx, q, ws); err != nil {
-				return err
-			}
 		}
 		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
 		return err
@@ -338,38 +409,84 @@ func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uu
 // survive; the old path becomes an alias so [[Old name]] still resolves.
 func (s *Service) Rename(ctx context.Context, ws, id uuid.UUID, newPath string) (store.Artifact, error) {
 	var a store.Artifact
-	err := s.tx(ctx, func(q *store.Queries) error {
-		p, err := artifacts.ValidNotePath(newPath)
+	err := s.tx(ctx, ws, func(q *store.Queries) error { var err error; a, err = renameNote(ctx, q, ws, id, newPath); return err })
+	return a, err
+}
+
+func renameNote(ctx context.Context, q *store.Queries, ws, id uuid.UUID, newPath string) (store.Artifact, error) {
+	var a store.Artifact
+	p, err := artifacts.ValidNotePath(newPath)
+	if err != nil {
+		return a, err
+	}
+	cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.Type != "note") {
+		return a, apperr.ErrNotFound
+	}
+	if err != nil {
+		return a, err
+	}
+	if *cur.Path == p {
+		return cur, nil
+	}
+	if err := q.LockNotePaths(ctx, ws); err != nil {
+		return a, err
+	}
+	if other, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil && other.ID != cur.ID {
+		return a, apperr.Invalid("path", "a page called %q already exists", p)
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return a, err
+	}
+	if other, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p}); err == nil && other.ID != cur.ID {
+		return a, apperr.Invalid("path", "%q is another page's alias", p)
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return a, err
+	}
+	if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: p}); err != nil {
+		return a, err
+	}
+	if !strings.EqualFold(*cur.Path, p) {
+		if err := q.AddAlias(ctx, store.AddAliasParams{WorkspaceID: ws, ArtifactID: cur.ID, Path: *cur.Path}); err != nil {
+			return a, err
+		}
+	}
+	a, err = q.SetNotePath(ctx, store.SetNotePathParams{ID: cur.ID, Path: &p, Title: cur.Title})
+	if err != nil {
+		return a, err
+	}
+	return a, links.ResolvePending(ctx, q, ws)
+}
+
+// UpdateAsUser applies a move, title, properties and body together. Reading
+// the unchanged body under the row lock prevents metadata-only saves from
+// restoring a stale body, and a failed validation rolls the whole edit back.
+func (s *Service) UpdateAsUser(ctx context.Context, ws, userID, id uuid.UUID, in Save, newPath, body *string) (Result, error) {
+	var res Result
+	err := s.tx(ctx, ws, func(q *store.Queries) error {
+		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && a.Type != "note") {
+			return apperr.ErrNotFound
+		}
 		if err != nil {
 			return err
 		}
-		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.Type != "note") {
-			return apperr.ErrNotFound
-		} else if err != nil {
-			return err
-		}
-		if *cur.Path == p {
-			a = cur
-			return nil
-		}
-		if other, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil && other.ID != cur.ID {
-			return apperr.Invalid("path", "a page called %q already exists", p)
-		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: p}); err != nil {
-			return err
-		}
-		if !strings.EqualFold(*cur.Path, p) {
-			if err := q.AddAlias(ctx, store.AddAliasParams{WorkspaceID: ws, ArtifactID: cur.ID, Path: *cur.Path}); err != nil {
+		if newPath != nil {
+			a, err = renameNote(ctx, q, ws, id, *newPath)
+			if err != nil {
 				return err
 			}
 		}
-		if a, err = q.SetNotePath(ctx, store.SetNotePathParams{ID: cur.ID, Path: &p, Title: links.TitleOf(p)}); err != nil {
-			return err
+		in.Path = *a.Path
+		if body == nil {
+			in.Body, _, err = current(ctx, q, a)
+			if err != nil {
+				return err
+			}
+		} else {
+			in.Body = *body
 		}
-		return links.ResolvePending(ctx, q, ws)
+		res, err = s.write(ctx, q, ws, artifacts.Actor{Type: "user", ID: userID}, in, artifacts.Published)
+		return err
 	})
-	return a, err
+	return res, err
 }
