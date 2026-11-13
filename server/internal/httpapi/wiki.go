@@ -144,7 +144,7 @@ func (s *Server) ListWikiSuggestions(ctx context.Context, req api.ListWikiSugges
 		sg := api.WikiSuggestion{
 			Id: r.ID, ArtifactId: r.ArtifactID, Path: deref(r.Path), Title: r.Title, BodyMd: deref(r.BodyMd), CurrentBodyMd: cur,
 			Author: dir.actor(r.CreatedByType, &r.CreatedByID), CreatedAt: r.CreatedAt, NewPage: r.CurrentVersionID == nil,
-			Stale: r.CurrentVersionID != nil && (r.BasedOnVersionID == nil || *r.BasedOnVersionID != *r.CurrentVersionID),
+			Stale: r.State == artifacts.Suggested && r.CurrentVersionID != nil && (r.BasedOnVersionID == nil || *r.BasedOnVersionID != *r.CurrentVersionID),
 		}
 		applied := r.State == artifacts.Published
 		sg.Applied = &applied

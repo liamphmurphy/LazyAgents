@@ -338,3 +338,13 @@ func TestPageRunFeedbackAndScopesAPI(t *testing.T) {
 		t.Fatal("ticket feedback went to page chat")
 	}
 }
+
+// A fully accepted suggestion stays as a hidden decision record; restoring it
+// would republish the persona's snapshot without per-change review.
+func TestPageRestoreRefusesDecisionRecordAPI(t *testing.T) {
+	e := pageSetup(t)
+	a := e.create(t, "Original.\n")
+	s := e.propose(t, a, "Proposed.\n", nil)
+	e.request(t, "POST", resolutionURL(a, s.Version.ID), wiki.Resolution{Rest: "accept"}, 200, nil)
+	e.request(t, "POST", fmt.Sprintf("/pages/%s/versions/%s/restore", a.Id, s.Version.ID), nil, 422, nil)
+}

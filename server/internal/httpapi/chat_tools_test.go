@@ -189,6 +189,26 @@ func TestChatRunToolAuthorization(t *testing.T) {
 	if code, out := call(token, "write_note", map[string]any{"path": "agents/someone-else/x", "body": "x"}); code != 422 {
 		t.Fatalf("write_note into another agent's memory = %d %v", code, out)
 	}
+	// Path normalisation can't sneak past the memory guard.
+	for _, p := range []string{"/agents/someone-else/x", " agents/someone-else/x"} {
+		if code, out := call(token, "write_note", map[string]any{"path": p, "body": "x"}); code != 422 {
+			t.Fatalf("write_note %q = %d %v", p, code, out)
+		}
+	}
+	// The chat agent's own memory is published directly and indexed,
+	// whatever the page controls say.
+	code, wn = call(token, "write_note", map[string]any{"path": "/" + wiki.MemoryRoot(assistant.Handle) + "Chat gotcha " + word, "body": "Remember this"})
+	if code != 200 || wn["state"] != "published" {
+		t.Fatalf("chat write_note to own memory = %d %v", code, wn)
+	}
+	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: wiki.MemoryIndex(assistant.Handle)})
+	if err != nil || idx.CurrentVersionID == nil {
+		t.Fatalf("memory index: %v", err)
+	}
+	iv, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *idx.CurrentVersionID, ArtifactID: idx.ID, WorkspaceID: ws})
+	if err != nil || iv.BodyMd == nil || !strings.Contains(*iv.BodyMd, "Chat gotcha "+word) {
+		t.Fatalf("memory index lacks chat note: %+v %v", iv.BodyMd, err)
+	}
 
 	// Writes use the chat project, without needing an execution ticket.
 	code, created := call(token, "create_epic", map[string]any{"name": "Chat planning"})

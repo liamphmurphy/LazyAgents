@@ -59,11 +59,20 @@ writes an inverse human edit against the current head, preserving newer edits.
 Existing shared pages default to suggestions. The private page creation/migration
 path must set `persona_direct=true`, as specified in the Knowledge ADR.
 
+Chat runs write through `PersonaWrite`: shared pages follow these page controls
+rather than the run's `wiki:write` scope (ADR R-V1/R-V4), the agent's own memory
+(`agents/<handle>/`) publishes directly and is added to its Memory index, and
+another agent's memory is refused. Paths are normalised before those checks.
+Feedback with no source chat or run falls back to the page's chat only for
+persona versions. Decision records (published `suggestion` rows with changes)
+are hidden from history and cannot be restored. Direct edits reuse the version
+`review_state` field: `approved` means every change was decided, not accepted.
+
 `POST /pages/{id}/versions/{versionId}/restore` copies a published version's body
 and properties into a new version authored by the signed-in person, even when its
 content equals the current head. Original authors and snapshots remain intact;
 tags, aliases, links and search are rebuilt through the normal publish path.
 
 Migration 00116 is additive. It adds version changes/origins and page controls/chat
-linkage; it does not apply migrations to any deployed instance. Its down migration
+linkage, with partial indexes on the new foreign keys; it does not apply migrations to any deployed instance. Its down migration
 removes those additions and their review metadata.

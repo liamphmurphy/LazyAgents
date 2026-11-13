@@ -60,8 +60,10 @@ func (s *Service) RestoreVersion(ctx context.Context, ws, user, id, vid uuid.UUI
 		if err != nil {
 			return err
 		}
-		if v.State != artifacts.Published {
-			return apperr.Invalid("version", "only published versions can be restored")
+		// Decision records (published, label 'suggestion', with changes) are hidden
+		// from history; restoring one would bypass per-change review.
+		if v.State != artifacts.Published || (v.Label == "suggestion" && len(v.Changes) > 0) {
+			return apperr.Invalid("version", "only published history versions can be restored")
 		}
 		r, err := artifacts.Markdown(value(v.BodyMd))
 		if err != nil {
@@ -263,15 +265,19 @@ func (s *Service) resolveTx(ctx context.Context, q *store.Queries, a store.Artif
 		}
 		note := fmt.Sprintf("Accepted %d of %d changes", accepted, len(changes))
 		if v.PersonaID != nil && v.SourceChatID != nil {
-			chat, e := q.GetChatSession(ctx, store.GetChatSessionParams{ID: *v.SourceChatID, WorkspaceID: a.WorkspaceID})
-			if e != nil {
-				return e
+			// The name is only for the note; a lookup failure must not block the decision.
+			named := false
+			if chat, e := q.GetChatSession(ctx, store.GetChatSessionParams{ID: *v.SourceChatID, WorkspaceID: a.WorkspaceID}); e == nil {
+				if persona, e := q.GetPersona(ctx, store.GetPersonaParams{ID: *v.PersonaID, WorkspaceID: a.WorkspaceID, UserID: chat.CreatedBy}); e == nil {
+					note += " from " + persona.Name
+					named = true
+				}
 			}
-			persona, e := q.GetPersona(ctx, store.GetPersonaParams{ID: *v.PersonaID, WorkspaceID: a.WorkspaceID, UserID: chat.CreatedBy})
-			if e != nil {
-				return e
+			if !named && v.CreatedByType == "agent" {
+				if author, e := q.GetAgent(ctx, store.GetAgentParams{ID: v.CreatedByID, WorkspaceID: a.WorkspaceID}); e == nil {
+					note += " from @" + author.Handle
+				}
 			}
-			note += " from " + persona.Name
 		} else if v.CreatedByType == "agent" {
 			author, e := q.GetAgent(ctx, store.GetAgentParams{ID: v.CreatedByID, WorkspaceID: a.WorkspaceID})
 			if e == nil {
@@ -316,7 +322,9 @@ func (s *Service) resolveTx(ctx context.Context, q *store.Queries, a store.Artif
 func (s *Service) suggestionFeedback(ctx context.Context, q *store.Queries, a store.Artifact, v store.ArtifactVersion, body string) error {
 	body = "Page review: " + a.Title + "\n\n" + body
 	chat := v.SourceChatID
-	if chat == nil && v.SourceRunID == nil {
+	// Only persona suggestions fall back to the page's chat; legacy and run
+	// rows without a source must not post into an unrelated persona's chat.
+	if chat == nil && v.SourceRunID == nil && v.PersonaID != nil {
 		chat = a.ChatSessionID
 	}
 	if chat != nil {
@@ -371,10 +379,22 @@ func recordChanges(ctx context.Context, q *store.Queries, a store.Artifact, v st
 // The chat identifies the person and persona; callers cannot supply attribution.
 func (s *Service) PersonaWrite(ctx context.Context, agent store.Agent, chatID uuid.UUID, runID *uuid.UUID, in Save) (Result, error) {
 	var res Result
-	if strings.HasPrefix(strings.ToLower(in.Path), "agents/") && !strings.HasPrefix(strings.ToLower(in.Path), strings.ToLower(MemoryRoot(agent.Handle))) {
+	// Normalise before the namespace checks, as AgentWrite does.
+	path, err := artifacts.ValidNotePath(in.Path)
+	if err != nil {
+		return res, err
+	}
+	in.Path = path
+	lp := strings.ToLower(path)
+	if strings.HasPrefix(lp, strings.ToLower(MemoryRoot(agent.Handle))) {
+		// The agent's own memory is always writable and indexed; page controls
+		// only govern shared pages.
+		return s.AgentWrite(ctx, agent, nil, in)
+	}
+	if strings.HasPrefix(lp, "agents/") {
 		return res, apperr.Invalid("path", "you can only write under %s, not another agent's memory", MemoryRoot(agent.Handle))
 	}
-	err := s.tx(ctx, agent.WorkspaceID, func(q *store.Queries) error {
+	err = s.tx(ctx, agent.WorkspaceID, func(q *store.Queries) error {
 		chat, err := q.GetChatSession(ctx, store.GetChatSessionParams{ID: chatID, WorkspaceID: agent.WorkspaceID})
 		if err != nil {
 			return err
