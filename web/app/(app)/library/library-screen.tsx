@@ -9,6 +9,7 @@ import {
   useClearLibraryReference,
   useDeleteLibraryItem,
   useLibrary,
+  useLibraryFilePreview,
   useRenameLibraryItem,
   useSetLibraryReference,
   useUploadLibraryItem,
@@ -21,7 +22,7 @@ import { formatBytes } from "@/lib/files";
 import { clock } from "@/lib/chat-video";
 import { audioFormat } from "@/lib/chat-audio";
 import { timelineTime } from "@/lib/format";
-import { LIBRARY_UPLOAD_ACCEPT, checkLibraryUpload, referenceBadge, referenceCaption, referenceChoices } from "@/lib/library-ui";
+import { checkLibraryUpload, referenceBadge, referenceCaption, referenceChoices } from "@/lib/library-ui";
 import { floatPanel } from "@/components/domain/pickers";
 import { AudioPlayer } from "@/components/domain/audio-player";
 import { Waveform } from "@/components/domain/waveform";
@@ -115,7 +116,7 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
 /** The dialog a Library tile opens: the item's header with Download and Remove, over the item itself. */
 function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { item: LibraryItem; open?: boolean; onOpenChange?: (open: boolean) => void; trigger: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
   const del = useDeleteLibraryItem();
-  const noun = item.kind === "diagram" ? "diagram" : item.kind === "video" ? "video" : item.kind === "audio" ? "audio file" : "image";
+  const noun = item.kind === "diagram" ? "diagram" : item.kind === "video" ? "video" : item.kind === "audio" ? "audio file" : item.kind === "file" ? "file" : item.kind === "export" ? "export" : "image";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
@@ -297,12 +298,149 @@ function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
   );
 }
 
+/** "PY", "ZIP", "CSV": a file's type as the badge on its tile. */
+function typeBadge(item: LibraryItem): string {
+  const ext = item.filename.includes(".") ? item.filename.split(".").pop()! : "";
+  return (ext || "FILE").slice(0, 4).toUpperCase();
+}
+
+/** Where an export's app lives, to link back to the source. */
+const SOURCE_APP = { slides: { label: "Slides", href: "/apps/slides" }, designs: { label: "Designs", href: "/apps/designs" }, docs: { label: "Docs", href: "/apps/docs" } } as const;
+
+/** "Source: Slides › Q4 deck (edited since)": whether the export is still what its source says. */
+function ExportSourceLine({ item }: { item: LibraryItem }) {
+  const src = item.export_source;
+  if (!src) return null;
+  const app = SOURCE_APP[src.kind];
+  const tone = src.status === "changed" ? "text-[#C77700]" : src.status === "deleted" ? "text-pill-blocked-fg" : "text-fg-tertiary";
+  const note = src.status === "changed" ? "edited since" : src.status === "deleted" ? "source deleted" : "up to date";
+  return (
+    <span className={cx("min-w-0 truncate text-xs", tone)} data-testid="export-source" data-status={src.status}>
+      Source:{" "}
+      {src.status === "deleted" ? (
+        <>{app.label}</>
+      ) : (
+        <Link href={`${app.href}/${src.id}`} className="hover:underline">{app.label} › {src.title}</Link>
+      )}
+      {` (${note})`}
+    </span>
+  );
+}
+
+/** The one line under a tile's name: "112 lines · 4 KB". */
+function fileMeta(item: LibraryItem): string {
+  return [item.detail, formatBytes(item.size_bytes)].filter(Boolean).join(" · ");
+}
+
+/** What a file's dialog shows of it: text as text, a table's first rows, a zip's names. Never rendered as a page. */
+function FilePreviewPane({ item, open }: { item: LibraryItem; open: boolean }) {
+  const q = useLibraryFilePreview(item.id, open);
+  if (q.isPending) return <Skeleton className="h-48 w-full rounded-lg" />;
+  if (q.isError) return <p className="text-xs text-pill-blocked-fg" role="alert">Couldn’t read a preview: {q.error.message}</p>;
+  const p = q.data;
+  const more = p.truncated ? <p className="mt-2 text-xs text-fg-tertiary">Showing the start of the file. Download it for the rest.</p> : null;
+  if (p.kind === "text")
+    return (
+      <div data-testid="file-preview" data-kind="text">
+        <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle bg-surface-sunken p-3 font-mono text-[12px] leading-[1.5] text-fg">{(p.lines ?? []).join("\n")}</pre>
+        {more}
+      </div>
+    );
+  if (p.kind === "table")
+    return (
+      <div data-testid="file-preview" data-kind="table">
+        <div className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle">
+          <table className="w-full border-collapse text-left text-[12px]">
+            <tbody>
+              {(p.rows ?? []).map((row, i) => (
+                <tr key={i} className={cx("border-b border-border-subtle last:border-0", i === 0 && "bg-surface-sunken font-medium")}>
+                  {row.map((cell, j) => <td key={j} className="max-w-[260px] truncate px-2.5 py-1.5 text-fg">{cell}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {more}
+      </div>
+    );
+  if (p.kind === "zip")
+    return (
+      <div data-testid="file-preview" data-kind="zip">
+        <ul className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle text-[12px]">
+          {(p.entries ?? []).map((e) => (
+            <li key={e.name} className="flex items-center gap-3 border-b border-border-subtle px-2.5 py-1.5 last:border-0">
+              <span className="min-w-0 flex-1 truncate font-mono text-fg">{e.name}</span>
+              <span className="flex-none text-fg-tertiary">{formatBytes(e.size)}</span>
+            </li>
+          ))}
+        </ul>
+        {p.truncated && <p className="mt-2 text-xs text-fg-tertiary">Showing {p.entries?.length} of {p.total} files. Nothing is unpacked.</p>}
+      </div>
+    );
+  return <p className="text-sm text-fg-secondary" data-testid="file-preview" data-kind="none">No preview for this type of file. Download it to open it.</p>;
+}
+
+/** A file: a type badge, its name, a summary line and the source. A click opens a read-only preview with Download, Rename and Remove. */
+function FileTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5" data-testid="library-item" data-kind="file">
+      <ItemDialog
+        item={item}
+        open={open}
+        onOpenChange={setOpen}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        trigger={
+          <button type="button" aria-label={`Open ${item.title}`} className="flex aspect-[2/1] flex-col justify-between rounded-lg border border-border bg-surface-sunken p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <span className="text-[26px] font-bold leading-none text-accent">{typeBadge(item)}</span>
+            <span className="truncate text-xs text-fg-secondary">{fileMeta(item)}</span>
+          </button>
+        }
+      >
+        <div className="flex flex-col gap-3 pb-1">
+          <RenameField item={item} />
+          <FilePreviewPane item={item} open={open} />
+        </div>
+      </ItemDialog>
+      <span className="truncate text-[13px] text-fg" title={item.filename}>{item.title}</span>
+      <Source item={item} />
+    </li>
+  );
+}
+
+/** An export: a frozen copy of what Slides, Designs or Docs made, with a line saying whether its source has changed since. */
+function ExportTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  const app = item.export_source ? SOURCE_APP[item.export_source.kind].label : "";
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-surface-sunken p-3" data-testid="library-item" data-kind="export">
+      <span className="text-xs font-semibold text-accent">{typeBadge(item)}{app && ` · from ${app}`}</span>
+      <ItemDialog
+        item={item}
+        open={open}
+        onOpenChange={setOpen}
+        trigger={<button type="button" aria-label={`Open ${item.title}`} className="min-w-0 truncate text-left text-[15px] font-semibold text-fg outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent">{item.title}</button>}
+      >
+        <div className="flex flex-col gap-3 pb-1">
+          <RenameField item={item} />
+          <p className="text-sm text-fg-secondary">A copy as it was when you exported it. {fileMeta(item)}</p>
+          <ExportSourceLine item={item} />
+        </div>
+      </ItemDialog>
+      <span className="truncate text-xs text-fg-secondary">{fileMeta(item)} · exported {timelineTime(item.created_at)}</span>
+      <ExportSourceLine item={item} />
+    </li>
+  );
+}
+
 /** One tile; a click opens the full item with Download, Remove and, for an image, the reference actions. */
 function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | null }) {
   const del = useDeleteLibraryItem();
   const url = libraryItemUrl(item.id);
   if (item.kind === "video") return <VideoTile item={item} initiallyOpen={openItem === item.id} />;
   if (item.kind === "audio") return <AudioTile item={item} initiallyOpen={openItem === item.id} />;
+  if (item.kind === "file") return <FileTile item={item} initiallyOpen={openItem === item.id} />;
+  if (item.kind === "export") return <ExportTile item={item} initiallyOpen={openItem === item.id} />;
   if (item.kind === "document") {
     return (
       <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
@@ -342,7 +480,7 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
   );
 }
 
-/** Adds an image or audio file of the person's own, e.g. a photo to use as their reference or a voice memo. */
+/** Adds a file of the person's own: an image (e.g. a photo to use as their reference), audio, or any other file. */
 function UploadButton() {
   const input = useRef<HTMLInputElement>(null);
   const upload = useUploadLibraryItem();
@@ -361,7 +499,6 @@ function UploadButton() {
       <input
         ref={input}
         type="file"
-        accept={LIBRARY_UPLOAD_ACCEPT}
         hidden
         aria-label="File to upload"
         onChange={(e) => {
@@ -408,6 +545,10 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
           ? "Workflows with an Add to library step save their results here."
           : kind === "video"
           ? "When a persona that can code renders a video in a chat, it\u2019s added here once it\u2019s finished."
+          : kind === "file"
+          ? "No files yet. When a persona that can code hands you a file (a script, a zip, a spreadsheet), it\u2019s kept here. You can also upload one."
+          : kind === "export"
+          ? "No exports yet. Export a deck, design or document and choose Save to Library to keep the copy here."
           : kind === "audio"
           ? "When a persona that can code renders audio in a chat, it\u2019s added here once it\u2019s finished. You can also upload an MP3, WAV, OGG or M4A file, like a voice memo."
           : kind === "diagram"
@@ -434,7 +575,7 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
   );
 }
 
-const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", audio: "audio", diagrams: "diagram", documents: "document" };
+const KINDS: Record<string, LibraryItemKind> = { images: "image", videos: "video", audio: "audio", files: "file", exports: "export", diagrams: "diagram", documents: "document" };
 
 /** ?source=projects: what agents wrote on tickets; otherwise your keepsakes. */
 export function LibraryScreen() {
@@ -455,7 +596,7 @@ function Keepsakes() {
             <div className="min-w-0 flex-1 space-y-1">
               <h1 className="type-display">Library</h1>
               <p className="text-sm text-fg-secondary">
-                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos and audio they render, are saved here automatically and stay after their chat is deleted.
+                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos and audio they render, are saved here automatically; files they hand you and exports you save from Slides, Designs and Docs are kept too and stay after their chat is deleted.
                 Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
               </p>
               <div className="pt-2">
@@ -464,7 +605,7 @@ function Keepsakes() {
             </div>
             <UploadButton />
           </div>
-          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "audio", label: "Audio" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
+          <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "audio", label: "Audio" }, { key: "files", label: "Files" }, { key: "exports", label: "Exports" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
           {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={KINDS[tab] ?? "image"} openItem={openItem} />}
         </div>
       </Content>

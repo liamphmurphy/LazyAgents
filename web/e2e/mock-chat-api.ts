@@ -1134,11 +1134,11 @@ export function mockVideo(state: string, runId: string): Record<string, unknown>
   };
 }
 
-/** One second of a quiet tone: enough for an <audio> element to load. */
-export function mockWav(): Buffer {
+/** A quiet tone, `seconds` long (one by default): enough for an <audio> element to load. */
+export function mockWav(seconds = 1): Buffer {
   const rate = 8000;
-  const data = Buffer.alloc(rate * 2);
-  for (let i = 0; i < rate; i++) data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 3000), i * 2);
+  const data = Buffer.alloc(rate * 2 * seconds);
+  for (let i = 0; i < rate * seconds; i++) data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 3000), i * 2);
   const head = Buffer.alloc(44);
   head.write("RIFF", 0);
   head.writeUInt32LE(36 + data.length, 4);

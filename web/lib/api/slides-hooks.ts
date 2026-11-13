@@ -1,10 +1,24 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type Schemas } from "./client";
+import { api, postForm, unwrap, type Schemas } from "./client";
+import { libraryKeys } from "./library-hooks";
 import type { paths } from "./schema";
 
 // ---- The Slides app: the person's decks, each a deck canvas in its own chat.
+
+/** Keeps one finished export (PDF or PowerPoint), linked to its deck, in the person's Library. */
+export function useSaveDeckExport(deckId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return postForm<Schemas["LibraryItem"]>(`/slides/${deckId}/library`, form);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
 
 export type DeckSummary = Schemas["DeckSummary"];
 export type DeckRef = Schemas["MyCanvas"];

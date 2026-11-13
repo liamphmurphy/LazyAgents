@@ -41,7 +41,8 @@ async function installLibrary(page: Page, items: Item[]) {
       items.unshift(it);
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(it) });
     }
-    if (m?.[2]) return route.fulfill({ status: 200, contentType: "audio/wav", body: mockWav() });
+    // Long enough that a slow test never reaches the end of the clip.
+    if (m?.[2]) return route.fulfill({ status: 200, contentType: "audio/wav", body: mockWav(30) });
     const kind = url.searchParams.get("kind");
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: items.filter((i) => !kind || i.kind === kind), has_more: false }) });
   });
@@ -89,8 +90,10 @@ test("a tile opens the player and starts it: scrub, speed, loop, details and dow
 
   // Arrow keys on the waveform move the position by 5% of the clip.
   const seek = player.getByRole("slider", { name: "Seek" });
-  // The file's own length (1 s here) replaces the planned one once its metadata loads.
-  await expect(player.getByTestId("audio-time")).toContainText("/ 0:01");
+  // The file's own length (30 s here) replaces the planned one once its metadata loads.
+  await expect(player.getByTestId("audio-time")).toContainText("/ 0:30");
+  // A mocked response has no byte ranges, so the browser can't seek until the whole clip has arrived.
+  await expect.poll(() => dialog.locator("audio").evaluate((a: HTMLAudioElement) => a.seekable.length > 0 && a.seekable.end(0) >= a.duration - 0.5)).toBe(true);
   await seek.focus();
   const before = Number(await seek.getAttribute("aria-valuenow"));
   await seek.press("ArrowRight");
@@ -139,14 +142,14 @@ test("removing an audio file asks first", async ({ page }) => {
   expect(seen.deleted).toEqual(["a-1"]);
 });
 
-test("uploading an audio file adds it, and a wrong type is refused before sending", async ({ page }) => {
+test("uploading an audio file adds it, and an executable is refused before sending", async ({ page }) => {
   const seen = await installLibrary(page, []);
   await page.goto("/library?tab=audio");
   await expect(page.getByRole("heading", { name: "Nothing here yet" })).toBeVisible();
   await expect(page.getByText("MP3, WAV, OGG or M4A file, like a voice memo")).toBeVisible();
   const input = page.getByLabel("File to upload");
-  await input.setInputFiles({ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("x") });
-  await expect(page.getByText("notes.pdf isn't a PNG, JPEG, GIF or WebP image, or an MP3, WAV, OGG or M4A file.")).toBeVisible();
+  await input.setInputFiles({ name: "setup.exe", mimeType: "application/octet-stream", buffer: Buffer.from("x") });
+  await expect(page.getByText("setup.exe isn't kept: executables and disk images aren't allowed.")).toBeVisible();
   expect(seen.uploaded).toEqual([]);
   await input.setInputFiles({ name: "Voice memo.wav", mimeType: "", buffer: mockWav() });
   await expect(page.getByTestId("library-item")).toHaveCount(1);

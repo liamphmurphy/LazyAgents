@@ -2,12 +2,13 @@
 
 // ---- The Library: the caller's permanent keepsakes from assistant chats.
 
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, postForm, unwrap, type Schemas } from "./client";
 
 export type LibraryItem = Schemas["LibraryItem"];
 export type LibraryItemKind = Schemas["LibraryItemKind"];
 export type LibraryReferenceRole = Schemas["LibraryReferenceRole"];
+export type LibraryFilePreview = Schemas["LibraryFilePreview"];
 
 export const libraryKeys = {
   all: ["library"] as const,
@@ -53,6 +54,16 @@ export function useUploadLibraryItem() {
       return postForm<LibraryItem>("/library", form);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
+/** A file's first lines, rows or zip entries, read when its dialog opens. */
+export function useLibraryFilePreview(itemId: string, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: ["library", "preview", itemId],
+    queryFn: () => unwrap(api.GET("/library/{itemId}/preview", { params: { path: { itemId } } })),
+    staleTime: Infinity,
   });
 }
 

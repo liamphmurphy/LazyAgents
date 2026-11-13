@@ -12,18 +12,15 @@ type PersonaLike = { id: string; name: string };
 /** Matches the server's Library upload limit and the types it keeps. */
 export const LIBRARY_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 export const LIBRARY_UPLOAD_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
-export const LIBRARY_AUDIO_EXTENSIONS = [".mp3", ".wav", ".ogg", ".oga", ".m4a"] as const;
-export const LIBRARY_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp,.mp3,.wav,.ogg,.oga,.m4a,audio/mpeg,audio/wav,audio/ogg,audio/mp4";
-
-/** Whether a picked file is audio, by its name: browsers disagree on the types of .wav and .m4a. */
-export function isAudioFile(file: { name: string }): boolean {
-  const name = file.name.toLowerCase();
-  return LIBRARY_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
-}
+/** What the server refuses outright: executables, installers and disk images. It checks the bytes too. */
+export const LIBRARY_DENIED_EXTENSIONS = [".exe", ".dll", ".msi", ".scr", ".com", ".pif", ".bat", ".cmd", ".vbs", ".lnk", ".app", ".apk", ".ipa", ".dmg", ".iso", ".img", ".vhd", ".vhdx", ".jar"] as const;
 
 /** Why a picked file can't be uploaded, or null. The server checks the bytes too. */
 export function checkLibraryUpload(file: { name: string; type: string; size: number }): string | null {
-  if (!isAudioFile(file) && !(LIBRARY_UPLOAD_TYPES as readonly string[]).includes(file.type)) return `${file.name} isn't a PNG, JPEG, GIF or WebP image, or an MP3, WAV, OGG or M4A file.`;
+  const name = file.name.toLowerCase();
+  if (LIBRARY_DENIED_EXTENSIONS.some((ext) => name.endsWith(ext))) return `${file.name} isn't kept: executables and disk images aren't allowed.`;
+  // A picture must be one of the image types; anything else is kept as audio or a file.
+  if (/\.(png|jpe?g|gif|webp)$/.test(name) && !(LIBRARY_UPLOAD_TYPES as readonly string[]).includes(file.type)) return `${file.name} isn't a PNG, JPEG, GIF or WebP image.`;
   if (file.size <= 0) return `${file.name} is empty.`;
   if (file.size > LIBRARY_UPLOAD_MAX_BYTES) return `${file.name} is over 25 MB.`;
   return null;

@@ -2098,12 +2098,15 @@ export interface paths {
         put?: never;
         /**
          * Add an image or audio file of your own to your Library
-         * @description Stores one image (PNG, JPEG, GIF or WebP) or audio file (MP3, WAV,
-         *     OGG or M4A), up to 25 MB, in the caller's Library, e.g. a photo to use
-         *     as their reference image or a voice memo. It counts against the same
+         * @description Stores one image (PNG, JPEG, GIF or WebP), audio file (MP3, WAV,
+         *     OGG or M4A) or any other file, up to 25 MB, in the caller's Library,
+         *     e.g. a photo to use as their reference image, a voice memo, a script,
+         *     a zip or a spreadsheet. Anything that isn't an image or audio is kept
+         *     as a file and only ever downloaded: executables and disk images are
+         *     refused, and a zip is listed, never unpacked. It counts against the same
          *     storage cap as generated images. An audio file is checked against its
          *     name, and its length and waveform are read for WAV and MP3. 422 for
-         *     another type, a file that isn't what its name says, an empty file,
+         *     a file that isn't what its name says, an executable or disk image, an empty file,
          *     one over the limit or a full Library.
          */
         post: operations["uploadLibraryItem"];
@@ -2268,6 +2271,30 @@ export interface paths {
          * @description 404 unless it is yours.
          */
         get: operations["getLibraryItemContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A file's contents at a glance
+         * @description The first 200 lines of a text or code file, the first 20 rows of a CSV
+         *     or TSV, or the names in a zip, read when asked for. Nothing is run,
+         *     rendered or unpacked. 404 unless it is your file.
+         */
+        get: operations["getLibraryFilePreview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3810,6 +3837,32 @@ export interface paths {
         patch: operations["renameDeck"];
         trace?: never;
     };
+    "/slides/{canvasId}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save an export of a deck (PDF or PowerPoint) to the Library
+         * @description Stores one finished export file, built by the Export menu, as an
+         *     export linked to its deck. The file's content decides its type: a PDF,
+         *     or a .pptx (a zip holding ppt/presentation.xml). It counts against the
+         *     Library's 1 GB storage cap. 404 for anyone else's deck; 422 for another
+         *     type, an empty file, one over 25 MB or a full Library.
+         */
+        post: operations["saveDeckExportToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/slides/{canvasId}/duplicate": {
         parameters: {
             query?: never;
@@ -4115,10 +4168,9 @@ export interface paths {
         put?: never;
         /**
          * Save an export of a design (PNG, SVG or PDF) to the Library
-         * @description Stores one finished export file, built by the Export menu, in the
-         *     caller's Library: a PNG as an image, an SVG as a diagram and a PDF as
-         *     a document, titled after the file name. The file's content decides
-         *     its type, not its name. It counts against the Library's 1 GB storage
+         * @description Stores one finished export file (PNG, SVG or PDF), built by the Export
+         *     menu, as an export linked to its design, titled after the file name.
+         *     The file's content decides its type, not its name. It counts against the Library's 1 GB storage
          *     cap. 404 for anyone else's design; 422 for another type, an empty
          *     file, one over 25 MB or a full Library, and then nothing is stored.
          */
@@ -4277,7 +4329,8 @@ export interface paths {
         put?: never;
         /**
          * Save a document's current version to the Library as Markdown
-         * @description Keeps a copy of the text as it is now; later edits don't change it.
+         * @description Keeps a copy of the text as it is now, as an export linked to the
+         *     document; later edits don't change it.
          *     Saving the same text again returns the existing item. It counts
          *     against the Library's storage cap. 404 for anyone else's canvas; 422
          *     for an SVG canvas or a full Library.
@@ -8391,7 +8444,7 @@ export interface components {
             audio: components["schemas"]["ChatAudio"][];
         };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video" | "audio";
+        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video" | "audio" | "file" | "export";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -8447,12 +8500,51 @@ export interface components {
             height?: number;
             /** @description For a video: a poster image is served at /library/{itemId}/poster */
             has_poster?: boolean;
+            /** @description For a file or export: one line under the name, e.g. 18 files, 112 lines or 1,204 rows · 6 columns. Absent when there is nothing to say beyond the size. */
+            detail?: string;
+            export_source?: components["schemas"]["LibraryExportSource"];
             /** @description For generated audio: how it was made, e.g. MIDI → FluidSynth; absent for an upload */
             method?: string;
             /** @description For audio: the waveform, one value (0-255) per bucket. Absent when the server can't decode the format (OGG, M4A); duration_ms is absent then too. */
             peaks?: number[];
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description For an export: the Slides deck, Design or Doc it was made from, and whether that has changed since */
+        LibraryExportSource: {
+            /** @enum {string} */
+            kind: "slides" | "designs" | "docs";
+            /** Format: uuid */
+            id: string;
+            /** @description The source's current title; absent once it is deleted */
+            title?: string;
+            /**
+             * @description current: not edited since the export; changed: edited since; deleted: gone
+             * @enum {string}
+             */
+            status: "current" | "changed" | "deleted";
+        };
+        /** @description What a file's dialog shows. Nothing is run or rendered: text is shown as text. */
+        LibraryFilePreview: {
+            /** @enum {string} */
+            kind: "text" | "table" | "zip" | "none";
+            /** @description text: the first 200 lines */
+            lines?: string[];
+            /** @description table: the first 20 rows */
+            rows?: string[][];
+            /** @description zip: the first 200 file names */
+            entries?: components["schemas"]["LibraryFileEntry"][];
+            /** @description Lines, rows or files in the whole file; 0 when it isn't known */
+            total: number;
+            truncated: boolean;
+        };
+        LibraryFileEntry: {
+            name: string;
+            /**
+             * Format: int64
+             * @description Uncompressed size in bytes
+             */
+            size: number;
         };
         /** @enum {string} */
         LibraryLinkStatus: "to_read" | "done";
@@ -13088,6 +13180,30 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getLibraryFilePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFilePreview"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     getLibraryItemPoster: {
         parameters: {
             query?: never;
@@ -15538,6 +15654,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveDeckExportToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
                 };
             };
             404: components["responses"]["Error"];
