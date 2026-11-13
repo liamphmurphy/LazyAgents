@@ -412,3 +412,35 @@ test("the explorer pins pages to the top, caps long folders with + N more, and c
   await page.reload();
   await expect(explorer.getByRole("region", { name: "Pinned" }).getByRole("link", { name: "Reading list" })).toBeVisible();
 });
+
+test("Home leads with what needs you, then where you left off, and tells untitled pages apart", async ({ page }) => {
+  const s = await install(page);
+  const at = new Date().toISOString();
+  const rows = [
+    { ...s.page, title: "Reading list", summary: "Books for the winter", updated_at: at, pending: 2 },
+    { ...s.page, id: Q, title: "Untitled", path: "Docs/Untitled", summary: "Ideas for the theme picker", updated_at: at, pending: 0 },
+    { ...s.page, id: F1, title: "Untitled", path: "Docs/Untitled 2", summary: "", updated_at: at, pending: 0 },
+  ];
+  const capture = { ...s.page, id: F2, title: "A thought", path: "Inbox/A thought", summary: "", updated_at: at, pending: 0 };
+  await page.route(/\/api\/v1\/knowledge\/query/, (route) => {
+    const q = route.request().postDataJSON() as { folder?: string };
+    if (q.folder === "Inbox") return json(route, { columns: [], rows: [capture], has_more: false });
+    if (q.folder === "Patterns/Proposed") return json(route, { columns: [], rows: [], has_more: false });
+    return json(route, { columns: [], rows, has_more: false });
+  });
+  await page.goto("/knowledge");
+  const needs = page.getByRole("region", { name: "Needs you" });
+  await expect(needs.getByRole("button", { name: /1\s*page with suggestions to review/ })).toBeVisible();
+  await expect(needs.getByRole("button", { name: /1\s*inbox captures to file/ })).toBeVisible();
+  await expect(needs.getByRole("button", { name: /agent pattern proposals/ })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Pick up where you left off" })).toContainText("Reading list");
+  await expect(page.getByText("Untitled · “Ideas for the theme picker”")).toBeVisible();
+  await expect(page.getByText(/Docs · empty/)).toBeVisible();
+  // The four quick-action cards are gone: the explorer and shortcuts already do them.
+  await expect(page.getByRole("button", { name: "Today's note" })).toHaveCount(0);
+
+  // Filing the inbox asks a persona with the Inbox attached.
+  await needs.getByRole("button", { name: /inbox captures/ }).click();
+  await expect(dock(page)).toBeVisible();
+  await expect(dock(page).getByRole("button", { name: "Remove folder Inbox" })).toBeVisible();
+});
