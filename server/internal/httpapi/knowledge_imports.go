@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -13,6 +15,11 @@ func knowledgeJob(job store.KnowledgeImport) map[string]any {
 }
 func (s *Server) knowledgeImportRoutes(mux *http.ServeMux) {
 	respond := func(w http.ResponseWriter, r *http.Request, job store.KnowledgeImport, err error, status int) {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// A missing job, someone else's, or one past the state the
+			// action needs (confirming twice) is not a server error.
+			err = apperr.ErrNotFound
+		}
 		if err != nil {
 			s.responseError(w, r, err)
 			return
@@ -72,6 +79,23 @@ func (s *Server) knowledgeImportRoutes(mux *http.ServeMux) {
 		}
 		job, err := s.Q.ConfirmKnowledgeImport(r.Context(), store.ConfirmKnowledgeImportParams{ID: id, WorkspaceID: ws, UserID: u.ID, Policy: in.Policy})
 		respond(w, r, job, err, 202)
+	})
+	mux.HandleFunc("POST /api/v1/knowledge/imports/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		u, _, ws := me(r.Context())
+		id, err := knowledgeID(r, "id")
+		if err != nil {
+			s.responseError(w, r, err)
+			return
+		}
+		job, err := s.Q.CancelKnowledgeImport(r.Context(), store.CancelKnowledgeImportParams{ID: id, WorkspaceID: ws, UserID: u.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			if _, getErr := s.Q.GetKnowledgeImport(r.Context(), store.GetKnowledgeImportParams{ID: id, WorkspaceID: ws, UserID: u.ID}); getErr == nil {
+				err = apperr.Conflict("only an import that hasn't been confirmed can be canceled; undo a finished one")
+			} else {
+				err = apperr.ErrNotFound
+			}
+		}
+		respond(w, r, job, err, 200)
 	})
 	mux.HandleFunc("POST /api/v1/knowledge/imports/{id}/undo", func(w http.ResponseWriter, r *http.Request) {
 		u, _, ws := me(r.Context())

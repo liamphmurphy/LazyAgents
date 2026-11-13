@@ -52,3 +52,10 @@ UPDATE knowledge_imports SET state='undone',updated_at=now() WHERE id=$1;
 -- name: SetImportedPageTimes :exec
 UPDATE artifacts SET created_at=$2,updated_at=$3 WHERE id=$1
 AND artifact_visible(audience,owner_user_id,sqlc.narg(viewer)::uuid);
+
+-- name: CancelKnowledgeImport :one
+-- Cancel before confirming: nothing was written, so the job ends as undone and
+-- its archive is collected like any finished one. A scan in progress holds a
+-- lease and is left to finish into preview first.
+UPDATE knowledge_imports SET state='undone',updated_at=now()
+WHERE id=sqlc.arg(id) AND workspace_id=sqlc.arg(workspace_id) AND user_id=sqlc.arg(user_id) AND state IN('queued','preview') RETURNING *;

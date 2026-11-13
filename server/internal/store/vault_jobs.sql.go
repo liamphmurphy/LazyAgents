@@ -13,6 +13,44 @@ import (
 	"github.com/google/uuid"
 )
 
+const cancelKnowledgeImport = `-- name: CancelKnowledgeImport :one
+UPDATE knowledge_imports SET state='undone',updated_at=now()
+WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND state IN('queued','preview') RETURNING id, workspace_id, user_id, blob_key, folder, policy, state, plan, report, error, files_done, lease_id, lease_until, created_at, updated_at, archive_deleted
+`
+
+type CancelKnowledgeImportParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// Cancel before confirming: nothing was written, so the job ends as undone and
+// its archive is collected like any finished one. A scan in progress holds a
+// lease and is left to finish into preview first.
+func (q *Queries) CancelKnowledgeImport(ctx context.Context, arg CancelKnowledgeImportParams) (KnowledgeImport, error) {
+	row := q.db.QueryRow(ctx, cancelKnowledgeImport, arg.ID, arg.WorkspaceID, arg.UserID)
+	var i KnowledgeImport
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.BlobKey,
+		&i.Folder,
+		&i.Policy,
+		&i.State,
+		&i.Plan,
+		&i.Report,
+		&i.Error,
+		&i.FilesDone,
+		&i.LeaseID,
+		&i.LeaseUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchiveDeleted,
+	)
+	return i, err
+}
+
 const claimKnowledgeImport = `-- name: ClaimKnowledgeImport :one
 UPDATE knowledge_imports SET state=CASE WHEN state IN('queued','scanning') THEN 'scanning' ELSE 'importing' END,
  lease_id=$1,lease_until=now()+interval '10 minutes',updated_at=now()

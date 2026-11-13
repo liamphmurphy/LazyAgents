@@ -289,6 +289,16 @@ paths:
                 policy: { type: string, enum: [skip, replace, keep_both] }
       responses:
         "202": { description: "The job, now importing", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+  /knowledge/imports/{id}/cancel:
+    post:
+      tags: [knowledge-imports]
+      summary: Cancel an import before it is confirmed
+      description: Nothing has been written, so the job just ends (as undone). A scan in progress finishes into preview first.
+      parameters: [{ $ref: "#/components/parameters/ImportID" }]
+      responses:
+        "200": { description: "The job, now undone", content: { application/json: { schema: { $ref: "#/components/schemas/ImportJob" } } } }
+        "404": { description: "No such import" }
+        "409": { description: "Already confirmed or finished; undo it instead" }
   /knowledge/imports/{id}/undo:
     post:
       tags: [knowledge-imports]

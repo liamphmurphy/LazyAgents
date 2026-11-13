@@ -24,6 +24,7 @@ var audienceExceptions = map[string]string{
 	"UpdateKnowledgeImport":       "system-only lease-checked job progress write",
 	"LockKnowledgeImportLease":    "system-only import transaction checks the unexposed worker lease",
 	"ConfirmKnowledgeImport":      "confirmation requires workspace and authenticated owner and preview state",
+	"CancelKnowledgeImport":       "cancel requires workspace and authenticated owner before anything is written",
 	"RecordImportFile":            "audit insert in the owned, lease-checked import; never exposed without the owned job",
 	"ListImportFiles":             "worker lease or authenticated owner job lock is checked before this internal read",
 	"LockKnowledgeImportForUndo":  "undo filters the job by workspace and authenticated owner",
