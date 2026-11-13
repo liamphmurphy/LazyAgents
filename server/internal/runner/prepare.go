@@ -351,8 +351,9 @@ var HarnessKeys = map[string]struct {
 	Secret string
 	Env    []string
 }{
-	agentdef.HarnessClaudeCode: {chatmodels.KeySecret[agentdef.HarnessClaudeCode], []string{"ANTHROPIC_API_KEY"}},
-	agentdef.HarnessCodex:      {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
+	agentdef.HarnessClaudeCode:  {chatmodels.KeySecret[agentdef.HarnessClaudeCode], []string{"ANTHROPIC_API_KEY"}},
+	agentdef.HarnessCodex:       {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
+	agentdef.HarnessAntigravity: {chatmodels.KeySecret[agentdef.HarnessAntigravity], []string{"GEMINI_API_KEY"}},
 }
 
 // Subscription logins. A stored harness key can be a plan login rather than an

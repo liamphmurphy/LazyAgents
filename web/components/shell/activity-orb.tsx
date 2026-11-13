@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { PersonaAvatar } from "@/app/(app)/chat/_components/persona";
 import type { Schemas } from "@/lib/api/client";
 import { useMarkChatRead, usePersonaDock } from "@/lib/api/hooks";
-import { CLAUDE, CODEX, checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, ringTone, sessionPercent, usageSub, type HarnessActivity } from "@/lib/activity-orb";
+import { ANTIGRAVITY, CLAUDE, CODEX, ORB_HARNESSES, checkedAgo, chatStates, finishes, orbBadge, orbGlyph, orbLabel, orbQuiet, ringTone, sessionPercent, usageSub, workingHarnesses, type HarnessActivity } from "@/lib/activity-orb";
 import { dockEntries, viewedChatId, type DockState } from "@/lib/persona-dock";
 
 type Entry = Schemas["PersonaDockEntry"];
@@ -14,8 +14,9 @@ type Chat = Schemas["PersonaDockChat"];
 type Persona = Entry["persona"];
 
 /*
- * The one floating element: harness activity (Claude's robot, Codex's comets),
- * the two session-usage rings in each harness's colour, and a badge for personas that need the person
+ * The one floating element: harness activity (Claude's robot, Codex's comets,
+ * Antigravity's lift-off), the session-usage rings in each harness's colour
+ * (Antigravity's stays a bare track: it has no allowance to read), and a badge for personas that need the person
  * or replied. Clicking it sprouts a panel out to the left; a persona that
  * finishes sends a chip out of it. The motion is a straight port of the
  * approved mockup: keep its keyframes, timings and easings in step with it.
@@ -101,6 +102,19 @@ function Robot({ u }: { u: number }) {
   );
 }
 
+/** Antigravity's lift-off: a core floating over its shadow while particles rise off it, fading. */
+function Lift() {
+  return (
+    <g className="orb-lift" fill="var(--orb-antigravity)">
+      <ellipse className="orb-lift-shadow" cx="22" cy="29.5" rx="5.5" ry="1.5" opacity="0.35" />
+      <circle className="orb-lift-core" cx="22" cy="21" r="4" />
+      {[[17, 25, 0], [27, 24, 0.6], [22, 26, 1.2]].map(([x, y, delay]) => (
+        <circle key={x} className="orb-lift-p" cx={x} cy={y} r="1.1" style={{ animationDelay: `${delay}s` }} />
+      ))}
+    </g>
+  );
+}
+
 const COMET: [number, number, number][] = [[0, 2.1, 1], [-28, 1.7, 0.6], [-56, 1.3, 0.3]];
 
 function Orbit({ r }: { r: number }) {
@@ -118,18 +132,34 @@ function Orbit({ r }: { r: number }) {
 
 const Idle = () => <circle cx="22" cy="22" r="2.5" fill="var(--orb-idle)" />;
 
+/** One harness's glyph at `scale` around the box's centre, shifted by (dx, dy). */
+function Glyph({ id, scale, dx = 0, dy = 0 }: { id: string; scale: number; dx?: number; dy?: number }) {
+  return (
+    <g transform={`translate(${dx} ${dy}) translate(22 22) scale(${scale}) translate(-22 -22)`}>
+      {id === CODEX ? <Orbit r={7.5} /> : id === ANTIGRAVITY ? <Lift /> : <Robot u={2} />}
+    </g>
+  );
+}
+
+/** Where each of several working harnesses' small glyph sits, so none overlaps the innermost ring. */
+const MULTI_SPOTS: Record<number, [number, number][]> = { 2: [[-6, 0], [6, 0]], 3: [[0, -5.5], [-6.5, 4.5], [6.5, 4.5]] };
+
 function Centre({ harnesses }: { harnesses: HarnessActivity[] }) {
   const g = orbGlyph(harnesses);
-  if (g === "both") return <><Robot u={1.25} /><Orbit r={11.8} /></>;
-  if (g === "claude") return <Robot u={2} />;
-  if (g === "codex") return <Orbit r={7.5} />;
-  return <Idle />;
+  if (g === "idle") return <Idle />;
+  if (g === "multi") {
+    const working = workingHarnesses(harnesses);
+    const spots = MULTI_SPOTS[working.length] ?? MULTI_SPOTS[3];
+    return <>{working.map((id, i) => <Glyph key={id} id={id} scale={0.46} dx={spots[i][0]} dy={spots[i][1]} />)}</>;
+  }
+  // Three rings leave less room than two did, so a lone glyph is a little smaller.
+  return <Glyph id={g === "claude" ? CLAUDE : g === "codex" ? CODEX : ANTIGRAVITY} scale={g === "claude" ? 0.8 : 0.9} />;
 }
 
 function Mini({ harness }: { harness: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 44 44" aria-hidden>
-      {harness === CODEX ? <Orbit r={10} /> : <Robot u={3.4} />}
+      {harness === CODEX ? <Orbit r={10} /> : harness === ANTIGRAVITY ? <g transform="translate(22 22) scale(1.5) translate(-22 -22)"><Lift /></g> : <Robot u={3.4} />}
     </svg>
   );
 }
@@ -143,7 +173,7 @@ function Status({ chat }: { chat: Chat }) {
 }
 
 /** Each harness's ring colour, so a panel row can be matched to its ring. */
-const RING_COLOR: Record<string, string> = { [CLAUDE]: "var(--orb-claude)", [CODEX]: "var(--orb-codex)" };
+const RING_COLOR: Record<string, string> = { [CLAUDE]: "var(--orb-claude)", [CODEX]: "var(--orb-codex)", [ANTIGRAVITY]: "var(--orb-antigravity)" };
 
 function UsageRow({ h, all }: { h: HarnessActivity; all: HarnessActivity[] }) {
   const pct = sessionPercent(h);
@@ -378,7 +408,7 @@ export function ActivityOrb() {
   const badge = orbBadge(entries);
   const quiet = orbQuiet(harnesses, entries);
   const liveGlyph = orbGlyph(harnesses) !== "idle" || working.length > 0;
-  const usage = [CLAUDE, CODEX].flatMap((id) => harnesses.filter((h) => h.harness === id));
+  const usage = ORB_HARNESSES.flatMap((id) => harnesses.filter((h) => h.harness === id));
 
   return (
     <div ref={root} role="region" aria-label="Activity" className="orb-root" style={{ bottom: `max(${bottom}px, calc(var(--tab-bar-h, 0px) + 12px))` }}>
@@ -414,6 +444,7 @@ export function ActivityOrb() {
         <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden>
           <Ring r={19.5} h={usage.find((h) => h.harness === CLAUDE)} color={RING_COLOR[CLAUDE]} />
           <Ring r={15.5} h={usage.find((h) => h.harness === CODEX)} color={RING_COLOR[CODEX]} />
+          <Ring r={11.5} h={usage.find((h) => h.harness === ANTIGRAVITY)} color={RING_COLOR[ANTIGRAVITY]} />
           <Centre harnesses={usage} />
         </svg>
         {badge && <Badge>{badge.kind === "needs" ? "!" : badge.count}</Badge>}

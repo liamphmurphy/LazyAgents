@@ -41,8 +41,8 @@ function PlainHeader({ lead, title, detail, actions }: { lead: ReactNode; title:
     <header className="flex items-center gap-4">
       {lead}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h2 className="truncate text-lg font-semibold text-fg">{title}</h2>
-        <p className="text-xs text-fg-secondary">{detail}</p>
+        <h2 className="truncate type-display text-fg">{title}</h2>
+        <p className="text-sm text-fg-secondary">{detail}</p>
       </div>
       {actions}
     </header>
@@ -52,9 +52,9 @@ function PlainHeader({ lead, title, detail, actions }: { lead: ReactNode; title:
 /** A rail group's heading, with a line saying what sets it apart from the others. */
 function RailGroup({ label, detail }: { label: string; detail: string }) {
   return (
-    <span className="flex flex-col px-2 pb-1 pt-3">
-      <span className="text-xs font-medium text-fg-tertiary">{label}</span>
-      <span className="text-[11px] text-fg-tertiary">{detail}</span>
+    <span className="flex flex-col px-2 pb-1.5 pt-5">
+      <span className="type-heading text-fg">{label}</span>
+      <span className="text-xs text-fg-tertiary">{detail}</span>
     </span>
   );
 }
@@ -169,14 +169,14 @@ export function CustomizationScreen() {
               <Link key={a.id} href={`/agents/${a.handle}`} data-testid="agent-row" className={cx(railItem, "text-fg-secondary hover:bg-hover hover:text-fg")}>
                 <AgentAvatar name={a.name} colorIndex={a.color_index} label={false} />
                 <span className="min-w-0 flex-1 truncate">@{a.handle}</span>
-                <span className="text-[11px] text-fg-tertiary">{a.kind === "sub" ? "sub" : "main"}</span>
+                <span className="text-xs text-fg-tertiary">{a.kind === "sub" ? "sub" : "main"}</span>
               </Link>
             ))}
-            {(spaces.data?.spaces.length ?? 0) > 0 && <span className="px-2 pb-1 pt-3 text-xs font-medium text-fg-tertiary">Spaces</span>}
+            {(spaces.data?.spaces.length ?? 0) > 0 && <span className="px-2 pb-1.5 pt-5 type-heading text-fg">Spaces</span>}
             {spaces.data?.spaces.map((sp) => (
               <RailButton key={sp.id} testId="space-memory-row" on={spaceParam === sp.id} onClick={() => pickSpace(sp.id)} lead={<SpaceTile name={sp.name} color={sp.color} size={20} />}>
                 <span className="min-w-0 flex-1 truncate">{sp.name}</span>
-                <span className="text-[11px] text-fg-tertiary">{sp.memory_count}</span>
+                <span className="text-xs text-fg-tertiary">{sp.memory_count}</span>
               </RailButton>
             ))}
           </nav>
@@ -219,7 +219,7 @@ export function CustomizationScreen() {
                   <PlainHeader lead={<span className="grid size-[72px] place-items-center rounded-full bg-selected text-fg-secondary"><Icon name="bookmark" size={28} /></span>} title="Everything" detail="Every memory: about you, and each persona’s own." />
                 )}
                 {selected && <PersonaConnectors personaId={selected.id} />}
-                <div className="border-t border-border-subtle pt-4">
+                <div className="pt-2">
                   <MemorySection key={whose} whose={whose} focus={focus} heading={spaceParam ? `${space?.name ?? "Space"} memory` : selected ? `${selected.name}’s memory` : whose === "person" ? "About you" : "All memories"} />
                 </div>
               </>

@@ -10,7 +10,7 @@
     <a href="#get-started">Get started</a> ·
     <a href="docs/guide.md">Documentation</a>
   </p>
-  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex &nbsp; / &nbsp; Your memory, your Postgres &nbsp; / &nbsp; No lock-in</p>
+  <p><strong>Self-hosted</strong> &nbsp; / &nbsp; Claude Code · Codex · Antigravity &nbsp; / &nbsp; Your memory, your Postgres &nbsp; / &nbsp; No lock-in</p>
 </div>
 
 ![A chat with the persona Iris: a Claude Code reply with a ticket table, then a switch to Codex, and a Codex reply that remembers the person likes evidence before a merge](docs/images/hero.png)
@@ -21,7 +21,7 @@ The best frontier models are at their best inside their labs' own harnesses,
 and the best chat apps keep your memory, instructions, and projects inside one
 vendor's product. Try the other lab's model and you start over.
 
-Vesper splits the two. It runs **Claude Code** and **Codex** headless as the
+Vesper splits the two. It runs **Claude Code**, **Codex** and **Antigravity** headless as the
 engine, and keeps everything that makes the assistant *yours* in your own
 database:
 
@@ -116,14 +116,15 @@ password: the first browser to arrive sets up the install, and other devices
 sign in with them. Locked out? `make signin` prints a one-time sign-in link.
 The first boot creates an empty workspace and an Assistant with all persona
 permissions enabled. After sign-in, the Assistant's Welcome Wizard asks for
-your name and what you do, connects Claude Code or Codex, and drafts your first
+your name and what you do, connects Claude Code, Codex or Antigravity, and drafts your first
 persona. Settings → Run setup again starts it over. You can also set
 `LOCAL_USER_NAME` and `LOCAL_USER_EMAIL` in `.env` before first boot. The demo
 dataset is available only by opting in with `SEED=true`.
 
 To chat and run agents, set `SECRETS_KEY` in `.env`, then follow the
 **[setup guide](docs/guide.md#running-agents)** to add provider keys
-(`harness:anthropic` for Claude Code, `harness:openai` for Codex). Runs use your
+(`harness:anthropic` for Claude Code, `harness:openai` for Codex, `harness:google`, a
+Gemini API key, for Antigravity). Runs use your
 configured providers and can incur model costs.
 
 Developing Vesper or running it from a checkout? `make start` does everything in

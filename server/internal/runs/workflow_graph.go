@@ -40,11 +40,13 @@ var workflowNodeTypes = append([]string{NodeTrigger, NodeEnrich, NodeAgent, Node
 type WorkflowConfig struct {
 	// Prompt is an enrich or agent step's instructions, a gate's message, or an
 	// output's body. An empty output body uses what the node's parents produced.
-	Prompt      string   `json:"prompt,omitempty" jsonschema:"Instructions for enrich and agent; message for gate; body template for outputs (empty uses the parents' output). Supports {{input}} and {{node_id.output}}"`
-	PersonaID   string   `json:"persona_id,omitempty" jsonschema:"agent: a persona's id to run as; empty uses the chat's persona"`
-	AgentHandle string   `json:"agent_handle,omitempty" jsonschema:"agent: a workspace agent's handle to run as, instead of a persona"`
-	Web         bool     `json:"web,omitempty" jsonschema:"agent: read the web. A web step can't read the workspace"`
-	Images      bool     `json:"images,omitempty" jsonschema:"agent: generate images. The step always runs on Codex, as a persona allowed to make images; not available with agent_handle"`
+	Prompt      string `json:"prompt,omitempty" jsonschema:"Instructions for enrich and agent; message for gate; body template for outputs (empty uses the parents' output). Supports {{input}} and {{node_id.output}}"`
+	PersonaID   string `json:"persona_id,omitempty" jsonschema:"agent: a persona's id to run as; empty uses the chat's persona"`
+	AgentHandle string `json:"agent_handle,omitempty" jsonschema:"agent: a workspace agent's handle to run as, instead of a persona"`
+	Web         bool   `json:"web,omitempty" jsonschema:"agent: read the web. A web step can't read the workspace"`
+	Images      bool   `json:"images,omitempty" jsonschema:"agent: generate images. The step runs as a persona allowed to make images, on image_engine; not available with agent_handle"`
+	// ImageEngine picks the harness an images step runs on.
+	ImageEngine string   `json:"image_engine,omitempty" jsonschema:"agent with images: auto (default; the first connected of Codex and Antigravity), codex or antigravity. Defaults to the persona's, then the workspace's, engine"`
 	Show        []string `json:"show,omitempty" jsonschema:"gate: ids of upstream nodes whose output the reviewer sees; empty shows the gate's parents"`
 	Check       bool     `json:"check,omitempty" jsonschema:"agent: this step is a check that reports pass or fail. Unless it passes, nothing after it runs, apart from a gate tied to it with requires_check"`
 	RetryFrom   string   `json:"retry_from,omitempty" jsonschema:"gate: id of an upstream enrich or agent node to re-run on Request changes; empty offers only approve or reject. agent with check: the upstream node to re-run automatically when the check fails; empty doesn't retry"`
@@ -288,6 +290,9 @@ func ValidateWorkflow(g WorkflowGraph) []WorkflowIssue {
 			}
 			if c.Images && c.AgentHandle != "" {
 				add(n.ID, "Image steps run as a persona: remove the agent handle")
+			}
+			if c.ImageEngine != "" && !ValidImageEngine(c.ImageEngine) {
+				add(n.ID, "Image engine must be auto, codex or antigravity")
 			}
 			if c.Check {
 				if c.Images {

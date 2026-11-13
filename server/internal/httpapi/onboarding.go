@@ -63,6 +63,11 @@ func checkHarnessCredential(harness string, kind api.HarnessVerifyRequestKind, v
 		return apperr.Invalid("credential", "paste the whole ~/.codex/auth.json from `codex login` (a ChatGPT sign-in)")
 	case harness == agentdef.HarnessCodex && kind == api.ApiKey && (codexLogin || !strings.HasPrefix(v, "sk-")):
 		return apperr.Invalid("credential", "an OpenAI API key starts with sk-")
+	case harness == agentdef.HarnessAntigravity && kind == api.Subscription:
+		// Google's terms bar a tool from extracting or storing the OAuth login agy keeps.
+		return apperr.Invalid("credential", "Antigravity runs on a Gemini API key: Google's terms don't let Vesper store an Antigravity sign-in")
+	case harness == agentdef.HarnessAntigravity && kind == api.ApiKey && !strings.HasPrefix(v, "AIza"):
+		return apperr.Invalid("credential", "a Gemini API key starts with AIza")
 	case kind != api.Subscription && kind != api.ApiKey:
 		return apperr.Invalid("kind", "must be subscription or api_key")
 	}
@@ -80,7 +85,7 @@ func (s *Server) VerifyHarness(ctx context.Context, req api.VerifyHarnessRequest
 		// Runs on the host use its CLI sign-ins and would never check a
 		// pasted key, yet the runner would still inject it.
 		if !s.Runs.RequireHarnessKey {
-			return nil, apperr.Invalid("credential", "this server's runs use the claude and codex sign-ins on its host: sign the CLI in there and verify without pasting")
+			return nil, apperr.Invalid("credential", "this server's runs use the claude, codex and agy sign-ins on its host: sign the CLI in there and verify without pasting")
 		}
 		v := strings.TrimSpace(b.Credential)
 		if err := checkHarnessCredential(name, b.Kind, v); err != nil {

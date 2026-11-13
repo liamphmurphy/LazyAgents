@@ -6,8 +6,8 @@ const at = "2026-11-01T00:00:00Z";
 const ws = (name) => ({ id: name, name, updated_at: at });
 const pay = { key: "PAY", name: "Payments", color: "#22c55e" };
 
-test("connections cover both harness keys and both git credentials", () => {
-  assert.deepEqual(CONNECTIONS.map((c) => c.name), ["harness:anthropic", "harness:openai", "git:ssh", "git:pat"]);
+test("connections cover the three harness keys and both git credentials", () => {
+  assert.deepEqual(CONNECTIONS.map((c) => c.name), ["harness:anthropic", "harness:openai", "harness:google", "git:ssh", "git:pat"]);
   assert.deepEqual(CONNECTIONS.find((c) => c.name === "harness:openai").unlocks, ["Codex"]);
 });
 
@@ -42,10 +42,10 @@ test("sidebar attention: missing key or missing harness secret", () => {
   assert.equal(needsAttention({ key_configured: true, secrets: both.slice(1) }), true);
 });
 
-test("Claude, Codex and the GitHub token can be signed in; the SSH key can't", () => {
+test("Claude, Codex and the GitHub token can be signed in; the Gemini key (Google bars storing a login) and the SSH key can't", () => {
   assert.deepEqual(
     CONNECTIONS.map((c) => [c.name, c.signIn ?? null]),
-    [["harness:anthropic", "claude"], ["harness:openai", "codex"], ["git:ssh", null], ["git:pat", "github"]],
+    [["harness:anthropic", "claude"], ["harness:openai", "codex"], ["harness:google", null], ["git:ssh", null], ["git:pat", "github"]],
   );
 });
 
@@ -63,4 +63,13 @@ test("signInView follows the sign-in through its steps", () => {
   assert.deepEqual(signInView(s({ status: "done" })), { step: "done" });
   assert.deepEqual(signInView(s({ status: "failed", error: "timed out" })), { step: "failed", message: "timed out" });
   assert.equal(signInView(s({ status: "cancelled" })).step, "failed");
+});
+
+test("the Gemini key is optional: not having one never raises the attention dot", () => {
+  const both = [ws("harness:anthropic"), ws("harness:openai")];
+  assert.deepEqual(missingConnections(both), []);
+  assert.equal(needsAttention({ key_configured: true, secrets: both }), false);
+  assert.equal(connectionState(both, "harness:google").state, "unset");
+  assert.equal(savedMessage("harness:google"), "harness:google saved. Antigravity is now available.");
+  assert.equal(otherSecrets([ws("harness:google")]).length, 0);
 });

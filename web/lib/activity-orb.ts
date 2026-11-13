@@ -19,19 +19,32 @@ export type HarnessActivity = {
 
 export const CLAUDE = "claude-code";
 export const CODEX = "codex";
+export const ANTIGRAVITY = "antigravity";
+/** The harnesses the orb draws, outermost ring first. */
+export const ORB_HARNESSES = [CLAUDE, CODEX, ANTIGRAVITY] as const;
 
 /** Running and not out of allowance: a limited harness's runs have moved elsewhere. */
 export function harnessWorking(h: HarnessActivity | undefined): boolean {
   return !!h && h.running > 0 && !h.limited_until;
 }
 
-export type Glyph = "both" | "claude" | "codex" | "idle";
+export type Glyph = "multi" | "claude" | "codex" | "antigravity" | "idle";
 
-/** The orb's centre: Claude's robot, Codex's comets, both, or an idle dot. */
+/** The harnesses working now, in ring order: the glyphs the orb's centre draws. */
+export function workingHarnesses(harnesses: HarnessActivity[]): string[] {
+  return ORB_HARNESSES.filter((id) => harnessWorking(harnesses.find((h) => h.harness === id)));
+}
+
+/**
+ * The orb's centre: Claude's robot, Codex's comets or Antigravity's lift-off
+ * when one harness is working, a small glyph of each when several are, or an
+ * idle dot.
+ */
 export function orbGlyph(harnesses: HarnessActivity[]): Glyph {
-  const a = harnessWorking(harnesses.find((h) => h.harness === CLAUDE));
-  const b = harnessWorking(harnesses.find((h) => h.harness === CODEX));
-  return a && b ? "both" : a ? "claude" : b ? "codex" : "idle";
+  const working = workingHarnesses(harnesses);
+  if (working.length === 0) return "idle";
+  if (working.length > 1) return "multi";
+  return working[0] === CLAUDE ? "claude" : working[0] === CODEX ? "codex" : "antigravity";
 }
 
 /** The session window's used percentage for a ring: 100 while limited, null when unread. */
@@ -91,6 +104,7 @@ export function usageSub(h: HarnessActivity, all: HarnessActivity[], now: Date =
     const other = all.find((x) => x.harness !== h.harness && !x.limited_until);
     return `Limited until ${resetLabel(h.limited_until, now)}${other ? ` · falls back to ${other.label}` : ""}`;
   }
+  if (h.harness === ANTIGRAVITY && !h.usage_available) return "Usage unknown · Antigravity doesn’t report an allowance";
   if (!h.usage_available) {
     if (h.usage_checking) return "Checking usage…";
     return h.usage_checked_at ? "Usage unavailable · check Usage settings" : "Usage not checked yet";

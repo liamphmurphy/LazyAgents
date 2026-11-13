@@ -43,7 +43,7 @@ var (
 
 // reservedEnvPrefixes are variables the runner sets for every turn; a service
 // can't replace the turn's token or run identity.
-var reservedEnvPrefixes = []string{"LAZYAGENTS_", "ANTHROPIC_", "OPENAI_", "CLAUDE_", "CODEX_", "GH_", "GITHUB_", "GIT_"}
+var reservedEnvPrefixes = []string{"LAZYAGENTS_", "ANTHROPIC_", "OPENAI_", "CLAUDE_", "CODEX_", "GEMINI_", "AGY_", "GH_", "GITHUB_", "GIT_"}
 
 func validServices(field string, services []Service) error {
 	if len(services) > MaxServices {

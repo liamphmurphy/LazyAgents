@@ -70,6 +70,8 @@ import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, model
 import { ChatStatus, InterimReply, RunActivity, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
+import { useSnippets } from "./snippets";
+import { messageWithSnippets } from "@/lib/snippets";
 import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
@@ -495,6 +497,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
   // "Start chat" links arrive with ?attach=kind:id; seed once, then drop it from the URL.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const files = useAttachments();
+  const snippets = useSnippets();
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLLIElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -671,6 +674,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
       {
         onSuccess: () => {
           files.clear();
+          snippets.clear();
           setText("");
           setPicked(null);
           setPickedEffort(null);
@@ -692,8 +696,12 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
     }
     setModeError(null);
     pinned.current = true;
-    if (mode === "aside") aside.mutate(body, { onSuccess: () => setText("") });
-    else queue.mutate(body, { onSuccess: () => setText("") });
+    const sent = () => {
+      setText("");
+      snippets.clear();
+    };
+    if (mode === "aside") aside.mutate(body, { onSuccess: sent });
+    else queue.mutate(body, { onSuccess: sent });
   }
 
   // A card's button or a choice: goes to the persona that wrote the reply. A mention
@@ -714,12 +722,12 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
   const commitPickRequired = fresh && askCommitEmail;
   function switchPersona(personaId: string) {
     if (!c || personaId === c.persona?.id || create.isPending || send.isPending || send.isSuccess) return;
-    replaceChat(personaId, undefined, text, !!c.temporary);
+    replaceChat(personaId, undefined, messageWithSnippets(text, snippets.items), !!c.temporary);
   }
   // A chat is temporary for life, so before the first message switching it is a fresh chat too.
   function switchTemporary(temporary: boolean) {
     if (!c || temporary === !!c.temporary || create.isPending || send.isPending || send.isSuccess) return;
-    replaceChat(c.persona?.id, c.repo_url, text, temporary);
+    replaceChat(c.persona?.id, c.repo_url, messageWithSnippets(text, snippets.items), temporary);
   }
   // Moves to a new chat, carrying the draft over. The old one is only dropped if it is still empty.
   function replaceChat(personaId: string | undefined, repo: string | undefined, draft: string, temporary: boolean) {
@@ -1179,6 +1187,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
               onText={setText}
               inputRef={area}
               files={files}
+              snippets={snippets}
               chips={chips}
               onChips={setChips}
               onSubmit={(body) => {
@@ -1270,7 +1279,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
               }
               send={{
                 label: running ? sendModeAction(sendMode) : research ? "Plan it" : "Send",
-                disabled: locked || !!unavailable || files.pending || !text.trim() || commitPickRequired || queue.isPending || aside.isPending,
+                disabled: locked || !!unavailable || files.pending || (!text.trim() && !snippets.items.length) || commitPickRequired || queue.isPending || aside.isPending,
                 title: commitPickRequired ? "Pick which email commits use first" : running ? SEND_MODE_HINT[sendMode] : undefined,
                 tone: running ? SEND_TONE[sendMode] : "accent",
               }}

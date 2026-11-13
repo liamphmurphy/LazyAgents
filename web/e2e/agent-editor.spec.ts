@@ -122,3 +122,23 @@ test("editor saves selective memory and an explicit independent-review policy", 
   await expect(page.getByRole("switch", { name: "Require independent review before Done" })).toBeChecked();
   await expect(page.getByRole("radio", { name: "Selective", exact: true })).toBeChecked();
 });
+
+// Antigravity shows what it can do from the server's capability list and, since its
+// models offer no effort setting, hides the effort control (for fallbacks too).
+test("editor: choose Antigravity, see its capabilities and no effort control", async ({ page }) => {
+  const mock = await installAgentApi(page);
+  await page.goto("/agents/atlas?tab=settings");
+  await expect(page.getByLabel("Effort", { exact: true })).toBeVisible();
+  await harness(page).getByRole("radio", { name: "Antigravity" }).click();
+  await expect(harness(page).getByRole("radio", { name: "Antigravity" })).toBeChecked();
+  await expect(page.getByText("On Antigravity, Vesper can")).toBeVisible();
+  await expect(page.getByLabel("Effort", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#ag-models option[value='gemini-2.5-pro']")).toHaveCount(1);
+  await model(page).fill("gemini-2.5-pro");
+  await saveDefinition(page);
+  await expect(page.getByRole("dialog")).toBeHidden();
+  const spec = (mock.saved.definition.at(-1) as { spec: { harness: string; model: string } }).spec;
+  expect(spec.harness).toBe("antigravity");
+  expect(spec.model).toBe("gemini-2.5-pro");
+  expect(mock.unhandled).toEqual([]);
+});

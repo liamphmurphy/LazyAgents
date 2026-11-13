@@ -66,7 +66,7 @@ func (q *Queries) ChatImageJobsForFollowup(ctx context.Context, followupTurnID *
 }
 
 const chatImageJobsForTurn = `-- name: ChatImageJobsForTurn :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles, harness FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 ORDER BY id
 `
 
 type ChatImageJobsForTurnParams struct {
@@ -101,6 +101,7 @@ func (q *Queries) ChatImageJobsForTurn(ctx context.Context, arg ChatImageJobsFor
 			&i.AttachmentID,
 			&i.FollowupTurnID,
 			&i.ReferenceRoles,
+			&i.Harness,
 		); err != nil {
 			return nil, err
 		}
@@ -129,8 +130,8 @@ func (q *Queries) CountChatImageJobsForTurn(ctx context.Context, arg CountChatIm
 }
 
 const createChatImageJob = `-- name: CreateChatImageJob :one
-INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, reference_roles)
-VALUES ($1, $2, $3, $4, $5, $6, coalesce($7::text[], '{}')) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles
+INSERT INTO chat_image_jobs (workspace_id, run_id, turn_id, chat_id, prompt, model, harness, reference_roles)
+VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8::text[], '{}')) RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles, harness
 `
 
 type CreateChatImageJobParams struct {
@@ -140,6 +141,7 @@ type CreateChatImageJobParams struct {
 	ChatID         uuid.UUID
 	Prompt         string
 	Model          string
+	Harness        string
 	ReferenceRoles []string
 }
 
@@ -151,6 +153,7 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 		arg.ChatID,
 		arg.Prompt,
 		arg.Model,
+		arg.Harness,
 		arg.ReferenceRoles,
 	)
 	var i ChatImageJob
@@ -172,6 +175,7 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 		&i.AttachmentID,
 		&i.FollowupTurnID,
 		&i.ReferenceRoles,
+		&i.Harness,
 	)
 	return i, err
 }
@@ -179,7 +183,7 @@ func (q *Queries) CreateChatImageJob(ctx context.Context, arg CreateChatImageJob
 const failQueuedChatImageJobs = `-- name: FailQueuedChatImageJobs :many
 UPDATE chat_image_jobs SET state = 'failed', error = $1::text, failure_kind = 'error', finished_at = now()
 WHERE run_id = $2 AND turn_id = $3 AND state = 'queued'
-RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles
+RETURNING id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles, harness
 `
 
 type FailQueuedChatImageJobsParams struct {
@@ -217,6 +221,7 @@ func (q *Queries) FailQueuedChatImageJobs(ctx context.Context, arg FailQueuedCha
 			&i.AttachmentID,
 			&i.FollowupTurnID,
 			&i.ReferenceRoles,
+			&i.Harness,
 		); err != nil {
 			return nil, err
 		}
@@ -282,7 +287,7 @@ func (q *Queries) LinkChatImageJobAttachment(ctx context.Context, arg LinkChatIm
 }
 
 const queuedChatImageJobs = `-- name: QueuedChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles, harness FROM chat_image_jobs WHERE run_id = $1 AND turn_id = $2 AND state = 'queued' ORDER BY id
 `
 
 type QueuedChatImageJobsParams struct {
@@ -317,6 +322,7 @@ func (q *Queries) QueuedChatImageJobs(ctx context.Context, arg QueuedChatImageJo
 			&i.AttachmentID,
 			&i.FollowupTurnID,
 			&i.ReferenceRoles,
+			&i.Harness,
 		); err != nil {
 			return nil, err
 		}
@@ -367,7 +373,7 @@ func (q *Queries) RecentChatImagePrompts(ctx context.Context, arg RecentChatImag
 }
 
 const runningChatImageJobs = `-- name: RunningChatImageJobs :many
-SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
+SELECT id, workspace_id, run_id, turn_id, chat_id, prompt, model, state, codex_session_id, error, created_at, finished_at, failure_kind, outbox_files, attachment_id, followup_turn_id, reference_roles, harness FROM chat_image_jobs WHERE run_id = $1 AND state = 'running'
 `
 
 // This run's image jobs that are making an image now.
@@ -398,6 +404,7 @@ func (q *Queries) RunningChatImageJobs(ctx context.Context, runID uuid.UUID) ([]
 			&i.AttachmentID,
 			&i.FollowupTurnID,
 			&i.ReferenceRoles,
+			&i.Harness,
 		); err != nil {
 			return nil, err
 		}

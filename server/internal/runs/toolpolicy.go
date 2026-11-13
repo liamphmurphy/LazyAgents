@@ -337,7 +337,7 @@ func repoPath(target, worktree string) (string, bool) {
 	return p, true
 }
 
-// imageToolName reports Codex's image tool however a hook names it: the plain
+// imageToolName reports a harness's own image tool however a hook names it: the plain
 // tool is image_gen or image_generation, and the JavaScript orchestrator calls
 // it as tools.image_gen__imagegen, which arrives as image_genimagegen. Names
 // are compared with case and punctuation removed; anything else (an MCP tool
@@ -353,7 +353,9 @@ func imageToolName(tool string) bool {
 		return -1
 	}, tool)
 	switch n {
-	case "imagegen", "imagegeneration", "imagegenimagegen":
+	case "imagegen", "imagegeneration", "imagegenimagegen", "generateimage":
+		// generateimage: Antigravity's built-in generator (an MCP tool of the
+		// same name arrives as mcp__lazyagents__generate_image and is not it).
 		return true
 	}
 	return false

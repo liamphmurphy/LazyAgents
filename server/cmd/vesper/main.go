@@ -370,7 +370,11 @@ func runRunner(ctx context.Context, log *slog.Logger) error {
 		backend = d
 	case "fake":
 		log.Warn("RUNNER_BACKEND=fake runs stand-in harnesses on this machine with no isolation; it's only for tests and playgrounds")
-		backend = &runner.Fake{Dir: rc.DataDir, Bins: map[string]string{"claude": rc.ClaudeBin, "codex": rc.CodexBin}}
+		bins := map[string]string{"claude": rc.ClaudeBin, "codex": rc.CodexBin}
+		if rc.AntigravityBin != "" {
+			bins["agy"] = rc.AntigravityBin
+		}
+		backend = &runner.Fake{Dir: rc.DataDir, Bins: bins}
 	}
 	host, _ := os.Hostname()
 	blobs := blob.New(cfg.S3)

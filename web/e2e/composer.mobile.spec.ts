@@ -82,3 +82,24 @@ test("attaching context through the sheet, then sending it", async ({ page }) =>
   await expect(page.getByTestId("assistant-message").first()).toContainText("Echo: see this");
   expect(mock.posted.at(-1)?.body.context_refs).toHaveLength(1);
 });
+
+test("a code snippet through the sheet: the sheet closes and the bubble opens over the composer", async ({ page }) => {
+  const mock = await installChatApi(page);
+  await openEmptyChat(page);
+  await openSheet(page);
+  await expect(sheet(page).locator('[data-option="code"]').getByTestId("sheet-option-value")).toHaveText("None");
+  await sheet(page).locator('[data-option="code"]').click();
+  await expect(sheet(page)).toHaveCount(0);
+  const bubble = page.getByTestId("snippet-bubble");
+  await expect(bubble).toBeVisible();
+  await bubble.getByTestId("snippet-input").fill("SELECT id\nFROM users\nWHERE active;");
+  await expect(bubble.getByTestId("snippet-lang")).toHaveValue("sql");
+  await bubble.getByRole("button", { name: "Add to message" }).click();
+  await expect(page.getByTestId("snippet-chip")).toHaveCount(1);
+
+  await openSheet(page);
+  await expect(sheet(page).locator('[data-option="code"]').getByTestId("sheet-option-value")).toHaveText("1 snippet");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => mock.posted.at(-1)?.body.body).toBe("```sql\nSELECT id\nFROM users\nWHERE active;\n```");
+});

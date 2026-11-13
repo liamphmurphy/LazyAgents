@@ -8,7 +8,7 @@ The runner side of switching. `chat_sessions.harness/model` is the selection;
 | Stored selection | Effect on next message |
 |---|---|
 | same harness, same model | resume the segment (unchanged) |
-| same harness, new model | update `runs.model` and `resolved_spec.model`; keep run, workspace and CLI session id. Next argv carries the new model (`--model` via `harness.AnthropicModel`, `-m` for Codex) |
+| same harness, new model | update `runs.model` and `resolved_spec.model`; keep run, workspace and CLI session id. Next argv carries the new model (`--model` via `harness.AnthropicModel`, `-m` for Codex, `--model` for Antigravity) |
 | different harness (incl. switching back) | complete the old segment run (`chat_segment_ended` event; the runner `Sweep` removes its workspace), create a fresh segment run with no resume session, and send a transcript handoff |
 
 Every harness switch starts fresh; old native sessions are never resumed because the

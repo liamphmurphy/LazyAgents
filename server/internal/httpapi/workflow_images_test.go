@@ -73,7 +73,7 @@ func TestWorkflowImageStepNeedsAPersonaThatCan(t *testing.T) {
 func TestWorkflowImageStepFailsClearlyWithoutCodex(t *testing.T) {
 	e := newChatEnvWith(t, func(s *runs.Service) {
 		s.ModelDiscovery = func(ctx context.Context, h, key string) ([]chatmodels.Model, error) {
-			if h == "codex" {
+			if h == "codex" || h == "antigravity" {
 				return nil, context.DeadlineExceeded
 			}
 			return testChatModels(ctx, h, key)
@@ -83,7 +83,7 @@ func TestWorkflowImageStepFailsClearlyWithoutCodex(t *testing.T) {
 	wf := e.publishGraph(t, nodes, edges)
 	chat := e.newChat(map[string]any{"persona_id": e.imagePersona(t, "Painter", true), "harness": "claude-code", "model": "opus-5.5"})["id"].(string)
 	run := e.want("POST", "/chats/"+chat+"/workflows", map[string]any{"workflow_id": wf, "input": "A cave"}, http.StatusCreated)
-	if run["state"] != "failed" || !strings.Contains(run["error"].(string), "Image steps run on Codex") {
+	if run["state"] != "failed" || !strings.Contains(run["error"].(string), "Image steps need an image engine: no image engine is connected") {
 		t.Fatalf("%v", run)
 	}
 }

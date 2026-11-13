@@ -8,10 +8,17 @@ type Caps struct {
 	Resume           bool `json:"resume"`            // resume a session by id
 }
 
-// Claude Code and Codex use run-scoped PreToolUse hooks for service tool policy.
+// Claude Code, Codex and Antigravity use run-scoped PreToolUse hooks for
+// service tool policy. Antigravity's hooks come from its docs and are not yet
+// proven against the real CLI (docs/contracts/antigravity.md). It reports
+// tokens but no cost, and it can't pause for approval: its file and shell
+// permissions are static deny rules written before the turn (the hook alone
+// would leave a turn unrestricted if it failed to load), so a scope that
+// needs approval stays denied, and the agent is told to ask first.
 var Capabilities = map[string]Caps{
-	HarnessClaudeCode: {ToolGating: true, PermissionPrompt: true, NativeCost: true, Resume: true},
-	HarnessCodex:      {ToolGating: true, PermissionPrompt: true, NativeCost: false, Resume: true},
+	HarnessClaudeCode:  {ToolGating: true, PermissionPrompt: true, NativeCost: true, Resume: true},
+	HarnessCodex:       {ToolGating: true, PermissionPrompt: true, NativeCost: false, Resume: true},
+	HarnessAntigravity: {ToolGating: true, PermissionPrompt: false, NativeCost: false, Resume: true},
 }
 
 // Enforcement is how strongly a scope holds (§6.3), strongest first:

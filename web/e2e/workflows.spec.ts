@@ -159,16 +159,22 @@ test("the build chat shows who is working until the reply arrives", async ({ pag
   await expect(page.getByTestId("workflow-build-working")).toHaveCount(0, { timeout: 10000 });
 });
 
-test("the editor offers image generation and says the step runs on Codex", async ({ page }) => {
+test("the editor offers image generation with an engine choice", async ({ page }) => {
   await installChatApi(page, { replyDelayMs: 10 });
   const state = { wf: workflow(), posts: [] as { url: string; body: unknown }[], runs: [] as unknown[] };
   await serveWorkflows(page, state);
   await page.goto(`/workflows/${WF}`);
   await page.getByTestId("node-work").click();
   await page.getByRole("checkbox", { name: "Generate images" }).check();
-  await expect(page.getByTestId("workflow-inspector")).toContainText("Always runs on Codex");
-  await expect(page.getByTestId("node-work")).toContainText("Codex");
+  await expect(page.getByTestId("workflow-inspector")).toContainText("Runs as a persona allowed to generate images");
+  await expect(page.getByTestId("node-work")).toContainText("Persona · images · default engine");
   await expect.poll(() => JSON.stringify(state.posts), { timeout: 5000 }).toContain('"images":true');
+  // Naming an engine is saved on the step and shown on the node.
+  await page.getByRole("combobox", { name: "Image engine" }).selectOption("antigravity");
+  await expect(page.getByTestId("node-work")).toContainText("Persona · images · Antigravity");
+  await expect.poll(() => JSON.stringify(state.posts), { timeout: 5000 }).toContain('"image_engine":"antigravity"');
+  await page.getByRole("combobox", { name: "Image engine" }).selectOption("");
+  await expect(page.getByTestId("node-work")).toContainText("default engine");
 });
 
 test("gates show images and the run view keeps every attempt", async ({ page }) => {

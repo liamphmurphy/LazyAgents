@@ -600,7 +600,17 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const running = chat?.state === "running";
   const events = useChatRunEvents(chat?.current_run_id, running && !!ref.data).data;
   const presence = useMemo(() => (running ? presenceOf(toolCalls(events), id, true) : undefined), [events, running, id]);
-  const presenceBoxes = useMemo(() => (presence && laid ? presence.nodes.flatMap((n) => laid.boxes.get(n) ?? []) : []), [presence, laid]);
+  // The nodes it touched once they reach this tab; until then, where its input says it is working (the parent it adds to).
+  const presenceNodes = useMemo(() => {
+    if (!presence || !laid) return [];
+    const laidOut = (ids: string[]) => ids.flatMap((id) => {
+      const box = laid.boxes.get(id);
+      return box ? [{ id, box }] : [];
+    });
+    const touched = laidOut(presence.nodes);
+    return touched.length ? touched : laidOut(presence.around);
+  }, [presence, laid]);
+  const presenceBoxes = useMemo(() => presenceNodes.map((n) => n.box), [presenceNodes]);
   const [follow, setFollow] = useState(false);
   const paused = !!ref.data?.settings?.persona_paused;
   const presenceKey = presenceBoxes.map((b) => `${b.x},${b.y}`).join(";");
@@ -777,7 +787,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   ) : presence ? (
     <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
       <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
-      {persona.slice(0, 1).toUpperCase()} is editing
+      {persona} is editing
       <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
       <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
     </div>
@@ -815,7 +825,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
         wires={tab === "Prototype"}
       />
       {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
-      {presence && <PresenceLayer name={persona} boxes={presenceBoxes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
+      {presence && <PresenceLayer name={persona} nodes={presenceNodes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
       {/* Tools centred, zoom on the right: on a narrow canvas the 1fr sides give way and the tools slide left of the zoom instead of under it. */}
       <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
         <div role="toolbar" aria-label="Tools" className="pointer-events-auto col-start-2 flex items-center gap-0.5 rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)]">

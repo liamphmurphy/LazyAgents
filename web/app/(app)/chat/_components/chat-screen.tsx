@@ -21,6 +21,7 @@ import { Banner, Skeleton } from "@/components/ui/primitives";
 import { NoHarnessNote, useHarnessHealth } from "@/components/domain/setup";
 import { ChatActivity, Conversation } from "./conversation";
 import { DropOverlay, useAttachments, useFileDrop } from "./attachments";
+import { useSnippets } from "./snippets";
 import { Composer, type CommandRun, type ComposerCommands } from "./composer";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type Effort, type Selection } from "./model-picker";
 import { useNewConversation } from "./chat-history";
@@ -135,6 +136,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
   // A "Start chat" link with no chat yet (?attach=…) lands here; its chips go with the first message.
   const [chips, setChips] = useState<Chip[]>(() => parseAttach(search.getAll("attach"), search.get("attach_title")));
   const files = useAttachments();
+  const snippets = useSnippets();
   const area = useRef<HTMLTextAreaElement>(null);
   const name = boot.data?.me.name?.split(" ")[0];
   const locked = disabled || start.isPending || create.isPending;
@@ -264,6 +266,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             onText={setText}
             inputRef={area}
             files={files}
+            snippets={snippets}
             chips={chips}
             onChips={setChips}
             onSubmit={submit}
@@ -299,7 +302,7 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
             }}
             send={{
               label: start.isPending ? "Starting…" : research ? "Plan it" : "Send",
-              disabled: locked || !!unavailable || files.pending || !text.trim() || askCommitEmail,
+              disabled: locked || !!unavailable || files.pending || (!text.trim() && !snippets.items.length) || askCommitEmail,
               title: askCommitEmail ? "Pick which email commits use first" : undefined,
             }}
           />

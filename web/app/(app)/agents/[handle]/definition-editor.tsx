@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { AgentDetail, AgentKind, AgentSpec, Harness } from "@/lib/api/client";
+import { takesEffort } from "@/lib/harnesses";
 import { cx } from "@/lib/cx";
 import { MODE_LABEL } from "@/lib/enforcement";
 import { Button, IconButton } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function describeChanges(a: Draft, b: Draft): string {
 const MODEL_SUGGESTIONS: Record<Harness, string[]> = {
   "claude-code": ["opus-5.5", "sonnet-5.5", "haiku-5.5", "fable-5.2", "fable-5.1"],
   codex: ["gpt-5-codex", "gpt-5"],
+  antigravity: ["gemini-2.5-pro", "gemini-2.5-flash"],
 };
 
 const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "selective", max_tokens: 1500 };
@@ -237,6 +239,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               ))}
             </datalist>
           </Field>
+          {takesEffort(spec.harness) && (
           <Field label="Effort" htmlFor="ag-effort" hint="Reasoning effort. Default uses the harness's own default.">
             <select
               id="ag-effort"
@@ -258,6 +261,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               ))}
             </select>
           </Field>
+          )}
           <Field label="Concurrent runs" htmlFor="ag-conc">
             <TextInput id="ag-conc" type="number" min={1} max={16} value={spec.max_concurrency} onChange={(e) => set({ max_concurrency: Number(e.target.value) || 1 })} />
           </Field>
@@ -324,7 +328,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: v.harness_options?.effort ? { effort: v.harness_options.effort } : {} } : v) })} />
             <TextInput aria-label={`Fallback ${i + 1} model`} placeholder="Model" list={`ag-fb-models-${i}`} value={f.model}
               onChange={(e) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, model: e.target.value } : v) })} />
-            <select
+            {takesEffort(f.harness) && <select
               aria-label={`Fallback ${i + 1} effort`}
               className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
               value={f.harness_options?.effort ?? ""}
@@ -341,7 +345,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               {["low", "medium", "high", "xhigh", "max"].map((v) => (
                 <option key={v} value={v}>{v}</option>
               ))}
-            </select>
+            </select>}
             <datalist id={`ag-fb-models-${i}`}>
               {MODEL_SUGGESTIONS[f.harness].map((m) => (
                 <option key={m} value={m} />

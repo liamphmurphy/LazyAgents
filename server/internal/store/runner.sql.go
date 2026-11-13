@@ -1239,6 +1239,20 @@ func (q *Queries) SetRunWorkspaceHostPath(ctx context.Context, arg SetRunWorkspa
 	return err
 }
 
+const setWorkspaceImageEngine = `-- name: SetWorkspaceImageEngine :exec
+UPDATE workspaces SET image_engine = $2, updated_at = now() WHERE id = $1
+`
+
+type SetWorkspaceImageEngineParams struct {
+	ID          uuid.UUID
+	ImageEngine string
+}
+
+func (q *Queries) SetWorkspaceImageEngine(ctx context.Context, arg SetWorkspaceImageEngineParams) error {
+	_, err := q.db.Exec(ctx, setWorkspaceImageEngine, arg.ID, arg.ImageEngine)
+	return err
+}
+
 const strandedRuns = `-- name: StrandedRuns :many
 SELECT r.id FROM runs r
 WHERE r.mode = 'managed' AND r.state = 'running' AND r.purpose <> 'chat'
@@ -1357,4 +1371,15 @@ func (q *Queries) UpdatePRSync(ctx context.Context, arg UpdatePRSyncParams) erro
 		arg.PrClosedUnmerged,
 	)
 	return err
+}
+
+const workspaceImageEngine = `-- name: WorkspaceImageEngine :one
+SELECT image_engine FROM workspaces WHERE id = $1
+`
+
+func (q *Queries) WorkspaceImageEngine(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, workspaceImageEngine, id)
+	var image_engine string
+	err := row.Scan(&image_engine)
+	return image_engine, err
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real-stack e2e: Go API + runner (RUNNER_BACKEND=fake) +
 # Postgres + SeaweedFS (S3) + Next, with the deterministic fake-harness binary
-# standing in for `claude` and `codex`. See README.md.
+# standing in for `claude`, `codex` and `agy`. See README.md.
 #
 # Usage: web/e2e-stack/run.sh [playwright args...]
 # Env:   E2E_DATABASE_URL  use this (disposable!) Postgres instead of starting one
@@ -53,14 +53,14 @@ WEB_URL="http://127.0.0.1:$WEB_PORT"
 # --- Fake CLIs and the PATH guard ------------------------------------------
 echo ">> building fake-harness and vesper"
 (cd "$REPO/server" && go build -o "$TMP/fake-harness" ./cmd/fake-harness && go build -o "$TMP/vesper" ./cmd/vesper)
-for cli in claude codex; do ln -s "$TMP/fake-harness" "$TMP/bin/$cli"; done
+for cli in claude codex agy; do ln -s "$TMP/fake-harness" "$TMP/bin/$cli"; done
 GIT_BIN="$(command -v git)" || { echo "git is required" >&2; exit 1; }
 ln -s "$GIT_BIN" "$TMP/bin/git"
 # The API and runner see ONLY this PATH: the fake CLIs, git, and system dirs.
 # Real CLIs live in ~/.local/bin, ~/.nix-profile/bin, /opt/homebrew/bin: refuse
 # to start if any of them could be found from here.
 SAFE_PATH="$TMP/bin:/usr/bin:/bin"
-for cli in claude codex; do
+for cli in claude codex agy; do
   found="$(PATH="$SAFE_PATH" command -v "$cli" || true)"
   if [ "$found" != "$TMP/bin/$cli" ]; then
     echo "PATH GUARD: '$cli' resolves to '${found:-nothing}' instead of $TMP/bin/$cli; refusing to start (a real CLI could run)" >&2
@@ -106,7 +106,7 @@ stack_env() {
     S3_ENDPOINT="$S3_ENDPOINT" SEED=false PR_SYNC_INTERVAL_S=0 \
     SECRETS_KEY="$SECRETS_KEY" PUBLIC_URL="$WEB_URL" \
     RUNNER_BACKEND=fake RUNNER_DATA_DIR="$TMP/runs" RUNNER_MCP_URL="$API_URL/mcp" \
-    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" \
+    RUNNER_CLAUDE_BIN="$TMP/bin/claude" RUNNER_CODEX_BIN="$TMP/bin/codex" RUNNER_ANTIGRAVITY_BIN="$TMP/bin/agy" \
     DESIGN_WORKER_URL="$WEB_URL/internal/designs" DESIGN_WORKER_TOKEN="$DESIGN_WORKER_TOKEN" \
     FAKE_HARNESS_MODE="${HARNESS_MODE:-chat-read}" "$@"
 }
@@ -151,7 +151,7 @@ psql_run() {
 psql_run -c "INSERT INTO epics (workspace_id, project_id, name, objective, health)
   SELECT workspace_id, id, 'Board e2e epic', 'Verify the Kanban flow end to end', 'on_track' FROM projects WHERE key = 'E2E'" >/dev/null
 CATALOG="$(curl -fsS "${SIGNED_IN[@]}" "$API_URL/api/v1/chat-models")"
-for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)'; do
+for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)' 'gemini-3.8-flash-medium'; do
   grep -q "$want" <<<"$CATALOG" || { echo "chat-models catalog lacks '$want': $CATALOG" >&2; exit 1; }
 done
 

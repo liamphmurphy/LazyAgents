@@ -82,6 +82,7 @@ var knownSecrets = []struct{ name, grants, desc string }{
 	{"git:ssh", "repo:write", "SSH private key for cloning and pushing over git@github.com"},
 	{"harness:anthropic", "", "API key for Claude Code runs"},
 	{"harness:openai", "", "API key for Codex runs"},
+	{"harness:google", "", "Gemini API key for Antigravity runs"},
 	{"db:staging", "db:migrate", "Staging database URL, used by the db:migrate broker"},
 	{"db:staging-readonly", "db:read-staging", "Read-only staging database URL"},
 	{"deploy:staging", "deploy:staging", "Token for triggering staging deploys"},

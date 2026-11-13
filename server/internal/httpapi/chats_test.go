@@ -172,7 +172,7 @@ func TestChatModelsCatalog(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != 200 {
 		t.Fatalf("%d %v", res.StatusCode, err)
 	}
-	if len(list) != 2 || list[0].Harness != "claude-code" || list[1].Harness != "codex" {
+	if len(list) != 3 || list[0].Harness != "claude-code" || list[1].Harness != "codex" || list[2].Harness != "antigravity" || list[2].Label != "Antigravity" {
 		t.Fatalf("catalog %+v", list)
 	}
 	for _, h := range list {
@@ -215,7 +215,7 @@ func TestChatModelsReportsPendingDiscoveryAndRunnerCompletion(t *testing.T) {
 		}
 		defer res.Body.Close()
 		var list []harnessModels
-		if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != http.StatusOK || len(list) != 2 {
+		if err := json.NewDecoder(res.Body).Decode(&list); err != nil || res.StatusCode != http.StatusOK || len(list) != 3 {
 			t.Fatalf("catalog %d %+v err %v", res.StatusCode, list, err)
 		}
 		return list
