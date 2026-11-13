@@ -12,11 +12,11 @@ import { Content, TopBar } from "@/components/shell/topbar";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Banner, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { Banner, EmptyState, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar, personaLook } from "../chat/_components/persona";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-const selectClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg";
+const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none";
 const DAY_LETTERS = [[1, "M"], [2, "T"], [3, "W"], [4, "T"], [5, "F"], [6, "S"], [0, "S"]] as const;
 const PILL: Record<string, string> = {
   done: "bg-pill-done-bg text-pill-done-fg",
@@ -57,13 +57,13 @@ export function ScheduledScreen() {
   return (
     <section aria-label="Scheduled tasks">
       <TopBar crumbs={[{ label: "Scheduled" }]} />
-      <Content wide>
+      <Content>
         <div className="flex gap-6 max-xl:flex-col">
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-6">
             <header className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="type-heading">Scheduled tasks</h1>
-                <p className="text-[13px] text-fg-secondary">Prompts and workflows that run on their own. Results arrive in your Inbox.</p>
+              <div className="space-y-1">
+                <h1 className="type-display">Scheduled tasks</h1>
+                <p className="text-sm text-fg-secondary">Prompts and workflows that run on their own. Results arrive in your Inbox.</p>
               </div>
               <Button variant="primary" icon="plus" onClick={() => setOpen("new")}>New task</Button>
             </header>
@@ -74,23 +74,23 @@ export function ScheduledScreen() {
             ) : !tasks.data ? (
               <Skeleton className="h-48" />
             ) : rows.length === 0 ? (
-              <p className="rounded-lg border border-border bg-surface px-4 py-8 text-center text-[13px] text-fg-secondary">{all.length ? "No tasks here." : "No scheduled tasks yet. Create one to have a persona work on its own."}</p>
+              <EmptyState icon="clock" title={all.length ? "No tasks here" : "No scheduled tasks yet"}>{all.length ? "Nothing matches this filter." : "Create one to have a persona work on its own."}</EmptyState>
             ) : (
-              <ul className="overflow-hidden rounded-lg border border-border bg-surface">
+              <ul className="overflow-hidden rounded-xl border border-border bg-surface">
                 {rows.map((t) => {
                   const persona = personas.data?.personas.find((p) => p.id === t.persona_id);
                   const last = t.runs[0];
                   return (
-                    <li key={t.id} data-testid="scheduled-row" className={cx("flex items-center gap-3 border-b border-border-row px-4 py-3 last:border-b-0", t.id === open && "bg-selected")}>
+                    <li key={t.id} data-testid="scheduled-row" className={cx("flex items-center gap-3 border-b border-border-row px-[18px] py-3.5 last:border-b-0", t.id === open && "bg-selected")}>
                       <button type="button" onClick={() => setOpen(t.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                        {t.kind === "workflow" ? <span className="grid size-7 flex-none place-items-center rounded-md border border-border-strong bg-selected text-fg-secondary"><Icon name="graph" size={14} /></span> : <PersonaAvatar persona={personaLook(persona)} size={28} />}
+                        {t.kind === "workflow" ? <span className="grid size-8 flex-none place-items-center rounded-md border border-border-strong bg-selected text-fg-secondary"><Icon name="graph" size={14} /></span> : <PersonaAvatar persona={personaLook(persona)} size={32} />}
                         <span className="min-w-0 flex-1">
-                          <span className={cx("block truncate text-[14px] font-medium", t.enabled ? "text-fg" : "text-fg-secondary")}>{t.name}</span>
-                          <span className="block truncate text-xs text-fg-secondary">{[t.kind === "workflow" ? "Workflow" : (persona?.name ?? "Default persona"), t.project, describeSchedule(t)].filter(Boolean).join(" · ")}</span>
+                          <span className={cx("block truncate text-[14px] font-semibold", t.enabled ? "text-fg" : "text-fg-secondary")}>{t.name}</span>
+                          <span className="block truncate text-[12.5px] text-fg-secondary">{[t.kind === "workflow" ? "Workflow" : (persona?.name ?? "Default persona"), t.project, describeSchedule(t)].filter(Boolean).join(" · ")}</span>
                         </span>
                         <span className="w-36 flex-none max-sm:hidden">
-                          <span className="block text-[11px] uppercase tracking-wide text-fg-tertiary">Next run</span>
-                          <span className="block truncate text-xs text-fg-2">{t.enabled && t.next_run_at ? when(t.next_run_at) : "Paused"}</span>
+                          <span className="block text-xs text-fg-tertiary">Next run</span>
+                          <span className="block truncate text-[12.5px] text-fg-2">{t.enabled && t.next_run_at ? when(t.next_run_at) : "Paused"}</span>
                         </span>
                       </button>
                       <span className="w-20 flex-none text-right">{last && <RunPill state={last.state} />}</span>
@@ -127,9 +127,9 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
   const submit = () => save.mutate({ id: task?.id, body: draft }, { onSuccess: (t) => { if (!task) onCreated(t.id); } });
   const error = save.error ?? run.error ?? remove.error;
   return (
-    <aside aria-label="Task editor" data-testid="scheduled-editor" className="flex w-[520px] flex-none flex-col gap-4 rounded-lg border border-border bg-panel p-5 max-xl:w-full">
+    <aside aria-label="Task editor" data-testid="scheduled-editor" className="flex w-[520px] flex-none flex-col gap-4 rounded-xl border border-border bg-panel p-5 max-xl:w-full">
       <div className="flex items-center gap-2">
-        <h2 className="min-w-0 flex-1 truncate text-[18px] font-semibold text-fg">{task ? task.name : "New task"}</h2>
+        <h2 className="min-w-0 flex-1 truncate type-title">{task ? task.name : "New task"}</h2>
         {task && <Button variant="outline" icon="play" disabled={run.isPending || task.runs[0]?.state === "running" || task.runs[0]?.state === "waiting"} onClick={() => run.mutate(task.id)}>Run now</Button>}
         <IconButton icon="x" label="Close editor" onClick={onClose} />
       </div>
@@ -195,7 +195,7 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
           )}
         </Field>
       )}
-      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-[18px] py-3.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[12.5px] text-fg-2">Results go to your Inbox. If a tool needs approval, the run waits there.</p>
@@ -212,8 +212,8 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
       </div>
       {task && task.runs.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="text-xs text-fg-secondary">Recent runs</h3>
-          <ul className="rounded-lg border border-border bg-surface">
+          <h3 className="type-heading">Recent runs</h3>
+          <ul className="overflow-hidden rounded-xl border border-border bg-surface">
             {task.runs.map((r) => (
               <li key={r.id} data-testid="scheduled-run" className="flex items-center gap-3 border-b border-border-row px-3 py-2 last:border-b-0">
                 <RunPill state={r.state} />
