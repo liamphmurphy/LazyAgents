@@ -959,7 +959,8 @@
 /* The head script hides a saved-off footer before hydration; React then unmounts it. */
 :root[data-harness-activity="hidden"] .harness-footer, :root[data-harness-activity="hidden"] .harness-drawer { display: none; }
 .harness-footer { flex: none; margin: 0 calc(var(--spacing) * -2.5); border-top: 1px solid var(--border-subtle); padding: 6px 12px; background: var(--bg-sidebar); }
-.harness-characters { display: flex; justify-content: space-between; align-items: center; height: 60px; }
+/* Only connected harnesses show, so one to three characters share the row. */
+.harness-characters { display: flex; justify-content: center; align-items: center; gap: 18px; height: 60px; }
 .harness-button { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; width: 50px; height: 58px; padding: 0; border-radius: 8px; cursor: pointer; }
 .harness-button:hover, .harness-usage-trigger:hover { background: var(--hover); }
 .harness-button:focus-visible, .harness-usage-trigger:focus-visible, .harness-drawer button:focus-visible, .harness-drawer a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

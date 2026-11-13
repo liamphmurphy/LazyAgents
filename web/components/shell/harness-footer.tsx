@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Popover } from "radix-ui";
 import { useId, useRef, useState } from "react";
 import { usePersonaDock } from "@/lib/api/hooks";
-import { ANTIGRAVITY, checkedAgo, harnessWorking, knownHarnesses, sessionPercent, usageSub, usageTone, type HarnessActivity } from "@/lib/harness-activity";
+import { ANTIGRAVITY, checkedAgo, harnessWorking, connectedHarnesses, sessionPercent, usageSub, usageTone, type HarnessActivity } from "@/lib/harness-activity";
 import { Icon } from "@/components/ui/icon";
 import { HarnessCharacter } from "./harness-character";
 
@@ -33,10 +33,10 @@ function UsageRow({ h, all }: { h: HarnessActivity; all: HarnessActivity[] }) {
   );
 }
 
-/** A home for the three harnesses; the drawer exposes readings, not inferred usage. */
+/** A home for the connected harnesses; the drawer exposes readings, not inferred usage. */
 export function HarnessFooter({ rail = false }: { rail?: boolean }) {
   const dock = usePersonaDock();
-  const harnesses = knownHarnesses(dock.data?.harnesses ?? []);
+  const harnesses = connectedHarnesses(dock.data?.harnesses ?? []);
   const working = harnesses.filter(harnessWorking);
   const running = working.reduce((n, h) => n + h.running, 0);
   const [open, setOpen] = useState(false);
@@ -50,6 +50,7 @@ export function HarnessFooter({ rail = false }: { rail?: boolean }) {
     setOpen((v) => !v);
   }
 
+  if (!harnesses.length) return null;
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Anchor asChild>

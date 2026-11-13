@@ -10,9 +10,9 @@ async function install(page: Page) {
   await installChatApi(page);
   await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   await page.route("**/api/v1/persona-dock", (route) => route.fulfill({ json: { personas: [], harnesses: [
-    { harness: "claude-code", label: "Claude", running: 2, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 42 }] },
-    { harness: "codex", label: "Codex", running: 1, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] },
-    { harness: "antigravity", label: "Antigravity", running: 0, usage_available: false, usage_checking: false, limited_until: new Date(Date.now() + 3600000).toISOString(), windows: [] },
+    { harness: "claude-code", label: "Claude", connected: true, running: 2, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 42 }] },
+    { harness: "codex", label: "Codex", connected: true, running: 1, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] },
+    { harness: "antigravity", label: "Antigravity", connected: true, running: 0, usage_available: false, usage_checking: false, limited_until: new Date(Date.now() + 3600000).toISOString(), windows: [] },
   ] } }));
 }
 

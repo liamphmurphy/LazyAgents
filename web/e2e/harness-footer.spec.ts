@@ -8,11 +8,11 @@ const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString(
 
 function harnesses(over: { claude?: Partial<S["HarnessActivity"]>; codex?: Partial<S["HarnessActivity"]>; agy?: Partial<S["HarnessActivity"]> } = {}): S["HarnessActivity"][] {
   return [
-    { harness: "claude-code", label: "Claude", running: 2, usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
+    { harness: "claude-code", label: "Claude", connected: true, running: 2, usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "five_hour", kind: "session", label: "Session", used_percent: 42, resets_at: inHours(2) }, { id: "seven_day", kind: "weekly", label: "Weekly", used_percent: 68 }], ...over.claude },
-    { harness: "codex", label: "Codex", running: 1, usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
+    { harness: "codex", label: "Codex", connected: true, running: 1, usage_available: true, usage_checking: false, usage_checked_at: new Date().toISOString(),
       windows: [{ id: "codex_300", kind: "session", label: "Session", used_percent: 18, resets_at: inHours(3) }], ...over.codex },
-    { harness: "antigravity", label: "Antigravity", running: 0, usage_available: false, usage_checking: false, windows: [], ...over.agy },
+    { harness: "antigravity", label: "Antigravity", connected: true, running: 0, usage_available: false, usage_checking: false, windows: [], ...over.agy },
   ];
 }
 
@@ -62,6 +62,29 @@ test("the flat footer replaces the profile and floating orb; settings sit beside
   expect(Math.abs(bottom!.y + bottom!.height - bounds!.y - bounds!.height)).toBeLessThan(1);
   expect(await footer(page).evaluate((el) => getComputedStyle(el).borderRadius)).toBe("0px");
   await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "44px");
+});
+
+test("only connected harnesses show, and the row fits however many there are", async ({ page }) => {
+  const state = { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { connected: false, running: 0 }, agy: { connected: false } }) } };
+  await installFooter(page, state);
+  await page.goto("/board?project=WEB");
+  const buttons = footer(page).getByRole("button", { name: /show usage/ });
+  await expect(buttons).toHaveCount(1);
+  await expect(buttons.first()).toHaveAccessibleName("Claude, idle; show usage");
+  // A lone character sits in the middle of the footer rather than at one edge.
+  const centre = async (box: { x: number; width: number } | null) => box!.x + box!.width / 2;
+  expect(Math.abs(await centre(await buttons.first().boundingBox()) - await centre(await footer(page).boundingBox()))).toBeLessThan(2);
+  state.dock.harnesses = harnesses({ agy: { connected: false } });
+  await refresh(page);
+  await expect(buttons).toHaveCount(2);
+  await expect(footer(page).getByRole("button", { name: /Antigravity/ })).toHaveCount(0);
+  // A harness still working stays visible after its key is removed.
+  state.dock.harnesses = harnesses({ codex: { connected: false }, agy: { connected: false } });
+  await refresh(page);
+  await expect(footer(page).getByRole("button", { name: "Codex, working; show usage" })).toBeVisible();
+  state.dock.harnesses = harnesses({ claude: { connected: false, running: 0 }, codex: { connected: false, running: 0 }, agy: { connected: false } });
+  await refresh(page);
+  await expect(footer(page)).toHaveCount(0);
 });
 
 test("characters open real usage details and Escape restores focus to the clicked character", async ({ page }) => {
@@ -131,14 +154,14 @@ test("zero, unavailable, checking, warning and limited readings stay distinct", 
 
 test("the collapsed rail keeps the footer and opens a drawer inside the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 650 });
-  await installFooter(page, { dock: { personas: [], harnesses: [] } }, false);
+  await installFooter(page, { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } }, false);
   await page.goto("/board?project=WEB");
   await expect(footer(page)).toHaveAttribute("data-rail", "true");
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
   await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "30px");
   await footer(page).getByRole("button", { name: /Antigravity, idle/ }).click();
   await expect(drawer(page)).toBeVisible();
-  await expect(drawer(page).getByRole("progressbar")).toHaveCount(0);
+  await expect(drawer(page).locator('[data-harness="antigravity"].harness-usage-row').getByRole("progressbar")).toHaveCount(0);
   await expect.poll(async () => (await drawer(page).boundingBox())!.x).toBeGreaterThanOrEqual(50);
   const bounds = await drawer(page).boundingBox();
   expect(bounds!.y).toBeGreaterThanOrEqual(11);

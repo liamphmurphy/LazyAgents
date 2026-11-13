@@ -8869,6 +8869,8 @@ export interface components {
             /** @description claude-code, codex or antigravity */
             harness: string;
             label: string;
+            /** @description The harness has the credential its runs need (its harness key secret), or the runner needs none. The sidebar shows only connected harnesses. */
+            connected: boolean;
             /** @description Runs and chat turns working on this harness now */
             running: number;
             /**
