@@ -5,7 +5,7 @@
 // needs the op that creates what it points at). Pure: unit-tested in
 // lib/designs-review.test.mjs.
 import { find, insertNodes, kids, labelOf, mapNode, mapPage, plainText, removeNodes, withPlainText, type Box } from "./edit.ts";
-import { makeLayout } from "./layout.ts";
+import { makeLayout, type LaidPage } from "./layout.ts";
 import type { Design, DesignNode, Page } from "./schema.ts";
 import { normalize } from "./schema.ts";
 import { settle } from "./layout.ts";
@@ -357,6 +357,44 @@ export function classify(before: Design, ops: DesignOp[], needs: number[][] = de
     const page = where?.page ?? (target ? (pageOf(before, target)?.id ?? find(before, target)?.page.id) : undefined) ?? (op.op === "add_sticky" ? str(op.page) : undefined);
     return { i, op, kind, title, why: str(op.why), target, page, box: where?.box, needs: needs[i] ?? [] };
   });
+}
+
+// ---- Pending suggestions as ghosts on the working copy ----
+
+/** One added layer of a pending suggestion: where it lands, in page coordinates. */
+export type GhostBox = { target: string; page: string; box: Box };
+
+export type Ghosts = {
+  /** The working copy with every pending suggestion applied, oldest first: what Accept all would make. */
+  after: Design;
+  /** Every op of every suggestion, classified against the working copy. */
+  changes: Change[];
+  /** The layers the suggestions add that have a box (connectors have none: see newConnectorOps). */
+  added: GhostBox[];
+};
+
+/**
+ * What the persona has suggested so far, drawn on the canvas while the person
+ * keeps editing: suggestions only change the design once reviewed, so without
+ * this the canvas shows none of the persona's work until Review is opened.
+ * Undefined with nothing pending.
+ */
+export function pendingGhosts(draft: Design, proposals: { ops: unknown[] }[]): Ghosts | undefined {
+  const ops = proposals.flatMap((p) => p.ops as DesignOp[]);
+  if (!ops.length) return undefined;
+  const changes = classify(draft, ops);
+  const added = changes.flatMap((c) => (c.kind === "added" && c.target && c.box && c.page ? [{ target: c.target, page: c.page, box: c.box }] : []));
+  return { after: preview(applyOps(draft, ops)), changes, added };
+}
+
+/**
+ * A page's connector drawing ops that the suggested page has and the current one
+ * doesn't: new connectors, and existing ones the suggestion reroutes. A connector
+ * has no box to clip the ghost to, so the ghost layer draws these on their own.
+ */
+export function newConnectorOps(now: LaidPage, after: LaidPage): LaidPage["connectors"] {
+  const have = new Set(now.connectors.map((o) => JSON.stringify(o)));
+  return after.connectors.filter((o) => !have.has(JSON.stringify(o)));
 }
 
 // ---- A version that arrives from elsewhere (a persona's direct edit, an accepted suggestion) ----

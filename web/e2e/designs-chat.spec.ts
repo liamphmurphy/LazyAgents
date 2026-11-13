@@ -299,3 +299,47 @@ test("Review on the Design card reviews the suggestion in the dock, survives a r
   await expect(page).not.toHaveURL(/review=1/);
   await expect(page).toHaveURL(/\/chat\//);
 });
+
+// Suggestions only change the design once reviewed, so outside review the canvas draws them as
+// ghosts: otherwise the persona's work is invisible while it builds and its cursor points at nothing.
+test("pending suggestions show as ghosts on the canvas until the review opens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const s = await install(page);
+  s.pending = 1;
+  s.proposals = [
+    {
+      id: "66666666-6666-4666-8666-666666666666",
+      agent_id: "a",
+      base_seq: 1,
+      summary: "Add a receipt screen",
+      status: "pending",
+      decisions: [],
+      created_at: at,
+      ops: [
+        { op: "add_node", parent: "p_flows", why: "Show the receipt", node: { id: "n_receipt", type: "frame", name: "Receipt", x: 0, y: 900, w: 390, h: 400, fill: "#FFFFFF", children: [] } },
+        { op: "connect", id: "n_to_receipt", from: "n_done", to: "n_receipt", why: "Where Confirmation leads" },
+        { op: "set_text", id: "n_cart_title", text: "Your cart", why: "Says whose cart it is" },
+      ],
+    },
+  ];
+  await box(page).fill("Now sketch onboarding");
+  await box(page).press("Enter");
+  await expect(page).toHaveURL(/\/chat\/[^/?]+/);
+  s.created = true;
+  await box(page).fill(`canvas: ${D}`);
+  await box(page).press("Enter");
+
+  const panel = page.getByTestId("design-panel");
+  const ghosts = panel.getByTestId("suggestion-ghosts");
+  await expect(ghosts).toBeAttached();
+  await expect(ghosts.locator('[data-ghost="n_receipt"]')).toHaveCount(1);
+  await expect(ghosts.locator("[data-ghost-wires]")).toHaveCount(1);
+  await expect(ghosts.locator('[data-ghost-kind="changed"]')).toHaveCount(1);
+  // The ghost is a picture, not a layer: the working copy's layers don't gain it.
+  await expect(panel.getByRole("treeitem", { name: "Receipt", exact: true })).toHaveCount(0);
+
+  // Review takes over with its own diff; the ghosts step aside.
+  await page.getByTestId("design-chat-card").first().getByRole("button", { name: "Review", exact: true }).click();
+  await expect(panel.getByTestId("review-pill")).toBeVisible();
+  await expect(panel.getByTestId("suggestion-ghosts")).toHaveCount(0);
+});

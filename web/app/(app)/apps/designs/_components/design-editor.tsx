@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu, Popover } from "radix-ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { fetchDesign, fetchDesignVersion, uploadDesignAsset, useDesign, useDesignProposals, useDesignSettings, useDesignVersion, useDuplicateDesign, useRenameDesign, useResolveProposal, useSaveDesign } from "@/lib/api/designs-hooks";
 import { provideChatRefs, useChat, useChatRunEvents, useSendChatMessage } from "@/lib/api/hooks";
@@ -14,7 +14,7 @@ import { duplicateNodes, find, groupNodes, inAutoLayout, insertNodes, labelOf, m
 import { makeLayout, settle, type LaidNode, type LaidPage } from "@/lib/designs/layout";
 import { mergeDesigns } from "@/lib/designs/merge";
 import { presenceOf } from "@/lib/designs/presence";
-import { adoptVersion, type Change } from "@/lib/designs/review";
+import { adoptVersion, pendingGhosts, type Change } from "@/lib/designs/review";
 import { designAssetHref, useDesignFonts } from "@/lib/designs/render";
 import { DesignError, normalize, type Design, type DesignNode, type ImageNode } from "@/lib/designs/schema";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import { tokensChanged } from "@/lib/designs/tokens";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { DesignCanvas, fitCamera, zoomAt, type Camera, type Tool } from "./design-canvas";
-import { ReviewOverlay, ReviewPanel, ReviewPill, stepChange, suggestionPages, useReview, type ReviewMode } from "./design-review";
+import { GhostLayer, ReviewOverlay, ReviewPanel, ReviewPill, stepChange, suggestionPages, useReview, type ReviewMode } from "./design-review";
 import { ExportMenu } from "./export-menu";
 import { PresenceLayer } from "./presence-layer";
 import { Inspector } from "./inspector";
@@ -372,6 +372,11 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const [editing, setEditing] = useState<string>();
   const [tool, setTool] = useState<Tool>("select");
   const { laid, lay } = useLaidPage(shown, page?.id);
+  // Outside review, what the persona has suggested so far is drawn faded over the working copy. Deferred: a drag
+  // re-lays the whole suggested design, which mustn't hold up the drag's own frames.
+  const ghostBase = useDeferredValue(design);
+  const ghosts = useMemo(() => (!reviewing && ghostBase && proposals?.length ? pendingGhosts(ghostBase, proposals) : undefined), [reviewing, ghostBase, proposals]);
+  const ghostLaid = useLaidPage(ghosts?.after, page?.id).laid;
   // Ids that left the page (undo, another page) drop out of the selection.
   const selected = useMemo(() => (laid ? selectedRaw.filter((s) => laid.boxes.has(s)) : []), [selectedRaw, laid]);
   const [camera, setCameraState] = useState<Camera | null>(null);
@@ -600,16 +605,17 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const running = chat?.state === "running";
   const events = useChatRunEvents(chat?.current_run_id, running && !!ref.data).data;
   const presence = useMemo(() => (running ? presenceOf(toolCalls(events), id, true) : undefined), [events, running, id]);
-  // The nodes it touched once they reach this tab; until then, where its input says it is working (the parent it adds to).
+  // The nodes it touched once they reach this tab, as ghosts while they wait for review; until then, where its
+  // input says it is working (the parent it adds to).
   const presenceNodes = useMemo(() => {
     if (!presence || !laid) return [];
     const laidOut = (ids: string[]) => ids.flatMap((id) => {
-      const box = laid.boxes.get(id);
+      const box = laid.boxes.get(id) ?? ghostLaid?.boxes.get(id);
       return box ? [{ id, box }] : [];
     });
     const touched = laidOut(presence.nodes);
     return touched.length ? touched : laidOut(presence.around);
-  }, [presence, laid]);
+  }, [presence, laid, ghostLaid]);
   const presenceBoxes = useMemo(() => presenceNodes.map((n) => n.box), [presenceNodes]);
   const [follow, setFollow] = useState(false);
   const paused = !!ref.data?.settings?.persona_paused;
@@ -824,6 +830,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
         onViewport={(w, h) => setViewport({ w, h, known: true })}
         wires={tab === "Prototype"}
       />
+      {ghosts && ghostLaid && laid && <GhostLayer ghosts={ghosts} now={laid} laid={ghostLaid} page={page.id} camera={camera ?? HIDDEN_CAMERA} assetUrl={assetUrl} />}
       {reviewing && review && <ReviewOverlay review={review} mode={mode} page={page.id} camera={camera ?? HIDDEN_CAMERA} />}
       {presence && <PresenceLayer name={persona} nodes={presenceNodes} camera={camera ?? HIDDEN_CAMERA} busy={presence.busy} />}
       {/* Tools centred, zoom on the right: on a narrow canvas the 1fr sides give way and the tools slide left of the zoom instead of under it. */}
