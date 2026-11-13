@@ -800,7 +800,7 @@ export function stepDetail(call: { tool: string; input: unknown }, names: Map<st
 }
 
 /** A tool result as JSON: plain, or the MCP envelope Codex passes through. Undefined when it was clipped or isn't JSON. */
-function resultJSON(output?: string): Record<string, unknown> | undefined {
+export function resultJSON(output?: string): Record<string, unknown> | undefined {
   try {
     const v = JSON.parse(output ?? "");
     const text = v?.content?.[0]?.text;
