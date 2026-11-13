@@ -67,10 +67,12 @@ export function GraphScreen() {
   const h = box.h / view.s;
   const vb = `${box.x + (box.w - w) / 2 + view.x} ${box.y + (box.h - h) / 2 + view.y} ${w} ${h}`;
   const labelAll = placed.length < 60 || view.s > 2;
+  // Sizes are in graph units; keep labels and dots about the same on screen at any vault size and zoom.
+  const unit = Math.max(w, h * 1.6) / 1200;
 
   return (
     <>
-      <div className="relative min-h-0 flex-1 bg-[#0A0910]">
+      <div className="relative min-h-0 flex-1 bg-surface-sunken">
         {net.isPending ? (
           <div className="p-8">
             <Skeleton className="h-full min-h-[300px] w-full" />
@@ -95,13 +97,13 @@ export function GraphScreen() {
                 const b = at.get(e.target);
                 if (!a || !b) return null;
                 const lit = neighbours && neighbours.has(e.source) && neighbours.has(e.target) && (e.source === hover || e.target === hover);
-                return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={lit ? "#9B8CFF" : "#2A2740"} strokeWidth={lit ? 1.6 : 0.9} opacity={neighbours && !lit ? 0.25 : 1} />;
+                return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={lit ? "var(--accent)" : "var(--border-strong)"} strokeWidth={(lit ? 1.6 : 1) * unit} opacity={neighbours && !lit ? 0.25 : 1} />;
               })}
             </g>
             <g>
               {placed.map((p) => {
                 const n = byId.get(p.id)!;
-                const r = Math.min(12, 3.5 + Math.sqrt(p.degree) * 1.6);
+                const r = Math.min(12, 3.5 + Math.sqrt(p.degree) * 1.6) * unit;
                 const dim = (neighbours && !neighbours.has(p.id)) || (match && !n.title.toLowerCase().includes(match));
                 const show = labelAll || p.degree >= 6 || p.id === hover || (match && !dim);
                 return (
@@ -115,9 +117,9 @@ export function GraphScreen() {
                     onClick={() => router.push(pageHref(p.id, n.title))}
                   >
                     <title>{n.path}</title>
-                    <circle cx={p.x} cy={p.y} r={r} fill={p.degree ? colorOf(n.group) : "#5E5B6E"} stroke={p.id === hover ? "#FFFFFF" : "none"} strokeWidth={1.5} />
+                    <circle cx={p.x} cy={p.y} r={r} fill={p.degree ? colorOf(n.group) : "var(--text-tertiary)"} stroke={p.id === hover ? "var(--text)" : "none"} strokeWidth={1.5 * unit} />
                     {show && (
-                      <text x={p.x} y={p.y + r + 11} textAnchor="middle" fontSize={10} fill={p.id === hover ? "#EEEDF3" : "#A4A1B3"} fontWeight={p.id === hover ? 600 : 400}>
+                      <text x={p.x} y={p.y + r + 11 * unit} textAnchor="middle" fontSize={10.5 * unit} fill={p.id === hover ? "var(--text)" : "var(--text-secondary)"} fontWeight={p.id === hover ? 600 : 400}>
                         {n.title.length > 28 ? `${n.title.slice(0, 27)}…` : n.title}
                       </text>
                     )}

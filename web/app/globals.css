@@ -1255,7 +1255,7 @@
 
 /* Knowledge live preview (lib/knowledge-editor.ts): Obsidian syntax stays as typed, styled in place. */
 .kn-link { color: var(--accent); font-weight: 500; cursor: pointer; }
-.kn-link.kn-unresolved { color: #8e86c8; text-decoration: underline dotted; text-underline-offset: 3px; }
+.kn-link.kn-unresolved { color: var(--text-tertiary); text-decoration: underline dotted; text-underline-offset: 3px; }
 .kn-embed { color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 3px; cursor: pointer; }
-.kn-tag { color: #b9aeff; background: var(--accent-soft); border-radius: 999px; padding: 0 6px; font-size: 0.9em; }
+.kn-tag { color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 0 6px; font-size: 0.9em; }
 .kn-block { color: var(--text-tertiary); font-size: 0.85em; }

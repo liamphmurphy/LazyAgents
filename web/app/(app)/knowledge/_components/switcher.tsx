@@ -16,7 +16,7 @@ function Match({ text, q }: { text: string; q: string }) {
   return (
     <>
       {text.slice(0, i)}
-      <span className="font-bold text-[#B9AEFF] underline">{text.slice(i, i + q.length)}</span>
+      <span className="font-bold text-accent underline">{text.slice(i, i + q.length)}</span>
       {text.slice(i + q.length)}
     </>
   );
@@ -103,7 +103,7 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
               onClick={() => go(r)}
               className={cx("flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left", i === at && "bg-selected")}
             >
-              <Icon name={r.properties?.query ? "board" : "artifacts"} size={15} className={i === at ? "text-[#B9AEFF]" : "text-fg-tertiary"} />
+              <Icon name={r.properties?.query ? "board" : "artifacts"} size={15} className={i === at ? "text-accent" : "text-fg-tertiary"} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-fg">
                   <Match text={r.title} q={tag ? "" : typed} />
@@ -123,7 +123,7 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
               disabled={create.isPending}
               className={cx("mt-1 flex w-full items-center gap-3 rounded-lg border border-dashed border-border px-3 py-2.5 text-left text-sm", at === rows.length && "bg-selected")}
             >
-              <Icon name="plus" size={15} className="text-[#B9AEFF]" />
+              <Icon name="plus" size={15} className="text-accent" />
               <span className="flex-1 text-fg-2">
                 Create <b className="text-fg">“{typed}”</b> <span className="text-fg-tertiary">in Inbox</span>
               </span>

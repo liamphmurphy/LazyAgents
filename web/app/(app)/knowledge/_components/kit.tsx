@@ -1,10 +1,29 @@
 "use client";
 
 import { Dialog } from "radix-ui";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { Audience } from "@/lib/api/knowledge-hooks";
+
+const noSubscribe = () => () => {};
+let today: Date | undefined;
+/**
+ * Today, on the client only: the server render (prerendered, Cache
+ * Components) has no "now", so it gets null and the date fills in on hydrate.
+ * Kept to the minute so the snapshot is stable between renders.
+ */
+export function useToday(): Date | null {
+  return useSyncExternalStore(
+    noSubscribe,
+    () => {
+      const now = new Date();
+      if (!today || now.getTime() - today.getTime() > 60_000) today = now;
+      return today;
+    },
+    () => null,
+  );
+}
 
 /** A centred modal over a scrim: the quick switcher, capture and the vault import. */
 export function Modal({
@@ -42,9 +61,9 @@ export function Modal({
 }
 
 export const AUDIENCE: Record<Audience, { label: string; icon: IconName; cls: string; detail: string }> = {
-  private: { label: "Private", icon: "lock", cls: "bg-accent-soft text-[#B9AEFF]", detail: "You and your personas. Never reaches ticket or epic runs." },
-  shared: { label: "Shared", icon: "upload", cls: "bg-[#4EA7FC24] text-[#7CBEFD]", detail: "Also ticket and epic runs. Linked private pages stay private." },
-  agent: { label: "Agent", icon: "agents", cls: "bg-[#F59E5B24] text-[#F7B07A]", detail: "Agent memory and proposed patterns. Hidden from your views." },
+  private: { label: "Private", icon: "lock", cls: "bg-accent-soft text-accent", detail: "You and your personas. Never reaches ticket or epic runs." },
+  shared: { label: "Shared", icon: "upload", cls: "bg-pill-review-bg text-pill-review-fg", detail: "Also ticket and epic runs. Linked private pages stay private." },
+  agent: { label: "Agent", icon: "agents", cls: "bg-pill-human-bg text-pill-human-fg", detail: "Agent memory and proposed patterns. Hidden from your views." },
 };
 
 export function AudienceChip({ audience, className }: { audience: Audience; className?: string }) {
@@ -58,7 +77,7 @@ export function AudienceChip({ audience, className }: { audience: Audience; clas
 }
 
 export function Tag({ children }: { children: ReactNode }) {
-  return <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-[11px] font-medium text-[#B9AEFF]">{children}</span>;
+  return <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-[11px] font-medium text-accent">{children}</span>;
 }
 
 /** The thin bar under a Knowledge screen: what's going on at the left, counts at the right. */

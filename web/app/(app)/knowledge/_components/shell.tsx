@@ -9,6 +9,7 @@ import { ancestors, buildTree, closeTab, isoDay, openTab, pageHref, type Tab, ty
 import { useAllPages, useCreatePage, useDaily, usePage } from "@/lib/api/knowledge-hooks";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
+import { useToday } from "./kit";
 import { isTyping } from "@/components/shell/shortcuts";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
@@ -206,7 +207,7 @@ function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onC
               on ? "border-x border-t border-border-subtle bg-bg text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg-secondary",
             )}
           >
-            <Icon name={icon(t)} size={13} className={on ? "text-[#B9AEFF]" : undefined} />
+            <Icon name={icon(t)} size={13} className={on ? "text-accent" : undefined} />
             <Link href={tabHref(t)} className="min-w-0 flex-1 truncate after:absolute after:inset-0" title={t.title}>
               {t.title || "Untitled"}
             </Link>
@@ -232,6 +233,7 @@ const pageIdOf = (pathname: string) => /^\/knowledge\/([0-9a-f-]{36})/.exec(path
 
 function Explorer({ pathname }: { pathname: string }) {
   const k = useKnowledge();
+  const today = useToday();
   const router = useRouter();
   const agent = k.view === "agent";
   const pages = useAllPages(agent);
@@ -259,7 +261,7 @@ function Explorer({ pathname }: { pathname: string }) {
 
 
   return (
-    <aside aria-label="Knowledge explorer" className="hidden w-64 flex-none flex-col border-r border-border-subtle bg-sidebar md:flex">
+    <aside aria-label="Knowledge explorer" className="hidden w-[272px] flex-none flex-col border-r border-border-subtle bg-sidebar md:flex">
       <div className="flex h-10 flex-none items-center gap-1 px-3">
         <span className="flex-1 text-sm font-semibold text-fg">Knowledge</span>
         <ExplorerButton icon="edit" label="New page" onClick={newPage} />
@@ -278,7 +280,7 @@ function Explorer({ pathname }: { pathname: string }) {
             role="radio"
             aria-checked={k.view === v}
             onClick={() => k.setView(v)}
-            className={cx("flex flex-1 items-center justify-center gap-1.5 rounded text-xs font-medium", k.view === v ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}
+            className={cx("flex items-center justify-center gap-1.5 whitespace-nowrap rounded text-xs font-medium", v === "yours" ? "w-[72px] flex-none" : "flex-1", k.view === v ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}
           >
             {icon && <Icon name={icon} size={12} />}
             {label}
@@ -290,7 +292,7 @@ function Explorer({ pathname }: { pathname: string }) {
         className="mx-3 mt-2.5 flex h-[30px] flex-none items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-left text-xs text-fg-tertiary hover:border-border-strong"
       >
         <Icon name="search" size={13} />
-        <span className="flex-1">Search pages, #tags, props</span>
+        <span className="flex-1 truncate">Search pages and #tags</span>
         <Kbd>⌘O</Kbd>
       </button>
       <nav aria-label="Pages" className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3">
@@ -310,7 +312,7 @@ function Explorer({ pathname }: { pathname: string }) {
         <button onClick={k.openToday} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium text-fg-2 hover:bg-hover">
           <Icon name="clock" size={14} className="text-fg-secondary" />
           Today
-          <span className="text-xs font-normal text-fg-tertiary">{new Date().toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</span>
+          <span className="text-xs font-normal text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</span>
         </button>
         <button onClick={k.openCapture} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium text-fg-2 hover:bg-hover">
           <Icon name="inbox" size={14} className="text-fg-secondary" />
@@ -355,7 +357,7 @@ function FolderItems({ folder, depth, open, toggle, activeId }: { folder: TreeFo
               <Icon name={isOpen ? "chev" : "chevr"} size={12} className="text-fg-tertiary" />
               <Icon name={depth === 0 && f.name === "Inbox" ? "inbox" : "folder"} size={14} className="text-fg-secondary" />
               <span className="min-w-0 flex-1 truncate text-left">{f.name}</span>
-              {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-[#B9AEFF]">{f.count}</span>}
+              {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{f.count}</span>}
             </button>
             {isOpen && <FolderItems folder={f} depth={depth + 1} open={open} toggle={toggle} activeId={activeId} />}
           </li>
@@ -388,10 +390,10 @@ function TreeLink({ href, icon, label, depth, active, badge, dot }: { href: stri
         active ? "bg-selected font-medium text-fg before:absolute before:left-0 before:top-1.5 before:h-3.5 before:w-0.5 before:rounded before:bg-accent" : "text-fg-secondary hover:bg-hover",
       )}
     >
-      <Icon name={icon} size={13} className={active ? "text-[#B9AEFF]" : "text-fg-tertiary"} />
+      <Icon name={icon} size={13} className={active ? "text-accent" : "text-fg-tertiary"} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {dot && <span title="Persona changes to review" className="size-1.5 rounded-full bg-state-human" />}
-      {badge !== undefined && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-[#B9AEFF]">{badge}</span>}
+      {badge !== undefined && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{badge}</span>}
     </Link>
   );
 }

@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
-import { fetchPages, useAttachChat, usePage, useSavePage, useSavedQuery, type Audience, type Page } from "@/lib/api/knowledge-hooks";
+import { fetchPages, useAttachChat, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { floatPanel } from "@/components/domain/pickers";
@@ -20,9 +20,6 @@ import { ReviewBar, ReviewList, undecided } from "./page-review";
 import { PageSide, type SideTab } from "./page-side";
 import { QueryTable } from "./query-table";
 import { useKnowledgeTab } from "./shell";
-
-/** Titles and paths of pages that exist, shared by every open editor; filled once a page opens. */
-const knownTitles = { set: new Set<string>() };
 
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Changed elsewhere", error: "Not saved" };
 const item = "flex cursor-default select-none items-start gap-2.5 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
@@ -65,23 +62,20 @@ function Loaded({ page: p }: { page: Page }) {
   const [tab, setTab] = useState<SideTab>(p.chat_id ? "chat" : "links");
   const [state, setState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
   const editor = useRef<DocEditorHandle>(null);
-  const agentPage = p.audience === "agent";
   const query = useSavedQuery(p.id, !!p.properties.query);
   const pendingCount = undecided(p).length;
 
   // The editor speaks in version numbers; the API wants version ids.
   const idOf = useMemo(() => new Map(p.versions.map((v) => [v.seq, v.id])), [p.versions]);
 
-  // Titles of pages that exist, so [[links]] to nothing yet read faded.
-  useEffect(() => {
-    void fetchPages({ limit: 200, include_agent: agentPage }).then((t) => {
-      knownTitles.set = new Set(t.rows.flatMap((r) => [r.title.toLowerCase(), r.path.toLowerCase()]));
-    });
-  }, [agentPage]);
+  // Titles of pages that exist, so [[links]] to nothing yet read faded. The
+  // editor reads them once, on mount, so it waits for them (or their failure).
+  const titles = usePages({ limit: 200, include_agent: true });
+  const known = useMemo(() => new Set((titles.data?.rows ?? []).flatMap((r) => [r.title.toLowerCase(), r.path.toLowerCase()])), [titles.data]);
   const extensions = useMemo(
     () => [
       KnowledgeSyntax.configure({
-        isResolved: (t) => knownTitles.set.size === 0 || knownTitles.set.has(t.toLowerCase()) || /^[A-Z]+-\d+$/.test(t),
+        isResolved: (t) => known.size === 0 || known.has(t.toLowerCase()) || /^[A-Z]+-\d+$/.test(t),
         onOpen: (raw) => {
           const { target } = linkTarget(raw);
           void fetchPages({ text: target, limit: 5, include_agent: true }).then((t) => {
@@ -91,7 +85,7 @@ function Loaded({ page: p }: { page: Page }) {
         },
       }),
     ],
-    [router],
+    [router, known],
   );
 
   const onSave = async (body: string, baseSeq: number) => {
@@ -158,7 +152,10 @@ function Loaded({ page: p }: { page: Page }) {
               </div>
             )}
             <div className="kn-editor">
-              <DocEditor
+              {titles.isPending ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <DocEditor
                 ref={editor}
                 body={body}
                 seq={p.seq}
@@ -172,6 +169,7 @@ function Loaded({ page: p }: { page: Page }) {
                 onAsk={(instruction, after) => p.chat_id && send.mutate({ body: `On the Knowledge page [[${p.path ?? p.title}]], after “${after.slice(-120)}”: ${instruction}` })}
                 onPick={() => {}}
               />
+              )}
             </div>
             <Embeds page={p} />
           </article>
@@ -269,7 +267,7 @@ function PropertiesBlock({ properties, onChange }: { properties: Page["propertie
             aria-label="Property value"
             className="h-7 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs text-fg outline-none focus:border-accent"
           />
-          <button onClick={add} className="text-xs font-medium text-[#B9AEFF]">
+          <button onClick={add} className="text-xs font-medium text-accent">
             Add
           </button>
         </div>
@@ -308,7 +306,7 @@ function Embeds({ page }: { page: Page }) {
             <span className="truncate">{e.title ?? e.ref}</span>
             {!e.available && <span className="text-state-human">not found</span>}
             {e.url && e.kind !== "page" && (
-              <a href={e.url} target="_blank" rel="noreferrer" className="ml-auto text-[#B9AEFF] hover:underline">
+              <a href={e.url} target="_blank" rel="noreferrer" className="ml-auto text-accent hover:underline">
                 Open
               </a>
             )}

@@ -19,7 +19,9 @@ export function QueryTable({ table }: { table: PageTable }) {
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
   }, [table.rows]);
   if (!table.rows.length) return <p className="rounded-lg border border-border-subtle bg-surface-sunken p-4 text-center text-xs text-fg-tertiary">No pages match this query yet.</p>;
-  const show = (v: unknown) => (v === undefined || v === null ? "—" : Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : String(v));
+  // A [[link]] value reads as its name, as it does in the properties block.
+  const unlink = (s: string) => s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t: string, label?: string) => label ?? t.split("/").pop() ?? t);
+  const show = (v: unknown) => (v === undefined || v === null ? "—" : Array.isArray(v) ? v.map(String).map(unlink).join(", ") : typeof v === "object" ? JSON.stringify(v) : unlink(String(v)));
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-left text-[13px]">

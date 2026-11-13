@@ -54,7 +54,7 @@ export function ConnectScreen() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1000px] px-8 pb-16 pt-8">
           <h1 className="flex items-center gap-3 text-[26px] font-bold tracking-[-0.02em] text-fg">
-            <Icon name="link" size={20} className="text-[#B9AEFF]" /> Keep notes connected
+            <Icon name="link" size={20} className="text-accent" /> Keep notes connected
           </h1>
           <Librarian />
           <div role="tablist" className="mt-8 flex gap-7 border-b border-border-subtle">

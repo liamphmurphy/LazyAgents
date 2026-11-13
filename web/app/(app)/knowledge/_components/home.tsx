@@ -7,12 +7,13 @@ import { useCreatePage, usePages } from "@/lib/api/knowledge-hooks";
 import { useBootstrap } from "@/lib/api/hooks";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
-import { AUDIENCE, StatusBar } from "./kit";
+import { AUDIENCE, StatusBar, useToday } from "./kit";
 import { useKnowledge, useKnowledgeTab } from "./shell";
 
 const HOME_TAB = { id: "home", title: "New tab", kind: "home" as const };
 
-function greeting(d = new Date()) {
+function greeting(d: Date | null) {
+  if (!d) return "Welcome back";
   const h = d.getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
@@ -21,6 +22,7 @@ function greeting(d = new Date()) {
 export function KnowledgeHome() {
   useKnowledgeTab(HOME_TAB);
   const k = useKnowledge();
+  const today = useToday();
   const router = useRouter();
   const me = useBootstrap().data?.me;
   const recent = usePages({ limit: 8, include_agent: k.view === "agent", audience: k.view === "agent" ? "agent" : undefined });
@@ -29,7 +31,7 @@ export function KnowledgeHome() {
   const newPage = () => create.mutate({ title: "Untitled", body_md: "" }, { onSuccess: (p) => router.push(pageHref(p.id, p.title)) });
   const actions: [IconName, string, string, string, () => void][] = [
     ["clock", "Today's note", "⌘D", "text-state-progress", k.openToday],
-    ["edit", "New page", "", "text-[#B9AEFF]", newPage],
+    ["edit", "New page", "", "text-accent", newPage],
     ["inbox", "Quick capture", "⌥⌘N", "text-[#3FC1B0]", k.openCapture],
     ["search", "Go to page", "⌘O", "text-state-review", k.openSwitcher],
   ];
@@ -40,11 +42,12 @@ export function KnowledgeHome() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[760px] px-6 pb-12 pt-14">
           <h1 className="text-[28px] font-bold tracking-[-0.02em] text-fg">
-            {greeting()}
-            {name ? `, ${name}` : ""}
+            {greeting(today)}
+            {/* Only once on the client: the name comes from data the server render doesn't have. */}
+            {today && name ? `, ${name}` : ""}
           </h1>
           <p className="mt-1 text-sm text-fg-tertiary">
-            {new Date().toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}
+            {today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}
             {inbox.data && inbox.data.rows.length > 0 && ` · ${inbox.data.has_more ? "3+" : inbox.data.rows.length} in your inbox`}
           </p>
           <div className="mt-8 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -61,7 +64,7 @@ export function KnowledgeHome() {
 
           <div className="mt-9 flex items-baseline justify-between">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Recent</h2>
-            <button onClick={k.openSwitcher} className="text-xs font-medium text-[#B9AEFF] hover:underline">
+            <button onClick={k.openSwitcher} className="text-xs font-medium text-accent hover:underline">
               Find a page
             </button>
           </div>
@@ -107,10 +110,10 @@ export function KnowledgeHome() {
             </div>
             <div className="rounded-xl border border-border bg-surface p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <Icon name="upload" size={15} className="text-[#B9AEFF]" /> Bring your Obsidian vault
+                <Icon name="upload" size={15} className="text-accent" /> Bring your Obsidian vault
               </p>
               <p className="mt-2 text-[13px] text-fg-secondary">Upload a zip. You see a dry run before anything is written, and can undo it.</p>
-              <button onClick={k.openImport} className="mt-2 text-xs font-medium text-[#B9AEFF] hover:underline">
+              <button onClick={k.openImport} className="mt-2 text-xs font-medium text-accent hover:underline">
                 Import vault →
               </button>
             </div>

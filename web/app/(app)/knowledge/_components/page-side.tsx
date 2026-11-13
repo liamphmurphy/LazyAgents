@@ -12,7 +12,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { LocalGraph } from "@/components/domain/local-graph";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
-import { SideHeading } from "./kit";
+import { SideHeading, useToday } from "./kit";
 
 export type SideTab = "links" | "outline" | "calendar" | "chat" | "history";
 
@@ -89,14 +89,15 @@ const DAY_NAMES = ["M", "T", "W", "T", "F", "S", "S"];
 /** A month of daily notes, and the inbox to file from: the Calendar plugin and the capture inbox in one. */
 export function CalendarPanel() {
   const router = useRouter();
-  const today = new Date();
-  const [month, setMonth] = useState({ y: today.getFullYear(), m: today.getMonth() });
+  const today = useToday() ?? new Date(0);
+  const [picked, setMonth] = useState<{ y: number; m: number }>();
+  const month = picked ?? { y: today.getFullYear(), m: today.getMonth() };
   const daily = useDaily();
   const notes = usePages({ folder: "Daily", limit: 200 });
   const have = useMemo(() => new Set((notes.data?.rows ?? []).map((r) => r.title)), [notes.data]);
   const weeks = monthGrid(month.y, month.m);
   const dayKey = (d: number) => isoDay(new Date(month.y, month.m, d));
-  const shift = (n: number) => setMonth(({ y, m }) => ({ y: m + n < 0 ? y - 1 : m + n > 11 ? y + 1 : y, m: (m + n + 12) % 12 }));
+  const shift = (n: number) => setMonth({ y: month.m + n < 0 ? month.y - 1 : month.m + n > 11 ? month.y + 1 : month.y, m: (month.m + n + 12) % 12 });
   return (
     <div>
       <div className="flex items-center px-1 pb-2">
@@ -273,7 +274,7 @@ function HistoryPanel({ page, persona }: { page: Page; persona: string }) {
               {current ? (
                 <span className="rounded-full bg-[#4CB7821F] px-2 py-0.5 text-[10px] font-semibold text-state-done">Current</span>
               ) : (
-                <button onClick={() => restore.mutate(v.id)} disabled={restore.isPending} className="text-xs font-medium text-[#B9AEFF] hover:underline">
+                <button onClick={() => restore.mutate(v.id)} disabled={restore.isPending} className="text-xs font-medium text-accent hover:underline">
                   Restore
                 </button>
               )}

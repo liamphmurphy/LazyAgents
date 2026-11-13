@@ -94,12 +94,12 @@ function Upload({ onJob }: { onJob: (id: string) => void }) {
         }}
         className={cx("flex h-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-surface-sunken text-center", drag ? "border-accent bg-accent-soft" : "border-[#9B8CFF66]")}
       >
-        <span className="grid size-12 place-items-center rounded-full bg-accent-soft text-[#B9AEFF]">
+        <span className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent">
           <Icon name="upload" size={22} />
         </span>
         <span className="text-base font-semibold text-fg">{file ? file.name : "Drop a zipped vault here"}</span>
         <span className="text-[13px] text-fg-tertiary">
-          {file ? mb(file.size) : <><span className="font-semibold text-[#B9AEFF]">choose a file</span> · .zip up to {LIMIT_GB} GB</>}
+          {file ? mb(file.size) : <><span className="font-semibold text-accent">choose a file</span> · .zip up to {LIMIT_GB} GB</>}
         </span>
         <span className="text-xs text-fg-tertiary">Your .obsidian settings, .trash and plugin data are ignored</span>
       </button>
@@ -112,7 +112,7 @@ function Upload({ onJob }: { onJob: (id: string) => void }) {
             <input value={folder} onChange={(e) => setFolder(e.target.value)} className="flex-1 bg-transparent text-[13px] font-normal text-fg outline-none" aria-label="Destination folder" />
           </span>
         </label>
-        <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-[#B9AEFF]">
+        <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-accent">
           <Icon name="lock" size={13} /> Private: you and your personas
         </span>
         <span className="flex-1" />
@@ -183,7 +183,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
             {by("unchanged") > 0 && <li>{fmt(by("unchanged"))} unchanged since the last import</li>}
             {by("conflict") > 0 && <li><Icon name="alert" size={13} className="mr-1.5 inline text-state-progress" />{by("conflict")} conflicts kept both, as suggestions to review</li>}
             {by("skipped") + by("failed") > 0 && <li><Icon name="x" size={13} className="mr-1.5 inline text-state-blocked" />{by("skipped") + by("failed")} skipped; their reasons are below</li>}
-            {(plan?.unresolved?.length ?? 0) > 0 && <li><Icon name="link" size={13} className="mr-1.5 inline text-state-human" />{plan!.unresolved!.length} unresolved links, listed in <Link href="/knowledge/connect" className="text-[#B9AEFF] underline" onClick={onClose}>Keep notes connected</Link></li>}
+            {(plan?.unresolved?.length ?? 0) > 0 && <li><Icon name="link" size={13} className="mr-1.5 inline text-state-human" />{plan!.unresolved!.length} unresolved links, listed in <Link href="/knowledge/connect" className="text-accent underline" onClick={onClose}>Keep notes connected</Link></li>}
           </ul>
         )}
         <Failures rows={(job.report ?? []).filter((r) => r.status === "failed" || r.status === "skipped")} />
@@ -300,7 +300,7 @@ function JobView({ job, onClose, onRetry }: { job: ImportJob; onClose: () => voi
           </div>
           <div>
             <p className="mb-1.5 text-xs font-semibold text-fg-tertiary">Who can see them</p>
-            <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-[#B9AEFF]">
+            <span className="flex h-8 items-center gap-2 rounded-md bg-accent-soft px-3 text-[13px] font-medium text-accent">
               <Icon name="lock" size={13} /> Private: you and your personas
             </span>
           </div>
@@ -327,7 +327,7 @@ function Progress({ label, done, total, note, errors }: { label: string; done: n
     <div className="flex flex-col gap-3 p-5">
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-semibold text-fg">{label}</span>
-        {pct !== undefined && <span className="font-bold text-[#B9AEFF]">{pct}%</span>}
+        {pct !== undefined && <span className="font-bold text-accent">{pct}%</span>}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-track" role="progressbar" aria-valuenow={pct} aria-label={label}>
         <div className={cx("h-full rounded-full bg-accent", pct === undefined && "w-1/3 animate-pulse")} style={pct !== undefined ? { width: `${Math.max(2, pct)}%` } : undefined} />
