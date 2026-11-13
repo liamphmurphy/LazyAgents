@@ -53,3 +53,16 @@ func TestToolNotice(t *testing.T) {
 		t.Errorf("notice %q", n)
 	}
 }
+
+// The person's note names what they'd notice and leaves instruction updates out.
+func TestRefreshNote(t *testing.T) {
+	if refreshNote(nil, nil, nil) != "" {
+		t.Error("an instructions-only refresh must not show a note")
+	}
+	n := refreshNote([]string{"connectors you can now use: github"}, []string{"a", "b", "c", "d", "e"}, nil)
+	for _, part := range []string{"connectors you can now use: github", "new tools: a, b, c and 2 more", "no restart"} {
+		if !strings.Contains(n, part) {
+			t.Errorf("note %q lacks %q", n, part)
+		}
+	}
+}

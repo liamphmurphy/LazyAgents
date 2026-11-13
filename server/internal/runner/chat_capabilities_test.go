@@ -492,6 +492,11 @@ func TestChatRefreshesToolsAndInstructionsInPlace(t *testing.T) {
 		t.Fatalf("the person's message must be stored as written: %q, %v", stored, err)
 	}
 
+	var note string
+	if err := e.pool.QueryRow(e.ctx, `SELECT body_md FROM chat_messages WHERE session_id = $1 AND role = 'system' ORDER BY seq DESC LIMIT 1`, chat.ID).Scan(&note); err != nil || !strings.Contains(note, "new tools: delete_page") {
+		t.Fatalf("the person isn't shown the refresh: %q, %v", note, err)
+	}
+
 	// Nothing changed since: the next message carries no notice.
 	e.say(chat.ID, "three")
 	if err := e.pool.QueryRow(e.ctx, `SELECT input_message FROM run_turns WHERE run_id = $1 ORDER BY seq DESC LIMIT 1`, first.ID).Scan(&input); err != nil || input != "three" {

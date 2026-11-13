@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -224,6 +225,19 @@ func refreshChatSpec(have, want agentdef.Resolved) agentdef.Resolved {
 // capabilityNotice tells a resumed session what changed in its capabilities,
 // so it doesn't rely on what it concluded earlier in the conversation.
 func capabilityNotice(before, after agentdef.Resolved) string {
+	changes := capabilityChanges(before, after)
+	if after.Instructions != before.Instructions {
+		changes = append(changes, "your instructions were updated: read AGENTS.md again")
+	}
+	if len(changes) == 0 {
+		return ""
+	}
+	return "[Vesper: since your last message " + strings.Join(changes, "; ") + ". These replace anything said earlier in this conversation about what you can do.]\n\n"
+}
+
+// capabilityChanges are the permission changes between two chat specs, in
+// words the model and the person both read.
+func capabilityChanges(before, after agentdef.Resolved) []string {
 	var changes []string
 	connectors := func(r agentdef.Resolved) []string {
 		out := []string{}
@@ -250,13 +264,34 @@ func capabilityNotice(before, after agentdef.Resolved) string {
 	if a, b := after.Mode("wiki:write"), before.Mode("wiki:write"); a != b {
 		changes = append(changes, "your wiki:write permission is now "+string(a))
 	}
-	if after.Instructions != before.Instructions {
-		changes = append(changes, "your instructions were updated: read AGENTS.md again")
+	return changes
+}
+
+// refreshNote is the line the person sees in the conversation where a chat
+// picked up new tools or permissions without restarting, or "" when nothing
+// they'd notice changed (an instructions update alone isn't shown).
+func refreshNote(capabilities, added, removed []string) string {
+	var parts []string
+	for _, c := range capabilities {
+		parts = append(parts, strings.TrimPrefix(strings.TrimPrefix(c, "you "), "your "))
 	}
-	if len(changes) == 0 {
+	list := func(label string, names []string) {
+		if len(names) == 0 {
+			return
+		}
+		shown := names[:min(len(names), 3)]
+		text := label + strings.Join(shown, ", ")
+		if more := len(names) - len(shown); more > 0 {
+			text += fmt.Sprintf(" and %d more", more)
+		}
+		parts = append(parts, text)
+	}
+	list("new tools: ", added)
+	list("tools removed: ", removed)
+	if len(parts) == 0 {
 		return ""
 	}
-	return "[Vesper: since your last message " + strings.Join(changes, "; ") + ". These replace anything said earlier in this conversation about what you can do.]\n\n"
+	return "↻ Refreshed in this chat: " + strings.Join(parts, "; ") + ". Same conversation, no restart."
 }
 
 // toolNotice tells a resumed session which chat tools appeared or went away
@@ -771,6 +806,7 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 		// up: in place, keeping the CLI session, unless the change needs a
 		// different workspace, which only a fresh segment gets.
 		changed := false
+		var seen []string // permission changes refreshed in place, for the person's note
 		if chat.Harness == run.Harness {
 			_, base, err := assistantSpec(ctx, q, chat.WorkspaceID, project)
 			if err != nil {
@@ -799,10 +835,20 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 					return chat, run, turn, err
 				}
 				prompt = capabilityNotice(have, refreshed) + prompt
+				seen = capabilityChanges(have, refreshed)
 			}
 			if !changed && !caps.Aside {
 				// Tools Vesper gained or dropped since the segment last heard.
 				prompt = toolNotice(run.ChatToolNames, ChatTools) + prompt
+				var added, removed []string
+				if run.ChatToolNames != nil {
+					added, removed = missingFrom(ChatTools, run.ChatToolNames), missingFrom(run.ChatToolNames, ChatTools)
+				}
+				if note := refreshNote(seen, added, removed); note != "" {
+					if _, err = q.AppendChatMessage(ctx, store.AppendChatMessageParams{SessionID: chat.ID, Role: "system", BodyMd: note, RunID: &run.ID, ContextRefs: []byte("[]"), Citations: []byte("[]")}); err != nil {
+						return chat, run, turn, err
+					}
+				}
 				if !slices.Equal(run.ChatToolNames, ChatTools) {
 					if err = q.SetRunChatTools(ctx, store.SetRunChatToolsParams{ID: run.ID, Names: ChatTools}); err != nil {
 						return chat, run, turn, err
