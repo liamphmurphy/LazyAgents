@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useBootstrap, useRunnerStatus, useSecrets, useUpdateRunnerSettings } from "@/lib/api/hooks";
 import type { Schemas } from "@/lib/api/client";
 import { cx } from "@/lib/cx";
@@ -22,6 +22,8 @@ import { SetupChecklist } from "@/components/domain/setup";
 
 type Health = "ok" | "attention" | "idle" | "unknown";
 
+const noSubscribe = () => () => {};
+
 /**
  * Settings (LAZYAGENTS-44): everything runs depend on, one page with a sticky
  * section nav. Each section loads independently, so one failing API call
@@ -32,6 +34,13 @@ export function SettingsScreen() {
   const secrets = useSecrets();
   const runner = useRunnerStatus();
   const auth = useAuthStatus();
+  // The shell's queries can resolve before this page's chunk hydrates; reading them in
+  // the hydration pass would not match the server's loading HTML, so sections render after mount.
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
+  useEffect(() => {
+    // Sections arrive after load, so the browser's own jump to #section found nothing.
+    if (mounted && window.location.hash) document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+  }, [mounted]);
   const missing = secrets.data ? missingConnections(secrets.data.secrets).length : 0;
   const activeProjects = boot.data?.projects.filter((p) => !p.archived).length ?? 0;
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
@@ -47,6 +56,14 @@ export function SettingsScreen() {
     { id: "appearance", label: "Appearance", health: "idle" },
   ];
 
+  if (!mounted) {
+    return (
+      <div aria-busy className="flex flex-col gap-6">
+        <h1 className="type-display">Settings</h1>
+        <Skeleton className="h-40 max-w-[1020px]" />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <div>
