@@ -341,3 +341,35 @@ test("the shell fits the viewport: a long tree and an open chat leave the compos
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("button", { name: /Quick capture/ })).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
 });
+
+const general = ["Tune PR #387", "Sheets engine", "Deploy plan", "Fix the error"].map((title) => ({ title, prompt: `${title}, please`, icon: "msg" }));
+
+test("an empty Knowledge chat offers starters about the notes, not the person's general suggestions, under one header", async ({ page }) => {
+  const s = await install(page, { suggestions: general });
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  const starters = dock(page).getByRole("list", { name: "Conversation starters" });
+  await expect(starters.getByRole("button", { name: /File my inbox/ })).toBeVisible();
+  await expect(dock(page).getByText("Tune PR #387")).toHaveCount(0);
+  // One header: the switcher sits in the conversation's header, not a bar of its own above it.
+  await expect(dock(page).getByTestId("dock-chat-switcher")).toHaveCount(1);
+  await expect(dock(page).getByRole("button", { name: /^Switch chat/ })).toHaveCount(1);
+  await expect(dock(page).getByRole("button", { name: "New chat", exact: true })).toBeVisible();
+
+  // Picking one sends its prompt.
+  await starters.getByRole("button", { name: /File my inbox/ }).click();
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.body).toContain("captures in my Inbox");
+});
+
+test("on a page the starters are about that page", async ({ page }) => {
+  await install(page, { suggestions: general });
+  await page.goto(`/knowledge/${P}`);
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const starters = dock(page).getByRole("list", { name: "Conversation starters" });
+  await expect(starters.getByRole("button", { name: /Summarise this page/ })).toBeVisible();
+  await expect(dock(page).getByText(/on “Reading list”/)).toBeVisible();
+  await expect(dock(page).getByText("Tune PR #387")).toHaveCount(0);
+});

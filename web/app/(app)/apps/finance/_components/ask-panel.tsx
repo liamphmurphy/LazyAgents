@@ -79,17 +79,20 @@ export const PRIVACY_NOTE =
  * question), with New chat and the privacy note.
  */
 export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
+  const switcher = (inline: boolean) => (
+    <DockChatSwitcher
+      current={ask.chats.find((c) => c.id === ask.chatId)}
+      sections={[{ label: "Finance", chats: ask.chats }]}
+      newLabel="New chat"
+      onSelect={ask.select}
+      onNew={ask.startFresh}
+      inline={inline}
+    />
+  );
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {ask.chats.length > 0 && (
-        <DockChatSwitcher
-          current={ask.chats.find((c) => c.id === ask.chatId)}
-          sections={[{ label: "Finance", chats: ask.chats }]}
-          newLabel="New chat"
-          onSelect={ask.select}
-          onNew={ask.startFresh}
-        />
-      )}
+      {/* With a chat open, the switcher sits in the conversation's own header instead of a second one. */}
+      {ask.chats.length > 0 && !ask.chatId && switcher(false)}
       <p className="flex-none border-b border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary">
         Answers come from your imported transactions.
       </p>
@@ -104,6 +107,7 @@ export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
             key={ask.chatId}
             id={ask.chatId}
             onNew={ask.startFresh}
+            actions={switcher(true)}
           />
         </div>
       ) : (

@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Conversation, type ConversationContext } from "@/app/(app)/chat/_components/conversation";
+import { Conversation, type ConversationContext, type DockStarter, type DockWelcome } from "@/app/(app)/chat/_components/conversation";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
 import { Dock, type DockTab } from "@/components/shell/editor-layout";
 import { Button } from "@/components/ui/button";
@@ -192,6 +192,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
       onSelect={(next) => { if (next !== id) void selectChat(next).catch(() => { /* attach.error offers Retry. */ }); }}
       onNew={() => start()}
       creating={create.isPending}
+      inline={!!id}
     />
   );
 
@@ -265,14 +266,14 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
       return contextBody(body, snapshots);
     },
     onSent: () => remove(attachments.map((a) => a.key)),
+    welcome: welcomeFor({ page, screen, selection: pages.some((a) => a.quote !== undefined), folders: folders.map((f) => f.path) }),
   };
 
   if (loadingPage) return <div className="p-4"><Skeleton className="h-4 w-2/3" /></div>;
   if (id) return (
     <div ref={host} className="flex min-h-0 flex-1 flex-col">
-      {switcher}
       {attach.error && <p role="alert" className="p-2 text-xs text-state-blocked">Couldn’t link this chat to the page. <button className="underline" onClick={() => attach.mutate(id)}>Retry</button></p>}
-      <Conversation key={id} id={id} onNew={start} onReplace={selectChat} context={context} />
+      <Conversation key={id} id={id} onNew={start} onReplace={selectChat} context={context} actions={switcher} />
     </div>
   );
   return (
@@ -291,6 +292,60 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
     </div>
     </div>
   );
+}
+
+/**
+ * What an empty Knowledge chat offers to start with: about the selection, the folders or the page
+ * attached, else the screen. Templates rather than the person's general suggestions, which come
+ * from their other chats and have nothing to do with their notes.
+ */
+export function welcomeFor({ page, screen, selection, folders }: { page?: Pick<Page, "title">; screen?: string; selection: boolean; folders: string[] }): DockWelcome {
+  if (selection)
+    return {
+      where: page ? `on “${page.title}”` : "in Knowledge",
+      intro: "I can read the passage you selected and suggest edits you accept or reject.",
+      label: "For the selection",
+      starters: [
+        { icon: "edit", title: "Rewrite the selection", prompt: "Rewrite the selected passage to read more clearly, as a suggestion I can accept or reject." },
+        { icon: "bulb", title: "Explain the selection", prompt: "Explain the selected passage, and link any pages it relates to." },
+      ],
+    };
+  if (folders.length) {
+    const named = folders.length === 1 ? `${folders[0]}/` : "these folders";
+    return {
+      where: "in Knowledge",
+      intro: `I can read every page in ${named}, link them and tidy them with you.`,
+      label: "For the folder",
+      starters: [
+        { icon: "wiki", title: `Summarise ${named}`, prompt: `Summarise what's in ${named}: the main topics and the pages that matter most.` },
+        { icon: "search", title: "Find gaps and duplicates", prompt: `Look through ${named} for pages that overlap or say the same thing, and for topics that are missing.` },
+        { icon: "graph", title: "Link the pages together", prompt: `Find unlinked mentions between the pages in ${named} and propose links.` },
+      ],
+    };
+  }
+  if (page)
+    return {
+      where: `on “${page.title}”`,
+      intro: "I can read this page, link it and suggest edits you accept or reject.",
+      label: "For this page",
+      starters: [
+        { icon: "wiki", title: "Summarise this page", prompt: "Summarise this page in three lines, and suggest adding it as a TL;DR at the top." },
+        { icon: "graph", title: "Suggest links", prompt: "Find mentions of other pages in this one that aren't linked yet, and propose links." },
+        { icon: "search", title: "Find related pages", prompt: "Which of my pages are related to this one? Group them by how they relate." },
+        { icon: "edit", title: "Tidy tags and properties", prompt: "Suggest tags and properties for this page that match the pages beside it." },
+      ],
+    };
+  return {
+    where: screen && screen !== "Home" ? `in Knowledge · ${screen}` : "in Knowledge",
+    intro: "Ask about your notes. I can search, link, tag and write pages with you.",
+    label: "For your notes",
+    starters: [
+      { icon: "inbox", title: "File my inbox", prompt: "Look at the captures in my Inbox and suggest a folder or page for each. Don't move anything until I say." },
+      { icon: "graph", title: "Connect orphan pages", prompt: "Find pages nothing links to and propose links to them from related pages." },
+      { icon: "history", title: "What did I write this week?", prompt: "Summarise the pages I created or edited this week." },
+      { icon: "edit", title: "Start today's note", prompt: "Start today's daily note, carrying over anything still open from my last one." },
+    ] satisfies DockStarter[],
+  };
 }
 
 /** A folder as message context: its path and the pages under it, with how to find any left out. */
