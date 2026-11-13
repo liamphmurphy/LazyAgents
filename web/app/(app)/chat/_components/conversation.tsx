@@ -60,6 +60,9 @@ import { ChatSuggestions } from "./suggestions";
 import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
 import { VideoCards, VideoRendererNotes } from "@/components/domain/video-card";
+import { AudioCards } from "@/components/domain/audio-card";
+import { useChatAudio } from "@/lib/api/audio-hooks";
+import type { ChatAudio } from "@/lib/chat-audio";
 import { useChatVideos } from "@/lib/api/video-hooks";
 import type { ChatVideo } from "@/lib/chat-video";
 import { CiteContext } from "@/components/domain/cite-marker";
@@ -129,7 +132,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; asides?: ReactNode }) {
+const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, audio, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; audio?: ChatAudio[]; asides?: ReactNode }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -157,6 +160,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
       <>
         {endedSteps}
         {videos?.length ? <li className="flex flex-col items-start"><VideoCards chatId={chat.id} videos={videos} messageId={m.id} /></li> : null}
+        {audio?.length ? <li className="flex flex-col items-start"><AudioCards chatId={chat.id} audio={audio} messageId={m.id} /></li> : null}
         <Divider testId="system-message">{m.body_md}</Divider>
       </>
     );
@@ -180,6 +184,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
       {/* The live card's steps, folded to a line once the turn ended. Its events all precede the reply. */}
       {!mine && turn && <TurnSteps runId={m.run_id} outcome="done" since={turn.since} until={m.created_at} end={Date.parse(m.created_at)} replyId={m.id} />}
       {!mine && videos?.length ? <VideoCards chatId={chat.id} videos={videos} messageId={m.id} /> : null}
+      {!mine && audio?.length ? <AudioCards chatId={chat.id} audio={audio} messageId={m.id} /> : null}
       {/* Replies read as prose on the page; only real objects (canvases, runs, sources) get a card. */}
       <div
         className={cx(
@@ -249,7 +254,7 @@ type ChatAsides = NonNullable<ReturnType<typeof useChatAsides>["data"]>;
  * a ref when it is a callback) and a keystroke only re-checks props instead of re-rendering
  * every message's markdown.
  */
-function BubbleList({ list, chat, persona, speakerName, names, highlight, running, since, locked, archived, editPending, lastUser, videosByMessage, asideList, pinnedRef, editLast }: {
+function BubbleList({ list, chat, persona, speakerName, names, highlight, running, since, locked, archived, editPending, lastUser, videosByMessage, audioByMessage, asideList, pinnedRef, editLast }: {
   list: Message[];
   chat: ChatInfo;
   persona: PersonaLook;
@@ -263,6 +268,7 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
   editPending: boolean;
   lastUser?: Message;
   videosByMessage: Map<string, ChatVideo[]>;
+  audioByMessage: Map<string, ChatAudio[]>;
   asideList?: ChatAsides;
   pinnedRef: RefObject<boolean>;
   editLast: (body: string) => void;
@@ -300,6 +306,7 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
       onRetry={canRetry && m.id === lastId ? onRetry : undefined}
       summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
       videos={videosByMessage.get(m.id)}
+      audio={audioByMessage.get(m.id)}
       asides={asideNodes.get(m.id) ?? null} />
   ));
 }
@@ -566,6 +573,14 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     return out;
   }, [videos.data]);
   const liveVideos = useMemo(() => (videos.data?.videos ?? []).filter((v) => !v.message_id && running && v.run_id === c?.current_run_id), [videos.data, running, c?.current_run_id]);
+  // Audio the same way.
+  const audioJobs = useChatAudio(c?.id, running);
+  const audioByMessage = useMemo(() => {
+    const out = new Map<string, ChatAudio[]>();
+    for (const a of audioJobs.data?.audio ?? []) if (a.message_id) out.set(a.message_id, [...(out.get(a.message_id) ?? []), a]);
+    return out;
+  }, [audioJobs.data]);
+  const liveAudio = useMemo(() => (audioJobs.data?.audio ?? []).filter((a) => !a.message_id && running && a.run_id === c?.current_run_id), [audioJobs.data, running, c?.current_run_id]);
   const stopping = running && (cancel.isPending || cancel.isSuccess);
   // Also locked while a persona switch creates the replacement chat, so nothing is sent to the one it drops.
   // A running reply doesn't lock the composer: a message sent then interrupts it,
@@ -1015,7 +1030,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               <BubbleList list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
-                locked={locked} archived={c.archived} editPending={edit.isPending} lastUser={lastUser} videosByMessage={videosByMessage} asideList={asideList}
+                locked={locked} archived={c.archived} editPending={edit.isPending} lastUser={lastUser} videosByMessage={videosByMessage} audioByMessage={audioByMessage} asideList={asideList}
                 pinnedRef={pinned} editLast={edit.mutate} />
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
@@ -1035,6 +1050,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
+                  <AudioCards chatId={c.id} audio={liveAudio} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep}
                     onAsk={locked || aside.isPending ? undefined : () => aside.mutate(QUIET_CHECK_IN)} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <LiveAsides
