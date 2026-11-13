@@ -41,8 +41,8 @@ type Target struct {
 	Path         string     `json:"path,omitempty"` // notes
 	DisplayID    string     `json:"display_id,omitempty"`
 	Href         string     `json:"href,omitempty"`
-	Status       string     `json:"status,omitempty"`      // tickets
-	ColorIndex   int        `json:"color_index,omitempty"` // agents
+	Status       string     `json:"status,omitempty"`       // tickets
+	ColorIndex   int        `json:"color_index,omitempty"`  // agents
 	ContentType  string     `json:"content_type,omitempty"` // attachments and Library items
 }
 
@@ -100,7 +100,9 @@ func ArtifactTarget(a store.Artifact, anchor string) Target {
 }
 
 // AttachmentHref is where an attachment's bytes are served.
-func AttachmentHref(id uuid.UUID) string { return "/api/v1/wiki/attachments/" + id.String() + "/content" }
+func AttachmentHref(id uuid.UUID) string {
+	return "/api/v1/wiki/attachments/" + id.String() + "/content"
+}
 
 func AttachmentTarget(a store.PageAttachment) Target {
 	return Target{Kind: KindAttachment, ID: &a.ID, Title: a.Name, ContentType: a.ContentType, Href: AttachmentHref(a.ID)}

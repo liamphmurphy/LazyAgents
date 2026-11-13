@@ -60,7 +60,9 @@ func splitLines(md string) []mdLine {
 
 func indentOf(s string) int { return len(s) - len(strings.TrimLeft(s, " \t")) }
 
-func blank(l mdLine) bool { return l.fence || strings.TrimSpace(l.text) == "" || headingLine.MatchString(l.text) }
+func blank(l mdLine) bool {
+	return l.fence || strings.TrimSpace(l.text) == "" || headingLine.MatchString(l.text)
+}
 
 // Blocks returns the identified blocks of a markdown body in document order.
 // The first block with a given id wins, as in Obsidian.
