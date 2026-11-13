@@ -11,7 +11,7 @@ import (
 // The assistant's Knowledge instructions name the Knowledge tools a chat
 // actually has, so personas reach for pages rather than canvases for documents.
 func TestAssistantKnowledgeSectionNamesChatKnowledgeTools(t *testing.T) {
-	for _, tool := range []string{"capture_note", "daily_note", "create_page", "search_knowledge", "list_pages", "page_outline", "read_page", "patch_page", "set_properties", "suggest_links", "import_vault"} {
+	for _, tool := range []string{"capture_note", "daily_note", "create_page", "search_knowledge", "list_pages", "page_outline", "read_page", "patch_page", "set_properties", "move_page", "move_folder", "suggest_links", "import_vault"} {
 		if !strings.Contains(agents.AssistantKnowledgeSection, tool) {
 			t.Errorf("Knowledge section doesn't mention %s", tool)
 		}

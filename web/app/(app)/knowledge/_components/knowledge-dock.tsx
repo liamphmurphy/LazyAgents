@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Conversation, type ConversationContext } from "@/app/(app)/chat/_components/conversation";
 import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
@@ -12,14 +12,22 @@ import { isTyping } from "@/components/shell/shortcuts";
 import { provideChatRefs, useChat, useCreateChat } from "@/lib/api/hooks";
 import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledge-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { refKey } from "@/lib/chat-context";
 import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
-import { useKnowledgeChat } from "./chat-context";
+import { isFolder, useKnowledgeChat, type FolderAttachment, type PageAttachment } from "./chat-context";
 
 const APP = "knowledge";
 const TABS = ["chat"];
 /** The chat for screens that aren't a page (Home, Graph, Connect). A page's own chat is the one it's attached to. */
 const GENERAL_CHAT_KEY = "vesper.knowledge.chat";
+
+/** The screen a Knowledge address shows when it isn't a page, as the persona is told it. */
+function screenOf(pathname: string): string {
+  if (pathname.startsWith("/knowledge/graph")) return "Graph";
+  if (pathname.startsWith("/knowledge/connect")) return "Connect";
+  return "Home";
+}
 
 /**
  * The persona chat on the right of every Knowledge screen, on the shared dock: it folds to a rail and starts
@@ -27,6 +35,7 @@ const GENERAL_CHAT_KEY = "vesper.knowledge.chat";
  */
 export function KnowledgeDock({ pageId }: { pageId?: string }) {
   const { request } = useKnowledgeChat();
+  const screen = screenOf(usePathname());
   const uid = useId();
   const page = usePage(pageId).data;
   const [general, setGeneral] = useState<string | null>(null);
@@ -89,6 +98,15 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   }, [chatId, pageId]);
   const chat = gone ? undefined : linkedChat.data;
   const running = chat?.state === "running";
+
+  // A persona can create, move and edit pages during a turn: refresh the explorer and lists when it ends.
+  // The open page's own query is left alone so a refetch can't disturb the editor.
+  const qc = useQueryClient();
+  const wasRunning = useRef(running);
+  useEffect(() => {
+    if (wasRunning.current && !running) void qc.invalidateQueries({ queryKey: ["knowledge"], predicate: (q) => q.queryKey[1] !== "page" });
+    wasRunning.current = running;
+  }, [running, qc]);
   const shown = state.open && !state.hidden;
 
   // A reply that arrived while the chat was out of sight is unread; one there on load, or that arrives while it shows, is read.
@@ -110,6 +128,7 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
           key={pageId ?? "general"}
           chatId={chatId}
           page={pageId ? page : undefined}
+          screen={pageId ? undefined : screen}
           loadingPage={!!pageId && !page}
           onGeneral={(id) => {
             window.localStorage.setItem(GENERAL_CHAT_KEY, id);
@@ -127,7 +146,7 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   );
 }
 
-function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; page?: Page; loadingPage: boolean; onGeneral: (id: string) => void }) {
+function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: string; page?: Page; screen?: string; loadingPage: boolean; onGeneral: (id: string) => void }) {
   const router = useRouter();
   const create = useCreateChat();
   const attach = useAttachChat(page?.id ?? "");
@@ -158,16 +177,19 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
     return () => cancelAnimationFrame(frame);
   }, [request, id]);
 
+  const pages = attachments.filter((a): a is PageAttachment => !isFolder(a));
+  const folders = attachments.filter(isFolder);
   const refs: Schemas["ChatContextRef"][] = [];
-  for (const p of [...(page ? [page] : []), ...attachments]) {
+  for (const p of [...(page ? [page] : []), ...pages]) {
     if (!refs.some((r) => r.id === p.id)) refs.push({ kind: "page", id: p.id });
   }
   const quote = (text: string) => text.split("\n").map((line) => `> ${line}`).join("\n");
   const label = (p: { path: string | null; title: string }) => `[[${p.path ?? p.title}]]`;
-  const passages = attachments.filter((a) => a.quote !== undefined).map((a) => `Selected passage from ${label(a)}:\n${quote(a.quote!)}`);
+  const passages = pages.filter((a) => a.quote !== undefined).map((a) => `Selected passage from ${label(a)}:\n${quote(a.quote!)}`);
+  const folderBlocks = folders.map(folderBlock);
   const contextBody = (body: string, snapshots: string[] = []) => {
-    const viewing = page ? [`Currently viewing Knowledge page ${label(page)}.`] : [];
-    const blocks = [...viewing, ...passages, ...snapshots];
+    const viewing = page ? [`Currently viewing Knowledge page ${label(page)}.`] : screen ? [`On the Knowledge ${screen} screen, not viewing a page.`] : [];
+    const blocks = [...viewing, ...passages, ...folderBlocks, ...snapshots];
     // The server excludes this source material when interpreting persona mentions and hand-off limits.
     const suffix = `\n\n<!-- vesper:knowledge-context -->\n${blocks.join("\n\n")}`;
     return blocks.length && !body.endsWith(suffix) ? `${body}${suffix}` : body;
@@ -177,7 +199,15 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
     composer: (
       <div className="flex flex-wrap gap-1.5 text-xs text-fg-secondary" aria-label="Knowledge context">
         {page && <span className="max-w-full truncate rounded-md border border-border bg-surface px-2 py-1" title={page.path ?? page.title}>Viewing: {page.title}</span>}
-        {attachments.map((a) => (
+        {!page && screen && <span className="rounded-md border border-border bg-surface px-2 py-1">On: {screen}</span>}
+        {folders.map((f) => (
+          <span key={f.key} className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface px-2 py-1" title={f.path}>
+            <Icon name="folder" size={12} />
+            <span className="truncate">{f.path}/</span>
+            <button aria-label={`Remove folder ${f.path}`} onClick={() => remove([f.key])} className="grid size-4 flex-none place-items-center rounded hover:bg-hover"><Icon name="x" size={11} /></button>
+          </span>
+        ))}
+        {pages.map((a) => (
           <span key={a.key} className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface px-2 py-1" title={a.quote ?? a.path ?? a.title}>
             <Icon name={a.quote === undefined ? "wiki" : "msg"} size={12} />
             <span className="truncate">{a.title}{a.quote === undefined ? "" : " · selection"}</span>
@@ -227,4 +257,11 @@ function ChatBody({ chatId, page, loadingPage, onGeneral }: { chatId?: string; p
       {create.error && <p className="text-xs text-state-blocked">{create.error.message}</p>}
     </div>
   );
+}
+
+/** A folder as message context: its path and the pages under it, with how to find any left out. */
+function folderBlock(f: FolderAttachment): string {
+  const lines = [`Attached folder ${f.path}/ (${f.count} ${f.count === 1 ? "page" : "pages"}):`, ...f.pages.map((p) => `- [[${p}]]`)];
+  if (f.count > f.pages.length) lines.push(`- and ${f.count - f.pages.length} more: list_pages with folder "${f.path}" lists them all.`);
+  return lines.join("\n");
 }

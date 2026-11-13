@@ -3,16 +3,26 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type PageContext = { id: string; title: string; path: string | null };
-export type PageAttachment = PageContext & { key: string; quote?: string };
+export type PageAttachment = PageContext & { kind?: "page"; key: string; quote?: string };
+/** A folder from the explorer: its path and the pages under it, so "these files" has something to point at. */
+export type FolderAttachment = { kind: "folder"; key: string; path: string; pages: string[]; count: number };
+export type Attachment = PageAttachment | FolderAttachment;
+
+export const isFolder = (a: Attachment): a is FolderAttachment => a.kind === "folder";
 
 function useContextState() {
-  const [attachments, setAttachments] = useState<PageAttachment[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [request, setRequest] = useState(0);
   const handled = useRef(0);
   const drafts = useRef(new Map<string, () => string | undefined>());
   const ask = useCallback((page: PageContext, quote?: string) => {
-    const attachment = { id: page.id, title: page.title, path: page.path, quote, key: crypto.randomUUID() };
-    setAttachments((old) => old.some((a) => a.id === page.id && a.quote === quote) ? old : [...old, attachment]);
+    const attachment: PageAttachment = { id: page.id, title: page.title, path: page.path, quote, key: crypto.randomUUID() };
+    setAttachments((old) => old.some((a) => !isFolder(a) && a.id === page.id && a.quote === quote) ? old : [...old, attachment]);
+    setRequest((n) => n + 1);
+  }, []);
+  const askFolder = useCallback((folder: { path: string; pages: string[]; count: number }) => {
+    const attachment: FolderAttachment = { kind: "folder", key: crypto.randomUUID(), ...folder };
+    setAttachments((old) => old.some((a) => isFolder(a) && a.path === folder.path) ? old : [...old, attachment]);
     setRequest((n) => n + 1);
   }, []);
   const remove = useCallback((keys: string[]) => setAttachments((old) => old.filter((a) => !keys.includes(a.key))), []);
@@ -26,7 +36,7 @@ function useContextState() {
     handled.current = n;
     return true;
   }, []);
-  return useMemo(() => ({ attachments, request, ask, remove, registerDraft, readDraft, claimRequest }), [attachments, request, ask, remove, registerDraft, readDraft, claimRequest]);
+  return useMemo(() => ({ attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest }), [attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest]);
 }
 
 const Context = createContext<ReturnType<typeof useContextState> | null>(null);
