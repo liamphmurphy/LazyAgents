@@ -7,13 +7,16 @@ import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
 import { composerIconButton } from "./reply-tools";
 
+type SheetCounts = { context: number; attach: number; code?: number };
+
 /** How far the sheet has to be dragged down by its grabber before letting go closes it. */
 const SWIPE_CLOSE = 64;
 
 /** A row's current value, as the sheet shows it under the label. */
-function shownValue(o: ComposerOption, counts: { context: number; attach: number }): string | undefined {
+function shownValue(o: ComposerOption, counts: SheetCounts): string | undefined {
   if (o.opens === "toggle") return o.on ? "On" : "Off";
   if (o.id === "context") return counts.context ? `${counts.context} added` : "None";
+  if (o.id === "code") return counts.code ? `${counts.code} ${counts.code === 1 ? "snippet" : "snippets"}` : "None";
   if (o.id === "attach") return counts.attach ? `${counts.attach} ${counts.attach === 1 ? "file" : "files"}` : "None";
   return o.value ?? "None";
 }
@@ -47,7 +50,7 @@ export function ComposerSheet({
   options: ComposerOption[];
   /** The option's control, as the desktop composer renders it. */
   control: (o: ComposerOption) => ReactNode;
-  counts: { context: number; attach: number };
+  counts: SheetCounts;
   disabled?: boolean;
 }) {
   // Where the drag started, while the grabber is held, and how far down the sheet follows it.

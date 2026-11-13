@@ -6,7 +6,7 @@ const ids = (list, place) => list.filter((o) => !place || o.place === place).map
 
 test("a chat whose persona can't code has no repository option", () => {
   const list = composerOptions({ code: false, research: false });
-  assert.deepEqual(ids(list), ["context", "attach", "research"]);
+  assert.deepEqual(ids(list), ["context", "attach", "code", "research"]);
 });
 
 test("a coding chat without a repository offers the picker with nothing chosen", () => {
@@ -31,7 +31,7 @@ test("a fresh running chat lists every control in the desktop order", () => {
     model: "Opus 5.5 · Auto",
     project: { name: "Web" },
   });
-  assert.deepEqual(ids(list, "options"), ["context", "attach", "repository", "persona", "send-mode", "research", "temporary"]);
+  assert.deepEqual(ids(list, "options"), ["context", "attach", "code", "repository", "persona", "send-mode", "research", "temporary"]);
   assert.deepEqual(ids(list, "actions"), ["model"]);
   assert.deepEqual(ids(list, "header"), ["project"]);
   assert.equal(list.find((o) => o.id === "research").on, true);
