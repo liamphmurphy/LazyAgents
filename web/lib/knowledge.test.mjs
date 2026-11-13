@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ancestors, buildTree, closeTab, monthGrid, openTab, outline, pageHref, slug, visibleProperties, wordCount } from "./knowledge.ts";
+import { ancestors, buildTree, closeTab, folderPaths, joinPath, monthGrid, movedPath, moveTargets, nameError, nameOf, openTab, outline, pageHref, parentOf, slug, visibleProperties, wordCount } from "./knowledge.ts";
 
 test("the explorer tree puts folders first, counts pages and lists daily notes newest first", () => {
   const t = buildTree([
@@ -92,4 +92,37 @@ test("the graph layout keeps linked pages closer than unlinked ones, determinist
   const random = Array.from({ length: 200 }, (_, i) => dist(`n${i}`, `n${(i * 13 + 500) % 1500}`)).reduce((s, d) => s + d, 0) / 200;
   assert.ok(linked < random, `linked ${linked.toFixed(0)} < random ${random.toFixed(0)}`);
   assert.ok(a.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
+});
+
+test("explorer paths: a folder is its pages' shared prefix, and a name is one segment", () => {
+  assert.equal(parentOf("Campaign/NPCs/Mara"), "Campaign/NPCs");
+  assert.equal(parentOf("Welcome"), "");
+  assert.equal(nameOf("Campaign/NPCs/Mara"), "Mara");
+  assert.equal(joinPath("", "Mara"), "Mara");
+  assert.equal(joinPath("Campaign", "Mara"), "Campaign/Mara");
+  assert.equal(nameError("  "), "Give it a name.");
+  assert.match(nameError("a/b") ?? "", /can't contain \//);
+  assert.equal(nameError("Mara"), undefined);
+});
+
+test("moving a folder carries the paths inside it and nothing beside it", () => {
+  assert.equal(movedPath("Campaign/NPCs", "Campaign/NPCs", "Campaign/People"), "Campaign/People");
+  assert.equal(movedPath("Campaign/NPCs/Retired", "Campaign/NPCs", "Campaign/People"), "Campaign/People/Retired");
+  assert.equal(movedPath("Campaign/NPCs2", "Campaign/NPCs", "Campaign/People"), "Campaign/NPCs2");
+  assert.equal(movedPath("Campaign", "Campaign/NPCs", "Campaign/People"), "Campaign");
+});
+
+test("Move to… offers every folder except where it is, and never a folder inside itself", () => {
+  const t = buildTree([
+    { id: "1", title: "Mara", path: "Campaign/NPCs/Mara" },
+    { id: "2", title: "Bren", path: "Campaign/NPCs/Retired/Bren" },
+    { id: "3", title: "Harbour", path: "Campaign/Locations/Harbour" },
+    { id: "4", title: "Welcome", path: "Welcome" },
+  ]);
+  const folders = folderPaths(t);
+  assert.deepEqual(folders, ["Campaign", "Campaign/Locations", "Campaign/NPCs", "Campaign/NPCs/Retired"]);
+  assert.deepEqual(moveTargets(folders, "Campaign/NPCs/Mara", false), ["", "Campaign", "Campaign/Locations", "Campaign/NPCs/Retired"]);
+  assert.deepEqual(moveTargets(folders, "Welcome", false), folders);
+  assert.deepEqual(moveTargets(folders, "Campaign/NPCs", true), ["", "Campaign/Locations"]);
+  assert.deepEqual(moveTargets(folders, "Campaign/NPCs", true, "loc"), ["Campaign/Locations"]);
 });
