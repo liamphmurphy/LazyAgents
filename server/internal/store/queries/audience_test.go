@@ -11,6 +11,11 @@ import (
 // Every exception names the invariant its caller must preserve. New queries
 // cannot inherit an exception just because they live beside a write query.
 var audienceExceptions = map[string]string{
+	"DeletePageTags":        "publish bookkeeping after a visible artifact lock",
+	"AddPageTags":           "publish bookkeeping after a visible artifact lock",
+	"DeletePropertyAliases": "publish bookkeeping for this visible locked page by artifact id",
+	"AddPropertyAlias":      "publish bookkeeping after visible path and alias collision checks; conflict scoped to artifact id",
+
 	"CreateArtifact":              "insert only; audience is chosen by trusted service code",
 	"NextADRNumber":               "number allocation, not a page reader; ADRs are shared",
 	"ADRNumberTaken":              "number allocation; no private note data",
@@ -26,7 +31,7 @@ var audienceExceptions = map[string]string{
 	"MockupReviewsSince":          "mockup-only; never notes",
 	"ChatTurnCitations":           "reads from the authenticated person's own chat",
 	"AddAlias":                    "write after visible artifact lock; aliases belong to artifact ids",
-	"DeleteAlias":                 "unused write query; not exposed to a caller",
+	"DeleteAlias":                 "delete only this locked page's moved alias by artifact id",
 	"SetNotePath":                 "rename after visible artifact lock; audience follows agent namespaces",
 	"DeleteLinksFromSource":       "index write in source publishing transaction",
 	"InsertLink":                  "index write; target ids hidden by reader visibility",

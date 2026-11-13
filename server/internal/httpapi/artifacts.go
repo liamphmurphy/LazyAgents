@@ -194,6 +194,17 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 	for _, sec := range sections {
 		out.Outline = append(out.Outline, api.OutlineSection{Id: sec.ID, Level: int(sec.Level), Anchor: sec.Anchor, Heading: sec.Heading, Citations: int(sec.Citations)})
 	}
+	if a.Type == "note" {
+		props := api.PageProperties(artifacts.DecodeProperties(cur.Properties))
+		out.Properties = &props
+		aliases, _ := artifacts.StringList(props["aliases"])
+		out.Aliases = &aliases
+		tags, err := s.Q.PageTags(ctx, store.PageTagsParams{ArtifactID: a.ID, Viewer: pageview.From(ctx).UserID})
+		if err != nil {
+			return out, err
+		}
+		out.Tags = &tags
+	}
 	out.BodyMd.Set(deref(cur.BodyMd))
 	if cur.BodyMd == nil {
 		out.BodyMd.SetNull()

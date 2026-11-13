@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,7 +15,7 @@ import (
 
 const addAlias = `-- name: AddAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path) VALUES ($1, $2, $3)
-ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, created_at = now()
+ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now()
 `
 
 type AddAliasParams struct {
@@ -25,6 +26,36 @@ type AddAliasParams struct {
 
 func (q *Queries) AddAlias(ctx context.Context, arg AddAliasParams) error {
 	_, err := q.db.Exec(ctx, addAlias, arg.WorkspaceID, arg.ArtifactID, arg.Path)
+	return err
+}
+
+const addPageTags = `-- name: AddPageTags :exec
+INSERT INTO page_tags (artifact_id, tag) SELECT $1::uuid, unnest($2::text[]) ON CONFLICT DO NOTHING
+`
+
+type AddPageTagsParams struct {
+	ArtifactID uuid.UUID
+	Tags       []string
+}
+
+func (q *Queries) AddPageTags(ctx context.Context, arg AddPageTagsParams) error {
+	_, err := q.db.Exec(ctx, addPageTags, arg.ArtifactID, arg.Tags)
+	return err
+}
+
+const addPropertyAlias = `-- name: AddPropertyAlias :exec
+INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
+ON CONFLICT (artifact_id, path) DO NOTHING
+`
+
+type AddPropertyAliasParams struct {
+	WorkspaceID uuid.UUID
+	ArtifactID  uuid.UUID
+	Path        string
+}
+
+func (q *Queries) AddPropertyAlias(ctx context.Context, arg AddPropertyAliasParams) error {
+	_, err := q.db.Exec(ctx, addPropertyAlias, arg.WorkspaceID, arg.ArtifactID, arg.Path)
 	return err
 }
 
@@ -257,16 +288,17 @@ func (q *Queries) DecideVersion(ctx context.Context, arg DecideVersionParams) er
 }
 
 const deleteAlias = `-- name: DeleteAlias :exec
-DELETE FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower($2)
+DELETE FROM artifact_aliases WHERE workspace_id = $1 AND artifact_id=$2 AND lower(path) = lower($3) AND kind='moved'
 `
 
 type DeleteAliasParams struct {
 	WorkspaceID uuid.UUID
+	ArtifactID  uuid.UUID
 	Path        string
 }
 
 func (q *Queries) DeleteAlias(ctx context.Context, arg DeleteAliasParams) error {
-	_, err := q.db.Exec(ctx, deleteAlias, arg.WorkspaceID, arg.Path)
+	_, err := q.db.Exec(ctx, deleteAlias, arg.WorkspaceID, arg.ArtifactID, arg.Path)
 	return err
 }
 
@@ -295,6 +327,24 @@ type DeleteLinksFromSourceParams struct {
 
 func (q *Queries) DeleteLinksFromSource(ctx context.Context, arg DeleteLinksFromSourceParams) error {
 	_, err := q.db.Exec(ctx, deleteLinksFromSource, arg.SourceKind, arg.SourceID)
+	return err
+}
+
+const deletePageTags = `-- name: DeletePageTags :exec
+DELETE FROM page_tags WHERE artifact_id = $1
+`
+
+func (q *Queries) DeletePageTags(ctx context.Context, artifactID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePageTags, artifactID)
+	return err
+}
+
+const deletePropertyAliases = `-- name: DeletePropertyAliases :exec
+DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias'
+`
+
+func (q *Queries) DeletePropertyAliases(ctx context.Context, artifactID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePropertyAliases, artifactID)
 	return err
 }
 
@@ -333,7 +383,7 @@ func (q *Queries) EpicsByIDs(ctx context.Context, arg EpicsByIDsParams) ([]Epics
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
@@ -355,6 +405,7 @@ type ExportNotesRow struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	BodyMd     *string
+	Properties json.RawMessage
 	ProjectKey *string
 }
 
@@ -376,6 +427,7 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Exp
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BodyMd,
+			&i.Properties,
 			&i.ProjectKey,
 		); err != nil {
 			return nil, err
@@ -1042,6 +1094,7 @@ SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.u
   (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
 FROM artifacts ar
 WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note'
+  AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower($4)))
 ORDER BY lower(ar.path)
 `
 
@@ -1049,6 +1102,7 @@ type ListNotesParams struct {
 	WorkspaceID  uuid.UUID
 	Viewer       *uuid.UUID
 	IncludeAgent bool
+	Tag          *string
 }
 
 type ListNotesRow struct {
@@ -1065,7 +1119,12 @@ type ListNotesRow struct {
 }
 
 func (q *Queries) ListNotes(ctx context.Context, arg ListNotesParams) ([]ListNotesRow, error) {
-	rows, err := q.db.Query(ctx, listNotes, arg.WorkspaceID, arg.Viewer, arg.IncludeAgent)
+	rows, err := q.db.Query(ctx, listNotes,
+		arg.WorkspaceID,
+		arg.Viewer,
+		arg.IncludeAgent,
+		arg.Tag,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1159,8 +1218,17 @@ func (q *Queries) ListSuggestions(ctx context.Context, arg ListSuggestionsParams
 	return items, nil
 }
 
+const lockNotePaths = `-- name: LockNotePaths :exec
+SELECT pg_advisory_xact_lock(hashtextextended('note-paths:' || $1::uuid::text, 0))
+`
+
+func (q *Queries) LockNotePaths(ctx context.Context, dollar_1 uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockNotePaths, dollar_1)
+	return err
+}
+
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE artifact_visible(ar.audience, ar.owner_user_id, $3::uuid) AND v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -1196,6 +1264,7 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewedAt,
 		&i.ReviewNote,
 		&i.ReviewPins,
+		&i.Properties,
 	)
 	return i, err
 }
@@ -1350,6 +1419,52 @@ func (q *Queries) NotePathTaken(ctx context.Context, arg NotePathTakenParams) (b
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const pageTags = `-- name: PageTags :many
+SELECT pt.tag FROM page_tags pt JOIN artifacts a ON a.id=pt.artifact_id WHERE pt.artifact_id = $1 AND artifact_visible(a.audience,a.owner_user_id,$2::uuid) ORDER BY pt.tag
+`
+
+type PageTagsParams struct {
+	ArtifactID uuid.UUID
+	Viewer     *uuid.UUID
+}
+
+func (q *Queries) PageTags(ctx context.Context, arg PageTagsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, pageTags, arg.ArtifactID, arg.Viewer)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		items = append(items, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const propertyAliasTaken = `-- name: PropertyAliasTaken :one
+SELECT EXISTS (SELECT 1 FROM artifact_aliases al JOIN artifacts a ON a.id=al.artifact_id WHERE al.workspace_id = $1 AND lower(al.path) = lower($2) AND al.kind = 'alias' AND artifact_visible(a.audience,a.owner_user_id,$3::uuid))
+`
+
+type PropertyAliasTakenParams struct {
+	WorkspaceID uuid.UUID
+	Path        string
+	Viewer      *uuid.UUID
+}
+
+func (q *Queries) PropertyAliasTaken(ctx context.Context, arg PropertyAliasTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, propertyAliasTaken, arg.WorkspaceID, arg.Path, arg.Viewer)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const relabelVersion = `-- name: RelabelVersion :exec

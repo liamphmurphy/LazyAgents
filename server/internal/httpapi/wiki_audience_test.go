@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"strings"
@@ -186,5 +187,30 @@ func TestWikiAudienceWorkflowTerminalWritesAsOwner(t *testing.T) {
 				t.Fatalf("owner's %s output: %v", mode, got)
 			}
 		})
+	}
+}
+
+func TestWikiAudiencePropertyReaders(t *testing.T) {
+	e := newChatEnv(t)
+	page := e.want("POST", "/wiki/pages", map[string]any{"path": "Private metadata page", "body_md": "Private metadata body", "aliases": []string{"Private metadata alias 175"}, "tags": []string{"privatetag175"}}, 201)
+	id := uuid.MustParse(page["id"].(string))
+	ctx := t.Context()
+	ws := e.me.WorkspaceID
+	if a, err := e.q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: "Private metadata alias 175"}); err != pgx.ErrNoRows {
+		t.Fatalf("run private alias lookup: %+v %v", a, err)
+	}
+	if taken, err := e.q.PropertyAliasTaken(ctx, store.PropertyAliasTakenParams{WorkspaceID: ws, Path: "Private metadata alias 175"}); err != nil || taken {
+		t.Fatalf("private alias existence leaked: %v %v", taken, err)
+	}
+	if tags, err := e.q.PageTags(ctx, store.PageTagsParams{ArtifactID: id}); err != nil || len(tags) != 0 {
+		t.Fatalf("private tags leaked: %v %v", tags, err)
+	}
+	tags, err := e.q.PageTags(ctx, store.PageTagsParams{ArtifactID: id, Viewer: &e.me.ID})
+	if err != nil || len(tags) != 1 || tags[0] != "privatetag175" {
+		t.Fatalf("owner tags: %v %v", tags, err)
+	}
+	tag := "privatetag175"
+	if rows, err := e.q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Tag: &tag, IncludeAgent: true}); err != nil || len(rows) != 0 {
+		t.Fatalf("tag discovery leaked private page: %v %v", rows, err)
 	}
 }

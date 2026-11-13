@@ -20,10 +20,10 @@ ORDER BY (ar.audience = 'private') DESC, al.created_at DESC LIMIT 1;
 
 -- name: AddAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path) VALUES ($1, $2, $3)
-ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, created_at = now();
+ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now();
 
 -- name: DeleteAlias :exec
-DELETE FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower(sqlc.arg(path));
+DELETE FROM artifact_aliases WHERE workspace_id = $1 AND artifact_id=sqlc.arg(artifact_id) AND lower(path) = lower(sqlc.arg(path)) AND kind='moved';
 
 -- name: FindEpicByName :one
 SELECT * FROM epics WHERE workspace_id = $1 AND lower(name) = lower(sqlc.arg(name)) LIMIT 1;
@@ -37,6 +37,7 @@ SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.u
   (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
 FROM artifacts ar
 WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note'
+  AND (sqlc.narg(tag)::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower(sqlc.narg(tag))))
 ORDER BY lower(ar.path);
 
 -- name: DeleteLinksFromSource :exec
@@ -185,7 +186,7 @@ WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) A
 UPDATE artifact_versions SET state = $2, decided_by_id = $3, decided_at = now() WHERE id = $1;
 
 -- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
@@ -352,3 +353,25 @@ SELECT EXISTS (SELECT 1 FROM artifacts a
  AND ((sqlc.arg(audience)::text='private' AND a.audience='private' AND a.owner_user_id=sqlc.narg(viewer)::uuid)
       OR (sqlc.arg(audience)::text<>'private' AND a.audience<>'private'))
  AND (sqlc.narg(exclude_id)::uuid IS NULL OR a.id<>sqlc.narg(exclude_id)))::bool;
+
+-- name: LockNotePaths :exec
+SELECT pg_advisory_xact_lock(hashtextextended('note-paths:' || $1::uuid::text, 0));
+
+-- name: DeletePageTags :exec
+DELETE FROM page_tags WHERE artifact_id = $1;
+
+-- name: AddPageTags :exec
+INSERT INTO page_tags (artifact_id, tag) SELECT sqlc.arg(artifact_id)::uuid, unnest(sqlc.arg(tags)::text[]) ON CONFLICT DO NOTHING;
+
+-- name: PageTags :many
+SELECT pt.tag FROM page_tags pt JOIN artifacts a ON a.id=pt.artifact_id WHERE pt.artifact_id = $1 AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid) ORDER BY pt.tag;
+
+-- name: DeletePropertyAliases :exec
+DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias';
+
+-- name: AddPropertyAlias :exec
+INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
+ON CONFLICT (artifact_id, path) DO NOTHING;
+
+-- name: PropertyAliasTaken :one
+SELECT EXISTS (SELECT 1 FROM artifact_aliases al JOIN artifacts a ON a.id=al.artifact_id WHERE al.workspace_id = $1 AND lower(al.path) = lower(sqlc.arg(path)) AND al.kind = 'alias' AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid));

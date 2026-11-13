@@ -390,7 +390,7 @@ func (s *Service) ProposePattern(ctx context.Context, agent store.Agent, in Prop
 	path := ProposedRoot + title
 	body := ComposeProposal(topic, tags, in.Body, in.SourceTicket)
 	var res Result
-	err = s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, agent.WorkspaceID, func(q *store.Queries) error {
 		ws := agent.WorkspaceID
 		if pub, err := publishedByTitle(ctx, q, ws, title); err != nil {
 			return err
@@ -508,7 +508,7 @@ func (s *Service) PublishPattern(ctx context.Context, agent store.Agent, scopes 
 		return Result{}, errNotCurator()
 	}
 	var res Result
-	err := s.tx(ctx, func(q *store.Queries) error {
+	err := s.tx(ctx, agent.WorkspaceID, func(q *store.Queries) error {
 		ws := agent.WorkspaceID
 		prop, cur, err := loadProposal(ctx, q, ws, in.ProposedTitle)
 		if err != nil {
@@ -564,7 +564,7 @@ func (s *Service) RejectPattern(ctx context.Context, agent store.Agent, scopes m
 	if !CanCurate(scopes) {
 		return "", errNotCurator()
 	}
-	err = s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, agent.WorkspaceID, func(q *store.Queries) error {
 		prop, _, err := loadProposal(ctx, q, agent.WorkspaceID, title)
 		if err != nil {
 			return err

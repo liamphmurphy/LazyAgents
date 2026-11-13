@@ -11,10 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
@@ -38,7 +39,7 @@ func toMentions(ms []wiki.Mention) []api.Mention { return same[[]api.Mention](ms
 func (s *Server) ListWikiPages(ctx context.Context, req api.ListWikiPagesRequestObject) (api.ListWikiPagesResponseObject, error) {
 	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	_, _, ws := me(ctx)
-	rows, err := s.Q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
+	rows, err := s.Q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Tag: req.Params.Tag, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}
@@ -67,10 +68,14 @@ func (s *Server) noteDetail(ctx context.Context, ws, id uuid.UUID) (api.Artifact
 
 func (s *Server) CreateWikiPage(ctx context.Context, req api.CreateWikiPageRequestObject) (api.CreateWikiPageResponseObject, error) {
 	u, _, ws := me(ctx)
-	in := wiki.Save{Path: req.Body.Path, Body: req.Body.BodyMd, Mode: wiki.ModeCreate, ProjectKey: deref(req.Body.ProjectKey), Audience: string(deref(req.Body.Audience))}
+	in := wiki.Save{Path: deref(req.Body.Path), Audience: string(deref(req.Body.Audience)), Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, Body: req.Body.BodyMd, Mode: wiki.ModeCreate, ProjectKey: deref(req.Body.ProjectKey)}
 	if strings.TrimSpace(in.Body) == "" {
 		// A new page from a ghost link starts with its title.
-		in.Body = "# " + links.TitleOf(links.NormalizePath(in.Path)) + "\n"
+		title := links.TitleOf(links.NormalizePath(in.Path))
+		if in.Title != nil {
+			title = *in.Title
+		}
+		in.Body = "# " + title + "\n"
 	}
 	res, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, in)
 	if err != nil {
@@ -104,31 +109,13 @@ func (s *Server) GetWikiPage(ctx context.Context, req api.GetWikiPageRequestObje
 
 func (s *Server) SaveWikiPage(ctx context.Context, req api.SaveWikiPageRequestObject) (api.SaveWikiPageResponseObject, error) {
 	u, _, ws := me(ctx)
-	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
-	if err != nil || a.Type != "note" {
-		return nil, apperr.ErrNotFound
+	res, err := s.Wiki.UpdateAsUser(ctx, ws, u.ID, req.Id, wiki.Save{
+		Audience: string(deref(req.Body.Audience)), Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, BaseID: req.Body.BaseVersionId, Note: deref(req.Body.Note),
+	}, req.Body.Path, req.Body.BodyMd)
+	if err != nil {
+		return nil, err
 	}
-	if req.Body.Path != nil {
-		if a, err = s.Wiki.Rename(ctx, ws, a.ID, *req.Body.Path); err != nil {
-			return nil, err
-		}
-	}
-	if req.Body.BodyMd != nil || req.Body.Audience != nil {
-		body := deref(req.Body.BodyMd)
-		if req.Body.BodyMd == nil && a.CurrentVersionID != nil {
-			v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
-			if err != nil {
-				return nil, err
-			}
-			body = deref(v.BodyMd)
-		}
-		if _, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, wiki.Save{
-			PageID: &a.ID, Path: *a.Path, Body: body, Audience: string(deref(req.Body.Audience)), Mode: wiki.ModeReplace, BaseID: req.Body.BaseVersionId, Note: deref(req.Body.Note),
-		}); err != nil {
-			return nil, err
-		}
-	}
-	out, err := s.noteDetail(ctx, ws, a.ID)
+	out, err := s.noteDetail(ctx, ws, res.Note.ID)
 	if err != nil {
 		return nil, err
 	}

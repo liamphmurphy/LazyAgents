@@ -32,7 +32,7 @@ func TestPrivatePageNeverReachesTicketRun(t *testing.T) {
 	if err := e.q.InsertLink(e.ctx, store.InsertLinkParams{WorkspaceID: e.ws, SourceKind: "ticket", SourceID: tk.ID, SourceTicketID: &tk.ID, TargetKind: "artifact", TargetID: &secret.Note.ID, TargetText: *secret.Note.Path, RawText: "[[" + *secret.Note.Path + "]]", Snippet: "Ticket-authored text"}); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws, IncludeAgent: true})
+	rows, err := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws, IncludeAgent: true, Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestPrivatePageNeverReachesTicketRun(t *testing.T) {
 		}
 	}
 	typ := "note"
-	listed, err := e.q.ListArtifacts(e.ctx, store.ListArtifactsParams{WorkspaceID: e.ws, Type: &typ, IncludeAgent: true})
+	listed, err := e.q.ListArtifacts(e.ctx, store.ListArtifactsParams{WorkspaceID: e.ws, Type: &typ, IncludeAgent: true, Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestPrivatePageNeverReachesTicketRun(t *testing.T) {
 			t.Fatal("artifact list leak")
 		}
 	}
-	attached, err := e.q.ListTicketArtifacts(e.ctx, store.ListTicketArtifactsParams{TicketID: tk.ID})
+	attached, err := e.q.ListTicketArtifacts(e.ctx, store.ListTicketArtifactsParams{TicketID: tk.ID, Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
