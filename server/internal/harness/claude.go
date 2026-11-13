@@ -314,6 +314,7 @@ func (p *claudeParser) Line(b []byte) []Event {
 		}
 		sub := l.Parent != nil // a sub agent's message, on the main stream
 		err := json.Unmarshal(l.Message, &msg)
+		var reqContext int64 // this request's prompt size, stamped on its tool calls
 		if l.Type == "assistant" && !sub && err == nil && msg.Usage != nil {
 			// This request's prompt size; only the main agent's counts.
 			var cached int64
@@ -322,6 +323,7 @@ func (p *claudeParser) Line(b []byte) []Event {
 			}
 			if n := msg.Usage.InputTokens + cached + msg.Usage.CacheCreationTokens; n > 0 {
 				p.res.Usage.ContextTokens = n
+				reqContext = n
 			}
 		}
 		if err != nil {
@@ -364,6 +366,9 @@ func (p *claudeParser) Line(b []byte) []Event {
 					pl["subagent"] = true
 				} else {
 					p.res.Usage.ToolCalls++
+					if reqContext > 0 { // per-call context growth, for run analysis
+						pl["context_tokens"] = reqContext
+					}
 				}
 				out = append(out, Event{"tool_call", pl})
 			case "tool_result":

@@ -18,8 +18,21 @@ func TestClaudeContextTokensAndToolOutput(t *testing.T) {
 		`{"type":"result","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}`,
 	}
 	p := ClaudeCode{}.NewParser("")
+	ctxByTool := map[string]any{}
 	for _, l := range lines {
-		p.Line([]byte(l))
+		for _, ev := range p.Line([]byte(l)) {
+			if ev.Type == "tool_call" {
+				ctxByTool[ev.Payload["id"].(string)] = ev.Payload["context_tokens"]
+			}
+		}
+	}
+	// Each main-agent tool call carries its request's prompt size; a sub
+	// agent's call carries none.
+	want := map[string]any{"r1": int64(1210), "b1": int64(1210), "m1": int64(1210), "g1": int64(3045), "s1": nil}
+	for id, w := range want {
+		if ctxByTool[id] != w {
+			t.Errorf("tool_call %s context_tokens = %v, want %v", id, ctxByTool[id], w)
+		}
 	}
 	u := p.Result().Usage
 	if u.ContextTokens != 3045 {
