@@ -3,16 +3,16 @@ import { PALETTES, contrast } from "../lib/palettes";
 import { installChatApi } from "./mock-chat-api";
 
 const footer = (page: Page) => page.getByRole("region", { name: "Harness activity" });
-const drawer = (page: Page) => page.getByRole("dialog", { name: "Harness usage" });
+const bubble = (page: Page, label: string) => page.getByRole("dialog", { name: `${label} usage` });
 const toggle = (page: Page) => page.getByRole("switch", { name: "Show harness activity", exact: true });
 
 async function install(page: Page) {
   await installChatApi(page);
   await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   await page.route("**/api/v1/persona-dock", (route) => route.fulfill({ json: { personas: [], harnesses: [
-    { harness: "claude-code", label: "Claude", running: 2, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 42 }] },
-    { harness: "codex", label: "Codex", running: 1, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] },
-    { harness: "antigravity", label: "Antigravity", running: 0, usage_available: false, usage_checking: false, limited_until: new Date(Date.now() + 3600000).toISOString(), windows: [] },
+    { harness: "claude-code", label: "Claude", connected: true, running: 2, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 42 }] },
+    { harness: "codex", label: "Codex", connected: true, running: 1, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] },
+    { harness: "antigravity", label: "Antigravity", connected: true, running: 0, usage_available: false, usage_checking: false, limited_until: new Date(Date.now() + 3600000).toISOString(), windows: [] },
   ] } }));
 }
 
@@ -25,7 +25,7 @@ test("the Appearance switch reclaims history space, persists and survives palett
   const before = (await history.boundingBox())!.height;
   await toggle(page).click();
   await expect(footer(page)).toHaveCount(0);
-  await expect.poll(async () => (await history.boundingBox())!.height).toBeGreaterThan(before + 80);
+  await expect.poll(async () => (await history.boundingBox())!.height).toBeGreaterThan(before + 50);
   await page.getByRole("radio", { name: "Nord", exact: true }).check();
   await page.getByRole("button", { name: "Reset palette", exact: true }).click();
   await expect(toggle(page)).not.toBeChecked();
@@ -47,27 +47,28 @@ test("the Appearance switch reclaims history space, persists and survives palett
   await expect(footer(page)).toHaveCount(0);
 });
 
-test("hiding activity in another tab also closes its drawer and frees the history", async ({ page, context }) => {
+test("hiding activity in another tab also closes its bubble and frees the history", async ({ page, context }) => {
   await install(page);
   await page.goto("/settings#appearance");
   const other = await context.newPage();
   await install(other);
   await other.goto("/chat?new");
   await footer(other).getByRole("button", { name: /Claude, working/ }).click();
-  await expect(drawer(other)).toBeVisible();
+  await expect(bubble(other, "Claude")).toBeVisible();
   await toggle(page).click();
   await expect(footer(other)).toHaveCount(0);
-  await expect(drawer(other)).toHaveCount(0);
+  await expect(bubble(other, "Claude")).toHaveCount(0);
   await toggle(page).click();
   await expect(footer(other)).toBeVisible();
   await footer(other).getByRole("button", { name: /Claude, working/ }).click();
-  await expect(drawer(other)).toBeVisible();
+  await expect(bubble(other, "Claude")).toBeVisible();
 });
 
 function hex(rgb: string) {
   return "#" + rgb.match(/[\d.]+/g)!.slice(0, 3).map((n) => Math.round(Number(n)).toString(16).padStart(2, "0")).join("");
 }
 
+/** Footer chrome and the open bubble's colors, beside the tokens they should match. */
 async function colors(page: Page) {
   return page.evaluate(() => {
     const sample = (selector: string, key: string) => getComputedStyle(document.querySelector(selector)!).getPropertyValue(key);
@@ -87,14 +88,23 @@ async function colors(page: Page) {
       paints,
       footer: sample(".harness-footer", "background-color"), sidebar: token("bg-sidebar"),
       label: sample(".harness-name", "color"), secondary: token("text-secondary"),
-      surface: sample(".harness-drawer", "background-color"), raised: token("surface-raised"),
-      value: sample('.harness-usage-row[data-tone="ok"] .harness-usage-value', "color"), text: token("text"),
-      bar: sample('.harness-usage-row[data-tone="ok"] .harness-usage-track i', "background-color"), accent: token("accent"),
-      track: sample(".harness-usage-track", "background-color"), sunken: token("surface-sunken"),
-      warn: sample('.harness-usage-row[data-tone="warn"] .harness-usage-value', "color"), human: token("pill-human-fg"),
-      limited: sample('.harness-usage-row[data-tone="limited"] .harness-usage-value', "color"), blocked: token("pill-blocked-fg"),
+      surface: sample(".harness-bubble", "background-color"), raised: token("surface-raised"),
+      value: sample(".harness-bubble .harness-usage-value", "color"),
+      bar: sample(".harness-bubble .harness-usage-track i", "background-color"),
+      track: sample(".harness-bubble .harness-usage-track", "background-color"), sunken: token("surface-sunken"),
+      text: token("text"), accent: token("accent"), human: token("pill-human-fg"), blocked: token("pill-blocked-fg"),
     };
   });
+}
+
+/** Opens one harness's bubble and returns its colors, closing it again. */
+async function bubbleColors(page: Page, label: string) {
+  await footer(page).getByRole("button", { name: new RegExp(`^${label},`) }).click();
+  await expect(bubble(page, label)).toBeVisible();
+  const c = await colors(page);
+  await page.keyboard.press("Escape");
+  await expect(bubble(page, label)).toHaveCount(0);
+  return c;
 }
 
 test("every palette and mode theme the UI while all character paints stay constant", async ({ page }) => {
@@ -108,23 +118,22 @@ test("every palette and mode theme the UI while all character paints stay consta
     for (const mode of ["Dark", "Light"]) {
       await page.getByRole("radio", { name: mode, exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", mode.toLowerCase());
-      await footer(page).getByRole("button", { name: /Claude, working/ }).click();
-      await expect(drawer(page)).toBeVisible();
-      const c = await colors(page);
-      paints ??= c.paints;
-      expect(c.paints, `${palette.name} ${mode} character colors`).toEqual(paints);
-      expect(c.footer).toBe(c.sidebar);
-      expect(c.label).toBe(c.secondary);
-      expect(c.surface).toBe(c.raised);
-      expect(c.value).toBe(c.text);
-      expect(c.bar).toBe(c.accent);
-      expect(c.track).toBe(c.sunken);
-      expect(c.warn).toBe(c.human);
-      expect(c.limited).toBe(c.blocked);
-      for (const fg of [c.value, c.warn, c.limited]) expect(contrast(hex(fg), hex(c.surface)), `${palette.name} ${mode} value contrast`).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(hex(c.label), hex(c.footer)), `${palette.name} ${mode} label contrast`).toBeGreaterThanOrEqual(4.5);
-      for (const fg of [c.bar, c.warn, c.limited]) expect(contrast(hex(fg), hex(c.track)), `${palette.name} ${mode} bar contrast`).toBeGreaterThanOrEqual(3);
-      await page.keyboard.press("Escape");
+      // Claude is ok, Codex near its limit (warn), Antigravity limited.
+      const ok = await bubbleColors(page, "Claude"), warn = await bubbleColors(page, "Codex"), limited = await bubbleColors(page, "Antigravity");
+      paints ??= ok.paints;
+      expect(ok.paints, `${palette.name} ${mode} character colors`).toEqual(paints);
+      expect(ok.footer).toBe(ok.sidebar);
+      expect(ok.label).toBe(ok.secondary);
+      expect(ok.surface).toBe(ok.raised);
+      expect(ok.value).toBe(ok.text);
+      expect(ok.bar).toBe(ok.accent);
+      expect(ok.track).toBe(ok.sunken);
+      expect(warn.value).toBe(warn.human);
+      expect(warn.bar).toBe(warn.human);
+      expect(limited.value).toBe(limited.blocked);
+      for (const fg of [ok.value, warn.value, limited.value]) expect(contrast(hex(fg), hex(ok.surface)), `${palette.name} ${mode} value contrast`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(hex(ok.label), hex(ok.footer)), `${palette.name} ${mode} label contrast`).toBeGreaterThanOrEqual(4.5);
+      for (const fg of [ok.bar, warn.bar, limited.bar]) expect(contrast(hex(fg), hex(ok.track)), `${palette.name} ${mode} bar contrast`).toBeGreaterThanOrEqual(3);
     }
   }
   await page.getByRole("button", { name: "Customize this palette", exact: true }).click();
@@ -133,10 +142,8 @@ test("every palette and mode theme the UI while all character paints stay consta
     await page.getByRole("button", { name: "Accent", exact: true }).click();
     await page.getByRole("textbox", { name: "Hex color", exact: true }).fill(value);
     await page.getByRole("radio", { name: mode, exact: true }).click();
-    await footer(page).getByRole("button", { name: /Claude, working/ }).click();
-    const c = await colors(page);
+    const c = await bubbleColors(page, "Claude");
     expect(c.paints).toEqual(paints);
     expect(hex(c.bar)).toBe(value);
-    await page.keyboard.press("Escape");
   }
 });

@@ -4,6 +4,7 @@ export type UsageWindow = { id: string; kind: "session" | "weekly" | "other"; la
 export type HarnessActivity = {
   harness: string;
   label: string;
+  connected: boolean;
   running: number;
   limited_until?: string;
   plan?: string;
@@ -16,7 +17,7 @@ export type HarnessActivity = {
 export const CLAUDE = "claude-code";
 export const CODEX = "codex";
 export const ANTIGRAVITY = "antigravity";
-/** Stable footer order, including harnesses an older server has not reported yet. */
+/** Stable footer order, whichever harnesses are connected. */
 export const HARNESS_ORDER = [CLAUDE, CODEX, ANTIGRAVITY] as const;
 
 /** Running and not out of allowance: a limited harness's runs have moved elsewhere. */
@@ -88,11 +89,11 @@ export function checkedAgo(harnesses: HarnessActivity[], now: number = Date.now(
   return m < 60 ? `checked ${m}m ago` : `checked ${Math.round(m / 60)}h ago`;
 }
 
-const LABELS = { [CLAUDE]: "Claude", [CODEX]: "Codex", [ANTIGRAVITY]: "Antigravity" };
-
-/** Missing readings stay visible as unknown, rather than disappearing or becoming zero. */
-export function knownHarnesses(readings: HarnessActivity[]): HarnessActivity[] {
-  return HARNESS_ORDER.map((harness) => readings.find((h) => h.harness === harness) ?? {
-    harness, label: LABELS[harness], running: 0, usage_available: false, windows: [],
-  });
+/** The harnesses that can run here, in footer order; a harness still working stays even if its key was just removed. */
+export function connectedHarnesses(readings: HarnessActivity[]): HarnessActivity[] {
+  const rank = (h: HarnessActivity) => {
+    const i = (HARNESS_ORDER as readonly string[]).indexOf(h.harness);
+    return i < 0 ? HARNESS_ORDER.length : i;
+  };
+  return readings.filter((h) => h.connected || h.running > 0).sort((a, b) => rank(a) - rank(b));
 }

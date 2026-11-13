@@ -1,19 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkedAgo, harnessWorking, knownHarnesses, resetLabel, usageTone, sessionPercent, usageSub } from "./harness-activity.ts";
+import { checkedAgo, connectedHarnesses, harnessWorking, resetLabel, usageTone, sessionPercent, usageSub } from "./harness-activity.ts";
 
 const harness = (h, over = {}) => ({ harness: h, label: { codex: "Codex", antigravity: "Antigravity" }[h] ?? "Claude", running: 0, usage_available: false, windows: [], ...over });
 const session = (used, resets_at) => ({ id: "five_hour", kind: "session", label: "Session", used_percent: used, resets_at });
 const weekly = (used) => ({ id: "seven_day", kind: "weekly", label: "Weekly", used_percent: used });
-test("all harnesses keep their place when the server omits a reading", () => {
-  const codex = harness("codex", { running: 2 });
-  const rows = knownHarnesses([codex]);
-  assert.deepEqual(rows.map((h) => h.harness), ["claude-code", "codex", "antigravity"]);
-  assert.equal(rows[1], codex);
-  assert.equal(sessionPercent(rows[0]), null);
-  assert.equal(sessionPercent(rows[2]), null);
-  assert.equal(harnessWorking(codex), true);
-  assert.equal(harnessWorking({ ...codex, limited_until: "2026-11-09T21:20:00Z" }), false);
+test("only connected harnesses show, in a stable order, and a working one is never hidden", () => {
+  const claude = harness("claude-code", { connected: true });
+  const codex = harness("codex", { connected: false });
+  const agy = harness("antigravity", { connected: true });
+  assert.deepEqual(connectedHarnesses([agy, codex, claude]).map((h) => h.harness), ["claude-code", "antigravity"]);
+  assert.deepEqual(connectedHarnesses([codex]), []);
+  assert.deepEqual(connectedHarnesses([]), []);
+  // Runs already underway on a harness whose key was removed keep it visible.
+  const busy = { ...codex, running: 2 };
+  assert.deepEqual(connectedHarnesses([agy, busy, claude]).map((h) => h.harness), ["claude-code", "codex", "antigravity"]);
+  assert.equal(harnessWorking(busy), true);
+  assert.equal(harnessWorking({ ...busy, limited_until: "2026-11-09T21:20:00Z" }), false);
   assert.equal(harnessWorking(undefined), false);
 });
 

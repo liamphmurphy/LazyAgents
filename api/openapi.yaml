@@ -9525,10 +9525,11 @@ components:
         resets_at: { type: string, format: date-time }
     HarnessActivity:
       type: object
-      required: [harness, label, running, usage_available, usage_checking, windows]
+      required: [harness, label, connected, running, usage_available, usage_checking, windows]
       properties:
         harness: { type: string, description: "claude-code, codex or antigravity" }
         label: { type: string }
+        connected: { type: boolean, description: "The harness has the credential its runs need (its harness key secret), or the runner needs none. The sidebar shows only connected harnesses." }
         running: { type: integer, description: Runs and chat turns working on this harness now }
         limited_until: { type: string, format: date-time, description: "Present while the harness is out of allowance; runs fall back to another harness until then" }
         plan: { type: string, description: "Subscription name when the CLI reports one (max, pro, plus…)" }
