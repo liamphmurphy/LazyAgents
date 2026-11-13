@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DropdownMenu } from "radix-ui";
-import { useMemo, useRef, useState } from "react";
+import { ContextMenu, DropdownMenu } from "radix-ui";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
@@ -20,6 +20,7 @@ import { ReviewBar, ReviewList, undecided } from "./page-review";
 import { PageSide, type SideTab } from "./page-side";
 import { QueryTable } from "./query-table";
 import { useKnowledgeTab } from "./shell";
+import { useKnowledgeChat } from "./chat-context";
 
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Changed elsewhere", error: "Not saved" };
 const item = "flex cursor-default select-none items-start gap-2.5 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
@@ -52,6 +53,7 @@ export function PageScreen({ id }: { id: string }) {
 }
 
 function Loaded({ page: p }: { page: Page }) {
+  const { ask, registerDraft } = useKnowledgeChat();
   const router = useRouter();
   const save = useSavePage(p.id);
   const chat = useChat(p.chat_id ?? undefined).data;
@@ -61,6 +63,11 @@ function Loaded({ page: p }: { page: Page }) {
   const [tab, setTab] = useState<SideTab>("links");
   const [state, setState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
   const editor = useRef<DocEditorHandle>(null);
+  const selected = useRef<string | undefined>(undefined);
+  useEffect(() => registerDraft(p.id, () => {
+    const md = editor.current?.getMarkdown();
+    return md === undefined ? undefined : restoreObsidianSyntax(md);
+  }), [p.id, registerDraft]);
   const query = useSavedQuery(p.id, !!p.properties.query);
   const pendingCount = undecided(p).length;
 
@@ -150,7 +157,13 @@ function Loaded({ page: p }: { page: Page }) {
               </Banner>
               </div>
             )}
-            <div className="kn-editor">
+            <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
+            <div className="kn-editor" onContextMenuCapture={(e) => {
+              const selection = window.getSelection();
+              selected.current = selection?.anchorNode && selection.focusNode && e.currentTarget.contains(selection.anchorNode) && e.currentTarget.contains(selection.focusNode)
+                ? selection.toString() || undefined : undefined;
+            }}>
               {titles.isPending ? (
                 <Skeleton className="h-40 w-full" />
               ) : (
@@ -170,6 +183,18 @@ function Loaded({ page: p }: { page: Page }) {
               />
               )}
             </div>
+            </ContextMenu.Trigger>
+            <ContextMenu.Portal>
+              <ContextMenu.Content collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()} className={cx(floatPanel, "min-w-[180px]")}>
+                <ContextMenu.Item className={item} onSelect={() => ask(p, selected.current)}>
+                  <Icon name="msg" size={14} /> Ask a Persona
+                </ContextMenu.Item>
+                <ContextMenu.Item className={item} onSelect={() => { if (selected.current) void navigator.clipboard?.writeText(selected.current); }}>
+                  Copy selection
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+            </ContextMenu.Root>
             <Embeds page={p} />
           </article>
         </div>

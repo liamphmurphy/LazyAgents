@@ -1,30 +1,36 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { installChatApi, persona, type MockOptions } from "./mock-chat-api";
 
 // The persona chat dock on every Knowledge screen: folded to a rail by default, on the shared dock.
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const P = "55555555-5555-4555-8555-555555555555";
+const Q = "66666666-6666-4666-8666-666666666666";
 const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
 
-async function install(page: Page) {
-  await installChatApi(page, { replyDelayMs: 10 });
+async function install(page: Page, options: MockOptions = {}) {
+  const chat = await installChatApi(page, { replyDelayMs: 10, ...options });
   const s = { attached: [] as string[], page: { id: P, title: "Reading list", path: "Reading list", audience: "private", body_md: "Notes", version_id: "v1", seq: 1, properties: {}, direct: false, paused: false, chat_id: null as string | null, url: `/knowledge/${P}`, embeds: [], reviews: [], versions: [] } };
+  const pages = [s.page, { ...s.page, id: Q, title: "Other notes", path: "Other notes", body_md: "Second page", url: `/knowledge/${Q}` }];
   await page.route(/\/api\/v1\/knowledge\//, (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace("/api/v1/knowledge", "");
-    if (path === "/query") return json(route, { columns: [], rows: [], total: 0, has_more: false });
-    if (path === `/pages/${P}/chat` && req.method() === "PUT") {
-      s.page.chat_id = (req.postDataJSON() as { chat_id: string }).chat_id;
-      s.attached.push(s.page.chat_id);
-      return json(route, s.page);
+    if (path === "/query") return json(route, { columns: [], rows: pages, total: pages.length, has_more: false });
+    const target = pages.find((p) => path === `/pages/${p.id}` || path === `/pages/${p.id}/chat`);
+    if (target && path.endsWith("/chat") && req.method() === "PUT") {
+      target.chat_id = (req.postDataJSON() as { chat_id: string }).chat_id;
+      s.attached.push(target.chat_id);
+      return json(route, target);
     }
-    if (path === `/pages/${P}`) return json(route, s.page);
+    if (target) {
+      if (req.method() === "PUT") Object.assign(target, req.postDataJSON(), { seq: target.seq + 1 });
+      return json(route, target);
+    }
     if (path === "/network" || path === "/graph") return json(route, { nodes: [], edges: [] });
     if (path === "/backlinks") return json(route, { linked: [], unlinked: [] });
     return json(route, {});
   });
-  return s;
+  return { ...s, chat };
 }
 
 const dock = (page: Page) => page.getByRole("complementary", { name: "Panel", exact: true });
@@ -66,4 +72,171 @@ test("on a page the dock holds that page's chat, and ⌘J opens it, with the pag
   await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
   await expect.poll(() => s.attached.length).toBe(1);
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
+});
+
+test("every message carries the viewed page, including after the page changes", async ({ page }) => {
+  const s = await install(page);
+  await page.goto(`/knowledge/${P}`);
+  await expect(rail(page)).toBeVisible();
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(dock(page).getByText("Viewing: Reading list", { exact: true })).toBeVisible();
+  expect(s.chat.posted).toHaveLength(0);
+  for (const question of ["Summarise this", "What changed?"]) {
+    await input.fill(question);
+    await input.press("Enter");
+    await expect.poll(() => s.chat.posted.length).toBe(question === "Summarise this" ? 1 : 2);
+    expect(s.chat.posted.at(-1)?.body.context_refs).toEqual([{ kind: "page", id: P }]);
+    await expect(dock(page).getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    if (question === "Summarise this") {
+      s.page.body_md = "Updated notes";
+      s.page.seq++;
+      await page.reload();
+      await expect(page.getByTestId("doc-editor")).toContainText("Updated notes");
+    }
+  }
+});
+
+test("Ask a Persona captures unsaved selected text without sending", async ({ page }) => {
+  const s = await install(page);
+  await page.goto(`/knowledge/${P}`);
+  const editor = page.getByTestId("doc-editor");
+  await editor.fill("A passage that has not been saved yet.");
+  await editor.press(`${mod}+a`);
+  await editor.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Ask a Persona", exact: true }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(input).toBeFocused();
+  await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toBeVisible();
+  expect(s.chat.posted).toHaveLength(0);
+  expect(s.chat.created).toHaveLength(1);
+  expect(s.chat.created[0].hidden).toBe(true);
+  await input.fill("Explain this");
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.body).toContain("> A passage that has not been saved yet.");
+  expect(s.chat.posted[0].body.body).toContain("\n\n<!-- vesper:knowledge-context -->\n");
+  expect(s.chat.posted[0].body.body).toContain("[[Reading list]]");
+  expect(s.chat.posted[0].body.context_refs).toEqual([{ kind: "page", id: P }]);
+  await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toHaveCount(0);
+});
+
+test("a failed send preserves the question and selection for retry", async ({ page }) => {
+  const s = await install(page);
+  let failed = false;
+  await page.route(/\/api\/v1\/chats\/[^/]+\/messages$/, (route) => {
+    if (route.request().method() === "POST" && !failed) {
+      failed = true;
+      return json(route, { code: "invalid", message: "Please retry this message" }, 422);
+    }
+    return route.fallback();
+  });
+  await page.goto(`/knowledge/${P}`);
+  const editor = page.getByTestId("doc-editor");
+  await editor.click();
+  await editor.press(`${mod}+a`);
+  await editor.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Ask a Persona", exact: true }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await input.fill("Explain this");
+  await input.press("Enter");
+  await expect(dock(page).getByText("Please retry this message", { exact: true })).toBeVisible();
+  await expect(input).toHaveValue("Explain this");
+  await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toBeVisible();
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toHaveCount(0);
+});
+
+test("explorer attachments reuse the chat, can be removed, and preserve the question", async ({ page }) => {
+  const s = await install(page);
+  await page.goto(`/knowledge/${P}`);
+  const other = page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("link", { name: "Other notes", exact: true });
+  const ask = async () => {
+    await other.click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Ask a Persona", exact: true }).click();
+  };
+  await ask();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(input).toBeFocused();
+  await input.fill("Compare these pages");
+  await dock(page).getByRole("button", { name: "Remove Other notes" }).click();
+  await expect(input).toHaveValue("Compare these pages");
+  await ask();
+  await ask();
+  await expect(dock(page).getByRole("button", { name: "Remove Other notes" })).toHaveCount(1);
+  expect(s.chat.created).toHaveLength(1);
+  expect(s.chat.posted).toHaveLength(0);
+  expect(new URL(page.url()).pathname).toBe(`/knowledge/${P}`);
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.context_refs).toEqual([{ kind: "page", id: P }, { kind: "page", id: Q }]);
+});
+
+test("a selected passage stays attached after navigation and a new page is not automatically given a chat", async ({ page }) => {
+  const s = await install(page);
+  await page.goto(`/knowledge/${P}`);
+  const editor = page.getByTestId("doc-editor");
+  await editor.click();
+  await editor.press(`${mod}+a`);
+  await editor.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Ask a Persona", exact: true }).click();
+  await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("link", { name: "Other notes", exact: true }).click();
+  await expect(dock(page).getByText("Viewing: Other notes", { exact: true })).toBeVisible();
+  await expect(dock(page).getByRole("button", { name: "Remove selection from Reading list" })).toBeVisible();
+  expect(s.chat.created).toHaveLength(1);
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await input.fill("Compare with this page");
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.body).toContain("Selected passage from [[Reading list]]:\n> Notes");
+  expect(s.chat.posted[0].body.body).toContain("Currently viewing Knowledge page [[Other notes]]");
+  expect(s.chat.posted[0].body.context_refs).toEqual([{ kind: "page", id: Q }, { kind: "page", id: P }]);
+});
+
+for (const [command, endpoint] of [["queue", "followups"], ["aside", "asides"]]) {
+  test(`${command} includes a page snapshot while the persona is running`, async ({ page }) => {
+    await install(page);
+    await page.route(new RegExp(`/api/v1/chats/[^/]+/${endpoint}$`), (route) => route.request().method() === "POST"
+      ? json(route, { id: "99999999-9999-4999-8999-999999999999", body: route.request().postDataJSON().body, created_at: new Date().toISOString() }, 202)
+      : route.fallback());
+    await page.goto(`/knowledge/${P}`);
+    await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+    await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+    const input = dock(page).getByRole("combobox", { name: "Message" });
+    await input.fill("slow: Keep working");
+    await input.press("Enter");
+    await expect(dock(page).getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+    const posted = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname.endsWith(`/${endpoint}`));
+    await input.fill(`/${command} Explain this page`);
+    await input.press("Enter");
+    const body = (await posted).postDataJSON().body;
+    expect(body).toContain("Explain this page");
+    expect(body).toContain("Page snapshot of [[Reading list]]:\n> Notes");
+    await expect(input).toHaveValue("");
+  });
+}
+
+test("switching persona keeps the draft and page context inside Knowledge", async ({ page }) => {
+  const first = persona(1, { name: "Atlas", is_default: true });
+  const second = persona(2, { name: "Nova" });
+  const s = await install(page, { personas: [first, second] });
+  await page.goto(`/knowledge/${P}`);
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await input.fill("Read this page");
+  await dock(page).getByRole("button", { name: "Persona for this conversation: Atlas" }).click();
+  await page.getByRole("menuitemradio", { name: /Nova/ }).click();
+  await expect(input).toHaveValue("Read this page");
+  await expect(dock(page).getByRole("button", { name: "Persona for this conversation: Nova" })).toBeVisible();
+  expect(s.chat.created.map((chat) => chat.hidden)).toEqual([true, true]);
+  expect(new URL(page.url()).pathname).toBe(`/knowledge/${P}`);
+  expect(s.chat.posted).toHaveLength(0);
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.context_refs).toEqual([{ kind: "page", id: P }]);
 });

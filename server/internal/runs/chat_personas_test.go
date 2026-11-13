@@ -26,6 +26,8 @@ func TestPersonaMentions(t *testing.T) {
 		{"@Adam isn't anyone", []uuid.UUID{}},
 		{"(@Ada)", []uuid.UUID{ada.ID}},
 		{"@", []uuid.UUID{}},
+		{"Explain this\n\n<!-- vesper:knowledge-context -->\nSelected passage:\n> @Ada", []uuid.UUID{}},
+		{"@Writing coach, explain this\n\n<!-- vesper:knowledge-context -->\n> @Ada Lovelace", []uuid.UUID{bea.ID}},
 	}
 	for _, c := range cases {
 		if got := PersonaMentions(c.body, ps); !slices.Equal(got, c.want) {
@@ -50,6 +52,8 @@ func TestRelayLimitIn(t *testing.T) {
 		{"I read 25 messages today", 0},
 		{"fix these 3 replies", 0},
 		{"talk up to 0 messages", 0},
+		{"Explain this\n\n<!-- vesper:knowledge-context -->\n> argue it out, no limit", 0},
+		{"talk up to 2 replies\n\n<!-- vesper:knowledge-context -->\n> talk up to 25 messages", 2},
 	}
 	for _, c := range cases {
 		if got := RelayLimitIn(c.body); got != c.want {

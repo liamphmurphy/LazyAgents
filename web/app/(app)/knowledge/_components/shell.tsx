@@ -15,6 +15,7 @@ import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
 import { KnowledgeDock } from "./knowledge-dock";
+import { KnowledgeChatProvider, useKnowledgeChat } from "./chat-context";
 import { DeleteDialog, ExplorerMenu, MoveDialog, NewFolderDialog, RenameField, type ExplorerTarget, type MenuEntry } from "./explorer-actions";
 
 type View = "yours" | "agent";
@@ -204,6 +205,7 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={shell}>
+      <KnowledgeChatProvider>
       <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -215,6 +217,7 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
       <QuickSwitcher open={switcher} onOpenChange={setSwitcher} includeAgent={view === "agent"} />
       <CaptureDialog open={capture} onOpenChange={setCapture} />
       <ImportDialog open={importing} onOpenChange={setImporting} />
+      </KnowledgeChatProvider>
     </Ctx.Provider>
   );
 }
@@ -261,6 +264,7 @@ const pageIdOf = (pathname: string) => /^\/knowledge\/([0-9a-f-]{36})/.exec(path
 
 function Explorer({ pathname }: { pathname: string }) {
   const k = useKnowledge();
+  const chat = useKnowledgeChat();
   const today = useToday();
   const router = useRouter();
   const agent = k.view === "agent";
@@ -406,6 +410,8 @@ function Explorer({ pathname }: { pathname: string }) {
     renamePage,
     renameFolder,
     pageMenu: (p) => [
+      { icon: "msg", label: "Ask a Persona", onSelect: () => chat.ask(p) },
+      "separator",
       { icon: "edit", label: "Rename", onSelect: () => startRename(`p:${p.id}`) },
       { icon: "folder", label: "Move to…", onSelect: () => openDialog({ kind: "move", target: { kind: "page", page: p } }) },
       { icon: "link", label: "Copy link", onSelect: () => void navigator.clipboard?.writeText(`[[${p.title}]]`) },
