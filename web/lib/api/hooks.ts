@@ -1131,6 +1131,7 @@ export function useChat(id?: string) {
     enabled: !!id,
     queryKey: chatKeys.detail(id ?? ""),
     queryFn: () => unwrap(api.GET("/chats/{id}", { params: { path: { id: id! } } })),
+    retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 2,
     refetchInterval: (q) => (q.state.data?.state === "running" ? CHAT_POLL_MS : false),
   });
 }
