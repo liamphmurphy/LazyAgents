@@ -179,6 +179,38 @@ paths:
                   url: { type: string, example: /knowledge/01a1.../old-doc }
         "404": { description: "Nothing there, or not visible" }
         "422": { description: "Not a legacy address" }
+  /knowledge/network:
+    get:
+      tags: [knowledge-pages]
+      summary: The whole-vault graph the viewer may see
+      description: Every visible page, the links between them, and links to pages that don't exist yet. Agent pages only with include_agent.
+      parameters:
+        - { name: include_agent, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: "Nodes and links"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        title: { type: string }
+                        path: { type: string }
+                        audience: { $ref: "#/components/schemas/Audience" }
+                  links:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source: { type: string, format: uuid }
+                        target: { type: string, format: uuid }
+                        unresolved: { type: string, description: "The name of a page that doesn't exist yet" }
   /knowledge/templates:
     get:
       tags: [knowledge-capture]

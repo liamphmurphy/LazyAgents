@@ -140,3 +140,24 @@ INSERT INTO page_comments(id,artifact_id,parent_id,seq,author_type,author_id,bod
 SELECT c.id,a.id,c.parent_id,c.seq,c.author_type,c.author_id,c.body,c.anchor,c.target_lost,c.status,c.suggestion,c.sent_in_message_id,c.created_at,c.updated_at
 FROM chat_canvas_comments c JOIN artifacts a ON a.id=sqlc.arg(artifact_id) AND a.workspace_id=sqlc.arg(workspace_id)
 WHERE c.canvas_id=sqlc.arg(canvas_id) AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid);
+
+-- name: KnowledgeNetworkNodes :many
+-- Every note the viewer may see, for the whole-vault graph and maintenance lists.
+SELECT a.id, a.title, a.path, a.audience FROM artifacts a
+WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.type='note'
+AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid)
+AND (sqlc.arg(include_agent)::boolean OR a.audience<>'agent')
+ORDER BY a.path LIMIT 20000;
+
+-- name: KnowledgeNetworkLinks :many
+-- Links between notes the viewer may see, and links that resolve to nothing yet.
+SELECT l.source_id, l.target_kind, l.target_id, l.target_text FROM knowledge_links l
+JOIN artifacts s ON s.id=l.source_id AND s.type='note'
+LEFT JOIN artifacts t ON t.id=l.target_id
+WHERE l.workspace_id=sqlc.arg(workspace_id) AND l.source_kind='artifact'
+AND artifact_visible(s.audience,s.owner_user_id,sqlc.narg(viewer)::uuid)
+AND (sqlc.arg(include_agent)::boolean OR s.audience<>'agent')
+AND (l.target_kind='unresolved' OR (l.target_kind='artifact' AND t.type='note'
+  AND artifact_visible(t.audience,t.owner_user_id,sqlc.narg(viewer)::uuid)
+  AND (sqlc.arg(include_agent)::boolean OR t.audience<>'agent')))
+LIMIT 50000;

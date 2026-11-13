@@ -263,6 +263,105 @@ func (q *Queries) KnowledgeBlobInUse(ctx context.Context, blobKey string) (bool,
 	return exists, err
 }
 
+const knowledgeNetworkLinks = `-- name: KnowledgeNetworkLinks :many
+SELECT l.source_id, l.target_kind, l.target_id, l.target_text FROM knowledge_links l
+JOIN artifacts s ON s.id=l.source_id AND s.type='note'
+LEFT JOIN artifacts t ON t.id=l.target_id
+WHERE l.workspace_id=$1 AND l.source_kind='artifact'
+AND artifact_visible(s.audience,s.owner_user_id,$2::uuid)
+AND ($3::boolean OR s.audience<>'agent')
+AND (l.target_kind='unresolved' OR (l.target_kind='artifact' AND t.type='note'
+  AND artifact_visible(t.audience,t.owner_user_id,$2::uuid)
+  AND ($3::boolean OR t.audience<>'agent')))
+LIMIT 50000
+`
+
+type KnowledgeNetworkLinksParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+}
+
+type KnowledgeNetworkLinksRow struct {
+	SourceID   uuid.UUID
+	TargetKind string
+	TargetID   *uuid.UUID
+	TargetText string
+}
+
+// Links between notes the viewer may see, and links that resolve to nothing yet.
+func (q *Queries) KnowledgeNetworkLinks(ctx context.Context, arg KnowledgeNetworkLinksParams) ([]KnowledgeNetworkLinksRow, error) {
+	rows, err := q.db.Query(ctx, knowledgeNetworkLinks, arg.WorkspaceID, arg.Viewer, arg.IncludeAgent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []KnowledgeNetworkLinksRow{}
+	for rows.Next() {
+		var i KnowledgeNetworkLinksRow
+		if err := rows.Scan(
+			&i.SourceID,
+			&i.TargetKind,
+			&i.TargetID,
+			&i.TargetText,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const knowledgeNetworkNodes = `-- name: KnowledgeNetworkNodes :many
+SELECT a.id, a.title, a.path, a.audience FROM artifacts a
+WHERE a.workspace_id=$1 AND a.type='note'
+AND artifact_visible(a.audience,a.owner_user_id,$2::uuid)
+AND ($3::boolean OR a.audience<>'agent')
+ORDER BY a.path LIMIT 20000
+`
+
+type KnowledgeNetworkNodesParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+}
+
+type KnowledgeNetworkNodesRow struct {
+	ID       uuid.UUID
+	Title    string
+	Path     *string
+	Audience string
+}
+
+// Every note the viewer may see, for the whole-vault graph and maintenance lists.
+func (q *Queries) KnowledgeNetworkNodes(ctx context.Context, arg KnowledgeNetworkNodesParams) ([]KnowledgeNetworkNodesRow, error) {
+	rows, err := q.db.Query(ctx, knowledgeNetworkNodes, arg.WorkspaceID, arg.Viewer, arg.IncludeAgent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []KnowledgeNetworkNodesRow{}
+	for rows.Next() {
+		var i KnowledgeNetworkNodesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Path,
+			&i.Audience,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listKnowledgeAssetDeletions = `-- name: ListKnowledgeAssetDeletions :many
 SELECT blob_key, created_at FROM knowledge_asset_deletions ORDER BY created_at LIMIT 100
 `

@@ -248,6 +248,45 @@ func (s *Server) knowledgeRoutes(mux *http.ServeMux) {
 		}
 		return map[string]any{"id": a.ID, "url": wiki.PageURL(a.ID, a.Title)}, nil
 	})
+	handle("GET /api/v1/knowledge/network", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		params := store.KnowledgeNetworkNodesParams{WorkspaceID: ws, Viewer: &u.ID, IncludeAgent: r.URL.Query().Get("include_agent") == "true"}
+		nodes, err := s.Q.KnowledgeNetworkNodes(r.Context(), params)
+		if err != nil {
+			return nil, err
+		}
+		links, err := s.Q.KnowledgeNetworkLinks(r.Context(), store.KnowledgeNetworkLinksParams(params))
+		if err != nil {
+			return nil, err
+		}
+		type node struct {
+			ID       uuid.UUID `json:"id"`
+			Title    string    `json:"title"`
+			Path     string    `json:"path"`
+			Audience string    `json:"audience"`
+		}
+		type edge struct {
+			Source uuid.UUID  `json:"source"`
+			Target *uuid.UUID `json:"target,omitempty"`
+			// Unresolved names a page that doesn't exist yet.
+			Unresolved string `json:"unresolved,omitempty"`
+		}
+		out := struct {
+			Nodes []node `json:"nodes"`
+			Links []edge `json:"links"`
+		}{Nodes: []node{}, Links: []edge{}}
+		for _, n := range nodes {
+			out.Nodes = append(out.Nodes, node{ID: n.ID, Title: n.Title, Path: deref(n.Path), Audience: n.Audience})
+		}
+		for _, l := range links {
+			if l.TargetKind == "unresolved" {
+				out.Links = append(out.Links, edge{Source: l.SourceID, Unresolved: l.TargetText})
+			} else if l.TargetID != nil && *l.TargetID != l.SourceID {
+				out.Links = append(out.Links, edge{Source: l.SourceID, Target: l.TargetID})
+			}
+		}
+		return out, nil
+	})
 	s.knowledgeAssetRoutes(mux)
 	s.knowledgeImportRoutes(mux)
 }

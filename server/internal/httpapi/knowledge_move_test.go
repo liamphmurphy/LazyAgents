@@ -87,3 +87,36 @@ func TestLegacyDocsAndWikiAddressesResolveToPages(t *testing.T) {
 	e.want("GET", "/knowledge/legacy?path="+url.QueryEscape("/wiki/Nowhere"), nil, 404)
 	e.want("GET", "/knowledge/legacy?path="+url.QueryEscape("/elsewhere"), nil, 422)
 }
+
+// The whole-vault graph lists the viewer's pages, the links between them and
+// links to pages that don't exist yet; agent pages only when asked for.
+func TestKnowledgeNetworkFollowsAudience(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := t.Context()
+	a := e.want("POST", "/knowledge/pages", map[string]any{"title": "Harbour", "path": "Net/Harbour", "body_md": "See [[Net/Tower]] and [[Nowhere yet]]."}, 200)
+	b := e.want("POST", "/knowledge/pages", map[string]any{"title": "Tower", "path": "Net/Tower", "body_md": "Back to [[Net/Harbour]]."}, 200)
+	if _, err := e.pool.Exec(ctx, `UPDATE artifacts SET audience='agent', owner_user_id=NULL WHERE id=$1`, b["id"]); err != nil {
+		t.Fatal(err)
+	}
+	other, err := e.q.CreateUser(ctx, store.CreateUserParams{WorkspaceID: e.me.WorkspaceID, Email: "other@example.com", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.pool.Exec(ctx, `UPDATE artifacts SET owner_user_id=$2 WHERE id=$1`, a["id"], other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if net := e.want("GET", "/knowledge/network", nil, 200); strings.Contains(fmtJSON(net), a["id"].(string)) || strings.Contains(fmtJSON(net), b["id"].(string)) {
+		t.Fatalf("network leaked another person's page or an agent page: %v", net)
+	}
+	if _, err = e.pool.Exec(ctx, `UPDATE artifacts SET owner_user_id=$2 WHERE id=$1`, a["id"], e.me.ID); err != nil {
+		t.Fatal(err)
+	}
+	net := e.want("GET", "/knowledge/network", nil, 200)
+	if s := fmtJSON(net); !strings.Contains(s, a["id"].(string)) || strings.Contains(s, b["id"].(string)) || !strings.Contains(s, "Nowhere yet") {
+		t.Fatalf("default network %v", net)
+	}
+	withAgent := fmtJSON(e.want("GET", "/knowledge/network?include_agent=true", nil, 200))
+	if !strings.Contains(withAgent, `"source":"`+a["id"].(string)+`","target":"`+b["id"].(string)) {
+		t.Fatalf("agent link missing: %s", withAgent)
+	}
+}
