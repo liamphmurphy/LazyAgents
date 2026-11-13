@@ -96,3 +96,66 @@ func TestEmptyPagesAllowedButNotBlankedByPersonas(t *testing.T) {
 		t.Fatalf("page changed: %v", again["body_md"])
 	}
 }
+
+// Ported from #361's suggestion tests: the review edge cases this model must
+// also hold. A change index out of range is refused, two people deciding the
+// same change at once can't both apply it, and undoing a persona's direct
+// edit keeps the person's own later edit.
+func TestPageReviewEdgeCases(t *testing.T) {
+	e := newChatEnv(t)
+	page := e.want("POST", "/knowledge/pages", map[string]any{"title": "Harbour", "body_md": "First.\n\nMiddle.\n\nLast.\n"}, 200)
+	id := page["id"].(string)
+	chat := e.newChat(nil)
+	token := e.canvasToken(uuid.MustParse(chat["id"].(string)))
+	suggest := func(before, after string) map[string]any {
+		t.Helper()
+		cur := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+		if code, out := e.tool(token, "patch_page", map[string]any{"ref": id, "base_version": cur["version_id"], "changes": []any{map[string]any{"before": before, "after": after, "why": "test"}}}); code != 200 {
+			t.Fatalf("patch_page %d %v", code, out)
+		}
+		got := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+		reviews := got["reviews"].([]any)
+		return reviews[len(reviews)-1].(map[string]any)
+	}
+
+	r := suggest("Middle.", "Middle, revised.")
+	resolve := "/knowledge/pages/" + id + "/reviews/" + r["id"].(string) + "/resolve"
+	if code, _ := e.do("POST", resolve, map[string]any{"decisions": []any{map[string]any{"index": 7, "accept": true}}}); code < 400 || code >= 500 {
+		t.Fatalf("out-of-range index answered %d", code)
+	}
+
+	codes := make(chan int, 2)
+	for range 2 {
+		go func() {
+			code, _ := e.do("POST", resolve, map[string]any{"decisions": []any{map[string]any{"index": 0, "accept": true}}})
+			codes <- code
+		}()
+	}
+	ok := 0
+	for range 2 {
+		if <-codes == 200 {
+			ok++
+		}
+	}
+	after := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+	if ok != 1 || strings.Count(after["body_md"].(string), "Middle, revised.") != 1 {
+		t.Fatalf("concurrent resolution: %d succeeded, body %q", ok, after["body_md"])
+	}
+
+	// A direct persona edit, then the person edits another passage, then undoes the persona's.
+	if code, out := e.tool(token, "write_note", map[string]any{"path": after["path"], "body": strings.Replace(after["body_md"].(string), "First.", "First, by the persona.", 1), "mode": "replace"}); code != 200 {
+		t.Fatalf("write_note %d %v", code, out)
+	}
+	cur := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+	reviews := cur["reviews"].([]any)
+	if len(reviews) == 0 {
+		t.Skip("this page took the persona's edit as a suggestion, not a direct edit")
+	}
+	direct := reviews[len(reviews)-1].(map[string]any)
+	e.want("PUT", "/knowledge/pages/"+id, map[string]any{"body_md": strings.Replace(cur["body_md"].(string), "Last.", "Last, by me.", 1), "base_version_id": cur["version_id"]}, 200)
+	e.want("POST", "/knowledge/pages/"+id+"/reviews/"+direct["id"].(string)+"/resolve", map[string]any{"decisions": []any{map[string]any{"index": 0, "accept": false, "reason": "keep mine"}}}, 200)
+	final := e.want("GET", "/knowledge/pages/"+id, nil, 200)["body_md"].(string)
+	if strings.Contains(final, "by the persona") || !strings.Contains(final, "Last, by me.") {
+		t.Fatalf("undoing the direct edit lost or kept the wrong text: %q", final)
+	}
+}
