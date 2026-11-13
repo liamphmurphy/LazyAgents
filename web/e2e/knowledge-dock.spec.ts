@@ -7,13 +7,18 @@ test.use({ viewport: { width: 1440, height: 900 } });
 const P = "55555555-5555-4555-8555-555555555555";
 const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
 
-async function install(page: Page) {
+async function install(page: Page, pageCount = 0) {
   await installChatApi(page, { replyDelayMs: 10 });
+  const rows = Array.from({ length: pageCount }, (_, i) => ({ id: `55555555-5555-4555-8555-${String(i).padStart(12, "0")}`, title: `Note ${i}`, path: `Note ${i}`, audience: "private", properties: {}, updated_at: "2026-11-13T09:00:00Z" }));
   const s = { attached: [] as string[], page: { id: P, title: "Reading list", path: "Reading list", audience: "private", body_md: "Notes", version_id: "v1", seq: 1, properties: {}, direct: false, paused: false, chat_id: null as string | null, url: `/knowledge/${P}`, embeds: [], reviews: [], versions: [] } };
   await page.route(/\/api\/v1\/knowledge\//, (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace("/api/v1/knowledge", "");
-    if (path === "/query") return json(route, { columns: [], rows: [], total: 0, has_more: false });
+    if (path === "/query") {
+      const params = new URL(req.url()).searchParams;
+      const found = params.has("folder") ? [] : rows.slice(0, Number(params.get("limit") ?? 200));
+      return json(route, { columns: [], rows: found, total: found.length, has_more: false });
+    }
     if (path === `/pages/${P}/chat` && req.method() === "PUT") {
       s.page.chat_id = (req.postDataJSON() as { chat_id: string }).chat_id;
       s.attached.push(s.page.chat_id);
@@ -67,3 +72,34 @@ test("on a page the dock holds that page's chat, and ⌘J opens it, with the pag
   await expect.poll(() => s.attached.length).toBe(1);
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
 });
+
+for (const route of ["/knowledge", `/knowledge/${P}`]) {
+  test(`the chat stays inside the viewport with a long explorer and conversation on ${route}`, async ({ page }) => {
+    await install(page, 80);
+    await page.goto(route);
+    await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+    await dock(page).getByRole("button", { name: /^Start a chat/ }).click();
+    const composer = dock(page).getByRole("combobox", { name: "Message" });
+    await expect(composer).toBeVisible();
+    await composer.fill("A long Knowledge conversation. ".repeat(100));
+    await composer.press("Enter");
+    await expect(dock(page).getByRole("button", { name: "Send", exact: true })).toBeVisible();
+
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1100, height: 650 }]) {
+      await page.setViewportSize(viewport);
+      // Visibility alone allows off-screen elements; check the full composer and dock bounds.
+      for (const element of [dock(page), composer]) {
+        await expect.poll(async () => {
+          const box = await element.boundingBox();
+          return !!box && box.y >= 0 && box.y + box.height <= viewport.height + 1;
+        }).toBe(true);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(viewport.height + 1);
+      const explorer = page.getByRole("navigation", { name: "Pages", exact: true });
+      await explorer.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      expect(await explorer.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      const history = dock(page).getByRole("region").getByRole("tabpanel", { name: "Chat", exact: true });
+      expect(await history.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    }
+  });
+}
