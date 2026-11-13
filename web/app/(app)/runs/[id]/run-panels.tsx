@@ -15,6 +15,7 @@ import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Kbd, TextArea } from "@/components/ui/primitives";
 import { shortcutBlocked } from "@/components/shell/shortcuts";
+import { confirmAction } from "@/components/ui/confirm";
 
 /** The ActionBox carries this id; the Graph view focuses it from a pending gate. */
 export const ACTION_BOX_ID = "run-action-box";
@@ -25,7 +26,7 @@ type P = Record<string, unknown>;
 
 /** Cancel always asks first: it ends the run and discards its workspace session. */
 export function confirmCancel(agent: string) {
-  return window.confirm(`Cancel ${agent}'s run? It stops now and can't be resumed.`);
+  return confirmAction({ title: `Cancel ${agent}'s run?`, body: "It stops now and can't be resumed.", confirmLabel: "Cancel run", cancelLabel: "Keep running" });
 }
 
 /** Sends a reply to a run waiting on `human_reply`: a ticket comment mentioning the agent. */
@@ -138,7 +139,7 @@ export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Ru
   /** No server call grants a scope for the rest of a run, so this approves every request the run has open now. */
   const approveAll = async () => {
     if (pending || approvals.length < 2) return;
-    if (!window.confirm(`Approve all ${approvals.length} requests from ${run.agent.name} for this run?`)) return;
+    if (!await confirmAction({ title: `Approve all ${approvals.length} requests from ${run.agent.name}?`, body: "Each one is approved for this run only.", confirmLabel: "Approve all", tone: "neutral" })) return;
     setBusy(true);
     let failed = false;
     // Keep going past one that fails (say, decided elsewhere meanwhile); decide.error shows the last failure.
@@ -261,7 +262,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
       icon="x"
       className="text-pill-blocked-fg"
       disabled={control.isPending}
-      onClick={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}
+      onClick={async () => { if (await confirmCancel(run.agent.name)) control.mutate("cancel"); }}
     >
       Cancel run
     </Button>

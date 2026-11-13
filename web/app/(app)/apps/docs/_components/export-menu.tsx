@@ -11,6 +11,7 @@ import { docExtensions, parseDoc } from "@/lib/doc-markdown";
 import { toDocx } from "@/lib/doc-docx";
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm";
 
 const item = "flex cursor-pointer select-none flex-col rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
 const detail = "text-11 text-fg-tertiary";
@@ -64,7 +65,7 @@ export function ExportMenu({ id, title, current, trigger }: { id: string; title:
     try {
       return done(await promote.mutateAsync(false));
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 409) || !window.confirm(`${e.message}\n\nReplace it with this version?`)) throw e;
+      if (!(e instanceof ApiError && e.status === 409) || !await confirmAction({ title: "Replace the wiki page?", body: `${e.message} Replace it with this version?`, confirmLabel: "Replace" })) throw e;
       return done(await promote.mutateAsync(true));
     }
   });

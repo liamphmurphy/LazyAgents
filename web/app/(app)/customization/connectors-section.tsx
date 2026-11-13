@@ -12,6 +12,7 @@ import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar } from "../chat/_components/persona";
+import { confirmAction } from "@/components/ui/confirm";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 type Policy = Schemas["ConnectorTool"]["policy"];
@@ -161,7 +162,7 @@ function ConnectorDetail({ connector: c, personas }: { connector: Connector; per
       </section>
       {error && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(error)}</p>}
       <div className="flex items-center justify-between border-t border-border-subtle pt-3">
-        <button type="button" className="text-13 text-pill-blocked-fg hover:underline" disabled={remove.isPending} onClick={() => window.confirm(`Remove ${c.name}?`) && remove.mutate(c.id)}>Remove connector</button>
+        <button type="button" className="text-13 text-pill-blocked-fg hover:underline" disabled={remove.isPending} onClick={async () => { if (await confirmAction({ title: `Remove ${c.name}?`, body: "Personas lose its tools right away.", confirmLabel: "Remove connector" })) remove.mutate(c.id); }}>Remove connector</button>
         <Button variant="outline" disabled={test.isPending} onClick={() => test.mutate(c.id)}>{test.isPending ? "Testing…" : "Test connection"}</Button>
       </div>
     </aside>

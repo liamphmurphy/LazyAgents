@@ -9,6 +9,7 @@ import type { Persona } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
+import { undoable } from "@/components/ui/toast";
 
 type Memory = Schemas["Memory"];
 
@@ -19,6 +20,9 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 function MomentCard({ m, persona }: { m: Memory; persona?: Persona }) {
   const del = useDeleteMemory();
   const color = persona?.color ?? "var(--border-strong)";
+  // Deleted but still undoable: hidden here until the toast goes and the delete runs.
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
   return (
     <li
       data-testid="fridge-moment"
@@ -31,9 +35,14 @@ function MomentCard({ m, persona }: { m: Memory; persona?: Persona }) {
           icon="trash"
           label={`Delete ${m.title}`}
           disabled={del.isPending}
-          onClick={() => {
-            if (window.confirm(`Delete this moment? ${persona?.name ?? "The persona"} will no longer remember it.`)) del.mutate(m.id);
-          }}
+          onClick={() => undoable({
+            title: "Moment deleted",
+            description: `${persona?.name ?? "The persona"} will no longer remember it.`,
+            failed: "Couldn't delete the moment",
+            hide: () => setHidden(true),
+            restore: () => setHidden(false),
+            commit: () => del.mutateAsync(m.id),
+          })}
         />
       </div>
       {m.summary && <p className="text-13 text-fg-secondary">{m.summary}</p>}

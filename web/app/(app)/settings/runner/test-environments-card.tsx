@@ -9,6 +9,7 @@ import { absoluteTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Banner, Card, Skeleton } from "@/components/ui/primitives";
 import { SmallPill } from "@/components/domain/labels";
+import { confirmAction } from "@/components/ui/confirm";
 
 type TestEnvironment = components["schemas"]["TestEnvironment"];
 
@@ -79,8 +80,8 @@ function TestEnvironmentRow({ env }: { env: TestEnvironment }) {
       </div>
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => setDraft(draft === null ? JSON.stringify(env.recipe, null, 2) : null)}>{draft === null ? "Edit" : "Cancel"}</Button>
-        <Button variant="outline" disabled={forget.isPending} onClick={() => {
-          if (window.confirm(`Forget the test environment for ${env.repo}? Its next run infers it again.`)) forget.mutate();
+        <Button variant="outline" disabled={forget.isPending} onClick={async () => {
+          if (await confirmAction({ title: `Forget the test environment for ${env.repo}?`, body: "Its next run infers it again.", confirmLabel: "Forget" })) forget.mutate();
         }}>Forget</Button>
       </div>
     </div>

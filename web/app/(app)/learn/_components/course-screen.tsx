@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { BuildStepper, OutlineReview } from "./outline-review";
 import { StudyView } from "./study-view";
+import { confirmAction } from "@/components/ui/confirm";
 
 export function CourseScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -16,8 +17,8 @@ export function CourseScreen({ id }: { id: string }) {
   const course = useCourse(id);
   const stop = useStopCourse(id);
   const del = useDeleteCourse();
-  const discard = () => {
-    if (window.confirm("Delete this module, its progress and its tutor conversation?")) del.mutate(id, { onSuccess: () => router.push("/learn") });
+  const discard = async () => {
+    if (await confirmAction({ title: "Delete this module?", body: "Its progress and its tutor conversation are deleted too.", confirmLabel: "Delete module" })) del.mutate(id, { onSuccess: () => router.push("/learn") });
   };
   const c = course.data;
   const state = c?.summary.state as BuildState | undefined;

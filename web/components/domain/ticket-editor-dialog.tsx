@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Banner, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { Markdown } from "./markdown";
 import { PRIORITY_NAME, PRIORITY_ORDER, STATUS_NAME } from "./meta";
+import { confirmAction } from "@/components/ui/confirm";
 
 const BOARD_STATUS_ORDER: TicketStatus[] = ["backlog", "todo", "in_progress", "in_review", "done", "canceled"];
 const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none";
@@ -35,7 +36,9 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
 }) {
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [dirty, setDirty] = useState(false);
-  const close = () => { if (!dirty || window.confirm("Discard your unsaved changes?")) onClose(); };
+  const close = async () => {
+    if (!dirty || await confirmAction({ title: "Discard your unsaved changes?", confirmLabel: "Discard", cancelLabel: "Keep editing" })) onClose();
+  };
   const [loaded, setLoaded] = useState<{ ticket: Ticket; nonce: number }>();
   if (detail && !loaded) setLoaded({ ticket: detail, nonce: 0 });
 

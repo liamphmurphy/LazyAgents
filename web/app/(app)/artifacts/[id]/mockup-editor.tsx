@@ -11,6 +11,7 @@ import { Segmented } from "@/components/ui/controls";
 import { MockupImage } from "@/components/domain/mockup";
 import { MockupCanvas, useSourceHistory } from "@/components/domain/mockup-canvas";
 import { ZoomControl } from "./mockup-parts";
+import { confirmAction } from "@/components/ui/confirm";
 
 type Mode = "visual" | "source" | "split";
 const MODES = [
@@ -90,8 +91,8 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
     onDone();
   }
 
-  function cancel() {
-    if (dirty && !window.confirm("Discard your unsaved changes to this mockup?")) return;
+  async function cancel() {
+    if (dirty && !await confirmAction({ title: "Discard your unsaved changes to this mockup?", confirmLabel: "Discard", cancelLabel: "Keep editing" })) return;
     onDone();
   }
 

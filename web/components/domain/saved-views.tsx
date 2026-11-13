@@ -12,6 +12,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { floatPanel } from "./pickers";
 import { hoverReveal } from "@/lib/reveal";
+import { confirmAction } from "@/components/ui/confirm";
 
 const VIEW_NAME: Record<string, string> = { all: "All tickets", active: "Active", backlog: "Backlog", agent_owned: "Agent-owned", needs_human: "Needs human" };
 export const describeView = (query: string) => describeQuery(query, { view: (v) => VIEW_NAME[v] ?? v });
@@ -166,8 +167,8 @@ export function SavedViewMenu({
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item
             className={cx(menuItem, "text-pill-blocked-fg")}
-            onSelect={() => {
-              if (!window.confirm(`Delete the view “${view.name}”? Tickets aren't changed.`)) return;
+            onSelect={async () => {
+              if (!await confirmAction({ title: `Delete the view “${view.name}”?`, body: "Tickets aren't changed.", confirmLabel: "Delete view" })) return;
               del.mutate(view.id, {
                 onSuccess: () => {
                   if (search.get("sv") === view.id) {

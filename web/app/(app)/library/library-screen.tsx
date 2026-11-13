@@ -30,6 +30,7 @@ import { Fridge } from "./fridge";
 import { Links } from "./links";
 import { ProjectDocs } from "./_components/project-docs";
 import { LibrarySourceSwitch } from "./_components/source-switch";
+import { confirmAction } from "@/components/ui/confirm";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
@@ -143,12 +144,9 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
               variant="ghost"
               icon="trash"
               disabled={del.isPending}
-              onClick={() => {
-                const msg =
-                  item.source === "upload"
-                    ? `Remove this ${noun} from your Library?`
-                    : `Remove this ${noun} from your Library? It stays in its chat while that chat exists.`;
-                if (window.confirm(msg)) del.mutate(item.id);
+              onClick={async () => {
+                const body = item.source === "upload" ? undefined : "It stays in its chat while that chat exists.";
+                if (await confirmAction({ title: `Remove this ${noun} from your Library?`, body, confirmLabel: "Remove" })) del.mutate(item.id);
               }}
             >
               Remove

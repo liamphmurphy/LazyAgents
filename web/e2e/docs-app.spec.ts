@@ -242,8 +242,8 @@ test("exports to PDF, Word and Markdown, copies rich text, and saves to the Libr
   expect(s.library).toBe(1);
 
   // Promoting asks before replacing a page that exists, then links to the page.
-  page.once("dialog", (d) => void d.accept());
   await menu("Promote to wiki");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Replace" }).click();
   const published = page.getByRole("status").filter({ hasText: "Published to the wiki as Trip plan" });
   await expect(published).toBeVisible();
   await expect(published.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/wiki/Trip%20plan");

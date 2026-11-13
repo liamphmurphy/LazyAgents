@@ -8,6 +8,7 @@ import { Content, TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { RunStatePill } from "@/components/domain/workflow-cards";
+import { confirmAction } from "@/components/ui/confirm";
 
 export function WorkflowsScreen() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export function WorkflowsScreen() {
                     <span className="flex-none font-mono text-12 text-fg-tertiary">
                       {w.published_version > 0 ? `v${w.published_version}${w.unpublished_changes ? " · edited" : ""}` : "Draft"}
                     </span>
-                    <Button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete ${w.name}? Runs already started keep going.`)) del.mutate(w.id); }}>Delete</Button>
+                    <Button disabled={del.isPending} onClick={async () => { if (await confirmAction({ title: `Delete ${w.name}?`, body: "Runs already started keep going.", confirmLabel: "Delete workflow" })) del.mutate(w.id); }}>Delete</Button>
                   </Card>
                 </li>
               ))}

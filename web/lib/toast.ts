@@ -71,8 +71,9 @@ export const currentToasts = () => toasts;
  * the toast goes, or bring it back if Undo is chosen. Nothing is deleted until then, so closing
  * the tab inside the window keeps the item rather than losing it.
  */
-export function undoable({ title, hide, restore, commit, failed = "Couldn't finish that", duration = 6000 }: {
+export function undoable({ title, description, hide, restore, commit, failed = "Couldn't finish that", duration = 6000 }: {
   title: ReactNode;
+  description?: ReactNode;
   hide: () => void;
   restore: () => void;
   commit: () => Promise<unknown>;
@@ -82,7 +83,7 @@ export function undoable({ title, hide, restore, commit, failed = "Couldn't fini
   let undone = false;
   hide();
   return toast({
-    title, duration,
+    title, description, duration,
     action: { label: "Undo", onClick: () => { undone = true; restore(); } },
     onClose: () => {
       if (undone) return;

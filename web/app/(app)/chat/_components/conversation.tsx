@@ -94,6 +94,7 @@ import { onComposerDrop } from "@/lib/playground-report";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 import { hoverReveal } from "@/lib/reveal";
+import { confirmAction } from "@/components/ui/confirm";
 
 type Message = Schemas["ChatMessage"];
 type Groups = Schemas["ChatHarnessModels"][] | undefined;
@@ -231,7 +232,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
         <div className={cx("flex flex-wrap items-center gap-1.5", REVEAL)} data-testid="reply-actions">
           <CopyButton text={m.body_md} />
           {m.body_md.length > LONG_REPLY && <Button variant="ghost" onClick={() => self.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Top of reply</Button>}
-          {onRetry && <Button variant="ghost" onClick={() => { if (window.confirm("Replace this reply with a new one?")) onRetry(); }}>Retry</Button>}
+          {onRetry && <Button variant="ghost" onClick={async () => { if (await confirmAction({ title: "Replace this reply with a new one?", body: "The current reply is discarded.", confirmLabel: "Retry" })) onRetry(); }}>Retry</Button>}
           <SaveActions chat={chat} body={m.body_md} />
         </div>
       )}

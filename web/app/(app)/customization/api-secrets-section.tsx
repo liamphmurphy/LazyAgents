@@ -13,6 +13,7 @@ import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar } from "../chat/_components/persona";
+import { confirmAction } from "@/components/ui/confirm";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -166,7 +167,7 @@ function SecretDetail({ secret: s, personas }: { secret: ApiSecret; personas: Pe
       <SecretActivity id={s.id} />
       {error && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(error)}</p>}
       <div className="border-t border-border-subtle pt-3">
-        <button type="button" className="text-13 text-pill-blocked-fg hover:underline" disabled={remove.isPending} onClick={() => window.confirm(`Remove ${s.name}? Personas lose access right away.`) && remove.mutate(s.id)}>Remove secret</button>
+        <button type="button" className="text-13 text-pill-blocked-fg hover:underline" disabled={remove.isPending} onClick={async () => { if (await confirmAction({ title: `Remove ${s.name}?`, body: "Personas lose access right away.", confirmLabel: "Remove secret" })) remove.mutate(s.id); }}>Remove secret</button>
       </div>
     </aside>
   );

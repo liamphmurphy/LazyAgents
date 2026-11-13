@@ -24,3 +24,8 @@ test("font sizes come from the type scale, so Settings → Text size reaches the
   // text-[13px] can't follow --type-scale and Tailwind's text-xs… are cleared; use text-10 … text-32.
   assert.deepEqual(offenders(/(?<![\w-])text-\[\d+(\.\d+)?(px|rem)\]|(?<![\w-])text-(xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/), []);
 });
+
+test("confirmations are in-app, never the browser's confirm() or alert()", () => {
+  // confirmAction (components/ui/confirm.tsx) for what can't be undone, undoable (lib/toast.ts) for the rest.
+  assert.deepEqual(offenders(/(?<![\w.])(window\.)?(confirm|alert)\(/), []);
+});

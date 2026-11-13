@@ -535,7 +535,7 @@ export function RunLogScreen({ id }: { id: string }) {
               </Button>
             )}
             {live && (
-              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
+              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={async () => { if (await confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
                 Cancel run
               </Button>
             )}

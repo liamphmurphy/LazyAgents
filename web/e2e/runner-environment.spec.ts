@@ -114,8 +114,8 @@ test("test environments show what was inferred and learned, and can be edited or
   await expect(card.getByText("nixpkgs#jq")).toBeVisible();
   expect(saved).toEqual({ repo: "github.com/acme/app", recipe: { nix_packages: ["nixpkgs#jq"] } });
 
-  page.once("dialog", (d) => void d.accept());
   await card.getByRole("button", { name: "Forget" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Forget" }).click();
   await expect(card.getByText(/None yet/)).toBeVisible();
   expect(forgotten).toBe("github.com/acme/app");
 });

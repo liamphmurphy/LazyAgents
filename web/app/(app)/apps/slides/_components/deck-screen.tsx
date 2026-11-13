@@ -34,6 +34,7 @@ import { ThemeEditor, type ThemeEditTarget } from "./theme-editor";
 import { Thumbnails } from "./thumbnails";
 import type { StylePatch } from "./style-menus";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
+import { confirmAction } from "@/components/ui/confirm";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Not saved", error: "Not saved" };
@@ -568,9 +569,9 @@ export function DeckScreen({ id }: { id: string }) {
       setThemeError(undefined);
       setThemeEdit(saved ? { start: themeBody(saved), target: { kind: "saved", id: saved.id } } : deck ? { start: deck.theme, target: { kind: "deck" } } : null);
     },
-    deleteSavedTheme: (tid) => {
+    deleteSavedTheme: async (tid) => {
       const t = savedThemes?.find((x) => x.id === tid);
-      if (!t || !window.confirm(`Delete the theme “${t.name}”? Decks using it keep their copy.`)) return;
+      if (!t || !await confirmAction({ title: `Delete the theme “${t.name}”?`, body: "Decks using it keep their copy.", confirmLabel: "Delete theme" })) return;
       deleteTheme.mutate(tid, { onError: (e) => setNotice(`Couldn't delete ${t.name}: ${errorText(e)}`) });
     },
     setBackground: (col, key) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined })), key && `${slide.id}:${key}`),

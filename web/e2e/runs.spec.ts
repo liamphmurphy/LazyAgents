@@ -173,9 +173,9 @@ test("the thread decides inline with A and ⇧A, then Next opens the next item w
   await expect(card.getByRole("button", { name: "Approve all 2 for this run" })).toBeVisible();
   await page.screenshot({ path: "test-results/run-thread.png" });
 
-  page.once("dialog", (d) => d.accept());
   await page.locator("body").click({ position: { x: 900, y: 5 } });
   await page.keyboard.press("Shift+A");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve all" }).click();
   await expect.poll(() => decided).toEqual(["a1:approve", "a2:approve"]);
   const next = thread.getByRole("link", { name: /Question · Payout retries/ });
   await expect(next).toBeVisible();

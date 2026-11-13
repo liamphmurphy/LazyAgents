@@ -46,8 +46,8 @@ test("the Library lists generated images with their source and can remove one", 
   await tiles.nth(1).getByRole("button", { name: "Open Old map" }).click();
   const dialog = page.getByRole("dialog", { name: "Old map" });
   await expect(dialog.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/v1/library/img-2/content?download=true");
-  page.once("dialog", (d) => d.accept());
   await dialog.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
   await expect(tiles).toHaveCount(1);
   expect(api.deleted).toEqual(["img-2"]);
 });
@@ -73,7 +73,6 @@ test("the Links tab lists saved links, filters them, plays videos and removes on
   const site = item("link-2", { kind: "link", title: "Routes", url: "https://a.example/routes", site: "", note: "Good.", size_bytes: 0, content_type: "text/uri-list" });
   const api = await installLibrary(page, [video, site]);
   await page.route(/youtube-nocookie/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "ok" }));
-  page.on("dialog", (d) => d.accept());
   await page.goto("/library");
   await page.getByRole("tab", { name: "Links" }).click();
 
@@ -90,9 +89,19 @@ test("the Links tab lists saved links, filters them, plays videos and removes on
   await expect(links.first().locator("iframe")).toHaveAttribute("src", /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
 
   await page.getByRole("button", { name: "All", exact: true }).click();
+  // Removing is undoable: the link hides at once and is only deleted once the toast goes.
+  const notifications = page.getByRole("region", { name: "Notifications" });
   await page.getByRole("button", { name: "Remove Routes" }).click();
   await expect(links).toHaveCount(1);
-  expect(api.deleted).toEqual(["link-2"]);
+  await notifications.getByRole("button", { name: "Undo" }).click();
+  await expect(links).toHaveCount(2);
+  expect(api.deleted).toEqual([]);
+
+  await page.getByRole("button", { name: "Remove Routes" }).click();
+  await expect(links).toHaveCount(1);
+  await notifications.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect.poll(() => api.deleted).toEqual(["link-2"]);
+  await expect(links).toHaveCount(1);
 });
 
 test("links move through the reading queue and show saved summaries", async ({ page }) => {

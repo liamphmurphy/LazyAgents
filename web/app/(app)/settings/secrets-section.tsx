@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Card, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { MonoChip, SmallPill } from "@/components/domain/labels";
 import { floatPanel } from "@/components/domain/pickers";
+import { confirmAction } from "@/components/ui/confirm";
 
 const buttonLinkClass = buttonClass("outline");
 
@@ -93,8 +94,8 @@ export function SecretsSection() {
               signInAvailable={d.sign_in_available}
               editing={editing?.fixedName && editing.name === c.name && !editing.project ? editing : null}
               onEdit={() => open({ name: c.name, project: "", fixedName: true })}
-              onDelete={(id) => {
-                if (window.confirm(`Delete ${c.name}? ${c.without}`)) del.mutate(id);
+              onDelete={async (id) => {
+                if (await confirmAction({ title: `Delete ${c.name}?`, body: c.without, confirmLabel: "Delete" })) del.mutate(id);
               }}
               deleting={del.isPending}
               onCancel={() => setEditing(null)}
@@ -161,8 +162,8 @@ export function SecretsSection() {
                         icon="trash"
                         label={`Delete ${s.name}`}
                         disabled={del.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete ${s.name}? Runs that need it will fail until it's set again.`)) del.mutate(s.id);
+                        onClick={async () => {
+                          if (await confirmAction({ title: `Delete ${s.name}?`, body: "Runs that need it will fail until it's set again.", confirmLabel: "Delete secret" })) del.mutate(s.id);
                         }}
                       />
                       </div>

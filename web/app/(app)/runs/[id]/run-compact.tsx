@@ -79,7 +79,7 @@ function RunMenu({ run, lastLog, control }: { run: Run; lastLog?: number; contro
             <DropdownMenu.Item className={item} disabled={control.isPending} onSelect={() => control.mutate("retry", { onSuccess: (r) => router.push(`/runs/${r.id}`) })}>Retry run</DropdownMenu.Item>
           )}
           {live && (
-            <DropdownMenu.Item className={cx(item, "text-pill-blocked-fg")} disabled={control.isPending} onSelect={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
+            <DropdownMenu.Item className={cx(item, "text-pill-blocked-fg")} disabled={control.isPending} onSelect={async () => { if (await confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
               Cancel run
             </DropdownMenu.Item>
           )}

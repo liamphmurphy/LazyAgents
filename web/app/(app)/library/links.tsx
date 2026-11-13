@@ -12,6 +12,7 @@ import { Markdown } from "@/components/domain/markdown";
 import { VideoFrame } from "@/components/domain/recommend-fence";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { undoable } from "@/components/ui/toast";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 
 const FILTERS = [{ key: "all", label: "All" }, { key: "video", label: "Videos" }, { key: "page", label: "Pages" }] as const;
@@ -26,6 +27,9 @@ function LinkCard({ item }: { item: LibraryItem }) {
   const embed = videoEmbedUrl(item.video_id);
   const image = item.size_bytes > 0 ? libraryItemUrl(item.id) : undefined;
   const site = item.site || hostOf(url);
+  // Removed but still undoable: hidden here until the toast goes and the delete runs.
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
   return (
     <li data-testid="library-link" data-kind={embed ? "video" : "page"} className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface">
       {embed ? (
@@ -62,9 +66,13 @@ function LinkCard({ item }: { item: LibraryItem }) {
             aria-label={`Remove ${item.title}`}
             disabled={del.isPending}
             className="flex-none hover:text-fg"
-            onClick={() => {
-              if (window.confirm("Remove this link from your Library?")) del.mutate(item.id);
-            }}
+            onClick={() => undoable({
+              title: `Removed ${item.title}`,
+              failed: `Couldn't remove ${item.title}`,
+              hide: () => setHidden(true),
+              restore: () => setHidden(false),
+              commit: () => del.mutateAsync(item.id),
+            })}
           >
             <Icon name="trash" size={14} />
           </button>

@@ -14,6 +14,7 @@ import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar, personaLook } from "../chat/_components/persona";
+import { confirmAction } from "@/components/ui/confirm";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none";
@@ -227,7 +228,7 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
       )}
       {error && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(error)}</p>}
       <div className="flex items-center justify-between border-t border-border-subtle pt-3">
-        {task ? <button type="button" className="text-13 text-pill-blocked-fg hover:underline" onClick={() => window.confirm(`Delete ${task.name}?`) && remove.mutate(task.id, { onSuccess: onClose })}>Delete task</button> : <span />}
+        {task ? <button type="button" className="text-13 text-pill-blocked-fg hover:underline" onClick={async () => { if (await confirmAction({ title: `Delete ${task.name}?`, body: "It won't run again.", confirmLabel: "Delete task" })) remove.mutate(task.id, { onSuccess: onClose }); }}>Delete task</button> : <span />}
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={save.isPending || !draft.name.trim()} onClick={submit}>Save</Button>
