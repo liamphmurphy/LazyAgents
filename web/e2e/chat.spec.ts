@@ -1011,3 +1011,24 @@ test("a new chat routes its model automatically until one is picked", async ({ p
   await expect(picker(page)).toHaveText("Auto");
   expect(mock.unhandled).toEqual([]);
 });
+
+test("a finished turn keeps its steps as a folded strip above the reply", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  // A reply that used no tools gets no strip.
+  await send(page, "hello");
+  await expect(page.getByTestId("assistant-message").getByText("Echo: hello")).toBeVisible();
+  await expect(page.getByTestId("turn-steps")).toHaveCount(0);
+  await send(page, "web: tts pricing?");
+  const strip = page.getByTestId("turn-steps");
+  await expect(strip).toHaveAttribute("data-outcome", "done");
+  await expect(page.getByTestId("chat-status-card")).toHaveCount(0);
+  await expect(strip.getByTestId("turn-steps-summary")).toHaveText(/· 1 step$/);
+  await expect(strip.getByTestId("chat-steps")).toHaveCount(0);
+  await strip.getByRole("button", { name: /Show steps/ }).click();
+  await expect(strip.getByTestId("chat-steps").locator('[data-step-state="done"]')).toHaveCount(1);
+  await expect(strip.getByTestId("chat-steps").locator('[data-step-state="active"]')).toHaveCount(0);
+  await strip.getByRole("button", { name: /Hide steps/ }).click();
+  await expect(strip.getByTestId("chat-steps")).toHaveCount(0);
+});

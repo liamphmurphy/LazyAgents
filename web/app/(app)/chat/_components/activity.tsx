@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatCalls, chatStatus, chatStatusOf, chatSteps, foldSteps, formatSpan, interimLine, NEXT_STEP_KEY, quietFor, turnClock, turnNotes, turnPulse, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep, type TurnPulse } from "@/lib/chat-ui";
+import { activityOf, chatCalls, chatStatus, chatStatusOf, chatSteps, finishedTurn, foldSteps, formatSpan, interimLine, NEXT_STEP_KEY, quietFor, turnClock, turnNotes, turnPulse, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep, type TurnOutcome, type TurnPulse } from "@/lib/chat-ui";
 import { useConnectorApprovals } from "@/lib/api/connector-hooks";
 import { useApiSecretApprovals } from "@/lib/api/secret-hooks";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
@@ -80,12 +80,14 @@ function TagPill({ tag }: { tag: IntentTag }) {
 
 /** Where "View reasoning" on a chat step lands in the Activity tab. */
 export const traceStepId = (key: string) => `trace-step-${key.replace(/[^\w-]/g, "_")}`;
+/** A finished turn's step, named by the reply it led to: step keys repeat across a run's turns. */
+export const turnStepKey = (replyId: string, key: string) => `${replyId}/${key}`;
 
 /**
  * A turn as the steps the chat tab showed, each with the decisions the assistant
  * narrated, its thinking (folded) and every tool call. `focus` opens and scrolls to one step.
  */
-function TurnTrace({ steps, live, focus }: { steps: TraceStep[]; live?: boolean; focus?: { key: string; at: number } }) {
+function TurnTrace({ steps, live, scope, focus }: { steps: TraceStep[]; live?: boolean; scope?: string; focus?: { key: string; at: number } }) {
   const root = useRef<HTMLOListElement>(null);
   useEffect(() => {
     if (!focus || !root.current) return;
@@ -100,9 +102,11 @@ function TurnTrace({ steps, live, focus }: { steps: TraceStep[]; live?: boolean;
       {steps.map((s) => {
         // A finished turn's last step was still "active" when it ended.
         const state = !live && s.state === "active" ? "done" : s.state;
+        // The live turn's steps go by their own key; a finished turn's by the reply they led to.
+        const key = live ? s.key : scope ? turnStepKey(scope, s.key) : undefined;
         return (
-          <li key={s.key} id={live ? traceStepId(s.key) : undefined} data-testid="trace-step" data-step-state={state}
-            className={`flex w-full scroll-mt-4 flex-col gap-1.5 rounded-lg border bg-surface px-3 py-2 ${focus?.key === s.key && live ? "border-accent" : "border-border"}`}>
+          <li key={s.key} id={key ? traceStepId(key) : undefined} data-testid="trace-step" data-step-state={state}
+            className={`flex w-full scroll-mt-4 flex-col gap-1.5 rounded-lg border bg-surface px-3 py-2 ${key && focus?.key === key ? "border-accent" : "border-border"}`}>
             <div className="flex min-w-0 items-center gap-2 text-[13px]">
               <StepGlyph step={{ state, kind: s.kind }} />
               <span className={`min-w-0 truncate ${state === "active" ? "font-medium text-fg" : "text-fg-secondary"}`}>{s.title}</span>
@@ -147,10 +151,10 @@ export function RunActivity({ runId, since, focus }: { runId?: string; since?: s
 }
 
 /** A finished turn's steps, with their intent, thinking and tool calls, in the Activity tab. */
-export function TurnToolCalls({ runId, since, until }: { runId?: string; since?: string; until?: string }) {
+export function TurnToolCalls({ runId, since, until, replyId, focus }: { runId?: string; since?: string; until?: string; replyId?: string; focus?: { key: string; at: number } }) {
   const q = useChatRunEvents(runId, true, false);
   const steps = useMemo(() => turnTrace(q.data, since, until), [q.data, since, until]);
-  return <TurnTrace steps={steps} />;
+  return <TurnTrace steps={steps} scope={replyId} focus={focus} />;
 }
 
 const STEP_BAR: Record<ChatStep["state"], string> = {
@@ -176,8 +180,8 @@ function StepTimer({ step, now }: { step: ChatStep; now: number }) {
   );
 }
 
-function StepRail({ steps, now, stopping, awaiting, onOpenStep }: { steps: ChatStep[]; now: number; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void }) {
-  const { earlier, shown, later } = foldSteps(steps);
+function StepRail({ steps, now, stopping, awaiting, onOpenStep, fold = foldSteps }: { steps: ChatStep[]; now: number; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void; fold?: (steps: ChatStep[]) => ReturnType<typeof foldSteps> }) {
+  const { earlier, shown, later } = fold(steps);
   return (
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
       {earlier > 0 && (
@@ -328,6 +332,72 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
     </div>
   );
 }
+
+/**
+ * Opens the Activity tab on a finished turn's step, given its turnStepKey. A context, so the
+ * memoized reply bubbles don't re-render when the conversation's callbacks change.
+ */
+export const OpenTurnStep = createContext<((key: string) => void) | undefined>(undefined);
+
+const OUTCOME_VERB: Record<TurnOutcome, string> = { done: "Worked for", failed: "Failed after", stopped: "Stopped after" };
+
+/** Every step of a finished turn: the person opened the strip to see them, so nothing folds. */
+const showAll = (steps: ChatStep[]) => ({ earlier: 0, shown: steps, later: 0 });
+/** A failed turn opens on where it failed: the steps before the first failure fold into a count. */
+const fromFailure = (steps: ChatStep[]) => {
+  const at = Math.max(0, steps.findIndex((s) => s.state === "failed"));
+  return { earlier: at, shown: steps.slice(at), later: 0 };
+};
+
+/**
+ * What the live card leaves behind once its turn ends: a one-line strip above the reply
+ * ("Worked for 2m 14s · 7 steps") that opens to the steps the card showed, all finished.
+ * A failed turn opens on its failed step; a stopped one says so. `replyId` names the reply in
+ * the Activity tab, so "View reasoning" can open there; turns without a reply have no entry.
+ */
+export function TurnSteps({ runId, outcome, since, until, end, replyId }: { runId?: string; outcome: TurnOutcome; since?: string; until?: string; end?: number; replyId?: string }) {
+  const q = useChatRunEvents(runId, true, false);
+  const turn = useMemo(() => finishedTurn(q.data, outcome, since, until, end), [q.data, outcome, since, until, end]);
+  const openStep = useContext(OpenTurnStep);
+  const [open, setOpen] = useState(outcome === "failed");
+  if (turn.steps.length === 0) return null;
+  const count = `${turn.steps.length} ${turn.steps.length === 1 ? "step" : "steps"}`;
+  const took = turn.duration !== undefined && turn.duration >= 1000 ? ` ${formatSpan(turn.duration)}` : "";
+  const view = replyOpen(openStep, replyId);
+  return (
+    <>
+      <div data-testid="turn-steps" data-outcome={outcome}
+        className={`w-full max-w-[min(720px,100%)] rounded-xl border bg-surface ${outcome === "failed" ? "border-[var(--state-blocked)]/40" : "border-border"} ${open ? "" : "sm:w-fit sm:min-w-[320px]"}`}>
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[12.5px]">
+          {outcome === "stopped" ? (
+            <span aria-hidden className="grid size-4 flex-none place-items-center rounded-full bg-fg-tertiary text-surface"><Icon name="pause" size={10} /></span>
+          ) : (
+            <StepGlyph step={{ state: outcome === "failed" ? "failed" : "done" }} />
+          )}
+          <span data-testid="turn-steps-summary" className="min-w-0 flex-1 truncate text-fg-secondary">
+            {took ? `${OUTCOME_VERB[outcome]}${took}` : OUTCOME_VERB[outcome].split(" ")[0]} · {count}
+          </span>
+          <span className="flex-none pl-3 text-xs text-fg-tertiary">{open ? "Hide steps ‹" : "Show steps ›"}</span>
+        </button>
+        {open && (
+          <>
+            <StepRail steps={turn.steps} now={0} fold={outcome === "failed" ? fromFailure : showAll} onOpenStep={view} />
+            {view && (
+              <button type="button" onClick={() => view(turn.steps[0].key)} className="px-3.5 pb-2.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+                All tool calls in Activity ›
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {outcome === "stopped" && <p className="text-xs italic text-fg-tertiary">Stopped before it replied.</p>}
+    </>
+  );
+}
+
+/** "View reasoning" for a finished turn's step, which only has somewhere to go when the turn has a reply in Activity. */
+const replyOpen = (openStep: ((key: string) => void) | undefined, replyId: string | undefined) =>
+  openStep && replyId ? (key: string) => openStep(turnStepKey(replyId, key)) : undefined;
 
 /** "4m 12s · 23 steps · ● last activity 3s ago": the turn's time, its work so far, and a heartbeat. */
 function PulseLine({ planned, work, pulse, heard }: { planned?: string; work: number; pulse: TurnPulse; heard: boolean }) {
