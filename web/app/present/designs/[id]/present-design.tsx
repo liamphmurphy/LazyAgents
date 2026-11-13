@@ -8,6 +8,7 @@ import { makeLayout, type LaidPage } from "@/lib/designs/layout";
 import { follow, goBack, hotspotsOf, play, restart, screens, startScreen, transitionFrames, type Player } from "@/lib/designs/prototype";
 import { designAssetHref, LaidNodeSvg, useDesignFonts } from "@/lib/designs/render";
 import { normalize, type Design, type Link } from "@/lib/designs/schema";
+import { Spinner } from "@/components/ui/loading";
 
 type Move = { from: string; transition: Link["transition"]; duration: number; back?: boolean };
 
@@ -260,7 +261,7 @@ export function PresentDesign({ id }: { id: string }) {
       ) : ref.isError || head.isError ? (
         <p role="alert" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">Couldn’t open this design.</p>
       ) : !design ? (
-        <p role="status" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">Loading…</p>
+        <p role="status" className="absolute inset-0 grid place-items-center"><Spinner size={20} /><span className="sr-only">Loading</span></p>
       ) : !count || !at || !laid ? (
         <p role="status" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">This design has no frames to present.</p>
       ) : (

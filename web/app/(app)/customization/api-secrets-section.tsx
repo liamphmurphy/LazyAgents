@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar } from "../chat/_components/persona";
 import { confirmAction } from "@/components/ui/confirm";
+import { LoadingLines } from "@/components/ui/loading";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -188,7 +189,7 @@ function SecretActivity({ id }: { id: string }) {
     <section className="flex flex-col gap-2" aria-label="Activity">
       <h4 className="text-14 font-medium text-fg">Activity</h4>
       {rows.length === 0 ? (
-        <p className="text-12 text-fg-secondary">{calls.isPending ? "Loading…" : "Not used yet."}</p>
+        calls.isPending ? <LoadingLines /> : <p className="text-12 text-fg-secondary">Not used yet.</p>
       ) : (
         <ul className="max-h-[260px] overflow-y-auto rounded-lg border border-border bg-surface" data-testid="secret-activity">
           {rows.map((c) => (

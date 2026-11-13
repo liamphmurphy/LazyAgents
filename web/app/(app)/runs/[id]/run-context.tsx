@@ -18,6 +18,7 @@ import { ContextPanel, ContextSection as Section, useContextPanel } from "@/comp
 import { Icon } from "@/components/ui/icon";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { CostValue } from "./run-thread";
+import { LoadingLines } from "@/components/ui/loading";
 
 type RunDetail = Schemas["RunDetail"];
 
@@ -45,7 +46,7 @@ function TicketSection({ ticketKey, run }: { ticketKey: string; run: RunDetail["
     <>
       <Section title="Ticket">
         {!t ? (
-          <p className="text-12 text-fg-tertiary">{ticket.isError ? "Couldn’t load the ticket." : "Loading…"}</p>
+          ticket.isError ? <p className="text-12 text-fg-tertiary">Couldn’t load the ticket.</p> : <LoadingLines />
         ) : (
           <>
             <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="text-13 text-fg hover:underline">

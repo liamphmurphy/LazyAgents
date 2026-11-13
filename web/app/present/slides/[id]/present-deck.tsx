@@ -7,6 +7,7 @@ import { useDeckRef } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { assetHref, SlideSvg, useSlideFonts } from "@/lib/slides/render";
 import { parseDeck, slideText, slideTitle } from "@/lib/slides/schema";
+import { Spinner } from "@/components/ui/loading";
 
 /**
  * The saved deck, full screen and in order (mockup 4/6). Keys: → ↓ Space
@@ -125,7 +126,7 @@ export function PresentDeck({ id }: { id: string }) {
       }}
     >
       {!deck ? (
-        <p role="status" className="text-13 text-[#fff9]">{ref.isError ? "Couldn’t open this deck." : "Loading…"}</p>
+        <p role="status" className="text-13 text-[#fff9]">{ref.isError ? "Couldn’t open this deck." : <><Spinner size={20} /><span className="sr-only">Loading</span></>}</p>
       ) : !slide ? (
         <p role="status" className="text-13 text-[#fff9]">Every slide in this deck is hidden.</p>
       ) : (

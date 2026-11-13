@@ -442,7 +442,7 @@ A reference sheet for:
 * system banners ("Managed runs are off", "Runner offline");
 * the reconnecting toast.
 
-Every screen uses these patterns rather than a blank page or a spinner.
+Every screen uses these patterns rather than a blank page or a spinner. In code (`components/ui/loading.tsx`): a section or value that's loading is a skeleton shaped like it (`Skeleton`, `LoadingLines`, `LoadingText`), and `Spinner` is only for a button or an inline step that's working. Skeletons stay hidden for their first 150ms so a fast load shows nothing but the content. "Loading…" never appears on screen; it's the screen-reader label. `lib/ui-conventions.test.mjs` enforces both.
 
 ---
 

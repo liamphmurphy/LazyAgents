@@ -3,12 +3,13 @@
 import { useImageEngine, useSetImageEngine } from "@/lib/api/image-engine-hooks";
 import { cx } from "@/lib/cx";
 import { engineChoices } from "@/lib/image-engine";
+import { LoadingLines } from "@/components/ui/loading";
 
 /** Settings: which engine makes images. A persona or a workflow step can choose its own. */
 export function ImageEngineSection() {
   const engine = useImageEngine();
   const save = useSetImageEngine();
-  if (engine.isPending) return <p className="text-14 text-fg-secondary">Loading…</p>;
+  if (engine.isPending) return <LoadingLines />;
   if (engine.error) return <p role="alert" className="text-14 text-pill-blocked-fg">{engine.error.message}</p>;
   const choices = engineChoices(engine.data.options);
   return (

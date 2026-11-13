@@ -19,6 +19,7 @@ import { MockupCanvas, renderNode, useSourceHistory, viewBoxOf } from "@/compone
 import { svgSize } from "@/lib/mockup-review";
 import { Button, IconButton } from "@/components/ui/button";
 import { CanvasBoard } from "./canvas-board";
+import { LoadingLines } from "@/components/ui/loading";
 
 type Canvas = Schemas["ChatCanvas"];
 type Comment = Schemas["ChatCanvasComment"];
@@ -198,7 +199,7 @@ function Changes({ chatId, c }: { chatId: string; c: Canvas }) {
   const prev = useChatCanvas(chatId, c.viewing_seq > 1 ? c.id : undefined, c.viewing_seq - 1);
   if (c.viewing_seq <= 1) return <p className="text-12 text-fg-tertiary">This is the first version.</p>;
   if (prev.isError) return <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(prev.error)}</p>;
-  if (!prev.data || prev.data.viewing_seq !== c.viewing_seq - 1) return <p className="text-12 text-fg-tertiary">Loading…</p>;
+  if (!prev.data || prev.data.viewing_seq !== c.viewing_seq - 1) return <LoadingLines lines={3} />;
   if (c.kind === "svg") {
     return (
       <div className="flex flex-col gap-3">
@@ -471,7 +472,7 @@ export function CanvasView({ chatId, canvasId, live, readOnly, agent, page, onCo
           {q.isError ? (
             <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(q.error)}</p>
           ) : !c ? (
-            <p className="text-12 text-fg-tertiary">Loading…</p>
+            <LoadingLines lines={4} />
           ) : c.kind === "deck" ? (
             <p className="text-13 text-fg-secondary">
               This is a slide deck.{" "}

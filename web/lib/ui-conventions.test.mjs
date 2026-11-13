@@ -29,3 +29,8 @@ test("confirmations are in-app, never the browser's confirm() or alert()", () =>
   // confirmAction (components/ui/confirm.tsx) for what can't be undone, undoable (lib/toast.ts) for the rest.
   assert.deepEqual(offenders(/(?<![\w.])(window\.)?(confirm|alert)\(/), []);
 });
+
+test("loading is a skeleton or a Spinner, never the word on screen or a hand-rolled spinner", () => {
+  // components/ui/loading.tsx: LoadingLines / LoadingText for sections and values, Spinner in buttons.
+  assert.deepEqual(offenders(/Loading(…|\.\.\.)|animate-spin/, (path) => path === "components/ui/loading.tsx"), []);
+});

@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
+import { Spinner } from "@/components/ui/loading";
 import { formatBytes } from "@/lib/files";
 import { Button, ButtonLink, buttonClass } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -101,10 +102,6 @@ function StageDot({ state }: { state: StageState }) {
   if (state === "failed") return <span className={cx(base, "border-state-blocked bg-state-blocked text-bg")} aria-hidden>!</span>;
   if (state === "active") return <span className={cx(base, "video-spin border-state-progress border-t-transparent")} aria-hidden />;
   return <span className={cx(base, "border-border-strong")} aria-hidden />;
-}
-
-function Spinner() {
-  return <span className="video-spin inline-block size-[11px] flex-none rounded-full border-[1.5px] border-accent border-t-transparent" aria-hidden />;
 }
 
 function Writing({ v }: { v: ChatVideo }) {

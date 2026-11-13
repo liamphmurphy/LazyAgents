@@ -13,6 +13,7 @@ import { Icon } from "@/components/ui/icon";
 import { CodeFence } from "./code-fence";
 import { ApiTab, LogsTab, PreviewTab, usePlaygroundLogs } from "./playground-tabs";
 import { RecommendActions } from "./recommend-fence";
+import { LoadingText } from "@/components/ui/loading";
 
 // A chat's playground: the app its agent is building, running on the runner
 // with fresh services, opened beside the chat or over the whole window.
@@ -309,7 +310,7 @@ export function PlaygroundFence({ code, info }: { code: string; info?: string })
   if (!id || !chatId || q.isError || (q.isSuccess && pg?.id !== id)) return <CodeFence code={code} info={info} />;
   const accent = pg?.state === "running" ? "bg-pill-done-fg" : pg?.state === "failed" ? "bg-pill-blocked-fg" : "bg-fg-tertiary";
   const detail = !pg
-    ? "Loading…"
+    ? <LoadingText className="w-32" />
     : pg.state === "running"
       ? [pg.processes.map((p) => p.name).join(", "), ...pg.services.map((s) => s.image)].join(" · ")
       : pg.state === "starting"

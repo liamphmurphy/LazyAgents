@@ -14,6 +14,7 @@ import { ConnectorApprovalCards } from "./connector-requests";
 import { SecretApprovalCards } from "./secret-requests";
 import { StepGlyph } from "./step-glyph";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
+import { Spinner } from "@/components/ui/loading";
 
 const str = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 
@@ -36,7 +37,7 @@ export function ActivityRef({ refText, label }: { refText: string; label: string
 function LiveLine({ a }: { a: Activity }) {
   return (
     <p data-testid="live-activity" className="flex min-w-0 items-center gap-2 text-13 text-fg-secondary">
-      <span aria-hidden className="size-3 flex-none animate-spin rounded-full border-2 border-border-strong border-t-accent" />
+      <Spinner />
       <span className="min-w-0 truncate">
         {a.verb}
         {a.ref && a.label && (

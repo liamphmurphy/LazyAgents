@@ -10,6 +10,7 @@ import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
+import { LoadingText } from "@/components/ui/loading";
 
 /**
  * A design in a chat's transcript (docs/design/designs-from-chat.svg): a live thumbnail
@@ -64,7 +65,7 @@ export function DesignCard({ id, title }: { id: string; title: string }) {
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-10 font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Design</span>
           <span className="truncate text-13 font-semibold text-fg">{name}</span>
-          <span data-testid="design-card-counts" className="truncate text-12 text-fg-tertiary">{body ? designCounts(body) : ref.isError ? "Couldn’t load this design" : "Loading…"}</span>
+          <span data-testid="design-card-counts" className="truncate text-12 text-fg-tertiary">{body ? designCounts(body) : ref.isError ? "Couldn’t load this design" : <LoadingText />}</span>
         </span>
         <Button variant="secondary" disabled={!body} onClick={() => router.push(`/present/designs/${id}`)}>
           Present

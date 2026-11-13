@@ -12,6 +12,7 @@ import { DocTypeTag } from "./labels";
 import { ReviewChip } from "./mockup";
 import { floatPanel } from "./pickers";
 import { hoverReveal } from "@/lib/reveal";
+import { LoadingLines } from "@/components/ui/loading";
 
 /** "ADR-012 · Postgres declarative partitioning" for numbered types. */
 export function artifactTitle(a: { title: string; display_id?: string }) {
@@ -149,7 +150,7 @@ export function ArtifactPicker({
             />
           </div>
           <div id="artifact-options" role="listbox" aria-label="Artifacts" className="max-h-[320px] overflow-y-auto p-1">
-            {list.isPending && <div className="px-2 py-2 text-fg-tertiary">Loading…</div>}
+            {list.isPending && <LoadingLines className="px-2" />}
             {!list.isPending && options.length === 0 && (
               <div className="px-2 py-2 text-fg-tertiary">{q ? `No artifacts match “${q}”` : "No artifacts to attach"}</div>
             )}

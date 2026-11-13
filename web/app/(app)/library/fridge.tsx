@@ -10,6 +10,7 @@ import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { Banner, EmptyState, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { undoable } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/loading";
 
 type Memory = Schemas["Memory"];
 
@@ -174,7 +175,7 @@ export function Fridge() {
           {moments.hasNextPage && (
             <div className="flex justify-center">
               <Button onClick={() => moments.fetchNextPage()} disabled={moments.isFetchingNextPage}>
-                {moments.isFetchingNextPage ? "Loading…" : "Show more"}
+                {moments.isFetchingNextPage && <Spinner />}Show more
               </Button>
             </div>
           )}

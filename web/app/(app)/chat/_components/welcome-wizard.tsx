@@ -30,6 +30,7 @@ import {
 import { ROLE_MAX } from "@/lib/profile-ui";
 import { setWizardStep } from "@/components/domain/setup-progress";
 import { PersonaAvatar, PersonaPortrait, personaLook, toneLabel } from "./persona";
+import { Spinner } from "@/components/ui/loading";
 
 // The first-run Welcome Wizard (LAZYAGENTS-102). It is the new-chat welcome:
 // the default Assistant hosts it from the carousel slot, says each step's line
@@ -105,8 +106,6 @@ function Foot({ hint, children }: { hint?: ReactNode; children: ReactNode }) {
 function Alert({ error }: { error?: string }) {
   return error ? <p role="alert" className="mt-2 text-13 text-pill-blocked-fg">{error}</p> : null;
 }
-
-const Spinner = () => <span aria-hidden className="inline-block size-3 animate-spin rounded-full border-2 border-border-strong border-t-accent" />;
 
 // ------------------------------------------------------------ 0 · greeting
 

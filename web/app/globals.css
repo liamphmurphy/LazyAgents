@@ -206,10 +206,14 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+/* Skeletons wait 150ms before showing, so a fast load goes straight to content with no flash. */
+@keyframes skeleton-wait {
+  from, to { visibility: hidden; }
+}
 @utility animate-skeleton {
-  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  animation: skeleton-wait 150ms, skeleton-pulse 1.6s ease-in-out 150ms infinite;
   @media (prefers-reduced-motion: reduce) {
-    animation: none;
+    animation: skeleton-wait 150ms;
   }
 }
 

@@ -10,6 +10,7 @@ import { formatTokens, sourceDetail, sourceName, type SourceKind } from "@/lib/s
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { LoadingLines } from "@/components/ui/loading";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
@@ -199,7 +200,7 @@ function WebsiteForm({ spaceId, onDone }: { spaceId: string; onDone: () => void 
 }
 
 function PickList<T extends { id: string }>({ items, loading, empty, render, onPick, busy }: { items: T[]; loading: boolean; empty: string; render: (t: T) => ReactNode; onPick: (t: T) => void; busy: boolean }) {
-  if (loading) return <p className="px-[4px] py-[8px] text-12 text-fg-tertiary">Loading…</p>;
+  if (loading) return <LoadingLines lines={3} className="px-[4px] py-[8px]" />;
   if (items.length === 0) return <p className="px-[4px] py-[8px] text-12 text-fg-secondary">{empty}</p>;
   return (
     <ul className="flex max-h-[180px] flex-col gap-px overflow-y-auto">

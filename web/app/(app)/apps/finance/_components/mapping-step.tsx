@@ -5,6 +5,7 @@ import { useCancelPending, useCommitMapping, useMappingPreview, usePendingImport
 import { cx } from "@/lib/cx";
 import { COLUMN_ROLES, ROLE_LABELS, columnRole, columnValues, dayLabel, money, setColumnRole, type ColumnRole, type CsvMapping } from "@/lib/finance";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/loading";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const select = "h-[28px] rounded-md border border-border-strong bg-surface-sunken px-[6px] text-12 text-fg focus:border-accent focus:outline-none";
@@ -166,7 +167,7 @@ function AssistantStatus({ pending, slow, edited }: { pending: FinancePendingImp
   if (pending.assistant === "asking") {
     return (
       <div className={cx(box, "border-border-strong text-fg-2")} role="status">
-        <span aria-hidden className="mt-[3px] size-3 flex-none animate-spin rounded-full border-[1.5px] border-track border-t-accent" />
+        <Spinner className="mt-[3px]" />
         <span>
           This CSV&rsquo;s layout is new, so your assistant is reading its columns from the first {pending.rows.length} rows.
           <span className="block text-fg-tertiary">{slow ? "It's taking a while: you can map them yourself below." : "You can map them yourself below in the meantime."}</span>

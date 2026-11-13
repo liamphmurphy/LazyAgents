@@ -38,6 +38,7 @@ import { firstLine, planCount, planLive, planStatus, readSources } from "@/lib/p
 import { dependencyProblems } from "@/lib/proposals";
 import { ago } from "@/lib/format";
 import { cx } from "@/lib/cx";
+import { Spinner } from "@/components/ui/loading";
 
 type Plan = Schemas["PlanningSession"];
 type Proposal = Schemas["TicketProposal"];
@@ -830,7 +831,7 @@ function SourcesRead({ plan, live }: { plan: Plan; live: boolean }) {
           {src.done ? (
             <Icon name="check" size={12} className="flex-none text-pill-done-fg" />
           ) : (
-            <span aria-hidden className="size-3 flex-none animate-spin rounded-full border-2 border-border-strong border-t-accent" />
+            <Spinner />
           )}
           <span className="min-w-0 truncate">
             {src.activity.verb}{" "}

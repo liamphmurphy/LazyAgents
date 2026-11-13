@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { undoable } from "@/components/ui/toast";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Spinner } from "@/components/ui/loading";
 
 const FILTERS = [{ key: "all", label: "All" }, { key: "video", label: "Videos" }, { key: "page", label: "Pages" }] as const;
 type Filter = (typeof FILTERS)[number]["key"];
@@ -135,7 +136,7 @@ export function Links() {
       {lib.hasNextPage && (
         <div className="flex justify-center">
           <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
-            {lib.isFetchingNextPage ? "Loading…" : "Show more"}
+            {lib.isFetchingNextPage && <Spinner />}Show more
           </Button>
         </div>
       )}

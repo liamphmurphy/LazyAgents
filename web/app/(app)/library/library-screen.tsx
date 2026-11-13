@@ -31,6 +31,7 @@ import { Links } from "./links";
 import { ProjectDocs } from "./_components/project-docs";
 import { LibrarySourceSwitch } from "./_components/source-switch";
 import { confirmAction } from "@/components/ui/confirm";
+import { Spinner } from "@/components/ui/loading";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
@@ -338,7 +339,7 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
       {lib.hasNextPage && (
         <div className="flex justify-center">
           <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
-            {lib.isFetchingNextPage ? "Loading…" : "Show more"}
+            {lib.isFetchingNextPage && <Spinner />}Show more
           </Button>
         </div>
       )}

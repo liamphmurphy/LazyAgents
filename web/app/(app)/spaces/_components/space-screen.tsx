@@ -25,6 +25,7 @@ import { modelLabel, type Selection } from "@/app/(app)/chat/_components/model-p
 import { ResearchToggle } from "@/app/(app)/chat/_components/reply-tools";
 import { ColorPicker, ConnectorSelect, PersonaSelect, ProjectSelect, SpaceTile, useConnectorNames, usePersonaName, useProjectName } from "./space-parts";
 import { SourceIcon, SourcesDialog } from "./sources-dialog";
+import { LoadingLines } from "@/components/ui/loading";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.markdown,.csv,.json";
@@ -115,7 +116,7 @@ function SourcesCard({ space, onAdd }: { space: Space; onAdd: () => void }) {
       }
     >
       {list.length === 0 ? (
-        <p className="text-13 text-fg-tertiary">{sources.isPending ? "Loading…" : "No sources yet. Add files, text or pages for every chat here to use."}</p>
+        sources.isPending ? <LoadingLines /> : <p className="text-13 text-fg-tertiary">No sources yet. Add files, text or pages for every chat here to use.</p>
       ) : (
         <ul className="flex flex-col gap-[12px]">
           {list.slice(0, SOURCE_ROWS).map((s) => (

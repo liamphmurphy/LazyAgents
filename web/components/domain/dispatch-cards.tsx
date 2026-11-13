@@ -20,6 +20,7 @@ import { RecommendActions } from "./recommend-fence";
 import { RUN_STATE, WAIT_LABEL } from "./run-status";
 import { SmallPill } from "./labels";
 import { SvgFenceMessage } from "./svg-fence";
+import { Spinner } from "@/components/ui/loading";
 
 type TicketRun = Schemas["ChatTicketRun"];
 
@@ -576,7 +577,7 @@ function MultiStartCard({ ticketKeys, chatId, messageId, started, onDismiss }: {
         {ready.length > 0 ? (
           <>
             <Button variant="primary" disabled={!messageId || loading} onClick={() => setOpen(true)}>
-              {loading ? "Loading…" : `Start all (${ready.length})…`}
+              {loading && <Spinner />}{`Start all (${ready.length})…`}
             </Button>
             <Button variant="ghost" onClick={onDismiss}>Not now</Button>
           </>
