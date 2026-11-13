@@ -255,14 +255,23 @@ func TestAgyPolicyHookAgreesWithTheParser(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"run_command", map[string]any{"CommandLine": "go test ./..."}},
+		// The tools agy 1.5.8 declares to the model, with their real argument keys.
+		{"run_command", map[string]any{"CommandLine": "go test ./...", "toolSummary": "Run tests", "WaitMsBeforeAsync": 500.0}},
+		{"read_file", map[string]any{"Path": "/workspace/a.go", "StartLine": 1.0}},
+		{"write_file", map[string]any{"Path": "/workspace/b.go", "Content": "package b"}},
+		{"edit_file", map[string]any{"Path": "/workspace/c.go", "Target": "a", "Replacement": "b"}},
+		{"call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "get_ticket", "Arguments": map[string]any{"ticket": "X-1"}}},
+		{"call_mcp_tool", map[string]any{"ServerName": "lazyagents"}},
+		{"invoke_subagent", map[string]any{"TypeName": "general", "Role": "helper", "Prompt": "run ls"}},
+		{"swarm", map[string]any{"action": "add"}},
+		{"search_web", map[string]any{"query": "go slog"}},
+		// agy's internal names (init's tool list), should a step report one.
 		{"view_file", map[string]any{"AbsolutePath": "/workspace/a.go"}},
 		{"write_to_file", map[string]any{"TargetFile": "/workspace/b.go"}},
 		{"replace_file_content", map[string]any{"TargetFile": "/workspace/c.go"}},
 		{"list_dir", map[string]any{"DirectoryPath": "/workspace"}},
 		{"grep_search", map[string]any{"Query": "TODO", "SearchPath": "/workspace"}},
 		{"find_by_name", map[string]any{"Pattern": "*.go", "SearchPath": "/workspace"}},
-		{"search_web", map[string]any{"query": "go slog"}},
 		{"read_url_content", map[string]any{"Url": "https://go.dev"}},
 		{"mcp_lazyagents_get_ticket", map[string]any{"ticket": "X-1"}},
 		{"browser_subagent", map[string]any{"Task": "x"}},
@@ -295,11 +304,18 @@ func TestAgyPolicyHookAgreesWithTheParser(t *testing.T) {
 
 func TestAntigravityToolNamesInEvents(t *testing.T) {
 	for in, want := range map[string]string{
-		"run_command": "Bash", "view_file": "Read", "write_to_file": "Write", "replace_file_content": "Edit",
+		"run_command": "Bash", "read_file": "Read", "write_file": "Write", "edit_file": "Edit", "invoke_subagent": "Agent",
+		"view_file": "Read", "write_to_file": "Write", "replace_file_content": "Edit", "call_mcp_tool": "call_mcp_tool",
 		"mcp_lazyagents_search_knowledge": "mcp__lazyagents_search_knowledge", "browser_subagent": "browser_subagent",
 	} {
 		if got, _ := antigravityTool(in, nil); got != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
+	}
+	// Every MCP tool arrives through call_mcp_tool; the policy must see it as
+	// that server's tool, or a read-only chat is refused its own tools.
+	tool, input := antigravityTool("call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "list_tickets", "Arguments": map[string]any{"q": "x"}})
+	if tool != "mcp__lazyagents__list_tickets" || input["q"] != "x" {
+		t.Fatalf("call_mcp_tool → %s %v", tool, input)
 	}
 }

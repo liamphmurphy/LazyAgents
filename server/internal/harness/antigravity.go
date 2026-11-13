@@ -455,13 +455,28 @@ func antigravityTool(name string, args map[string]any) (string, map[string]any) 
 		return ""
 	}
 	pathKeys := []string{"AbsolutePath", "TargetFile", "file_path", "path", "Path", "DirectoryPath", "SearchPath"}
+	// The names agy 1.5.8 declares to the model come first; the others are its
+	// internal names (init's tool list), kept in case a step reports one.
 	switch name {
 	case "run_command":
 		return "Bash", map[string]any{"command": str("CommandLine", "command", "cmd")}
-	case "view_file", "view_file_outline":
+	case "read_file", "view_file", "view_file_outline":
 		return "Read", map[string]any{"file_path": str(pathKeys...)}
-	case "write_to_file", "create_file":
+	case "write_file", "write_to_file", "create_file":
 		return "Write", map[string]any{"file_path": str(pathKeys...)}
+	case "call_mcp_tool":
+		// Every MCP tool goes through this one: name it as Claude Code would, so
+		// the policy governs it as an MCP tool rather than an unknown one.
+		server, tool := str("ServerName"), str("ToolName")
+		if server == "" || tool == "" {
+			return name, args
+		}
+		input, _ := args["Arguments"].(map[string]any)
+		return "mcp__" + server + "__" + tool, input
+	case "invoke_subagent", "define_subagent", "manage_subagents", "swarm", "send_message":
+		// Other agents, which Vesper's policy refuses as it does Claude Code's
+		// (only its explorer, which agy doesn't have).
+		return "Agent", map[string]any{"description": str("Role", "Name", "TypeName", "action")}
 	case "replace_file_content", "multi_replace_file_content", "edit_file":
 		return "Edit", map[string]any{"file_path": str(pathKeys...)}
 	case "list_dir":

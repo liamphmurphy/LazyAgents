@@ -22,10 +22,18 @@ def canonical(name, args):
         args = {}
     if name == "run_command":
         return "Bash", {"command": FIRST(args, "CommandLine", "command", "cmd")}
-    if name in ("view_file", "view_file_outline"):
+    if name in ("read_file", "view_file", "view_file_outline"):
         return "Read", {"file_path": FIRST(args, *PATH)}
-    if name in ("write_to_file", "create_file"):
+    if name in ("write_file", "write_to_file", "create_file"):
         return "Write", {"file_path": FIRST(args, *PATH)}
+    if name == "call_mcp_tool":
+        server, tool = FIRST(args, "ServerName"), FIRST(args, "ToolName")
+        if not server or not tool:
+            return name, args
+        tool_input = args.get("Arguments")
+        return "mcp__" + server + "__" + tool, tool_input if isinstance(tool_input, dict) else None
+    if name in ("invoke_subagent", "define_subagent", "manage_subagents", "swarm", "send_message"):
+        return "Agent", {"description": FIRST(args, "Role", "Name", "TypeName", "action")}
     if name in ("replace_file_content", "multi_replace_file_content", "edit_file"):
         return "Edit", {"file_path": FIRST(args, *PATH)}
     if name == "list_dir":
