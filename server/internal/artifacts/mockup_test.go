@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
@@ -90,8 +91,8 @@ func TestCreateMockup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
-	v, err := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: f.ws})
+	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
+	v, err := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestCreateMockup(t *testing.T) {
 	if got := outline(t, f, a); len(got) != 0 {
 		t.Fatalf("a mockup has no outline: %+v", got)
 	}
-	if list, err := f.q.ListArtifacts(ctx, store.ListArtifactsParams{WorkspaceID: f.ws, Q: ptr("zorblax")}); err != nil || len(list) != 1 {
+	if list, err := f.q.ListArtifacts(ctx, store.ListArtifactsParams{WorkspaceID: f.ws, Q: ptr("zorblax"), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent}); err != nil || len(list) != 1 {
 		t.Fatalf("search over svg text: %d %v", len(list), err)
 	}
 
@@ -117,8 +118,8 @@ func TestCreateMockup(t *testing.T) {
 	if b.Title != "login" {
 		t.Errorf("title from file name = %q", b.Title)
 	}
-	b, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: b.ID, WorkspaceID: f.ws})
-	bv, _ := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *b.CurrentVersionID, ArtifactID: b.ID, WorkspaceID: f.ws})
+	b, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: b.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
+	bv, _ := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *b.CurrentVersionID, ArtifactID: b.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 	if bv.BodyMd == nil || bv.BlobKey != nil || len(f.blobs.objs) != 0 {
 		t.Fatal("svg file should be stored as text, not a blob")
 	}
@@ -139,8 +140,8 @@ func TestCreateMockup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: d.ID, WorkspaceID: f.ws})
-	if dv, _ := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *d.CurrentVersionID, ArtifactID: d.ID, WorkspaceID: f.ws}); dv.BlobKey == nil {
+	d, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: d.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
+	if dv, _ := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *d.CurrentVersionID, ArtifactID: d.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID}); dv.BlobKey == nil {
 		t.Error("design svg should stay a blob")
 	}
 	// ...and an SVG file can be a new version of a design or a report.
@@ -209,7 +210,7 @@ func TestMockupGate(t *testing.T) {
 		t.Fatal("epic mockup leaked to a ticket outside the epic")
 	}
 	approve := func() {
-		m, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: m.ID, WorkspaceID: f.ws})
+		m, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: m.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 		state := "approved"
 		if _, err := f.q.ReviewArtifactVersion(ctx, store.ReviewArtifactVersionParams{ID: *m.CurrentVersionID, ReviewState: &state, ReviewedByUserID: &f.maya.ID, ReviewPins: []byte("[]")}); err != nil {
 			t.Fatal(err)

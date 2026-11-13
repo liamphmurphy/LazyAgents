@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/api"
@@ -173,7 +174,7 @@ func (s *Server) GetDispatchPreview(ctx context.Context, req api.GetDispatchPrev
 	}
 	for _, f := range files {
 		title, kind := f.Path, "artifact"
-		if a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: ws}); err == nil {
+		if a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err == nil {
 			title, kind = a.Title, a.Type
 			if a.Path != nil {
 				title, kind = *a.Path, "wiki"

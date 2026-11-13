@@ -16,6 +16,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -251,7 +252,7 @@ func findPatterns(ctx context.Context, q *store.Queries, ws uuid.UUID, text, top
 		}
 		tp = &t
 	}
-	rows, err := q.FindPatterns(ctx, store.FindPatternsParams{Q: strings.TrimSpace(text), WorkspaceID: ws, Topic: tp, Lim: int32(limit)})
+	rows, err := q.FindPatterns(ctx, store.FindPatternsParams{Q: strings.TrimSpace(text), WorkspaceID: ws, Topic: tp, Lim: int32(limit), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +344,7 @@ func errNotCurator() error {
 
 // publishedByTitle finds a published pattern called title, in any topic.
 func publishedByTitle(ctx context.Context, q *store.Queries, ws uuid.UUID, title string) (*store.Artifact, error) {
-	notes, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: title})
+	notes, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: title, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +398,7 @@ func (s *Service) ProposePattern(ctx context.Context, agent store.Agent, in Prop
 			return apperr.Invalid("title", "a pattern called %q is already published at %s; improve it with write_note (mode replace) or propose a different title", title, deref(pub.Path))
 		}
 		mode := ModeCreate
-		if ex, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path}); err == nil && ex.CurrentVersionID != nil {
+		if ex, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID}); err == nil && ex.CurrentVersionID != nil {
 			if ex.AuthorType != "agent" || ex.AuthorID != agent.ID {
 				return apperr.Invalid("title", "%q has already been proposed by someone else; pick a different title or wait for it to be reviewed", title)
 			}
@@ -422,7 +423,7 @@ type ProposedPattern struct {
 // ListProposed lists proposals waiting for review, oldest first.
 func (s *Service) ListProposed(ctx context.Context, ws uuid.UUID) ([]ProposedPattern, error) {
 	q := store.New(s.Pool)
-	notes, err := q.ListNotes(ctx, ws)
+	notes, err := q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +439,7 @@ func (s *Service) ListProposed(ctx context.Context, ws uuid.UUID) ([]ProposedPat
 	}
 	handles := map[uuid.UUID]string{}
 	if len(agentIDs) > 0 {
-		as, err := q.AgentsByIDs(ctx, agentIDs)
+		as, err := q.AgentsByIDs(ctx, store.AgentsByIDsParams{WorkspaceID: ws, Ids: agentIDs})
 		if err != nil {
 			return nil, err
 		}
@@ -476,13 +477,13 @@ func loadProposal(ctx context.Context, q *store.Queries, ws uuid.UUID, title str
 	if err != nil {
 		return store.Artifact{}, "", err
 	}
-	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path})
+	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && a.CurrentVersionID == nil) {
 		return store.Artifact{}, "", apperr.Invalid("proposed_title", "no proposed pattern called %q; list_proposed_patterns shows what is waiting", title)
 	} else if err != nil {
 		return store.Artifact{}, "", err
 	}
-	if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: a.ID, WorkspaceID: ws}); err != nil {
+	if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 		return store.Artifact{}, "", err
 	}
 	body, _, err := current(ctx, q, a)
@@ -543,7 +544,7 @@ func (s *Service) PublishPattern(ctx context.Context, agent store.Agent, scopes 
 		} else if pub != nil {
 			return apperr.Conflict("a pattern called %q is already published at %s; merge into it with write_note (mode replace) and reject_pattern this proposal", title, deref(pub.Path))
 		}
-		if ex, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path}); err == nil && ex.ID != prop.ID {
+		if ex, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID}); err == nil && ex.ID != prop.ID {
 			return apperr.Conflict("%s already exists; merge into it with write_note (mode replace) and reject_pattern this proposal", path)
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -570,7 +571,7 @@ func (s *Service) RejectPattern(ctx context.Context, agent store.Agent, scopes m
 		}
 		proposer = "a person"
 		if prop.AuthorType == "agent" {
-			if as, err := q.AgentsByIDs(ctx, []uuid.UUID{prop.AuthorID}); err == nil && len(as) == 1 {
+			if as, err := q.AgentsByIDs(ctx, store.AgentsByIDsParams{WorkspaceID: agent.WorkspaceID, Ids: []uuid.UUID{prop.AuthorID}}); err == nil && len(as) == 1 {
 				proposer = "@" + as[0].Handle
 			}
 		}

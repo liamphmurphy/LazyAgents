@@ -1,6 +1,6 @@
 -- name: CreateArtifact :one
-INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, path)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO artifacts (workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, path, audience, owner_user_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, sqlc.arg(audience), sqlc.narg(owner_user_id))
 RETURNING *;
 
 -- name: NextADRNumber :one
@@ -14,10 +14,10 @@ SELECT EXISTS (SELECT 1 FROM artifacts WHERE workspace_id = $1 AND type = 'adr' 
 SELECT pg_advisory_xact_lock(hashtextextended('artifact-numbering:' || $1::uuid::text, 0));
 
 -- name: GetArtifact :one
-SELECT * FROM artifacts WHERE id = $1 AND workspace_id = $2;
+SELECT * FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND id = $1 AND workspace_id = $2;
 
 -- name: LockArtifact :one
-SELECT * FROM artifacts WHERE id = $1 AND workspace_id = $2 FOR UPDATE;
+SELECT * FROM artifacts WHERE id = $1 AND workspace_id = $2 AND artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) FOR UPDATE;
 
 -- name: SetArtifactCurrentVersion :exec
 UPDATE artifacts SET current_version_id = $2, search_text = $3, summary = $4 WHERE id = $1;
@@ -32,12 +32,12 @@ RETURNING *;
 
 -- name: GetArtifactVersion :one
 SELECT v.* FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id
-WHERE v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
+WHERE artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid) AND v.id = $1 AND v.artifact_id = $2 AND a.workspace_id = $3;
 
 -- name: ListArtifactVersions :many
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
   review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
-FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' ORDER BY seq DESC;
+FROM artifact_versions WHERE artifact_id = $1 AND EXISTS (SELECT 1 FROM artifacts a WHERE a.id = artifact_id AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)) AND state = 'published' ORDER BY seq DESC;
 
 -- name: CountPublishedVersions :one
 SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published';
@@ -54,7 +54,7 @@ SELECT s.id, s.position, s.level, s.anchor, s.heading,
      JOIN artifact_versions v2 ON v2.id = s2.version_id
    WHERE v2.artifact_id = sqlc.arg(artifact_id) AND s2.anchor = s.anchor)::int AS citations
 FROM artifact_sections s
-WHERE s.version_id = sqlc.arg(version_id)
+WHERE EXISTS (SELECT 1 FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id WHERE v.id = s.version_id AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)) AND s.version_id = sqlc.arg(version_id)
 ORDER BY s.position;
 
 -- name: GetSectionByAnchor :one
@@ -85,7 +85,7 @@ FROM artifacts ar
 LEFT JOIN projects p ON p.id = ar.project_id
 LEFT JOIN epics e ON e.id = ar.epic_id
 JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = sqlc.arg(workspace_id)
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = sqlc.arg(workspace_id)
   -- Notes have their own tab and stay out of "All".
   AND (CASE WHEN sqlc.narg(type)::text IS NULL THEN ar.type <> 'note' ELSE ar.type = sqlc.narg(type) END)
   AND (sqlc.narg(project_id)::uuid IS NULL OR ar.project_id = sqlc.narg(project_id))
@@ -97,7 +97,7 @@ LIMIT 500;
 
 -- name: CountArtifactsByType :many
 SELECT type, count(*)::int AS n FROM artifacts
-WHERE workspace_id = sqlc.arg(workspace_id) AND current_version_id IS NOT NULL
+WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR audience <> 'agent') AND workspace_id = sqlc.arg(workspace_id) AND current_version_id IS NOT NULL
   AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
   AND (sqlc.narg(q)::text IS NULL
        OR search @@ websearch_to_tsquery('english', sqlc.narg(q))
@@ -122,7 +122,7 @@ SELECT ar.id, ar.type, ar.title, ar.number, ar.author_type, ar.author_id, ta.rel
 FROM ticket_artifacts ta
 JOIN artifacts ar ON ar.id = ta.artifact_id
 LEFT JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ta.ticket_id = sqlc.arg(ticket_id)
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ta.ticket_id = sqlc.arg(ticket_id)
 ORDER BY ta.relation, ta.created_at;
 
 -- name: ListArtifactTickets :many
@@ -132,7 +132,7 @@ WHERE ta.artifact_id = $1
 ORDER BY t.updated_at DESC;
 
 -- name: GetADRByNumber :one
-SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'adr' AND number = $2;
+SELECT * FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND workspace_id = $1 AND type = 'adr' AND number = $2;
 
 -- name: ReviewArtifactVersion :one
 UPDATE artifact_versions SET review_state = $2, reviewed_by_user_id = $3, reviewed_at = now(), review_note = $4, review_pins = $5
@@ -166,3 +166,11 @@ WHERE ar.type = 'mockup' AND ar.workspace_id = sqlc.arg(workspace_id)
   AND (EXISTS (SELECT 1 FROM ticket_artifacts ta WHERE ta.artifact_id = ar.id AND ta.ticket_id = sqlc.arg(ticket_id))
        OR (sqlc.narg(epic_id)::uuid IS NOT NULL AND ar.epic_id = sqlc.narg(epic_id)))
 ORDER BY v.reviewed_at, v.id;
+
+-- name: SetPageAudience :one
+-- Person-only service; the lock above serializes edits with audience changes.
+UPDATE artifacts SET audience=sqlc.arg(audience), owner_user_id=sqlc.narg(owner_user_id)
+WHERE id=sqlc.arg(id) AND workspace_id=sqlc.arg(workspace_id)
+ AND sqlc.narg(viewer)::uuid IS NOT NULL AND audience <> 'agent'
+ AND artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid)
+RETURNING *;

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/api"
@@ -174,7 +175,7 @@ func (s *Server) overview(ctx context.Context, ws uuid.UUID) (overview, error) {
 	if err != nil {
 		return out, err
 	}
-	docs, err := s.Q.OverviewArtifacts(ctx, ws)
+	docs, err := s.Q.OverviewArtifacts(ctx, store.OverviewArtifactsParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return out, err
 	}

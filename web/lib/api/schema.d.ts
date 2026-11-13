@@ -6023,6 +6023,8 @@ export interface components {
             relation: components["schemas"]["ArtifactRelation"];
         };
         Artifact: {
+            /** @description private, shared or agent; only a person can change private/shared */
+            audience?: string;
             /** Format: uuid */
             id: string;
             type: components["schemas"]["ArtifactType"];
@@ -6804,6 +6806,8 @@ export interface components {
             unlinked: components["schemas"]["ArtifactReader"][];
         };
         WikiPageSummary: {
+            /** @description private, shared or agent; only a person can change private/shared */
+            audience?: string;
             /** Format: uuid */
             id: string;
             path: string;
@@ -6823,11 +6827,21 @@ export interface components {
             suggestions: number;
         };
         NewWikiPage: {
+            /**
+             * @description Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
+             * @enum {string}
+             */
+            audience?: "private" | "shared";
             path: string;
             body_md: string;
             project_key?: string;
         };
         WikiPageSave: {
+            /**
+             * @description Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
+             * @enum {string}
+             */
+            audience?: "private" | "shared";
             body_md?: string;
             /** @description Move the page here; the old path keeps resolving */
             path?: string;
@@ -8930,6 +8944,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Include agent memory and proposed patterns in discovery; false by default. */
+        IncludeAgent: boolean;
         NodeKind: components["schemas"]["NodeKind"];
         NodeId: string;
         /** @description Ticket key, e.g. PAY-214 */
@@ -9274,6 +9290,8 @@ export interface operations {
     search: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q: string;
                 project?: string;
             };
@@ -10913,7 +10931,10 @@ export interface operations {
     };
     listWikiPages: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11211,6 +11232,8 @@ export interface operations {
     suggestLinks: {
         parameters: {
             query?: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q?: string;
             };
             header?: never;
@@ -11291,6 +11314,8 @@ export interface operations {
     getGraph: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 kind: components["parameters"]["NodeKind"];
                 id: components["parameters"]["NodeId"];
                 depth?: number;
@@ -11316,6 +11341,8 @@ export interface operations {
     searchKnowledge: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q: string;
                 kind?: string[];
             };

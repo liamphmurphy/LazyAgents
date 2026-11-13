@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
@@ -104,12 +105,12 @@ func TestMockupGateAndReview(t *testing.T) {
 	if ag.Status != "waiting" {
 		t.Fatalf("agent status = %s", ag.Status)
 	}
-	m, _ := q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
+	m, _ := q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	v2 := *m.CurrentVersionID
 
 	// Review validation.
-	other1, _ := q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
-	vers, _ := q.ListArtifactVersions(ctx, other1.ID)
+	other1, _ := q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
+	vers, _ := q.ListArtifactVersions(ctx, store.ListArtifactVersionsParams{ArtifactID: other1.ID, Viewer: pageview.From(ctx).UserID})
 	v1 := vers[len(vers)-1].ID
 	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v1, "approved", "", nil); !isConflict(err) {
 		t.Fatalf("reviewing a stale version: %v", err)
@@ -124,7 +125,7 @@ func TestMockupGateAndReview(t *testing.T) {
 	if note, err = svc.Artifacts.Create(ctx, ws, artifacts.Actor{Type: "user", ID: me.ID}, artifacts.NewArtifact{ProjectKey: "PAY", Type: "note", Path: "Scratch/x", Content: artifacts.Content{BodyMD: ptr("hi")}}); err != nil {
 		t.Fatal(err)
 	}
-	note, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: note.ID, WorkspaceID: ws})
+	note, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: note.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if _, err := svc.ReviewMockup(ctx, ws, me.ID, note.ID, *note.CurrentVersionID, "approved", "", nil); !isInvalid(err) {
 		t.Fatalf("non-mockup: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestMockupGateAndReview(t *testing.T) {
 	if out, err = svc.CreateMockup(ctx, atlas, "", "", testSVG+"<!-- r3 -->", "", &mockup.ID); err != nil || !out.Waiting {
 		t.Fatalf("revise 2: %+v %v", out, err)
 	}
-	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
+	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	v3 := *m.CurrentVersionID
 	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, v3, "changes_requested", "hmm", nil); err != nil {
 		t.Fatal(err)
@@ -166,7 +167,7 @@ func TestMockupGateAndReview(t *testing.T) {
 	if _, err := svc.CreateMockup(ctx, atlas, "", "", testSVG+"<!-- r4 -->", "", &mockup.ID); err != nil {
 		t.Fatal(err)
 	}
-	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws})
+	m, _ = q.GetArtifact(ctx, store.GetArtifactParams{ID: mockup.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if _, err := svc.ReviewMockup(ctx, ws, me.ID, mockup.ID, *m.CurrentVersionID, "approved", "Ship it", nil); err != nil {
 		t.Fatal(err)
 	}

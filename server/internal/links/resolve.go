@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -116,7 +117,7 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor
 	if m := adrID.FindStringSubmatch(target); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		num := int32(n)
-		a, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num})
+		a, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num, Viewer: pageview.From(ctx).UserID})
 		if ok, err := found(err); err != nil || ok {
 			return ArtifactTarget(a, slug), err
 		}
@@ -128,20 +129,20 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor
 		}
 	}
 	path := NormalizePath(target)
-	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path})
+	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
 	if ok, err := found(err); err != nil {
 		return ghost, err
 	} else if ok && a.CurrentVersionID != nil { // a suggested page isn't there yet
 		return ArtifactTarget(a, slug), nil
 	}
-	notes, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: target})
+	notes, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: target, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return ghost, err
 	}
 	if len(notes) > 0 {
 		return ArtifactTarget(notes[0], slug), nil
 	}
-	a, err = q.FindArtifactByTitle(ctx, store.FindArtifactByTitleParams{WorkspaceID: ws, Title: target})
+	a, err = q.FindArtifactByTitle(ctx, store.FindArtifactByTitleParams{WorkspaceID: ws, Title: target, Viewer: pageview.From(ctx).UserID})
 	if ok, err := found(err); err != nil || ok {
 		return ArtifactTarget(a, slug), err
 	}
@@ -149,7 +150,7 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor
 	if ok, err := found(err); err != nil || ok {
 		return EpicTarget(e), err
 	}
-	a, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: path})
+	a, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
 	if ok, err := found(err); err != nil || ok {
 		return ArtifactTarget(a, slug), err
 	}

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -73,7 +74,7 @@ func seedWiki(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service, 
 	users map[string]store.User, agents map[string]store.Agent) error {
 	svc := &wiki.Service{Pool: pool, Artifacts: arts, Tracker: tr}
 	for _, p := range demoPages {
-		if _, err := svc.SaveAsUser(ctx, ws, users["dev"].ID, wiki.Save{Path: p.path, Body: p.body, Mode: wiki.ModeCreate}); err != nil {
+		if _, err := svc.SaveAsUser(ctx, ws, users["dev"].ID, wiki.Save{Path: p.path, Body: p.body, Mode: wiki.ModeCreate, Audience: "shared"}); err != nil {
 			return err
 		}
 	}
@@ -84,7 +85,7 @@ func seedWiki(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service, 
 	}
 	adr := int32(12)
 	q := store.New(pool)
-	a, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &adr})
+	a, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &adr, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return err
 	}

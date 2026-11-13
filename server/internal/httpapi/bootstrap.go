@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -92,7 +93,7 @@ func (s *Server) GetBootstrap(ctx context.Context, _ api.GetBootstrapRequestObje
 			out.Counts.NeedsYou++
 		}
 	}
-	sugg, err := s.Q.CountSuggestions(ctx, ws)
+	sugg, err := s.Q.CountSuggestions(ctx, store.CountSuggestionsParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}

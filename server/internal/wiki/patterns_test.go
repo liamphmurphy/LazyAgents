@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
@@ -208,7 +209,7 @@ func TestPatternProposeAndPublish(t *testing.T) {
 	if list, _ := e.svc.ListProposed(e.ctx, e.ws); len(list) != 0 {
 		t.Fatalf("proposal still listed: %+v", list)
 	}
-	if _, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Patterns/Proposed/Wrap errors with context"}); err == nil {
+	if _, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Patterns/Proposed/Wrap errors with context", Viewer: pageview.From(e.ctx).UserID}); err == nil {
 		t.Fatal("proposal page still exists")
 	}
 

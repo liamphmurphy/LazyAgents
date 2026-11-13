@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -21,7 +22,7 @@ import (
 // Export writes every published note as an Obsidian-compatible vault: one
 // <path>.md per page, [[wikilinks]] as written, properties as frontmatter.
 func Export(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer) error {
-	rows, err := q.ExportNotes(ctx, ws)
+	rows, err := q.ExportNotes(ctx, store.ExportNotesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return err
 	}
@@ -59,6 +60,7 @@ const maxVaultBytes = 50 << 20
 // its path. Frontmatter is dropped except `project`, used for new pages.
 // Everything is one transaction, so a bad file leaves the wiki untouched.
 func (s *Service) Import(ctx context.Context, ws, userID uuid.UUID, data []byte) (ImportResult, error) {
+	ctx = pageview.Person(ctx, userID)
 	res := ImportResult{Skipped: []string{}}
 	if len(data) > maxVaultBytes {
 		return res, apperr.Invalid("file", "vaults are limited to 50 MB")

@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -153,7 +154,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 		return api.Artifact{}, err
 	}
 	out := api.Artifact{
-		Id: a.ID, Type: api.ArtifactType(a.Type), Title: a.Title, DisplayId: artifacts.DisplayID(a.Type, a.Number),
+		Audience: &a.Audience, Id: a.ID, Type: api.ArtifactType(a.Type), Title: a.Title, DisplayId: artifacts.DisplayID(a.Type, a.Number),
 		Summary: a.Summary, Path: a.Path, Author: dir.actor(a.AuthorType, &a.AuthorID),
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 		Outline: []api.OutlineSection{}, ReadBy: []api.ArtifactReader{}, Versions: []api.ArtifactVersion{}, Tickets: []api.LinkedTicket{},
@@ -176,17 +177,17 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 		return out, apperr.ErrNotFound
 	}
 	if a.Type == "note" {
-		sugg, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID})
+		sugg, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return out, err
 		}
 		out.Suggestions = len(sugg)
 	}
-	cur, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	cur, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return out, err
 	}
-	sections, err := s.Q.ListSectionsWithCitations(ctx, store.ListSectionsWithCitationsParams{ArtifactID: a.ID, VersionID: cur.ID})
+	sections, err := s.Q.ListSectionsWithCitations(ctx, store.ListSectionsWithCitationsParams{ArtifactID: a.ID, VersionID: cur.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return out, err
 	}
@@ -197,7 +198,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 	if cur.BodyMd == nil {
 		out.BodyMd.SetNull()
 	}
-	versions, err := s.Q.ListArtifactVersions(ctx, a.ID)
+	versions, err := s.Q.ListArtifactVersions(ctx, store.ListArtifactVersionsParams{ArtifactID: a.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return out, err
 	}
@@ -246,7 +247,7 @@ func (s *Server) artifactDetail(ctx context.Context, ws uuid.UUID, a store.Artif
 }
 
 func (s *Server) docCards(ctx context.Context, ws uuid.UUID, t store.Ticket) ([]api.DocCard, error) {
-	rows, err := s.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: t.AssigneeAgentID})
+	rows, err := s.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: t.AssigneeAgentID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +384,7 @@ func (s *Server) CreateArtifact(ctx context.Context, req api.CreateArtifactReque
 	if err != nil {
 		return nil, err
 	}
-	a, err = s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+	a, err = s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +393,7 @@ func (s *Server) CreateArtifact(ctx context.Context, req api.CreateArtifactReque
 }
 
 func (s *Server) getArtifact(ctx context.Context, ws, id uuid.UUID) (store.Artifact, error) {
-	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, apperr.ErrNotFound
 	}
@@ -527,7 +528,7 @@ func (r contentResponse) write(w http.ResponseWriter) error {
 
 func (s *Server) GetArtifactContent(ctx context.Context, req api.GetArtifactContentRequestObject) (api.GetArtifactContentResponseObject, error) {
 	_, _, ws := me(ctx)
-	v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: req.VersionId, ArtifactID: req.Id, WorkspaceID: ws})
+	v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: req.VersionId, ArtifactID: req.Id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.ErrNotFound
 	} else if err != nil {
@@ -577,7 +578,7 @@ func (s *Server) DetachArtifact(ctx context.Context, req api.DetachArtifactReque
 	if err := s.Tracker.DetachArtifact(ctx, ws, actor, req.Key, req.ArtifactId); err != nil {
 		return nil, err
 	}
-	if a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.ArtifactId, WorkspaceID: ws}); err == nil && a.Type == "mockup" {
+	if a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.ArtifactId, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err == nil && a.Type == "mockup" {
 		if err := s.Runs.ReleaseMockupWaiters(ctx, ws, []string{req.Key}, nil, a.Title); err != nil {
 			return nil, err
 		}
