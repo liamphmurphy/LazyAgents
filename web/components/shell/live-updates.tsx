@@ -2,29 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-
-const prefixes: Record<string, string[]> = {
-  planning: ["planning", "inbox", "bootstrap"],
-  metrics: ["dashboard", "agent-overviews"],
-  ticket: ["planning", "tickets", "boards", "inbox", "bootstrap", "knowledge", "search"],
-  epic: ["projects", "planning", "bootstrap", "tickets", "boards", "epics", "inbox", "search"],
-  activity: ["tickets", "inbox", "bootstrap"],
-  approval: ["tickets", "runs", "inbox", "bootstrap"],
-  // "dock" is the activity orb: which harnesses are running.
-  run: ["planning", "runs", "boards", "tickets", "agents", "inbox", "bootstrap", "runner", "search", "dock"],
-  agent: ["agents", "bootstrap", "search"],
-  artifact: ["artifacts", "wiki", "knowledge", "inbox", "bootstrap", "search"],
-  knowledge: ["knowledge", "wiki"],
-  project: ["projects", "planning", "bootstrap", "tickets", "boards", "inbox", "search"],
-  inbox: ["inbox", "bootstrap"],
-  chat: ["chats", "canvases", "videos", "dock"],
-  // A chat video's progress, copied every couple of seconds while it renders.
-  video: ["videos"],
-  // A chat's playground starting, resetting or stopping on the runner.
-  playground: ["playgrounds"],
-  // A persona edit changes the name, color and avatar every chat using it embeds.
-  persona: ["personas", "chats", "dock"],
-};
+import { invalidatedBy } from "@/lib/live-updates";
 
 /** One stream per shell. Coalesce bursts from harness logs before refetching. */
 export function LiveUpdates() {
@@ -48,15 +26,7 @@ export function LiveUpdates() {
           void qc.invalidateQueries();
           return;
         }
-        for (const key of type === "run.events"
-          ? ["runs"]
-          : (prefixes[type.split(".")[0]] ?? []))
-          pending.add(key);
-        if (type !== "run.events" && type !== "video.updated") {
-          pending.add("dashboard");
-          pending.add("epics");
-          pending.add("agent-overviews");
-        }
+        for (const key of invalidatedBy(type)) pending.add(key);
         if (!timer) timer = setTimeout(flush, 100);
       } catch {
         /* Ignore malformed hints; reconnect resets every cache. */

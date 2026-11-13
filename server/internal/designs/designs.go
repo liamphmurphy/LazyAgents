@@ -296,10 +296,12 @@ type Patch struct {
 }
 
 // Proposed is what a patch became: a pending proposal, or (direct edit on)
-// an applied one with the version it wrote.
+// an applied one with the version it wrote. Nodes are the nodes its ops are
+// about, with the ids minted for any the persona left unnamed.
 type Proposed struct {
 	Proposal store.DesignProposal
 	Version  *store.ChatCanvasVersion
+	Nodes    []string
 }
 
 // Propose takes a persona's patch on a design. With direct edit off (the
@@ -322,6 +324,7 @@ func (s *Service) Propose(ctx context.Context, p Patch) (Proposed, error) {
 		}
 	}
 	design.MintIDs(p.Ops)
+	out.Nodes = design.Touches(p.Ops)
 	raw, err := json.Marshal(p.Ops)
 	if err != nil {
 		return out, err
