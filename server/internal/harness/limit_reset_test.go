@@ -27,6 +27,8 @@ func TestLimitReset(t *testing.T) {
 		{"exactly now is tomorrow", "resets 3pm", at(la, 7, 15, 0), true},
 		{"midnight", "resets 12am", at(la, 7, 0, 0), true},
 		{"noon", "resets 12pm", at(la, 7, 12, 0), true},
+		{"gemini retry delay (agy)", "Error 429, Message: You exceeded your current quota, please check your plan and billing details., Status: RESOURCE_EXHAUSTED, Details: [map[@type:type.googleapis.com/google.rpc.RetryInfo retryDelay:41s]]", now.Add(41 * time.Second), true},
+		{"gemini retry delay as JSON", `{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"2.5s"}`, now.Add(2500 * time.Millisecond), true},
 		{"unparsable", "You've hit your usage limit.", time.Time{}, false},
 	}
 	for _, tt := range tests {
