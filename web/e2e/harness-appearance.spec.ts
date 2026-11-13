@@ -4,6 +4,7 @@ import { installChatApi } from "./mock-chat-api";
 
 const footer = (page: Page) => page.getByRole("region", { name: "Harness activity" });
 const drawer = (page: Page) => page.getByRole("dialog", { name: "Harness usage" });
+const toggle = (page: Page) => page.getByRole("switch", { name: "Show harness activity", exact: true });
 
 async function install(page: Page) {
   await installChatApi(page);
@@ -14,6 +15,54 @@ async function install(page: Page) {
     { harness: "antigravity", label: "Antigravity", running: 0, usage_available: false, usage_checking: false, limited_until: new Date(Date.now() + 3600000).toISOString(), windows: [] },
   ] } }));
 }
+
+test("the Appearance switch reclaims history space, persists and survives palette import/reset", async ({ page }) => {
+  await install(page);
+  await page.goto("/settings#appearance");
+  await expect(toggle(page)).toBeChecked();
+  await expect(footer(page)).toBeVisible();
+  const history = page.getByRole("navigation", { name: "Chats", exact: true });
+  const before = (await history.boundingBox())!.height;
+  await toggle(page).click();
+  await expect(footer(page)).toHaveCount(0);
+  await expect.poll(async () => (await history.boundingBox())!.height).toBeGreaterThan(before + 80);
+  await page.getByRole("radio", { name: "Nord", exact: true }).check();
+  await page.getByRole("button", { name: "Reset palette", exact: true }).click();
+  await expect(toggle(page)).not.toBeChecked();
+  await page.getByLabel("Palette JSON file").setInputFiles({ name: "nord.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ version: 1, palette: "nord", showHarnessActivity: true })) });
+  await expect(page.getByRole("radio", { name: "Nord", exact: true })).toBeChecked();
+  await expect(toggle(page)).not.toBeChecked();
+  await page.reload();
+  await expect(toggle(page)).not.toBeChecked();
+  await expect(footer(page)).toHaveCount(0);
+  await expect(page.locator("html")).toHaveAttribute("data-harness-activity", "hidden");
+  await page.goto("/chat?new");
+  await expect(footer(page)).toHaveCount(0);
+  await page.goto("/settings#appearance");
+  await toggle(page).click();
+  await expect(footer(page)).toBeVisible();
+  await page.getByRole("button", { name: "Collapse menu", exact: true }).click();
+  await expect(footer(page)).toHaveAttribute("data-rail", "true");
+  await toggle(page).click();
+  await expect(footer(page)).toHaveCount(0);
+});
+
+test("hiding activity in another tab also closes its drawer and frees the history", async ({ page, context }) => {
+  await install(page);
+  await page.goto("/settings#appearance");
+  const other = await context.newPage();
+  await install(other);
+  await other.goto("/chat?new");
+  await footer(other).getByRole("button", { name: /Claude, working/ }).click();
+  await expect(drawer(other)).toBeVisible();
+  await toggle(page).click();
+  await expect(footer(other)).toHaveCount(0);
+  await expect(drawer(other)).toHaveCount(0);
+  await toggle(page).click();
+  await expect(footer(other)).toBeVisible();
+  await footer(other).getByRole("button", { name: /Claude, working/ }).click();
+  await expect(drawer(other)).toBeVisible();
+});
 
 function hex(rgb: string) {
   return "#" + rgb.match(/[\d.]+/g)!.slice(0, 3).map((n) => Math.round(Number(n)).toString(16).padStart(2, "0")).join("");

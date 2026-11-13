@@ -17,6 +17,7 @@ import { AppsMenu } from "./apps-menu";
 import { useEditorRail, useReadingFocus } from "./editor-layout";
 import { NeedsYou } from "./needs-you";
 import { HarnessFooter } from "./harness-footer";
+import { useAppearance } from "./theme";
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
   return (
@@ -144,6 +145,7 @@ function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, nu
 export function Sidebar() {
   const pathname = usePathname();
   const counts = useNavCounts();
+  const [appearance] = useAppearance();
   const [expanded, setExpanded] = useExpanded();
   // An app editor shows the menu as its rail without touching the remembered preference.
   const editorRail = useEditorRail();
@@ -197,7 +199,7 @@ export function Sidebar() {
             <PersonaRail id={viewed ?? undefined} viewed={viewed} />
           </div>
         </nav>
-        <HarnessFooter rail />
+        {appearance.showHarnessActivity !== false && <HarnessFooter rail />}
         <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
       </aside>
     );
@@ -239,7 +241,7 @@ export function Sidebar() {
           <SetupProgress />
         </div>
       </nav>
-      <HarnessFooter />
+      {appearance.showHarnessActivity !== false && <HarnessFooter />}
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
     </aside>
   );

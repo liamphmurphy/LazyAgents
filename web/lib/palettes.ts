@@ -132,8 +132,8 @@ export const PALETTES: readonly Palette[] = [
 ];
 
 export const COLOR_KEYS = Object.keys(DUSK.dark).filter((key) => /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test((DUSK.dark as Tokens)[key]));
-export type Appearance = { version: 1; palette: string; custom: { base: string; dark: Tokens; light: Tokens } };
-export const DEFAULT_APPEARANCE: Appearance = { version: 1, palette: "dusk", custom: { base: "dusk", dark: {}, light: {} } };
+export type Appearance = { version: 1; palette: string; custom: { base: string; dark: Tokens; light: Tokens }; showHarnessActivity?: boolean };
+export const DEFAULT_APPEARANCE: Appearance = { version: 1, palette: "dusk", custom: { base: "dusk", dark: {}, light: {} }, showHarnessActivity: true };
 
 /** Only known color tokens and opaque hex enter inline CSS, including imported JSON. */
 export function parseAppearance(raw: string | null): Appearance {
@@ -146,7 +146,7 @@ export function parseAppearance(raw: string | null): Appearance {
       const value = input && typeof input === "object" ? (input as Tokens)[key] : undefined;
       return typeof value === "string" && /^#[\da-f]{6}$/i.test(value) ? [[key, value.toLowerCase()]] : [];
     }));
-    return { version: 1, palette: data.palette === "custom" || known(data.palette) ? data.palette : "dusk", custom: { base: known(data.custom?.base) ? data.custom.base : "dusk", dark: clean(data.custom?.dark), light: clean(data.custom?.light) } };
+    return { version: 1, palette: data.palette === "custom" || known(data.palette) ? data.palette : "dusk", custom: { base: known(data.custom?.base) ? data.custom.base : "dusk", dark: clean(data.custom?.dark), light: clean(data.custom?.light) }, showHarnessActivity: data.showHarnessActivity !== false };
   } catch { return DEFAULT_APPEARANCE; }
 }
 

@@ -162,9 +162,10 @@ test("reduced motion holds all three characters still and opens the drawer witho
   await expect(drawer(page)).toHaveCSS("animation-name", "none");
 });
 
-for (const width of [1280, 390]) {
-  test(`the visible chat is marked read after a reply at ${width}px`, async ({ page }) => {
+for (const [width, showHarnessActivity] of [[1280, true], [1280, false], [390, false]] as const) {
+  test(`the visible chat is marked read at ${width}px with the footer ${showHarnessActivity ? "on" : "off"}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript((showHarnessActivity) => localStorage.setItem("la-appearance", JSON.stringify({ version: 1, palette: "dusk", showHarnessActivity })), showHarnessActivity);
     await installChatApi(page);
     const id = await openEmptyChat(page);
     const chat: S["PersonaDockChat"] = { id, title: "Read tracking", state: "replied", harness: "codex", unread: 1, last_line: "A reply", last_seq: 3, waiting_approval: false, last_activity_at: new Date().toISOString() };

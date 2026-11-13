@@ -8,7 +8,7 @@ import { ColorWheel } from "@/components/ui/color-wheel";
 import { Button } from "@/components/ui/button";
 import { Card, TextInput } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icon";
-import { Segmented } from "@/components/ui/controls";
+import { Segmented, Toggle } from "@/components/ui/controls";
 import { cx } from "@/lib/cx";
 
 const GROUPS: { label: string; keys: string[] }[] = [
@@ -45,7 +45,8 @@ export function AppearanceSection() {
     { name: "Diagram secondary text", ratio: contrast(colors["viz-muted"], colors["viz-surface"]) },
   ].filter((p) => p.ratio < 4.5);
   const exportSettings = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" }));
+    const { version, palette, custom } = settings;
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ version, palette, custom }, null, 2)], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url; a.download = "vesper-palette.json"; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -60,6 +61,11 @@ export function AppearanceSection() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="type-heading">Mode</h3><p className="type-small text-fg-tertiary">System follows your OS setting. Palette is independent of mode.</p></div>
         <ThemeSwitch />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Toggle label="Show harness activity" checked={settings.showHarnessActivity !== false}
+          onChange={(showHarnessActivity) => update({ ...settings, showHarnessActivity })} />
+        <p className="type-small text-fg-tertiary">Show animated harness characters and usage in the sidebar. Turn off to give conversation history more room.</p>
       </div>
       <fieldset>
         <legend className="type-heading mb-2">Color palette</legend>
@@ -77,7 +83,7 @@ export function AppearanceSection() {
         {!custom && <Button onClick={() => update({ ...settings, palette: "custom", custom: { base: settings.palette, dark: {}, light: {} } })}>Customize this palette</Button>}
         <Button variant="outline" onClick={exportSettings}>Export palette</Button>
         <Button variant="outline" onClick={() => upload.current?.click()}>Import palette</Button>
-        <Button variant="ghost" onClick={() => { update(DEFAULT_APPEARANCE); setMessage("Palette reset to Dusk."); }}>Reset palette</Button>
+        <Button variant="ghost" onClick={() => { update({ ...DEFAULT_APPEARANCE, showHarnessActivity: settings.showHarnessActivity }); setMessage("Palette reset to Dusk."); }}>Reset palette</Button>
         <input ref={upload} aria-label="Palette JSON file" type="file" accept=".json,application/json" className="sr-only" onChange={async (e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
@@ -87,7 +93,7 @@ export function AppearanceSection() {
             const raw = await file.text();
             const data = JSON.parse(raw);
             if (data?.version !== 1 || ![...PALETTES.map((p) => p.id), "custom"].includes(data.palette)) throw new Error("This file is not a Vesper palette.");
-            update(parseAppearance(raw)); setMessage("Palette imported.");
+            update({ ...parseAppearance(raw), showHarnessActivity: settings.showHarnessActivity }); setMessage("Palette imported.");
           } catch (error) { setMessage(error instanceof Error ? error.message : "Could not import palette."); }
         }} />
       </div>
