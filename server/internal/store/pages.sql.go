@@ -455,6 +455,72 @@ func (q *Queries) LockKnowledgeBlob(ctx context.Context, dollar_1 string) error 
 	return err
 }
 
+const lockNotesInFolder = `-- name: LockNotesInFolder :many
+SELECT a.id, a.workspace_id, a.project_id, a.epic_id, a.type, a.title, a.number, a.summary, a.author_type, a.author_id, a.current_version_id, a.search_text, a.search, a.created_at, a.updated_at, a.path, a.audience, a.owner_user_id, a.persona_direct, a.persona_paused, a.chat_session_id FROM artifacts a
+WHERE a.workspace_id = $1 AND a.type = 'note'
+AND starts_with(a.path, $2::text || '/')
+AND artifact_visible(a.audience, a.owner_user_id, $3::uuid)
+AND (a.audience = 'agent') = $4::boolean
+ORDER BY a.path
+FOR UPDATE
+`
+
+type LockNotesInFolderParams struct {
+	WorkspaceID uuid.UUID
+	Folder      string
+	Viewer      *uuid.UUID
+	Agent       bool
+}
+
+// The pages under a folder in one explorer view (agent knowledge, or the
+// person's own), locked for a move or delete of the whole folder.
+func (q *Queries) LockNotesInFolder(ctx context.Context, arg LockNotesInFolderParams) ([]Artifact, error) {
+	rows, err := q.db.Query(ctx, lockNotesInFolder,
+		arg.WorkspaceID,
+		arg.Folder,
+		arg.Viewer,
+		arg.Agent,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Artifact{}
+	for rows.Next() {
+		var i Artifact
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ProjectID,
+			&i.EpicID,
+			&i.Type,
+			&i.Title,
+			&i.Number,
+			&i.Summary,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.CurrentVersionID,
+			&i.SearchText,
+			&i.Search,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Path,
+			&i.Audience,
+			&i.OwnerUserID,
+			&i.PersonaDirect,
+			&i.PersonaPaused,
+			&i.ChatSessionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDocPageIndexed = `-- name: MarkDocPageIndexed :exec
 UPDATE doc_page_redirects SET indexed=true WHERE artifact_id=$1
 `

@@ -375,3 +375,9 @@ ON CONFLICT (artifact_id, path) DO NOTHING;
 
 -- name: PropertyAliasTaken :one
 SELECT EXISTS (SELECT 1 FROM artifact_aliases al JOIN artifacts a ON a.id=al.artifact_id WHERE al.workspace_id = $1 AND lower(al.path) = lower(sqlc.arg(path)) AND al.kind = 'alias' AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid));
+
+-- name: UnresolveLinksTo :exec
+-- A deleted page's inbound links go back to unresolved, keeping their text,
+-- so [[Name]] shows as a page to create and reattaches if one is made.
+UPDATE knowledge_links SET target_kind = 'unresolved', target_id = NULL
+WHERE workspace_id = $1 AND target_id = $2 AND target_kind IN ('artifact', 'section');
