@@ -270,3 +270,41 @@ export function SnippetBubble({
     </Popover.Root>
   );
 }
+
+/** A paste into the message box that could be a snippet or a file: where it sits, so the offer can take it back out. */
+export type PasteOfferState = { text: string; start: number; lang: string; big: boolean };
+
+/**
+ * Offered after pasting code-like or very long text into the message box. The paste has
+ * already happened; ignoring this leaves it exactly as pasted.
+ */
+export function PasteOffer({ offer, onSnippet, onAttach, onDismiss }: { offer: PasteOfferState; onSnippet: () => void; onAttach: () => void; onDismiss: () => void }) {
+  const lines = lineCount(offer.text);
+  return (
+    <div role="status" data-testid="paste-offer" className="flex flex-wrap items-center gap-2 rounded-xl border border-accent bg-surface-raised px-3 py-2">
+      <p className="min-w-0 flex-1 text-[13px] text-fg">
+        {offer.big ? (
+          <>
+            {lines.toLocaleString()} {lines === 1 ? "line" : "lines"} pasted. That’s long for a message: attach it as a file?
+          </>
+        ) : (
+          <>
+            Looks like <span className="font-semibold text-accent">{snippetLangLabel(offer.lang)}</span>. Send it as a code block?
+          </>
+        )}
+      </p>
+      {offer.big ? (
+        <button type="button" data-testid="paste-offer-attach" onClick={onAttach} className="h-7 rounded-md bg-accent px-3 text-[12.5px] font-semibold text-on-accent hover:opacity-90">
+          Attach as file
+        </button>
+      ) : (
+        <button type="button" data-testid="paste-offer-snippet" onClick={onSnippet} className="h-7 rounded-md bg-accent px-3 text-[12.5px] font-semibold text-on-accent hover:opacity-90">
+          Code block
+        </button>
+      )}
+      <button type="button" onClick={onDismiss} className="h-7 rounded-md bg-selected px-3 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg">
+        Keep as text
+      </button>
+    </div>
+  );
+}

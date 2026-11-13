@@ -14,6 +14,17 @@ const GO = `func retry(ctx context.Context, n int) error {
 	return errors.New("gave up")
 }`;
 
+// A paste the way the browser does it: the paste event (which the composer inspects), then the text lands.
+async function paste(page: Page, text: string) {
+  await composer(page).focus();
+  await composer(page).evaluate((el, text) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", text);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  }, text);
+  await page.keyboard.insertText(text);
+}
+
 async function fakeUploads(page: Page) {
   const names: string[] = [];
   await page.route("**/api/v1/chat-attachments", async (route) => {
@@ -91,18 +102,52 @@ test("Markdown with its own fences is sent in a longer fence", async ({ page }) 
   await expect.poll(() => mock.posted.at(-1)?.body.body).toBe(`Review this\n\n\`\`\`\`markdown\n${md}\n\`\`\`\``);
 });
 
-test("a very long snippet is offered as a file instead", async ({ page }) => {
+test("pasting code offers a code block, and ignoring the offer leaves the paste as typed", async ({ page }) => {
+  await installChatApi(page);
+  await openEmptyChat(page);
+  const offer = page.getByTestId("paste-offer");
+
+  await composer(page).fill("Why? ");
+  await paste(page, GO);
+  await expect(offer).toContainText("Looks like Go");
+  await offer.getByRole("button", { name: "Code block" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(composer(page)).toHaveValue("Why? ");
+  await expect(chips(page)).toHaveAttribute("data-lang", "go");
+
+  // Prose isn't offered.
+  await paste(page, "It failed again this morning.\nThe third attempt timed out.\nNothing in the logs.");
+  await expect(offer).toHaveCount(0);
+
+  // Keep as text leaves the paste where it landed.
+  await composer(page).fill("");
+  await paste(page, GO);
+  await offer.getByRole("button", { name: "Keep as text" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect(composer(page)).toHaveValue(GO);
+  await expect(chips(page)).toHaveCount(1);
+});
+
+test("a very long paste is offered as a file, from the message box and from the bubble", async ({ page }) => {
   await installChatApi(page);
   const uploads = await fakeUploads(page);
   await openEmptyChat(page);
   const log = Array.from({ length: 500 }, (_, i) => `2026-11-13T09:14:${String(i % 60).padStart(2, "0")}Z INFO step ${i}`).join("\n");
 
+  await paste(page, log);
+  const offer = page.getByTestId("paste-offer");
+  await expect(offer).toContainText("500 lines pasted");
+  await offer.getByRole("button", { name: "Attach as file" }).click();
+  await expect(composer(page)).toHaveValue("");
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(1);
+  await expect(page.getByTestId("attachment-chip")).toHaveAttribute("data-status", "done");
+  expect(uploads).toEqual(["pasted-log-1.txt"]);
+
   await page.getByTestId("snippet-button").click();
   await bubble(page).getByTestId("snippet-input").fill(log);
   await expect(bubble(page).getByTestId("snippet-big")).toContainText("500 lines");
   await bubble(page).getByRole("button", { name: "Attach as file" }).click();
-  await expect(page.getByTestId("attachment-chip")).toHaveCount(1);
-  await expect(page.getByTestId("attachment-chip")).toHaveAttribute("data-status", "done");
-  expect(uploads).toEqual(["pasted-log-1.txt"]);
+  await expect(page.getByTestId("attachment-chip")).toHaveCount(2);
+  expect(uploads).toEqual(["pasted-log-1.txt", "pasted-log-2.txt"]);
   await expect(chips(page)).toHaveCount(0);
 });

@@ -15,9 +15,9 @@ import { ComposerHints, composerFrameFor, composerIconButton, composerInput, Sen
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
 import { ComposerSheet } from "./composer-sheet";
 import { useCompact } from "@/lib/viewport";
-import { messageWithSnippets } from "@/lib/snippets";
+import { detectLanguage, isBigPaste, messageWithSnippets, offerAsSnippet, withoutPaste } from "@/lib/snippets";
 import { Icon } from "@/components/ui/icon";
-import { CodeButton, newSnippetDraft, SnippetBubble, SnippetChips, snippetFile, type SnippetDraft, type Snippets } from "./snippets";
+import { CodeButton, newSnippetDraft, PasteOffer, SnippetBubble, SnippetChips, snippetFile, type PasteOfferState, type SnippetDraft, type Snippets } from "./snippets";
 
 /** A / command's action; a returned string is why it couldn't run. */
 export type CommandRun = () => string | void;
@@ -113,16 +113,24 @@ export function Composer({
     setSheet(true);
   }
 
-  // The snippet bubble's draft (open while set).
+  // The snippet bubble's draft (open while set), and the last paste into the message box worth offering as a snippet or file.
   const [snippetDraft, setSnippetDraft] = useState<SnippetDraft | null>(null);
+  const [paste, setPaste] = useState<PasteOfferState | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const pastedFiles = useRef(0);
+  const offer = paste && text.includes(paste.text) ? paste : null;
   const saveSnippet = (d: SnippetDraft) => {
     if (d.key === undefined) snippets.add(d.text, d.lang);
     else snippets.update(d.key, d.text, d.lang);
     setSnippetDraft(null);
   };
   const attachPasted = (pasted: string, lang: string) => files.add([snippetFile(pasted, lang, ++pastedFiles.current)]);
+  const takeBackPaste = (o: PasteOfferState) => {
+    const rest = withoutPaste(text, o);
+    if (rest !== null) onText(rest);
+    setPaste(null);
+    inputRef.current?.focus();
+  };
 
   const attach = (t: Parameters<typeof chipFromTarget>[0]) => {
     const chip = chipFromTarget(t);
@@ -245,7 +253,15 @@ export function Composer({
       )}
       <form
         data-dock-avoid=""
-        onPaste={files.onPaste}
+        onPaste={(e) => {
+          files.onPaste(e);
+          // Only the message box: a paste into the snippet bubble stays in the bubble.
+          if (e.defaultPrevented || e.target !== inputRef.current) return;
+          const pasted = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
+          const big = isBigPaste(pasted);
+          const lang = big ? detectLanguage(pasted) : offerAsSnippet(pasted);
+          setPaste(lang ? { text: pasted, start: inputRef.current.selectionStart, lang, big } : null);
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           submitComposer();
@@ -255,6 +271,23 @@ export function Composer({
         <AttachmentChips attachments={files} />
         <ChipList chips={chips} onRemove={(k) => onChips((cs) => removeChip(cs, k))} disabled={disabled} />
         <SnippetChips snippets={snippets} disabled={disabled} onEdit={(x) => setSnippetDraft({ key: x.key, text: x.text, lang: x.lang, picked: true })} />
+        {offer && (
+          <PasteOffer
+            offer={offer}
+            onSnippet={() => {
+              takeBackPaste(offer);
+              snippets.add(offer.text, offer.lang);
+            }}
+            onAttach={() => {
+              takeBackPaste(offer);
+              attachPasted(offer.text, offer.lang);
+            }}
+            onDismiss={() => {
+              setPaste(null);
+              inputRef.current?.focus();
+            }}
+          />
+        )}
         <SnippetBubble
           anchor={frame}
           draft={snippetDraft}

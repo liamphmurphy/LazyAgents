@@ -11,6 +11,7 @@ import {
   pastedSnippetName,
   SNIPPET_LANGS,
   snippetLangLabel,
+  withoutPaste,
 } from "./snippets.ts";
 
 const SAMPLES = {
@@ -258,4 +259,10 @@ test("a pasted file gets an extension chat attachments accept", () => {
   assert.equal(pastedSnippetName("json", 2), "pasted-json-2.json");
   assert.equal(pastedSnippetName("markdown", 3), "pasted-markdown-3.md");
   assert.equal(pastedSnippetName("go", 4), "pasted-go-4.txt");
+});
+
+test("taking a paste back out finds it where it landed, or anywhere, or gives up", () => {
+  assert.equal(withoutPaste("Why? x := 1 thanks", { text: "x := 1", start: 5 }), "Why?  thanks");
+  assert.equal(withoutPaste("Edited first. x := 1", { text: "x := 1", start: 0 }), "Edited first. ", "moved by edits before it");
+  assert.equal(withoutPaste("all gone", { text: "x := 1", start: 0 }), null);
 });

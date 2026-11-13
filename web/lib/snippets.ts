@@ -324,3 +324,13 @@ export function pastedSnippetName(lang: string, n: number): string {
   const ext = lang === "json" ? "json" : lang === "markdown" ? "md" : "txt";
   return `pasted-${lang === "text" ? "text" : lang}-${n}.${ext}`;
 }
+
+/**
+ * The draft with a pasted text taken back out: from where it landed if it's still there,
+ * else its first occurrence; null once it has been edited away.
+ */
+export function withoutPaste(draft: string, paste: { text: string; start: number }): string | null {
+  const at = draft.slice(paste.start, paste.start + paste.text.length) === paste.text ? paste.start : draft.indexOf(paste.text);
+  if (at < 0) return null;
+  return draft.slice(0, at) + draft.slice(at + paste.text.length);
+}
