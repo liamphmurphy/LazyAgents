@@ -14,11 +14,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/blob"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -276,8 +276,9 @@ func actorOf(ctx context.Context) artifacts.Actor {
 func (s *Server) ListArtifacts(ctx context.Context, req api.ListArtifactsRequestObject) (api.ListArtifactsResponseObject, error) {
 	_, _, ws := me(ctx)
 	p := req.Params
-	params := store.ListArtifactsParams{WorkspaceID: ws}
-	counts := store.CountArtifactsByTypeParams{WorkspaceID: ws}
+	viewer := pageview.From(ctx)
+	params := store.ListArtifactsParams{WorkspaceID: ws, Viewer: viewer.UserID, IncludeAgent: viewer.IncludeAgent}
+	counts := store.CountArtifactsByTypeParams{WorkspaceID: ws, Viewer: viewer.UserID, IncludeAgent: viewer.IncludeAgent}
 	empty := api.ListArtifacts200JSONResponse{Artifacts: []api.ArtifactSummary{}}
 	if p.Project != nil && *p.Project != "" {
 		proj, err := s.Q.GetProjectByKey(ctx, store.GetProjectByKeyParams{WorkspaceID: ws, Key: *p.Project})

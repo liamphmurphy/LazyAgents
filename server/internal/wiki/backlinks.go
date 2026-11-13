@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -293,7 +293,7 @@ func (s *Service) LinkMention(ctx context.Context, ws, userID uuid.UUID, ref Ref
 		return err
 	}
 	if art.Type == "note" {
-		_, err := s.SaveAsUser(ctx, ws, userID, Save{Path: *art.Path, Body: next, Note: note})
+		_, err := s.SaveAsUser(ctx, ws, userID, Save{PageID: &art.ID, Path: *art.Path, Body: next, Note: note, BaseID: art.CurrentVersionID})
 		return err
 	}
 	_, err = s.Artifacts.AddVersion(ctx, ws, artifacts.Actor{Type: "user", ID: userID}, art.ID, artifacts.NewVersion{Note: note, Content: artifacts.Content{BodyMD: &next}})

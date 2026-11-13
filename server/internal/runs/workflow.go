@@ -1102,6 +1102,8 @@ func (e *WorkflowEngine) output(ctx context.Context, q *store.Queries, chat stor
 		if n.Config.Mode == "append" {
 			mode = wiki.ModeAppend
 		}
+		// This is an owner-authorized terminal effect, not a model read. Only
+		// the destination path is returned; private body text never becomes step output.
 		res, err := e.Wiki.SaveAsUser(ctx, run.WorkspaceID, run.UserID, wiki.Save{Path: path, Body: body, Mode: mode, ProjectKey: p.Key, Note: "Workflow: " + run.Name})
 		if err != nil {
 			return "", workflowEffectError("the wiki page", err), workflowInternal(err)

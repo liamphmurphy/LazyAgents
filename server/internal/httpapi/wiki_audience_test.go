@@ -102,3 +102,89 @@ func TestWikiAudienceSavesUsePageID(t *testing.T) {
 	}
 	e.want("PUT", "/wiki/pages/"+pid, map[string]any{"audience": "shared"}, 409)
 }
+
+func TestWikiAudienceMentionEditsUseSourceID(t *testing.T) {
+	e := newChatEnv(t)
+	target := e.want("POST", "/wiki/pages", map[string]any{"path": "Mention target", "body_md": "Target", "audience": "shared"}, 201)
+	shared := e.want("POST", "/wiki/pages", map[string]any{"path": "Mention overlap", "body_md": "See Mention target", "audience": "shared"}, 201)
+	private := e.want("POST", "/wiki/pages", map[string]any{"path": "Mention overlap", "body_md": "Private sentinel"}, 201)
+	e.want("POST", "/knowledge/link-mention", map[string]any{"target_kind": "artifact", "target_id": target["id"], "source_kind": "artifact", "source_id": shared["id"]}, 204)
+	if got := e.want("GET", "/artifacts/"+shared["id"].(string), nil, 200); got["body_md"] != "See [[Mention target]]" {
+		t.Fatalf("shared source not edited: %v", got)
+	}
+	if got := e.want("GET", "/artifacts/"+private["id"].(string), nil, 200); got["body_md"] != "Private sentinel" {
+		t.Fatalf("private page overwritten: %v", got)
+	}
+}
+
+func TestWikiAudienceLibraryIncludesOwnedPrivatePages(t *testing.T) {
+	e := newChatEnv(t)
+	private := e.want("POST", "/wiki/pages", map[string]any{"path": "Libraryprivateneedle175", "body_md": "Private sentinel"}, 201)
+	out := e.want("GET", "/artifacts?type=note&q=Libraryprivateneedle175", nil, 200)
+	rows := out["artifacts"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["id"] != private["id"] || out["counts"].(map[string]any)["note"] != float64(1) {
+		t.Fatalf("owner's Library list/count lost private page: %v", out)
+	}
+	// A different person's private page must not enter either the list or count.
+	other := uuid.New()
+	if _, err := e.pool.Exec(t.Context(), `INSERT INTO users(id,workspace_id,name,email,initials,password_hash) VALUES($1,$2,'Other','other175@example.com','O','x')`, other, e.me.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(t.Context(), `UPDATE artifacts SET owner_user_id=$2 WHERE id=$1`, private["id"], other); err != nil {
+		t.Fatal(err)
+	}
+	out = e.want("GET", "/artifacts?type=note&q=Libraryprivateneedle175", nil, 200)
+	if len(out["artifacts"].([]any)) != 0 || out["counts"].(map[string]any)["note"] != float64(0) {
+		t.Fatalf("other owner's page leaked: %v", out)
+	}
+}
+
+// The owner authorizes a deterministic terminal write at the gate. The model
+// never gets a person viewer or the existing private body as step context.
+func TestWikiAudienceWorkflowTerminalWritesAsOwner(t *testing.T) {
+	for _, mode := range []string{"replace", "append"} {
+		t.Run(mode, func(t *testing.T) {
+			e := newChatEnv(t)
+			private := e.want("POST", "/wiki/pages", map[string]any{"path": "Workflows/Result", "body_md": "Private workflow sentinel 175"}, 201)
+			graph := gatedWorkflowGraph()
+			for _, node := range graph["nodes"].([]map[string]any) {
+				if node["id"] == "page" {
+					node["config"].(map[string]any)["mode"] = mode
+				}
+			}
+			wf := e.want("POST", "/workflows", map[string]any{"name": "Owner-authorized output"}, 201)["id"].(string)
+			e.want("PATCH", "/workflows/"+wf, map[string]any{"graph": graph}, 200)
+			e.want("POST", "/workflows/"+wf+"/publish", nil, 200)
+			chat := e.newChat(nil)["id"].(string)
+			run := e.want("POST", "/chats/"+chat+"/workflows", map[string]any{"workflow_id": wf, "input": "Write new text"}, 201)
+			id := run["id"].(string)
+			run = e.finishWFStep(t, id, "brief", "New brief")
+			var prompt string
+			if err := e.pool.QueryRow(t.Context(), `SELECT input_message FROM run_turns WHERE run_id=$1`, e.wfStep(run, "work")["agent_run_id"]).Scan(&prompt); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(prompt, "Private workflow sentinel") {
+				t.Fatal("private body reached the model")
+			}
+			e.finishWFStep(t, id, "work", "New workflow text")
+			if got := e.want("GET", "/artifacts/"+private["id"].(string), nil, 200); got["body_md"] != "Private workflow sentinel 175" {
+				t.Fatal("output ran before approval")
+			}
+			run = e.want("POST", "/workflow-runs/"+id+"/gate", map[string]any{"node_id": "review", "decision": "approve"}, 200)
+			if run["state"] != "done" {
+				t.Fatalf("terminal output didn't finish: %v", run)
+			}
+			raw, _ := json.Marshal(run)
+			if strings.Contains(string(raw), "Private workflow sentinel") {
+				t.Fatalf("private body reached workflow step output: %s", raw)
+			}
+			want := "New workflow text"
+			if mode == "append" {
+				want = "Private workflow sentinel 175\n\nNew workflow text"
+			}
+			if got := e.want("GET", "/artifacts/"+private["id"].(string), nil, 200); got["audience"] != "private" || got["body_md"] != want {
+				t.Fatalf("owner's %s output: %v", mode, got)
+			}
+		})
+	}
+}
