@@ -74,10 +74,10 @@ export function SettingsScreen() {
         </span>
       </PageHeader>
       <SetupChecklist className="max-w-[1020px]" />
-      <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(180px,max-content)_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto lg:sticky lg:top-4 lg:flex-col">
           {nav.map((n) => (
-            <a key={n.id} href={`#${n.id}`} className="flex h-8 flex-none items-center gap-2.5 rounded-md border border-border bg-surface px-3 text-13 hover:bg-hover">
+            <a key={n.id} href={`#${n.id}`} className="flex min-h-8 flex-none items-center gap-2.5 rounded-md border border-border bg-surface px-3 text-13 hover:bg-hover">
               <HealthDot health={n.health} />
               <span className="flex-1 whitespace-nowrap">{n.label}</span>
               {n.badge && <span className="rounded-full bg-pill-human-bg px-1.5 text-11 text-pill-human-fg">{n.badge}</span>}
