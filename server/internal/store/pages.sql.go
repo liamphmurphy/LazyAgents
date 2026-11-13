@@ -809,9 +809,16 @@ func (q *Queries) SetPageChanges(ctx context.Context, arg SetPageChangesParams) 
 }
 
 const setPageChat = `-- name: SetPageChat :exec
-UPDATE artifacts SET chat_session_id = $1
-WHERE id = $2 AND workspace_id = $3
-AND artifact_visible(audience, owner_user_id, $4::uuid)
+WITH page AS (
+  UPDATE artifacts a SET chat_session_id = $1
+  WHERE a.id = $2::uuid AND a.workspace_id = $3::uuid
+  AND artifact_visible(a.audience, a.owner_user_id, $4::uuid)
+  RETURNING a.id, a.workspace_id
+)
+INSERT INTO dock_chats (workspace_id, user_id, scope, chat_id)
+SELECT page.workspace_id, c.created_by, 'page:' || page.id, c.id
+FROM page JOIN chat_sessions c ON c.id = $1::uuid AND c.workspace_id = page.workspace_id
+ON CONFLICT (user_id, scope, chat_id) DO UPDATE SET attached_at = now()
 `
 
 type SetPageChatParams struct {
@@ -821,6 +828,7 @@ type SetPageChatParams struct {
 	Viewer      *uuid.UUID
 }
 
+// The page opens on this chat from now on, and its dock lists it (dock_chats).
 func (q *Queries) SetPageChat(ctx context.Context, arg SetPageChatParams) error {
 	_, err := q.db.Exec(ctx, setPageChat,
 		arg.ChatID,

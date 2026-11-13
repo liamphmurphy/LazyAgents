@@ -601,6 +601,14 @@ type DocPageRedirect struct {
 	Indexed            bool
 }
 
+type DockChat struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Scope       string
+	ChatID      uuid.UUID
+	AttachedAt  time.Time
+}
+
 type Epic struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID

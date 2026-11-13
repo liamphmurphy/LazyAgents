@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux := http.NewServeMux()
 	s.knowledgeRoutes(mux)
+	s.dockChatRoutes(mux)
 	if s.Events != nil {
 		mux.Handle("GET /events", s.Events)
 	}
