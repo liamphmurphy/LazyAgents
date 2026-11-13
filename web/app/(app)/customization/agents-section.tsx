@@ -41,7 +41,7 @@ const KINDS = [
 function CardStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="truncate text-[11.5px] text-fg-tertiary">{label}</dt>
+      <dt className="truncate text-xs text-fg-tertiary">{label}</dt>
       <dd className="font-mono text-[15px] font-medium text-fg">{value}</dd>
     </div>
   );
@@ -189,8 +189,8 @@ export function AgentsSection() {
       <header className="flex items-center gap-4">
         <span className="grid size-[72px] flex-none place-items-center rounded-2xl bg-selected text-fg-secondary"><Icon name="agents" size={28} /></span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 className="truncate text-lg font-semibold text-fg">Agents</h2>
-          <p className="text-xs text-fg-secondary">
+          <h2 className="truncate type-display text-fg">Agents</h2>
+          <p className="text-sm text-fg-secondary">
             Agents run your tickets; personas talk with you. A Start card hands a ticket to its agent, and the agent&apos;s scopes, budget and project overrides decide what the run may do.
           </p>
         </div>

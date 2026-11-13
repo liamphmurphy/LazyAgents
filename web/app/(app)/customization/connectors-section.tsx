@@ -237,9 +237,9 @@ export function PersonaConnectors({ personaId }: { personaId: string }) {
   if (!rows.length) return null;
   const flip = (c: Connector, on: boolean) => update.mutate({ id: c.id, patch: { revision: c.revision, persona_ids: on ? c.persona_ids.filter((x) => x !== personaId) : [...c.persona_ids, personaId] } });
   return (
-    <section aria-label="Persona connectors" className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+    <section aria-label="Persona connectors" className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-[18px] py-3.5">
       <div className="flex items-center justify-between">
-        <h3 className="text-[14px] font-medium text-fg">Connectors</h3>
+        <h3 className="type-heading text-fg">Connectors</h3>
         <Link href="/customization?who=connectors" className="text-[12.5px] text-accent hover:underline">Manage connectors</Link>
       </div>
       <div className="flex flex-wrap gap-2">

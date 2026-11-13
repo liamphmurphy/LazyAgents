@@ -54,7 +54,7 @@ function PersonaTag({ id }: { id: string }) {
 
 function Meta({ m }: { m: Memory }) {
   return (
-    <p className="text-[11.5px] text-fg-tertiary">
+    <p className="text-xs text-fg-tertiary">
       {m.space_id && (
         <>
           <span className="text-fg-secondary" data-testid="memory-space">{m.space_name ?? "A space"}’s memory</span>
@@ -86,7 +86,7 @@ function Tags({ tags }: { tags: string[] }) {
   );
 }
 
-const label = "text-[11px] font-medium uppercase tracking-wide text-fg-tertiary";
+const label = "text-[12.5px] font-medium text-fg-2";
 
 function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDeleted: () => void }) {
   const update = useUpdateMemory();
@@ -107,7 +107,7 @@ function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDel
   }
   const err = update.error ?? del.error;
   return (
-    <form onSubmit={save} aria-label={`Edit ${m.title}`} className="flex flex-col gap-2 rounded-lg border border-accent bg-surface p-3">
+    <form onSubmit={save} aria-label={`Edit ${m.title}`} className="flex flex-col gap-2 rounded-xl border border-accent bg-surface p-3">
       <label htmlFor={`${id}-title`} className={label}>Title</label>
       <TextInput id={`${id}-title`} value={title} maxLength={200} required autoFocus onChange={(e) => setTitle(e.target.value)} />
       <label htmlFor={`${id}-summary`} className={label}>Summary</label>
@@ -161,9 +161,9 @@ function Row({ m, editing, onEdit, onDone }: { m: Memory; editing: boolean; onEd
   const del = useDeleteMemory();
   if (editing) return <li className="col-span-full"><Editor m={m} onDone={onDone} onDeleted={onDone} /></li>;
   return (
-    <li className="group flex min-w-0 gap-2 rounded-lg border border-border bg-surface p-3 hover:bg-hover" data-testid="memory-row">
+    <li className="group flex min-w-0 gap-2 rounded-xl border border-border bg-surface p-3.5 hover:bg-hover" data-testid="memory-row">
       <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
-        <span className="text-[13px] font-medium text-fg">{m.title}</span>
+        <span className="type-heading text-fg">{m.title}</span>
         {m.summary && <span className="text-xs text-fg-secondary">{m.summary}</span>}
         <Tags tags={m.tags} />
         <Meta m={m} />
@@ -408,7 +408,7 @@ function Focused({ id, onDone }: { id: string; onDone: () => void }) {
   const m = useMemory(id);
   if (m.isError)
     return (
-      <p className="rounded-lg border border-border p-3 text-[13px] text-fg-secondary">
+      <p className="rounded-xl border border-border p-3 text-[13px] text-fg-secondary">
         That memory is no longer saved.
       </p>
     );
@@ -439,7 +439,7 @@ export function MemorySection({ whose, heading, focus }: { whose: string; headin
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[13px] font-semibold text-fg">{heading}</h2>
+        <h2 className="type-title text-fg">{heading}</h2>
         <div className="w-60 max-sm:w-full">
           <TextInput type="search" aria-label="Search memories" placeholder="Search memories" value={text} onChange={(e) => setText(e.target.value)} />
         </div>
@@ -479,7 +479,7 @@ export function MemorySection({ whose, heading, focus }: { whose: string; headin
       </div>
       <div className="mt-4 flex flex-col items-start gap-2 border-t border-border-subtle pt-3">
         {!whose && <DeleteAll total={count.data?.total} />}
-        <p className="text-[11.5px] text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
+        <p className="text-xs text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
       </div>
     </div>
   );
