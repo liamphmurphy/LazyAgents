@@ -66,17 +66,19 @@ RUN npm install -g --no-fund --no-audit \
 # Antigravity (agy). Google publishes no npm package and no pinned release: the
 # install script fetches whatever is current, so a rebuild can change it (record
 # `agy --version` from the image when you verify the adapter). A failed install
-# leaves the image without agy rather than failing the build; Antigravity is then
-# unavailable and says so. Pass --build-arg INSTALL_ANTIGRAVITY=false to omit it.
+# fails the build: an image that builds without agy breaks every Antigravity turn
+# with a bare "No such file or directory", which is how a change to the script's
+# flags went unnoticed. Pass --build-arg INSTALL_ANTIGRAVITY=false to omit it.
 ARG INSTALL_ANTIGRAVITY=true
 RUN if [ "$INSTALL_ANTIGRAVITY" = true ]; then \
-      mkdir -p /opt/agy-home \
-   && curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
-   && HOME=/opt/agy-home bash /tmp/agy-install.sh --skip-aliases --skip-path \
-   && ln -s /opt/agy-home/.local/bin/agy /usr/local/bin/agy \
-   && chmod -R a+rX /opt/agy-home \
-   || echo "agy install failed: Antigravity will be unavailable in this image"; \
+      set -e; \
+      mkdir -p /opt/agy-home; \
+      curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh; \
+      HOME=/opt/agy-home bash /tmp/agy-install.sh --dir /opt/agy-home/bin; \
+      ln -s /opt/agy-home/bin/agy /usr/local/bin/agy; \
+      chmod -R a+rX /opt/agy-home; \
       rm -f /tmp/agy-install.sh; \
+      agy --version; \
     fi
 
 # Browser system libraries are installed once in the image. Browser revisions
