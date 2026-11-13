@@ -5,8 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { claimEditorRail } from "@/lib/editor-layout";
 import { cx } from "@/lib/cx";
-import { ancestors, buildTree, closeTab, isoDay, openTab, pageHref, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
-import { useAllPages, useCreatePage, useDaily, usePage } from "@/lib/api/knowledge-hooks";
+import { ancestors, buildTree, closeTab, folderPaths, isoDay, joinPath, movedPath, nameOf, openTab, pageHref, parentOf, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
+import { useAllPages, useCreatePage, useDaily, useDeleteFolder, useDeletePage, useMoveFolder, useMovePage, usePage } from "@/lib/api/knowledge-hooks";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
 import { useToday } from "./kit";
@@ -14,6 +14,7 @@ import { isTyping } from "@/components/shell/shortcuts";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
+import { DeleteDialog, ExplorerMenu, MoveDialog, NewFolderDialog, RenameField, type ExplorerTarget, type MenuEntry } from "./explorer-actions";
 
 type View = "yours" | "agent";
 
@@ -26,6 +27,10 @@ type Shell = {
   openToday: () => void;
   /** Registers the screen showing now as a tab. */
   registerTab: (tab: Tab) => void;
+  /** Closes the tabs of deleted pages, moving off the one shown if it went. */
+  forgetPages: (ids: string[]) => void;
+  /** Keeps a renamed page's tab title current, whether or not it's showing. */
+  retitleTab: (id: string, title: string) => void;
 };
 
 const Ctx = createContext<Shell | null>(null);
@@ -159,6 +164,25 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
     lastActive = tab.id;
   }, []);
 
+  const forgetPages = useCallback(
+    (ids: string[]) => {
+      const gone = new Set(ids);
+      const cur = tabsStore.get();
+      const left = cur.filter((t) => !gone.has(t.id));
+      if (left.length !== cur.length) tabsStore.set(left);
+      if (active && gone.has(active)) {
+        const next = left.at(-1);
+        router.push(next ? tabHref(next) : "/knowledge");
+      }
+    },
+    [active, router],
+  );
+
+  const retitleTab = useCallback((id: string, title: string) => {
+    const cur = tabsStore.get();
+    if (cur.some((t) => t.id === id && t.title !== title)) tabsStore.set(cur.map((t) => (t.id === id ? { ...t, title } : t)));
+  }, []);
+
   const shell: Shell = {
     view,
     setView,
@@ -167,6 +191,8 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
     openImport: () => setImporting(true),
     openToday,
     registerTab,
+    forgetPages,
+    retitleTab,
   };
 
   const close = (id: string) => {
@@ -254,9 +280,147 @@ function Explorer({ pathname }: { pathname: string }) {
       setClosed((c) => new Set([...c].filter((f) => f !== path)));
     }
   };
-  const newPage = () => {
-    const folder = current?.path?.split("/").slice(0, -1).join("/");
-    create.mutate({ title: "Untitled", path: folder ? `${folder}/Untitled ${Date.now().toString(36)}` : undefined, body_md: "" }, { onSuccess: (p) => router.push(pageHref(p.id, p.title)) });
+  /** Opens a folder and its parents, so a page made or moved into it shows. */
+  const reveal = (folder: string) => {
+    if (!folder) return;
+    const want = ancestors(`${folder}/page`);
+    const cur = openStore.get();
+    if (want.some((f) => !cur.includes(f))) openStore.set([...new Set([...cur, ...want])]);
+    setClosed((c) => new Set([...c].filter((f) => !want.includes(f))));
+  };
+  /** Open folders follow a folder that moved, so it stays open under its new path. */
+  const followMove = (from: string, to: string) => {
+    openStore.set([...new Set(openStore.get().map((p) => movedPath(p, from, to)))]);
+    reveal(parentOf(to));
+  };
+  const newPageIn = (folder: string) => {
+    create.mutate(
+      { title: "Untitled", path: folder ? `${folder}/Untitled ${Date.now().toString(36)}` : undefined, body_md: "" },
+      {
+        onSuccess: (p) => {
+          reveal(folder);
+          router.push(pageHref(p.id, p.title));
+        },
+      },
+    );
+  };
+  const newPage = () => newPageIn(parentOf(current?.path ?? ""));
+
+  // The context menu's actions: one inline rename or one dialog at a time.
+  const movePage = useMovePage();
+  const moveFolder = useMoveFolder();
+  const deletePage = useDeletePage();
+  const deleteFolder = useDeleteFolder();
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "move" | "delete"; target: ExplorerTarget } | { kind: "folder"; parent: string } | null>(null);
+  const clearErrors = () => [movePage, moveFolder, deletePage, deleteFolder, create].forEach((m) => m.reset());
+  const startRename = (key: string) => {
+    clearErrors();
+    setRenaming(key);
+  };
+  const openDialog = (d: NonNullable<typeof dialog>) => {
+    clearErrors();
+    setDialog(d);
+  };
+  const closeDialog = () => setDialog(null);
+
+  const renamePage = (p: TreeRow, name: string) =>
+    movePage.mutate(
+      { id: p.id, title: name, path: joinPath(parentOf(p.path), name) },
+      {
+        onSuccess: (pg) => {
+          setRenaming(null);
+          k.retitleTab(pg.id, pg.title);
+        },
+      },
+    );
+  const renameFolder = (f: TreeFolder, name: string) => {
+    const to = joinPath(parentOf(f.path), name);
+    moveFolder.mutate(
+      { from: f.path, to, agent },
+      {
+        onSuccess: () => {
+          setRenaming(null);
+          followMove(f.path, to);
+        },
+      },
+    );
+  };
+  const moveTo = (t: ExplorerTarget, folder: string) => {
+    if (t.kind === "page") {
+      movePage.mutate(
+        { id: t.page.id, path: joinPath(folder, nameOf(t.page.path)) },
+        {
+          onSuccess: () => {
+            closeDialog();
+            reveal(folder);
+          },
+        },
+      );
+      return;
+    }
+    const to = joinPath(folder, t.folder.name);
+    moveFolder.mutate(
+      { from: t.folder.path, to, agent },
+      {
+        onSuccess: () => {
+          closeDialog();
+          followMove(t.folder.path, to);
+        },
+      },
+    );
+  };
+  const remove = (t: ExplorerTarget) => {
+    const done = (r: { deleted: string[] }) => {
+      closeDialog();
+      k.forgetPages(r.deleted);
+    };
+    if (t.kind === "page") deletePage.mutate(t.page.id, { onSuccess: done });
+    else deleteFolder.mutate({ folder: t.folder.path, agent }, { onSuccess: done });
+  };
+  const newFolder = (parent: string, name: string) => {
+    const folder = joinPath(parent, name);
+    create.mutate(
+      { title: "Untitled", path: `${folder}/Untitled`, body_md: "" },
+      {
+        onSuccess: (p) => {
+          closeDialog();
+          reveal(folder);
+          router.push(pageHref(p.id, p.title));
+        },
+      },
+    );
+  };
+
+  const blankMenu: MenuEntry[] = [
+    { icon: "edit", label: "New page", onSelect: () => newPageIn("") },
+    { icon: "folder", label: "New folder", onSelect: () => openDialog({ kind: "folder", parent: "" }) },
+  ];
+  const actions: TreeActions = {
+    renaming,
+    renameError: (renaming?.startsWith("p:") ? movePage.error : moveFolder.error)?.message,
+    renamePending: movePage.isPending || moveFolder.isPending,
+    cancelRename: () => setRenaming(null),
+    renamePage,
+    renameFolder,
+    pageMenu: (p) => [
+      { icon: "edit", label: "Rename", onSelect: () => startRename(`p:${p.id}`) },
+      { icon: "folder", label: "Move to…", onSelect: () => openDialog({ kind: "move", target: { kind: "page", page: p } }) },
+      { icon: "link", label: "Copy link", onSelect: () => void navigator.clipboard?.writeText(`[[${p.title}]]`) },
+      "separator",
+      { icon: "plus", label: "New page beside it", onSelect: () => newPageIn(parentOf(p.path)) },
+      "separator",
+      { icon: "trash", label: "Delete", danger: true, onSelect: () => openDialog({ kind: "delete", target: { kind: "page", page: p } }) },
+    ],
+    folderMenu: (f) => [
+      { icon: "plus", label: "New page", onSelect: () => newPageIn(f.path) },
+      { icon: "folder", label: "New folder", onSelect: () => openDialog({ kind: "folder", parent: f.path }) },
+      "separator",
+      { icon: "edit", label: "Rename", onSelect: () => startRename(`f:${f.path}`) },
+      { icon: "folder", label: "Move to…", onSelect: () => openDialog({ kind: "move", target: { kind: "folder", folder: f } }) },
+      "separator",
+      { icon: "trash", label: "Delete folder", danger: true, onSelect: () => openDialog({ kind: "delete", target: { kind: "folder", folder: f } }) },
+    ],
   };
 
 
@@ -305,7 +469,9 @@ function Explorer({ pathname }: { pathname: string }) {
         ) : tree.count === 0 ? (
           <p className="px-2 py-3 text-xs leading-relaxed text-fg-tertiary">{agent ? "No agent knowledge yet. Runs write their memory and proposed patterns here." : "No pages yet. Create one, capture a thought, or import your Obsidian vault."}</p>
         ) : (
-          <FolderItems folder={tree} depth={0} open={open} toggle={toggle} activeId={activeId} />
+          <ExplorerMenu entries={blankMenu} className="min-h-full">
+            <FolderItems folder={tree} depth={0} open={open} toggle={toggle} activeId={activeId} actions={actions} />
+          </ExplorerMenu>
         )}
       </nav>
       <div className="flex-none border-t border-border-subtle px-2 py-2">
@@ -324,9 +490,43 @@ function Explorer({ pathname }: { pathname: string }) {
           Import Obsidian vault
         </button>
       </div>
+      {dialog?.kind === "move" && (
+        <MoveDialog
+          target={dialog.target}
+          folders={folderPaths(tree)}
+          pending={movePage.isPending || moveFolder.isPending}
+          error={(dialog.target.kind === "page" ? movePage.error : moveFolder.error)?.message}
+          onMove={(f) => moveTo(dialog.target, f)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "delete" && (
+        <DeleteDialog
+          target={dialog.target}
+          pending={deletePage.isPending || deleteFolder.isPending}
+          error={(dialog.target.kind === "page" ? deletePage.error : deleteFolder.error)?.message}
+          onDelete={() => remove(dialog.target)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "folder" && <NewFolderDialog parent={dialog.parent} pending={create.isPending} error={create.error?.message} onCreate={(n) => newFolder(dialog.parent, n)} onClose={closeDialog} />}
     </aside>
   );
 }
+
+type TreeActions = {
+  renaming: string | null;
+  renameError?: string;
+  renamePending: boolean;
+  cancelRename: () => void;
+  renamePage: (p: TreeRow, name: string) => void;
+  renameFolder: (f: TreeFolder, name: string) => void;
+  pageMenu: (p: TreeRow) => MenuEntry[];
+  folderMenu: (f: TreeFolder) => MenuEntry[];
+};
+
+// The row whose menu is open stays highlighted, as in Obsidian.
+const menuRow = "rounded-md data-[state=open]:bg-hover";
 
 function ExplorerButton({ icon, label, onClick, href }: { icon: IconName; label: string; onClick?: () => void; href?: string }) {
   const cls = "grid size-7 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg-secondary";
@@ -341,7 +541,7 @@ function ExplorerButton({ icon, label, onClick, href }: { icon: IconName; label:
   );
 }
 
-function FolderItems({ folder, depth, open, toggle, activeId }: { folder: TreeFolder; depth: number; open: Set<string>; toggle: (p: string) => void; activeId?: string }) {
+function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folder: TreeFolder; depth: number; open: Set<string>; toggle: (p: string) => void; activeId?: string; actions: TreeActions }) {
   return (
     <ul role={depth ? "group" : "tree"} className="space-y-px">
       {/* Inbox heads the tree, as the place new captures land. */}
@@ -349,30 +549,42 @@ function FolderItems({ folder, depth, open, toggle, activeId }: { folder: TreeFo
         const isOpen = open.has(f.path);
         return (
           <li key={f.path} role="treeitem" aria-expanded={isOpen} aria-selected={false}>
-            <button
-              onClick={() => toggle(f.path)}
-              style={{ paddingLeft: 6 + depth * 16 }}
-              className="flex h-[26px] w-full items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-fg-2 hover:bg-hover"
-            >
-              <Icon name={isOpen ? "chev" : "chevr"} size={12} className="text-fg-tertiary" />
-              <Icon name={depth === 0 && f.name === "Inbox" ? "inbox" : "folder"} size={14} className="text-fg-secondary" />
-              <span className="min-w-0 flex-1 truncate text-left">{f.name}</span>
-              {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{f.count}</span>}
-            </button>
-            {isOpen && <FolderItems folder={f} depth={depth + 1} open={open} toggle={toggle} activeId={activeId} />}
+            {actions.renaming === `f:${f.path}` ? (
+              <RenameField initial={f.name} icon="folder" indent={24 + depth * 16} error={actions.renameError} pending={actions.renamePending} onCommit={(name) => actions.renameFolder(f, name)} onCancel={actions.cancelRename} />
+            ) : (
+              <ExplorerMenu entries={actions.folderMenu(f)} className={menuRow}>
+                <button
+                  onClick={() => toggle(f.path)}
+                  style={{ paddingLeft: 6 + depth * 16 }}
+                  className="flex h-[26px] w-full items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-fg-2 hover:bg-hover"
+                >
+                  <Icon name={isOpen ? "chev" : "chevr"} size={12} className="text-fg-tertiary" />
+                  <Icon name={depth === 0 && f.name === "Inbox" ? "inbox" : "folder"} size={14} className="text-fg-secondary" />
+                  <span className="min-w-0 flex-1 truncate text-left">{f.name}</span>
+                  {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{f.count}</span>}
+                </button>
+              </ExplorerMenu>
+            )}
+            {isOpen && <FolderItems folder={f} depth={depth + 1} open={open} toggle={toggle} activeId={activeId} actions={actions} />}
           </li>
         );
       })}
       {folder.pages.map((p) => (
         <li key={p.id} role="treeitem" aria-selected={p.id === activeId}>
-          <TreeLink
-            href={pageHref(p.id, p.title)}
-            icon={p.properties?.query ? "board" : "artifacts"}
-            label={p.title}
-            depth={depth}
-            active={p.id === activeId}
-            dot={(p.pending ?? 0) > 0}
-          />
+          {actions.renaming === `p:${p.id}` ? (
+            <RenameField initial={p.title} icon="artifacts" indent={24 + depth * 16} error={actions.renameError} pending={actions.renamePending} onCommit={(name) => actions.renamePage(p, name)} onCancel={actions.cancelRename} />
+          ) : (
+            <ExplorerMenu entries={actions.pageMenu(p)} className={menuRow}>
+              <TreeLink
+                href={pageHref(p.id, p.title)}
+                icon={p.properties?.query ? "board" : "artifacts"}
+                label={p.title}
+                depth={depth}
+                active={p.id === activeId}
+                dot={(p.pending ?? 0) > 0}
+              />
+            </ExplorerMenu>
+          )}
         </li>
       ))}
     </ul>

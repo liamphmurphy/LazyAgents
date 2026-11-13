@@ -144,3 +144,42 @@ export function restoreObsidianSyntax(md: string): string {
     .map((part, i) => (i % 2 ? part : part.split(/(`[^`\n]*`)/).map((s, j) => (j % 2 ? s : fix(s))).join("")))
     .join("");
 }
+
+// ---- Explorer paths. A folder is the shared prefix of its pages' paths.
+
+export const parentOf = (path: string) => path.split("/").slice(0, -1).join("/");
+export const nameOf = (path: string) => path.split("/").pop() ?? path;
+export const joinPath = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
+
+/** Every folder in the tree, sorted, parents before their children. */
+export function folderPaths(root: TreeFolder): string[] {
+  const out: string[] = [];
+  const walk = (f: TreeFolder) => {
+    for (const c of f.folders) {
+      out.push(c.path);
+      walk(c);
+    }
+  };
+  walk(root);
+  return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+/** Why a page or folder name won't do: it's one path segment, so it can't be empty or hold a slash. */
+export function nameError(name: string): string | undefined {
+  if (!name.trim()) return "Give it a name.";
+  if (name.includes("/")) return "Names can't contain /. Use Move to… to put it in another folder.";
+  return undefined;
+}
+
+/** Where a path ends up when the folder `from` moves to `to`; paths outside it stay put. */
+export const movedPath = (path: string, from: string, to: string) => (path === from || path.startsWith(`${from}/`) ? to + path.slice(from.length) : path);
+
+/**
+ * The folders something at `path` can move to ("" is the top level): not the
+ * one it's in, and for a folder, not itself or anything inside it.
+ */
+export function moveTargets(folders: string[], path: string, isFolder: boolean, filter = ""): string[] {
+  const here = parentOf(path);
+  const q = filter.trim().toLowerCase();
+  return ["", ...folders].filter((f) => f !== here && (!isFolder || (f !== path && !f.startsWith(`${path}/`))) && (!q || f.toLowerCase().includes(q)));
+}

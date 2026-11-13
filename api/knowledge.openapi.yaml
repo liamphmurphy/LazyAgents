@@ -65,6 +65,51 @@ paths:
       responses:
         "200": { description: "The page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
         "409": { description: "The page moved on since base_version_id" }
+    delete:
+      tags: [knowledge-pages]
+      summary: Delete a page and its history
+      description: Links to it go back to unresolved, so [[Name]] reattaches if a page by that name is made again.
+      responses:
+        "200": { description: "The deleted page", content: { application/json: { schema: { $ref: "#/components/schemas/FolderResult" } } } }
+        "404": { description: "No such page, or not visible" }
+  /knowledge/folders/move:
+    post:
+      tags: [knowledge-pages]
+      summary: Move or rename a folder
+      description: Moves every page under `from` to the same place under `to`, in one transaction, in one explorer view (agent knowledge when `agent` is true, the person's own pages otherwise). Each page keeps its old path as an alias. A clash moves nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to]
+              properties:
+                from: { type: string }
+                to: { type: string }
+                agent: { type: boolean }
+      responses:
+        "200": { description: "The pages moved", content: { application/json: { schema: { $ref: "#/components/schemas/FolderResult" } } } }
+        "404": { description: "No visible pages under the folder" }
+        "422": { description: "A page already exists at a new path, or the folder would move into itself" }
+  /knowledge/folders/delete:
+    post:
+      tags: [knowledge-pages]
+      summary: Delete a folder and every page under it
+      description: In one explorer view, as for move. Links into the deleted pages go back to unresolved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folder]
+              properties:
+                folder: { type: string }
+                agent: { type: boolean }
+      responses:
+        "200": { description: "The pages deleted", content: { application/json: { schema: { $ref: "#/components/schemas/FolderResult" } } } }
+        "404": { description: "No visible pages under the folder" }
   /knowledge/pages/{id}/controls:
     parameters: [{ $ref: "#/components/parameters/PageID" }]
     put:
@@ -369,6 +414,12 @@ components:
       type: object
       additionalProperties: true
       description: Frontmatter-style properties; tags and aliases are lists
+    FolderResult:
+      type: object
+      description: The ids of the pages a delete or move acted on (`deleted` or `moved`).
+      properties:
+        deleted: { type: array, items: { type: string, format: uuid } }
+        moved: { type: array, items: { type: string, format: uuid } }
     PageInput:
       type: object
       properties:

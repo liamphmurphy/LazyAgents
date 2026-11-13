@@ -1946,6 +1946,23 @@ func (q *Queries) TicketsByIDs(ctx context.Context, arg TicketsByIDsParams) ([]T
 	return items, nil
 }
 
+const unresolveLinksTo = `-- name: UnresolveLinksTo :exec
+UPDATE knowledge_links SET target_kind = 'unresolved', target_id = NULL
+WHERE workspace_id = $1 AND target_id = $2 AND target_kind IN ('artifact', 'section')
+`
+
+type UnresolveLinksToParams struct {
+	WorkspaceID uuid.UUID
+	TargetID    *uuid.UUID
+}
+
+// A deleted page's inbound links go back to unresolved, keeping their text,
+// so [[Name]] shows as a page to create and reattaches if one is made.
+func (q *Queries) UnresolveLinksTo(ctx context.Context, arg UnresolveLinksToParams) error {
+	_, err := q.db.Exec(ctx, unresolveLinksTo, arg.WorkspaceID, arg.TargetID)
+	return err
+}
+
 const unresolvedTargets = `-- name: UnresolvedTargets :many
 SELECT DISTINCT target_text FROM knowledge_links WHERE workspace_id = $1 AND target_kind = 'unresolved'
 `

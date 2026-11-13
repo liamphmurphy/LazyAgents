@@ -161,3 +161,14 @@ AND (l.target_kind='unresolved' OR (l.target_kind='artifact' AND t.type='note'
   AND artifact_visible(t.audience,t.owner_user_id,sqlc.narg(viewer)::uuid)
   AND (sqlc.arg(include_agent)::boolean OR t.audience<>'agent')))
 LIMIT 50000;
+
+-- name: LockNotesInFolder :many
+-- The pages under a folder in one explorer view (agent knowledge, or the
+-- person's own), locked for a move or delete of the whole folder.
+SELECT a.* FROM artifacts a
+WHERE a.workspace_id = sqlc.arg(workspace_id) AND a.type = 'note'
+AND starts_with(a.path, sqlc.arg(folder)::text || '/')
+AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)
+AND (a.audience = 'agent') = sqlc.arg(agent)::boolean
+ORDER BY a.path
+FOR UPDATE;

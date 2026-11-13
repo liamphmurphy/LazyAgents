@@ -247,6 +247,27 @@ export const useRestore = (id: string) => usePageWrite((version: string) => call
 export const useFileCapture = (id: string) => usePageWrite((v: { folder?: string; merge?: string }) => call<Page>("POST", `/pages/${id}/file`, v));
 export const useMoveCanvas = () => usePageWrite((v: { chat_id: string; canvas_id: string; folder?: string }) => call<Page>("POST", "/pages/from-canvas", v));
 
+// ---- Explorer: rename or move a page, delete one, and move or delete a folder
+// (every page under a path prefix, in one view).
+
+/** Renames or moves a page by its path; the body is left as it is. */
+export const useMovePage = () => usePageWrite((v: { id: string; title?: string; path: string }) => call<Page>("PUT", `/pages/${v.id}`, { title: v.title, path: v.path }));
+
+function useTreeWrite<V, R extends { deleted?: string[]; moved?: string[] }>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (r) => {
+      for (const id of r.deleted ?? []) qc.removeQueries({ queryKey: knowledgeKeys.page(id) });
+      void qc.invalidateQueries({ queryKey: knowledgeKeys.all });
+    },
+  });
+}
+
+export const useDeletePage = () => useTreeWrite((id: string) => call<{ deleted: string[] }>("DELETE", `/pages/${id}`));
+export const useMoveFolder = () => useTreeWrite((v: { from: string; to: string; agent: boolean }) => call<{ moved: string[] }>("POST", "/folders/move", v));
+export const useDeleteFolder = () => useTreeWrite((v: { folder: string; agent: boolean }) => call<{ deleted: string[] }>("POST", "/folders/delete", v));
+
 // ---- Obsidian vault imports
 
 export function useImports() {

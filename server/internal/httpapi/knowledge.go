@@ -93,6 +93,50 @@ func (s *Server) knowledgeRoutes(mux *http.ServeMux) {
 		}
 		return s.knowledgePage(r.Context(), ws, id)
 	})
+	handle("DELETE /api/v1/knowledge/pages/{id}", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		id, err := knowledgeID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		if err = s.Wiki.DeletePageAsUser(r.Context(), ws, u.ID, id); err != nil {
+			return nil, err
+		}
+		return map[string]any{"deleted": []uuid.UUID{id}}, nil
+	})
+	// Folders are path prefixes, so these act on every page under one in the
+	// explorer view it belongs to (agent knowledge or the person's own).
+	handle("POST /api/v1/knowledge/folders/move", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		var in struct {
+			From  string `json:"from"`
+			To    string `json:"to"`
+			Agent bool   `json:"agent"`
+		}
+		if err := knowledgeJSON(r, &in); err != nil {
+			return nil, err
+		}
+		moved, err := s.Wiki.MoveFolder(r.Context(), ws, u.ID, wiki.FolderScope{Folder: in.From, Agent: in.Agent}, in.To)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"moved": moved}, nil
+	})
+	handle("POST /api/v1/knowledge/folders/delete", func(r *http.Request) (any, error) {
+		u, _, ws := me(r.Context())
+		var in struct {
+			Folder string `json:"folder"`
+			Agent  bool   `json:"agent"`
+		}
+		if err := knowledgeJSON(r, &in); err != nil {
+			return nil, err
+		}
+		deleted, err := s.Wiki.DeleteFolder(r.Context(), ws, u.ID, wiki.FolderScope{Folder: in.Folder, Agent: in.Agent})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"deleted": deleted}, nil
+	})
 	handle("PUT /api/v1/knowledge/pages/{id}/controls", func(r *http.Request) (any, error) {
 		u, _, ws := me(r.Context())
 		id, err := knowledgeID(r, "id")
