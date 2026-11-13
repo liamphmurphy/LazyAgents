@@ -106,6 +106,13 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if err != nil {
 		return Result{}, err
 	}
+	if in.Title != nil {
+		title, err := artifacts.ValidPageTitle(*in.Title)
+		if err != nil {
+			return Result{}, err
+		}
+		in.Title = &title
+	}
 	if in.Path == "" && in.Title != nil {
 		in.Path, err = artifacts.DerivedNotePath(ctx, q, ws, *in.Title)
 		if err != nil {
@@ -195,14 +202,8 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	}
 
 	if in.Title != nil && state == artifacts.Published {
-		if strings.TrimSpace(*in.Title) == "" {
-			return Result{}, apperr.Invalid("title", "must not be empty")
-		}
-		a, err = q.SetPageTitle(ctx, store.SetPageTitleParams{ID: a.ID, WorkspaceID: ws, Title: *in.Title})
+		a, err = artifacts.RenameNoteTitleTx(ctx, q, a, *in.Title)
 		if err != nil {
-			return Result{}, err
-		}
-		if err := links.ResolvePending(ctx, q, ws); err != nil {
 			return Result{}, err
 		}
 	}

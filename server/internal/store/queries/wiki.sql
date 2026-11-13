@@ -353,5 +353,5 @@ DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias';
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
 ON CONFLICT (workspace_id, path) DO NOTHING;
 
--- name: SetPageTitle :one
-UPDATE artifacts SET title = $3 WHERE id = $1 AND workspace_id = $2 RETURNING *;
+-- name: PropertyAliasTaken :one
+SELECT EXISTS (SELECT 1 FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower(sqlc.arg(path)) AND kind = 'alias');

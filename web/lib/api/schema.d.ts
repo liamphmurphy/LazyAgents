@@ -6845,7 +6845,7 @@ export interface components {
             project_key?: string;
         };
         WikiPageSave: {
-            /** @description Change the display title independently of the path */
+            /** @description Rename the display title and derive a unique last path segment in the current folder; the old path remains an alias */
             title?: string;
             body_md?: string;
             properties?: components["schemas"]["PageProperties"];

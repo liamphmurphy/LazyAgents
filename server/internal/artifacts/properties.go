@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/links"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -206,11 +207,25 @@ func IndexProperties(ctx context.Context, q *store.Queries, a store.Artifact, v 
 	return q.AddPageTags(ctx, store.AddPageTagsParams{ArtifactID: a.ID, Tags: Tags(p, body)})
 }
 
+// ValidPageTitle follows ADR §3.3: free display text, 1–200 characters.
+func ValidPageTitle(title string) (string, error) {
+	title = strings.TrimSpace(title)
+	if n := utf8.RuneCountInString(title); n < 1 || n > 200 {
+		return "", apperr.Invalid("title", "must be 1–200 characters")
+	}
+	return title, nil
+}
+
 // DerivedNotePath serializes allocation so concurrent duplicate titles get
 // deterministic numeric suffixes, without displacing old moved paths.
 func DerivedNotePath(ctx context.Context, q *store.Queries, ws uuid.UUID, title string) (string, error) {
-	if strings.TrimSpace(title) == "" {
-		return "", apperr.Invalid("title", "is required when path is omitted")
+	return derivedNotePath(ctx, q, ws, title, "", uuid.Nil)
+}
+
+func derivedNotePath(ctx context.Context, q *store.Queries, ws uuid.UUID, title, folder string, owner uuid.UUID) (string, error) {
+	title, err := ValidPageTitle(title)
+	if err != nil {
+		return "", err
 	}
 	if err := q.LockNotePaths(ctx, ws); err != nil {
 		return "", err
@@ -230,24 +245,72 @@ func DerivedNotePath(ctx context.Context, q *store.Queries, ws uuid.UUID, title 
 	if base == "" || base == "." || base == ".." {
 		base = "Untitled"
 	}
-	if utf8.RuneCountInString(base) > 280 {
-		base = string([]rune(base)[:280])
-	}
+	budget := 300 - utf8.RuneCountInString(folder)
 	for n := 1; ; n++ {
-		p := base
+		suffix := ""
 		if n > 1 {
-			p = fmt.Sprintf("%s %d", base, n)
+			suffix = fmt.Sprintf(" %d", n)
 		}
-		if _, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil {
-			continue
+		limit := budget - utf8.RuneCountInString(suffix)
+		if limit < 1 {
+			return "", apperr.Invalid("path", "folder leaves no room for a unique page name")
+		}
+		segment := []rune(base)
+		if len(segment) > limit {
+			segment = segment[:limit]
+		}
+		p, err := ValidNotePath(folder + strings.TrimSpace(string(segment)) + suffix)
+		if err != nil {
+			return "", err
+		}
+		if a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil {
+			if a.ID != owner {
+				continue
+			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}
-		if _, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p}); err == nil {
-			continue
+		if a, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p}); err == nil {
+			if a.ID != owner {
+				continue
+			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}
-		return ValidNotePath(p)
+		return p, nil
 	}
+}
+
+// RenameNoteTitleTx changes the title and last path segment together. The
+// caller holds the namespace lock before locking the page, as on a folder move.
+func RenameNoteTitleTx(ctx context.Context, q *store.Queries, a store.Artifact, title string) (store.Artifact, error) {
+	title, err := ValidPageTitle(title)
+	if err != nil {
+		return a, err
+	}
+	if title == a.Title {
+		return a, nil
+	}
+	folder := ""
+	if i := strings.LastIndex(*a.Path, "/"); i >= 0 {
+		folder = (*a.Path)[:i+1]
+	}
+	p, err := derivedNotePath(ctx, q, a.WorkspaceID, title, folder, a.ID)
+	if err != nil {
+		return a, err
+	}
+	if !strings.EqualFold(*a.Path, p) {
+		if err := q.AddAlias(ctx, store.AddAliasParams{WorkspaceID: a.WorkspaceID, ArtifactID: a.ID, Path: *a.Path}); err != nil {
+			return a, err
+		}
+	}
+	// Allocation permits only this page's aliases; another page's are skipped.
+	if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: a.WorkspaceID, Path: p}); err != nil {
+		return a, err
+	}
+	a, err = q.SetNotePath(ctx, store.SetNotePathParams{ID: a.ID, Path: &p, Title: title})
+	if err != nil {
+		return a, err
+	}
+	return a, links.ResolvePending(ctx, q, a.WorkspaceID)
 }

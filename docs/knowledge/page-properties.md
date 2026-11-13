@@ -5,8 +5,8 @@ Implemented by LAZYAGENTS-176, following [ADR §3.3–3.4](ADR-knowledge.md).
 `POST /api/v1/wiki/pages` accepts the existing `path` and `body_md` fields plus
 optional `title`, `properties`, `tags`, and `aliases`. When `path` is omitted,
 `title` is required and a unique link-safe path is derived, with numeric suffixes
-for collisions. Display titles may repeat and contain link punctuation. An
-explicit path still follows `ValidNotePath` and conflicts return 422.
+for collisions. Display titles are 1–200 characters, may repeat, and may contain
+link punctuation. An explicit path still follows `ValidNotePath` and conflicts return 422.
 
 ```json
 {
@@ -37,9 +37,12 @@ reserved export envelope fields and cannot be custom properties.
 Omitted metadata is inherited. A supplied properties map replaces the custom
 properties, and supplied tag/alias arrays replace those fields (use `[]` to
 clear them). A body-only edit retains metadata. Changing the body or properties
-creates a version; a title-only edit changes display metadata. A move changes
-the path and keeps the title and old path. Combined edits are transactional;
-invalid metadata (422) or a stale `base_version_id` (409) rolls them back.
+creates a version. A title edit derives a unique last path segment in the current
+folder, with numeric suffixes for collisions, and retains the old path as a moved
+alias. A folder move changes the path while keeping the display title. When both
+path and title change, the title determines the last segment in the destination
+folder. Supplying the unchanged title preserves the current path. Combined edits
+are transactional; invalid metadata (422) or a stale `base_version_id` (409) rolls them back.
 
 The returned `Artifact` includes the current version's `properties`, explicit
 `aliases`, and the union of explicit and inline `tags`. `GET /api/v1/wiki/pages?tag=work/releases`
@@ -49,8 +52,10 @@ paths; code blocks, code spans and link targets do not supply tags.
 
 Suggestions store their own properties; only publication rebuilds `page_tags`
 and frontmatter aliases. Alias changes cannot steal another page's path or
-alias. Removed frontmatter aliases leave moved-path aliases intact. Metadata
-has no independent audience or read endpoint: it is returned with its parent
+alias. Explicit path creation also rejects another page's frontmatter alias,
+including when the new page is only a suggestion; historical moved paths may
+still be explicitly reused. Removed frontmatter aliases leave moved-path aliases
+intact. Metadata has no independent audience or read endpoint: it is returned with its parent
 page under that page's read policy. The audience implementation is LAZYAGENTS-175.
 
 Vault export writes stable YAML frontmatter, including the display title and

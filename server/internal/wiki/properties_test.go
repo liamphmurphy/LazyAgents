@@ -35,13 +35,17 @@ func TestFreeTitlesAndDuplicatePaths(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	changed := "Display only [changed]"
+	changed := "Renamed [display]"
 	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: *first.Note.Path, Title: &changed, Body: "body"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Note.Title != changed || *r.Note.Path != *first.Note.Path {
-		t.Fatalf("title edit moved page: %+v", r.Note)
+	if r.Note.Title != changed || *r.Note.Path != "Renamed display" {
+		t.Fatalf("title edit did not derive path: %+v", r.Note)
+	}
+	target, err := links.Resolve(e.ctx, e.q, e.ws, *first.Note.Path, "")
+	if err != nil || target.ID == nil || *target.ID != r.Note.ID {
+		t.Fatalf("title rename lost old path: %+v %v", target, err)
 	}
 }
 
@@ -71,7 +75,7 @@ func TestFolderMoveKeepsLinks(t *testing.T) {
 
 func TestPropertiesAliasesTagsVault(t *testing.T) {
 	e := setup(t)
-	props := artifacts.Properties{"text": "a: #quoted", "number": 12.5, "date": "2026-11-13", "checkbox": true, "list": []string{"one", "two"}, "link": "[[Target]]", "tags": []string{"#Explicit"}, "aliases": []string{"Alternate name"}}
+	props := artifacts.Properties{"text": "before\n---\nafter\n", "number": 12.5, "date": "2026-11-13", "checkbox": true, "list": []string{"one", "two"}, "link": "[[Target]]", "tags": []string{"#Explicit"}, "aliases": []string{"Alternate name"}}
 	title := "A display [title]"
 	ghost := e.save(t, "Alias source", "[[Alternate name]]")
 	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Metadata/page", Title: &title, Body: "# heading\n\n#Inline/nested #inline/nested `#code`\n```\n#fenced\n```", Properties: props})
@@ -271,7 +275,7 @@ func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 		}
 		return buf.Bytes()
 	}
-	data := vault(map[string]string{"Yaml.md": "---\ntags: [YAML]\naliases: [From YAML]\ndate: 2026-11-13\nnumber: 2\ncheckbox: true\nlist: [one, two]\nlink: '[[Target]]'\nunknown:\n  nested: value\n---\n\nbody"})
+	data := vault(map[string]string{"Yaml.md": "---\ntags: [YAML]\naliases: [From YAML]\ndate: 2026-11-13\nnumber: 2\ncheckbox: true\nlist: [one, two]\nlink: '[[Target]]'\nunknown:\n  nested: value\ntext: |\n  before\n  ---\n  after\n---\n\nbody"})
 	res, err := e.svc.Import(e.ctx, e.ws, e.me.ID, data)
 	if err != nil || res.Created != 1 {
 		t.Fatalf("native YAML: %+v %v", res, err)
@@ -285,7 +289,7 @@ func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := artifacts.DecodeProperties(v.Properties)
-	if p["date"] != "2026-11-13" || p["number"] != float64(2) || p["checkbox"] != true || !strings.Contains(p["unknown"].(string), "nested: value") {
+	if p["text"] != "before\n---\nafter\n" || p["date"] != "2026-11-13" || p["number"] != float64(2) || p["checkbox"] != true || !strings.Contains(p["unknown"].(string), "nested: value") {
 		t.Fatalf("native YAML properties: %+v", p)
 	}
 	var buf bytes.Buffer
@@ -299,5 +303,117 @@ func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 	bad := vault(map[string]string{"Bad.md": "---\ntags: [unclosed\n---\nbody"})
 	if _, err := e.svc.Import(e.ctx, e.ws, e.me.ID, bad); !invalid(err) {
 		t.Fatalf("malformed YAML accepted: %v", err)
+	}
+}
+
+func TestExplicitCreationPreservesPropertyAliases(t *testing.T) {
+	e := setup(t)
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Original", Body: "body", Aliases: &[]string{"Alternate"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "alternate", Body: "steal", Mode: wiki.ModeCreate}); !invalid(err) {
+		t.Fatalf("explicit create stole property alias: %v", err)
+	}
+	if _, err := e.svc.AgentWrite(e.ctx, e.atlas, map[string]agentdef.Mode{}, wiki.Save{Path: "Alternate", Body: "suggestion", Mode: wiki.ModeCreate}); !invalid(err) {
+		t.Fatalf("suggested create stole property alias: %v", err)
+	}
+	target, err := links.Resolve(e.ctx, e.q, e.ws, "Alternate", "")
+	if err != nil || target.ID == nil || *target.ID != r.Note.ID {
+		t.Fatalf("alias ownership: %+v %v", target, err)
+	}
+	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Original", Body: "body-only edit"}); err != nil {
+		t.Fatalf("inherited alias broke body edit: %v", err)
+	}
+}
+
+func TestConcurrentCreationAndAliasPublication(t *testing.T) {
+	e := setup(t)
+	for n := 0; n < 6; n++ {
+		original := fmt.Sprintf("Original %d", n)
+		alias := fmt.Sprintf("Racing alias %d", n)
+		r := e.save(t, original, "body")
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		go func() {
+			<-start
+			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: original, Body: "body", Aliases: &[]string{alias}})
+			errs <- err
+		}()
+		go func() {
+			<-start
+			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: alias, Body: "created", Mode: wiki.ModeCreate})
+			errs <- err
+		}()
+		close(start)
+		success := 0
+		for i := 0; i < 2; i++ {
+			err := <-errs
+			if err == nil {
+				success++
+			} else if !invalid(err) {
+				t.Fatal(err)
+			}
+		}
+		if success != 1 {
+			t.Fatalf("create and alias publication: %d successes", success)
+		}
+		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: original, Body: "still editable"}); err != nil {
+			t.Fatal(err)
+		}
+		v, err := e.q.GetArtifact(e.ctx, store.GetArtifactParams{ID: r.Note.ID, WorkspaceID: e.ws})
+		if err != nil {
+			t.Fatal(err)
+		}
+		current, err := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *v.CurrentVersionID, ArtifactID: v.ID, WorkspaceID: e.ws})
+		if err != nil {
+			t.Fatal(err)
+		}
+		aliases, _ := artifacts.StringList(artifacts.DecodeProperties(current.Properties)["aliases"])
+		if len(aliases) > 0 {
+			target, err := links.Resolve(e.ctx, e.q, e.ws, alias, "")
+			if err != nil || target.ID == nil || *target.ID != r.Note.ID {
+				t.Fatalf("publication lost race ownership: %+v %v", target, err)
+			}
+		}
+	}
+}
+
+func TestTitleRenamesLastSegmentWithSuffix(t *testing.T) {
+	e := setup(t)
+	e.save(t, "Ops/New", "occupied")
+	old := e.save(t, "Ops/Old", "body")
+	title := "New"
+	renamed, err := e.svc.UpdateAsUser(e.ctx, e.ws, e.me.ID, old.Note.ID, wiki.Save{Title: &title}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.Note.Title != "New" || *renamed.Note.Path != "Ops/New 2" {
+		t.Fatalf("rename path: %+v", renamed.Note)
+	}
+	target, err := links.Resolve(e.ctx, e.q, e.ws, "Ops/Old", "")
+	if err != nil || target.ID == nil || *target.ID != old.Note.ID {
+		t.Fatalf("old path: %+v %v", target, err)
+	}
+	// A generic artifact title edit must follow the same ADR behavior.
+	title = "Third [name]"
+	a, err := e.svc.Artifacts.UpdateMeta(e.ctx, e.ws, old.Note.ID, artifacts.MetaPatch{Title: &title})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Title != title || *a.Path != "Ops/Third name" {
+		t.Fatalf("generic title rename: %+v", a)
+	}
+	for _, bad := range []string{"", strings.Repeat("界", 201)} {
+		if _, err := e.svc.UpdateAsUser(e.ctx, e.ws, e.me.ID, a.ID, wiki.Save{Title: &bad}, nil, nil); !invalid(err) {
+			t.Fatalf("invalid title length accepted: %v", err)
+		}
+		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &bad, Body: "body", Mode: wiki.ModeCreate}); !invalid(err) {
+			t.Fatalf("invalid create title length accepted: %v", err)
+		}
+	}
+	valid := strings.Repeat("界", 200)
+	if _, err := e.svc.UpdateAsUser(e.ctx, e.ws, e.me.ID, a.ID, wiki.Save{Title: &valid}, nil, nil); err != nil {
+		t.Fatalf("200-rune title rejected: %v", err)
 	}
 }

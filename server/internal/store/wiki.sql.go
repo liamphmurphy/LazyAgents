@@ -1318,6 +1318,22 @@ func (q *Queries) PageTags(ctx context.Context, artifactID uuid.UUID) ([]string,
 	return items, nil
 }
 
+const propertyAliasTaken = `-- name: PropertyAliasTaken :one
+SELECT EXISTS (SELECT 1 FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower($2) AND kind = 'alias')
+`
+
+type PropertyAliasTakenParams struct {
+	WorkspaceID uuid.UUID
+	Path        string
+}
+
+func (q *Queries) PropertyAliasTaken(ctx context.Context, arg PropertyAliasTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, propertyAliasTaken, arg.WorkspaceID, arg.Path)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const relabelVersion = `-- name: RelabelVersion :exec
 UPDATE artifact_versions SET label = $2 WHERE id = $1
 `
@@ -1585,40 +1601,6 @@ type SetNotePathParams struct {
 
 func (q *Queries) SetNotePath(ctx context.Context, arg SetNotePathParams) (Artifact, error) {
 	row := q.db.QueryRow(ctx, setNotePath, arg.ID, arg.Path, arg.Title)
-	var i Artifact
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ProjectID,
-		&i.EpicID,
-		&i.Type,
-		&i.Title,
-		&i.Number,
-		&i.Summary,
-		&i.AuthorType,
-		&i.AuthorID,
-		&i.CurrentVersionID,
-		&i.SearchText,
-		&i.Search,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Path,
-	)
-	return i, err
-}
-
-const setPageTitle = `-- name: SetPageTitle :one
-UPDATE artifacts SET title = $3 WHERE id = $1 AND workspace_id = $2 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path
-`
-
-type SetPageTitleParams struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	Title       string
-}
-
-func (q *Queries) SetPageTitle(ctx context.Context, arg SetPageTitleParams) (Artifact, error) {
-	row := q.db.QueryRow(ctx, setPageTitle, arg.ID, arg.WorkspaceID, arg.Title)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,

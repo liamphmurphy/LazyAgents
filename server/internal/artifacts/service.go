@@ -424,6 +424,10 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 		if in.Title != "" {
 			title = in.Title
 		}
+		title, err = ValidPageTitle(title)
+		if err != nil {
+			return a, err
+		}
 	} else {
 		var err error
 		if title, err = validTitle(defaultTitle(r, in.Title, fileName)); err != nil {
@@ -458,6 +462,15 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 			return a, apperr.Invalid("path", "a page called %q already exists", *notePath)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return a, err
+		}
+		// Explicit paths may reuse historical moved paths, but must not steal
+		// a published frontmatter alias (even for an unpublished suggestion).
+		taken, err := q.PropertyAliasTaken(ctx, store.PropertyAliasTakenParams{WorkspaceID: ws, Path: *notePath})
+		if err != nil {
+			return a, err
+		}
+		if taken {
+			return a, apperr.Invalid("path", "%q is another page's frontmatter alias", *notePath)
 		}
 		// The new page takes over this path from any renamed page.
 		if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: *notePath}); err != nil {
@@ -625,6 +638,9 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 	var a store.Artifact
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := store.New(tx)
+		if err := q.LockNotePaths(ctx, ws); err != nil {
+			return err
+		}
 		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
@@ -634,10 +650,11 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 		next := store.UpdateArtifactMetaParams{ID: cur.ID, Title: cur.Title, Summary: cur.Summary, EpicID: cur.EpicID}
 		if p.Title != nil {
 			if cur.Type == "note" {
-				next.Title = strings.TrimSpace(*p.Title)
-				if next.Title == "" {
-					return apperr.Invalid("title", "must not be empty")
+				cur, err = RenameNoteTitleTx(ctx, q, cur, *p.Title)
+				if err != nil {
+					return err
 				}
+				next.Title = cur.Title
 			} else if next.Title, err = validTitle(*p.Title); err != nil {
 				return err
 			}

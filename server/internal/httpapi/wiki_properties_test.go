@@ -24,7 +24,8 @@ func TestWikiPropertiesAPI(t *testing.T) {
 	if _, err := seed.Run(ctx, pool, seed.Options{Demo: true, Artifacts: arts}); err != nil {
 		t.Fatal(err)
 	}
-	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Artifacts: arts, Wiki: &wiki.Service{Pool: pool, Artifacts: arts}}).Handler()
+	wk := &wiki.Service{Pool: pool, Artifacts: arts}
+	handler := (&Server{AnonymousAPI: true, Pool: pool, Q: q, Artifacts: arts, Wiki: wk}).Handler()
 	request := func(method, path, body string, status int, out any) {
 		t.Helper()
 		rec := httptest.NewRecorder()
@@ -40,7 +41,7 @@ func TestWikiPropertiesAPI(t *testing.T) {
 			}
 		}
 	}
-	body := `{"title":"Display [ ] # | ^", "body_md":"body #inline", "properties":{"text":"hello","number":1.5,"date":"2026-11-13","checkbox":true,"list":["one","two"],"link":"[[Target]]"}, "tags":["Explicit"],"aliases":["An alias"]}`
+	body := `{"title":"Display [ ] # | ^", "body_md":"body #inline", "properties":{"text":"before\n---\nafter\n","number":1.5,"date":"2026-11-13","checkbox":true,"list":["one","two"],"link":"[[Target]]"}, "tags":["Explicit"],"aliases":["An alias"]}`
 	var a, b api.Artifact
 	request("POST", "/wiki/pages", body, 201, &a)
 	request("POST", "/wiki/pages", `{"title":"Display [ ] # | ^","body_md":"other"}`, 201, &b)
@@ -58,6 +59,30 @@ func TestWikiPropertiesAPI(t *testing.T) {
 	if got.Id != a.Id {
 		t.Fatal("alias read")
 	}
+	// The actual API property payload must survive the HTTP export unchanged,
+	// including an indented delimiter in YAML's literal scalar representation.
+	exported := httptest.NewRecorder()
+	handler.ServeHTTP(exported, httptest.NewRequest("GET", "/api/v1/wiki/export", nil))
+	if exported.Code != 200 {
+		t.Fatalf("export: %d %s", exported.Code, exported.Body.String())
+	}
+	me, err := q.GetLocalUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported, err := wk.Import(ctx, me.WorkspaceID, me.ID, exported.Body.Bytes())
+	if err != nil || imported.Updated != 0 || imported.Created != 0 {
+		t.Fatalf("API-property YAML roundtrip: %+v %v", imported, err)
+	}
+	var roundtrip api.Artifact
+	request("GET", "/wiki/page?path=An%20alias", "", 200, &roundtrip)
+	if roundtrip.BodyMd.MustGet() != a.BodyMd.MustGet() || roundtrip.CurrentVersion.Id != a.CurrentVersion.Id || (*roundtrip.Properties)["text"] != "before\n---\nafter\n" {
+		t.Fatal("YAML separator corrupted API property/body")
+	}
+	request("POST", "/wiki/pages", `{"path":"An alias","body_md":"cannot steal"}`, 422, nil)
+	var bodyEdited api.Artifact
+	request("PUT", "/wiki/pages/"+a.Id.String(), `{"body_md":"body #inline edited"}`, 200, &bodyEdited)
+	a = bodyEdited
 	var tree api.WikiTree
 	request("GET", "/wiki/pages?tag=INLINE", "", 200, &tree)
 	if len(tree.Pages) != 1 || tree.Pages[0].Id != a.Id {
@@ -84,4 +109,17 @@ func TestWikiPropertiesAPI(t *testing.T) {
 	request("POST", "/wiki/pages", `{"path":"Another collision","body_md":"bad","aliases":["Unique collision alias"]}`, 422, &invalid)
 	request("PUT", "/wiki/pages/"+a.Id.String(), `{"properties":{"number":3},"base_version_id":"`+a.CurrentVersion.Id.String()+`"}`, 409, &invalid)
 	request("GET", "/wiki/page?path=Missing", "", 404, &invalid)
+	var renamed api.Artifact
+	request("PUT", "/wiki/pages/"+a.Id.String(), `{"title":"Updated [title]"}`, 200, &renamed)
+	if *renamed.Path != "Updated title" || renamed.Title != "Updated [title]" {
+		t.Fatalf("HTTP title rename: %+v", renamed)
+	}
+	var oldPath api.Artifact
+	request("GET", "/wiki/page?path=Display", "", 200, &oldPath)
+	if oldPath.Id != a.Id {
+		t.Fatal("old path lost on title rename")
+	}
+	longTitle, _ := json.Marshal(map[string]any{"title": strings.Repeat("x", 201)})
+	request("PUT", "/wiki/pages/"+a.Id.String(), string(longTitle), 422, nil)
+
 }

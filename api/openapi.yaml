@@ -7648,7 +7648,7 @@ components:
       required: [body_md]
       properties:
         path: { type: string, maxLength: 300, description: Optional explicit unique path; otherwise derived from title with a numeric suffix }
-        title: { type: string, description: Free display text; duplicate titles are allowed }
+        title: { type: string, minLength: 1, maxLength: 200, description: Free display text; duplicate titles are allowed }
         body_md: { type: string }
         properties: { $ref: "#/components/schemas/PageProperties" }
         tags: { type: array, items: { type: string }, description: Explicit tags; response also includes inline body tags }
@@ -7658,7 +7658,7 @@ components:
     WikiPageSave:
       type: object
       properties:
-        title: { type: string, description: Change the display title independently of the path }
+        title: { type: string, minLength: 1, maxLength: 200, description: Rename the display title and derive a unique last path segment in the current folder; the old path remains an alias }
         body_md: { type: string }
         properties: { $ref: "#/components/schemas/PageProperties" }
         tags: { type: array, items: { type: string }, description: Explicit tags; response also includes inline body tags }

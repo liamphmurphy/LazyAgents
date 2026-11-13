@@ -180,7 +180,7 @@ func splitFrontmatter(md string) (string, artifacts.Properties, error) {
 	offset := 4
 	end := -1
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "---" {
+		if strings.TrimRight(line, " \t\r\n") == "---" {
 			end = offset
 			offset += len(line)
 			break
