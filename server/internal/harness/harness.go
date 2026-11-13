@@ -113,6 +113,10 @@ type Result struct {
 	Error        string
 	Final        string // the last assistant text
 	Opening      string // the first assistant text, when a tool call followed it (runner-set)
+	// Images are absolute paths of image files the harness reported saving
+	// (Antigravity's generator names them in its tool output). The runner reads
+	// them only from under the harness's own home (runner.collectImagePaths).
+	Images []string
 	// RateLimits are the rate_limit_info objects of Claude's
 	// rate_limit_event lines, oldest first (usage.FromClaudeEvent reads them).
 	RateLimits []json.RawMessage
@@ -138,6 +142,8 @@ func For(name string) (Harness, error) {
 		return ClaudeCode{}, nil
 	case agentdef.HarnessCodex:
 		return Codex{}, nil
+	case agentdef.HarnessAntigravity:
+		return Antigravity{}, nil
 	}
 	return nil, fmt.Errorf("harness: unknown harness %q", name)
 }
