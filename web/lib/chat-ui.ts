@@ -390,6 +390,31 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "move_page":
     case "move_folder":
       return status("wiki", "moving pages");
+    case "delete_page":
+    case "delete_folder":
+      return status("wiki", "deleting pages");
+    case "file_capture":
+      return status("wiki", "filing a note");
+    case "list_page_versions":
+    case "list_page_reviews":
+    case "knowledge_graph":
+    case "list_imports":
+      return status("wiki", "looking through the wiki");
+    case "restore_page_version":
+      return status("wiki", "restoring an earlier version");
+    case "attach_file":
+      return status("wiki", "attaching a file");
+    case "withdraw_suggestion":
+      return status("wiki", "withdrawing a suggestion");
+    case "set_page_controls":
+      return status("wiki", "changing a page's settings");
+    case "attach_chat_to_page":
+    case "promote_canvas":
+      return status("wiki", "saving to Knowledge");
+    case "confirm_import":
+    case "cancel_import":
+    case "undo_import":
+      return status("wiki", "working on a vault import");
     case "get_ticket":
     case "list_epics":
     case "list_tickets":
