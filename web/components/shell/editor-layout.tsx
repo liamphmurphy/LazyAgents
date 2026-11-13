@@ -180,7 +180,7 @@ export function EditorLayout({
   const panels = dockPanels(uid, dock, active?.id, compact);
 
   return (
-    <div data-editor-layout={app} className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 flex-col bg-bg md:h-dvh">
+    <div data-editor-layout={app} className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none flex-col bg-bg md:h-dvh">
       <Header {...header} />
       <div className="relative flex min-h-0 flex-1">
         {showLeft && (
