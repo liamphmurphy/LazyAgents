@@ -41,13 +41,15 @@ async function refresh(page: Page) {
 }
 
 const footer = (page: Page) => page.getByRole("region", { name: "Harness activity" });
-const drawer = (page: Page) => page.getByRole("dialog", { name: "Harness usage" });
+const bubble = (page: Page, label: string) => page.getByRole("dialog", { name: `${label} usage` });
 
 test("the flat footer replaces the profile and floating orb; settings sit beside collapse", async ({ page }) => {
   await installFooter(page, { dock: { personas: [], harnesses: harnesses() } });
   await page.goto("/board?project=WEB");
-  await expect(footer(page).getByRole("button", { name: "Harness usage: 2 working" })).toBeVisible();
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
+  // Only the characters: no "Harnesses · All idle" summary row under them.
+  await expect(footer(page).getByRole("button")).toHaveCount(3);
+  await expect(footer(page)).not.toContainText("Harnesses");
   await expect(page.locator(".orb-root")).toHaveCount(0);
   const menu = page.getByRole("complementary", { name: "Main menu" });
   await expect(menu.getByText("Liam", { exact: true })).toHaveCount(0);
@@ -61,7 +63,7 @@ test("the flat footer replaces the profile and floating orb; settings sit beside
   expect(Math.abs(bottom!.x - bounds!.x)).toBeLessThan(1);
   expect(Math.abs(bottom!.y + bottom!.height - bounds!.y - bounds!.height)).toBeLessThan(1);
   expect(await footer(page).evaluate((el) => getComputedStyle(el).borderRadius)).toBe("0px");
-  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "44px");
+  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "35px");
 });
 
 test("only connected harnesses show, and the row fits however many there are", async ({ page }) => {
@@ -87,28 +89,40 @@ test("only connected harnesses show, and the row fits however many there are", a
   await expect(footer(page)).toHaveCount(0);
 });
 
-test("characters open real usage details and Escape restores focus to the clicked character", async ({ page }) => {
+test("a character opens a bubble with its own usage beside it; Escape restores focus", async ({ page }) => {
   await installFooter(page, { dock: { personas: [], harnesses: harnesses() } });
   await page.goto("/board?project=WEB");
   const trigger = footer(page).getByRole("button", { name: "Codex, working; show usage" });
   await trigger.click();
-  await expect(drawer(page)).toBeVisible();
-  await expect(drawer(page)).toContainText("3 agents working");
-  await expect(drawer(page).getByRole("progressbar", { name: "Claude allowance used" })).toHaveAttribute("aria-valuenow", "42");
-  await expect(drawer(page).getByRole("progressbar", { name: "Codex allowance used" })).toHaveAttribute("aria-valuenow", "18");
-  await expect(drawer(page)).toContainText("weekly 68%");
-  await expect(drawer(page)).toContainText(/5h · resets/);
-  await expect(drawer(page)).toContainText("Antigravity doesn’t report an allowance");
-  await expect(drawer(page).getByRole("link", { name: "Usage settings →" })).toHaveAttribute("href", "/settings/runner");
+  const codex = bubble(page, "Codex");
+  await expect(codex).toBeVisible();
+  await expect(codex.getByRole("progressbar", { name: "Codex allowance used" })).toHaveAttribute("aria-valuenow", "18");
+  await expect(codex).toContainText("1 working");
+  await expect(codex).toContainText(/5h · resets/);
+  await expect(codex.getByRole("progressbar", { name: "Claude allowance used" })).toHaveCount(0);
+  await expect(codex.getByRole("link", { name: "Usage settings →" })).toHaveAttribute("href", "/settings/runner");
+  // A bubble, not a panel: small, and sitting just above the character it belongs to.
+  await expect.poll(async () => (await codex.boundingBox())!.height).toBeLessThan(200);
+  const at = (await trigger.boundingBox())!, box = (await codex.boundingBox())!;
+  expect(box.width).toBeLessThan(260);
+  expect(box.y + box.height).toBeLessThanOrEqual(at.y);
+  expect(at.y - (box.y + box.height)).toBeLessThan(20);
+  expect(box.x).toBeLessThan(at.x + at.width);
+  expect(box.x + box.width).toBeGreaterThan(at.x);
   await page.keyboard.press("Escape");
-  await expect(drawer(page)).toBeHidden();
+  await expect(codex).toBeHidden();
   await expect(trigger).toBeFocused();
+  // Another character swaps the bubble; clicking away closes it.
   await trigger.click();
-  await footer(page).getByRole("button", { name: /Harness usage:/ }).click();
-  await expect(drawer(page)).toBeHidden();
-  await trigger.click();
+  await footer(page).getByRole("button", { name: /Claude, working/ }).click();
+  await expect(codex).toBeHidden();
+  await expect(bubble(page, "Claude").getByRole("progressbar", { name: "Claude allowance used" })).toHaveAttribute("aria-valuenow", "42");
+  await expect(bubble(page, "Claude")).toContainText("weekly 68%");
+  await footer(page).getByRole("button", { name: /Antigravity, idle/ }).click();
+  await expect(bubble(page, "Claude")).toBeHidden();
+  await expect(bubble(page, "Antigravity")).toContainText("Antigravity doesn’t report an allowance");
   await page.mouse.click(1000, 70);
-  await expect(drawer(page)).toBeHidden();
+  await expect(bubble(page, "Antigravity")).toBeHidden();
 });
 
 test("working follows live harness activity; the approved characters idle at rest", async ({ page }) => {
@@ -124,7 +138,6 @@ test("working follows live harness activity; the approved characters idle at res
   await expect(body("robot")).toHaveCSS("animation-name", "harness-tap");
   await expect(body("comet")).toHaveCSS("animation-name", "harness-comet");
   await expect(body("jet")).toHaveCSS("animation-name", "harness-boost");
-  await expect(footer(page).getByRole("button", { name: "Harness usage: 3 working" })).toBeVisible();
   state.dock.harnesses = harnesses({ codex: { limited_until: inHours(1) } });
   await refresh(page);
   await expect(footer(page).getByRole("button", { name: "Codex, limited; show usage" })).toBeVisible();
@@ -135,44 +148,50 @@ test("zero, unavailable, checking, warning and limited readings stay distinct", 
   const state = { dock: { personas: [], harnesses: harnesses({ claude: { windows: [{ id: "s", kind: "session" as const, label: "Session", used_percent: 0 }], usage_checking: true }, codex: { usage_available: false, usage_checking: true, windows: [] } }) } };
   await installFooter(page, state);
   await page.goto("/board?project=WEB");
+  const claude = bubble(page, "Claude").locator('[data-harness="claude-code"].harness-usage-row');
+  const codex = bubble(page, "Codex").locator('[data-harness="codex"].harness-usage-row');
   await footer(page).getByRole("button", { name: /Claude, working/ }).click();
-  const claude = drawer(page).locator('[data-harness="claude-code"].harness-usage-row');
-  const codex = drawer(page).locator('[data-harness="codex"].harness-usage-row');
   await expect(claude).toContainText("0%");
   await expect(claude.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+  await footer(page).getByRole("button", { name: /Codex, working/ }).click();
   await expect(codex).toContainText("Checking usage…");
   await expect(codex.getByRole("progressbar")).toHaveCount(0);
   await expect(codex.locator(".harness-usage-track")).toHaveAttribute("data-unavailable", "true");
   state.dock.harnesses = harnesses({ claude: { usage_checking: true, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] }, codex: { limited_until: inHours(1) } });
   await refresh(page);
-  await expect(claude).toContainText("86%");
-  await expect(claude).toHaveAttribute("data-tone", "warn");
   await expect(codex).toHaveAttribute("data-tone", "limited");
   await expect(codex).toContainText("100%");
   await expect(codex).toContainText(/Limited until .*falls back to Claude/);
+  await footer(page).getByRole("button", { name: /Claude, working/ }).click();
+  await expect(claude).toContainText("86%");
+  await expect(claude).toHaveAttribute("data-tone", "warn");
 });
 
-test("the collapsed rail keeps the footer and opens a drawer inside the viewport", async ({ page }) => {
+test("the collapsed rail keeps the footer and opens the bubble to the right, inside the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 650 });
   await installFooter(page, { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } }, false);
   await page.goto("/board?project=WEB");
   await expect(footer(page)).toHaveAttribute("data-rail", "true");
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
-  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "30px");
-  await footer(page).getByRole("button", { name: /Antigravity, idle/ }).click();
-  await expect(drawer(page)).toBeVisible();
-  await expect(drawer(page).locator('[data-harness="antigravity"].harness-usage-row').getByRole("progressbar")).toHaveCount(0);
-  await expect.poll(async () => (await drawer(page).boundingBox())!.x).toBeGreaterThanOrEqual(50);
-  const bounds = await drawer(page).boundingBox();
-  expect(bounds!.y).toBeGreaterThanOrEqual(11);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(639);
+  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "24px");
+  const trigger = footer(page).getByRole("button", { name: /Antigravity, idle/ });
+  await trigger.click();
+  const agy = bubble(page, "Antigravity");
+  await expect(agy).toBeVisible();
+  await expect(agy.getByRole("progressbar")).toHaveCount(0);
+  const at = (await trigger.boundingBox())!;
+  await expect.poll(async () => (await agy.boundingBox())!.x).toBeGreaterThanOrEqual(at.x + at.width);
+  const bounds = (await agy.boundingBox())!;
+  expect(bounds.x - (at.x + at.width)).toBeLessThan(20);
+  expect(bounds.y).toBeGreaterThanOrEqual(7);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(643);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Expand menu", exact: true }).click();
   await expect(footer(page)).toHaveAttribute("data-rail", "false");
-  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "44px");
+  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "35px");
 });
 
-test("reduced motion holds all three characters still and opens the drawer without animation", async ({ page }) => {
+test("reduced motion holds all three characters still and opens the bubble without animation", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installFooter(page, { dock: { personas: [], harnesses: harnesses({ agy: { running: 1 } }) } });
   await page.goto("/board?project=WEB");
@@ -182,7 +201,7 @@ test("reduced motion holds all three characters still and opens the drawer witho
   expect(animations.length).toBeGreaterThan(0);
   expect(new Set(animations)).toEqual(new Set(["none"]));
   await footer(page).getByRole("button", { name: /Antigravity, working/ }).click();
-  await expect(drawer(page)).toHaveCSS("animation-name", "none");
+  await expect(bubble(page, "Antigravity")).toHaveCSS("animation-name", "none");
 });
 
 for (const [width, showHarnessActivity] of [[1280, true], [1280, false], [390, false]] as const) {
