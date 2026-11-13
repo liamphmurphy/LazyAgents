@@ -30,8 +30,16 @@ const simple = () => ({
   ],
 });
 
-async function install(page: Page, designs: Record<string, object>) {
+/** `dock: "default"` leaves the dock as a first visit finds it (collapsed); otherwise the chat dock starts open, as most tests expect. */
+async function install(page: Page, designs: Record<string, object>, opts: { dock?: "open" | "default" } = {}) {
   await installChatApi(page, { replyDelayMs: 10 });
+  if (opts.dock !== "default")
+    await page.addInitScript(() => {
+      // Once per tab, so a test that collapses the dock and reloads still finds it collapsed.
+      if (sessionStorage.getItem("dock-seeded")) return;
+      sessionStorage.setItem("dock-seeded", "1");
+      localStorage.setItem("lazyagents.editor-dock.designs", JSON.stringify({ open: true, tab: "chat" }));
+    });
   await page.goto("/apps/designs");
   const chatId = (await page.evaluate(() => fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).then((r) => r.json()))).id as string;
   const s = {
@@ -576,9 +584,9 @@ test("diagram tools: connect two nodes, add a sticky, and draw a section that ta
 });
 
 // ---- The shared editor layout (LAZYAGENTS-157).
-test("a design opens in the shared layout: slim header, Pages and layers, and a dock that collapses and reopens", async ({ page }) => {
+test("a design opens in the shared layout: slim header, Pages and layers, and a chat dock that starts collapsed", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await install(page, { [D1]: acceptance });
+  await install(page, { [D1]: acceptance }, { dock: "default" });
   const settings: unknown[] = [];
   await page.route(/\/api\/v1\/designs\/[^/]+\/settings$/, async (route) => {
     settings.push(route.request().postDataJSON());
@@ -602,8 +610,13 @@ test("a design opens in the shared layout: slim header, Pages and layers, and a 
   await expect(page.getByRole("toolbar", { name: "Tools" }).getByRole("button", { name: /Ask/ })).toHaveCount(0);
 
   // Three panels: Pages and layers, the canvas, the dock (Chat · Design; Review only with suggestions).
+  // A first visit finds the dock collapsed to its rail, with the persona's Chat one click away.
   await expect(page.getByRole("navigation", { name: "Pages and layers" })).toBeVisible();
   await expect(canvas(page)).toBeVisible();
+  await expect(dock).toHaveCount(0);
+  await expect(rail).toBeVisible();
+  await rail.getByRole("button", { name: /^Open Chat/ }).click();
+  await expect(dock).toBeVisible();
   await expect(tab("Chat")).toBeVisible();
   await expect(tab("Design")).toBeVisible();
   await expect(tab("Review")).toHaveCount(0);
