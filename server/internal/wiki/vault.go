@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -34,11 +35,43 @@ func Export(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer) er
 		if err != nil {
 			return err
 		}
-		fm := fmt.Sprintf("---\nlazyagents_id: %s\ncreated: %s\nupdated: %s\n", r.ID, r.CreatedAt.Format(time.RFC3339), r.UpdatedAt.Format(time.RFC3339))
-		if r.ProjectKey != nil {
-			fm += "project: " + *r.ProjectKey + "\n"
+		props := artifacts.DecodeProperties(r.Properties)
+		fm := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		add := func(k string, v any) error {
+			var n yaml.Node
+			if err := n.Encode(v); err != nil {
+				return err
+			}
+			fm.Content = append(fm.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k}, &n)
+			return nil
 		}
-		if _, err := io.WriteString(f, fm+"---\n\n"+*r.BodyMd); err != nil {
+		for _, kv := range [][2]string{{"vesper_id", r.ID.String()}, {"created", r.CreatedAt.Format(time.RFC3339)}, {"updated", r.UpdatedAt.Format(time.RFC3339)}, {"title", r.Title}} {
+			if err := add(kv[0], kv[1]); err != nil {
+				return err
+			}
+		}
+		if r.ProjectKey != nil {
+			if err := add("project", *r.ProjectKey); err != nil {
+				return err
+			}
+		}
+		keys := []string{}
+		for k := range props {
+			if !reservedFrontmatter(k) {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if err := add(k, props[k]); err != nil {
+				return err
+			}
+		}
+		b, err := yaml.Marshal(fm)
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(f, "---\n"+string(b)+"---\n\n"+*r.BodyMd); err != nil {
 			return err
 		}
 	}
@@ -56,7 +89,7 @@ type ImportResult struct {
 const maxVaultBytes = 50 << 20
 
 // Import reads a vault zip: each .md file becomes (or replaces) the note at
-// its path. Frontmatter is dropped except `project`, used for new pages.
+// its path. Frontmatter is stored with the body on the published version.
 // Everything is one transaction, so a bad file leaves the wiki untouched.
 func (s *Service) Import(ctx context.Context, ws, userID uuid.UUID, data []byte) (ImportResult, error) {
 	res := ImportResult{Skipped: []string{}}
@@ -67,7 +100,7 @@ func (s *Service) Import(ctx context.Context, ws, userID uuid.UUID, data []byte)
 	if err != nil {
 		return res, apperr.Invalid("file", "isn't a zip file")
 	}
-	err = s.tx(ctx, func(q *store.Queries) error {
+	err = s.tx(ctx, ws, func(q *store.Queries) error {
 		for _, f := range z.File {
 			name := strings.ReplaceAll(f.Name, "\\", "/")
 			base := path.Base(name)
@@ -90,13 +123,27 @@ func (s *Service) Import(ctx context.Context, ws, userID uuid.UUID, data []byte)
 			if err != nil {
 				return err
 			}
-			body, props := splitFrontmatter(string(b))
+			body, props, err := splitFrontmatter(string(b))
+			if err != nil {
+				return apperr.Invalid("file", "%s: invalid frontmatter: %v", name, err)
+			}
+			project, _ := props["project"].(string)
+			title, _ := props["title"].(string)
+			var displayTitle *string
+			if title != "" {
+				displayTitle = &title
+			}
+			for k := range props {
+				if reservedFrontmatter(k) {
+					delete(props, k)
+				}
+			}
 			if strings.TrimSpace(body) == "" {
 				res.Skipped = append(res.Skipped, name)
 				continue
 			}
 			p := strings.TrimSuffix(name, path.Ext(name))
-			r, err := s.write(ctx, q, ws, artifacts.Actor{Type: "user", ID: userID}, Save{Path: p, Body: body, ProjectKey: props["project"], Note: "Imported"}, artifacts.Published)
+			r, err := s.write(ctx, q, ws, artifacts.Actor{Type: "user", ID: userID}, Save{Path: p, Body: body, Title: displayTitle, Properties: props, ProjectKey: project, Note: "Imported"}, artifacts.Published)
 			if err != nil {
 				var ve *apperr.ValidationError
 				if asValidation(err, &ve) {
@@ -118,25 +165,66 @@ func (s *Service) Import(ctx context.Context, ws, userID uuid.UUID, data []byte)
 	return res, err
 }
 
-// splitFrontmatter strips a leading YAML block and returns its simple
-// key: value pairs.
-func splitFrontmatter(md string) (string, map[string]string) {
-	props := map[string]string{}
+func reservedFrontmatter(k string) bool { return artifacts.ReservedProperty(k) }
+
+// YAML's timestamps stay strings; unknown nested maps are retained as YAML
+// text rather than being silently dropped. Malformed frontmatter aborts the
+// transaction, like any other validation error.
+func splitFrontmatter(md string) (string, artifacts.Properties, error) {
+	props := artifacts.Properties{}
 	md = strings.TrimPrefix(strings.ReplaceAll(md, "\r\n", "\n"), "\ufeff")
 	if !strings.HasPrefix(md, "---\n") {
-		return md, props
+		return md, props, nil
 	}
-	end := strings.Index(md[4:], "\n---")
+	lines := strings.SplitAfter(md[4:], "\n")
+	offset := 4
+	end := -1
+	for _, line := range lines {
+		if strings.TrimRight(line, " \t\r\n") == "---" {
+			end = offset
+			offset += len(line)
+			break
+		}
+		offset += len(line)
+	}
 	if end < 0 {
-		return md, props
+		return "", nil, apperr.Invalid("properties", "unclosed YAML block")
 	}
-	for _, line := range strings.Split(md[4:4+end], "\n") {
-		if k, v, ok := strings.Cut(line, ":"); ok {
-			props[strings.TrimSpace(k)] = strings.Trim(strings.TrimSpace(v), `"'`)
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(md[4:end]), &doc); err != nil {
+		return "", nil, err
+	}
+	if len(doc.Content) > 0 {
+		root := doc.Content[0]
+		if root.Kind != yaml.MappingNode {
+			return "", nil, apperr.Invalid("properties", "must be a mapping")
+		}
+		seen := map[string]bool{}
+		for i := 0; i < len(root.Content); i += 2 {
+			key, n := root.Content[i], root.Content[i+1]
+			if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || seen[key.Value] {
+				return "", nil, apperr.Invalid("properties", "keys must be unique strings")
+			}
+			seen[key.Value] = true
+			var val any
+			switch {
+			case n.Kind == yaml.MappingNode:
+				raw, err := yaml.Marshal(n)
+				if err != nil {
+					return "", nil, err
+				}
+				val = string(raw)
+			case n.Tag == "!!timestamp":
+				val = n.Value
+			default:
+				if err := n.Decode(&val); err != nil {
+					return "", nil, err
+				}
+			}
+			props[key.Value] = val
 		}
 	}
-	rest := md[4+end+4:]
-	return strings.TrimLeft(rest, "\n"), props
+	return strings.TrimPrefix(md[offset:], "\n"), props, nil
 }
 
 func asValidation(err error, target **apperr.ValidationError) bool { return errors.As(err, target) }

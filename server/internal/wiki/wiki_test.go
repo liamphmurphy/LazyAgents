@@ -376,7 +376,7 @@ func TestGraphSearchVault(t *testing.T) {
 		t.Fatalf("autocomplete: %+v %v", ac, err)
 	}
 
-	notes, _ := e.q.ListNotes(e.ctx, e.ws)
+	notes, _ := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws})
 	var buf bytes.Buffer
 	if err := wiki.Export(e.ctx, e.q, e.ws, &buf); err != nil {
 		t.Fatal(err)
