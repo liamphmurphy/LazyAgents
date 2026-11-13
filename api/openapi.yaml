@@ -1703,6 +1703,69 @@ paths:
               schema: { $ref: "#/components/schemas/Artifact" }
         default: { $ref: "#/components/responses/Error" }
 
+  /wiki/pages/{id}/attachments:
+    parameters:
+      - $ref: "#/components/parameters/ArtifactId"
+    get:
+      operationId: listPageAttachments
+      summary: The files attached to a page
+      tags: [wiki]
+      responses:
+        "200":
+          description: Attachments by name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attachments]
+                properties:
+                  attachments: { type: array, items: { $ref: "#/components/schemas/PageAttachment" } }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: uploadPageAttachment
+      summary: Attach an image, PDF, audio or video file to a page
+      description: |
+        At most 50 MB. Stored by content hash, so an identical file is stored
+        once. Uploading a file with the name of one already on the page
+        replaces it (an identical one is returned unchanged). Embed it with
+        ![[name]]; an attachment no page embeds is removed after an hour.
+      tags: [wiki]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: The stored attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageAttachment" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /wiki/attachments/{attachmentId}/content:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getPageAttachmentContent
+      summary: An attachment's bytes (404 unless you can see its page)
+      tags: [wiki]
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /wiki/suggestions:
     get:
       operationId: listWikiSuggestions
@@ -1800,6 +1863,32 @@ paths:
                 required: [links]
                 properties:
                   links: { type: array, items: { $ref: "#/components/schemas/ResolvedLink" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /knowledge/embeds:
+    get:
+      operationId: resolveEmbeds
+      summary: Resolve ![[embed]] texts to their content (for rendering in place)
+      tags: [knowledge]
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          description: Embed texts as written inside ![[…]], without the brackets
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string }, maxItems: 100 }
+        - { name: from, in: query, description: "The page they're written on, for ![[#Heading]] and its own attachments", schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: One entry per distinct ref
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [embeds]
+                properties:
+                  embeds: { type: array, items: { $ref: "#/components/schemas/Embed" } }
         default: { $ref: "#/components/responses/Error" }
 
   /knowledge/suggest:
@@ -7515,7 +7604,7 @@ components:
       required: [kind, title]
       description: What a [[link]] points at, with enough to render it
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, run, workflow, persona, memory, library, unresolved], description: "chat, run, workflow, persona, memory and library only appear in GET /search hits" }
+        kind: { type: string, enum: [artifact, section, block, ticket, epic, agent, attachment, design, comment, chat, run, workflow, persona, memory, library, unresolved], description: "chat, run, workflow, persona and memory only appear in GET /search hits; block is a [[Page#^id]] link (its anchor starts with ^); attachment, design (anchor = frame node id) and library come from embeds" }
         id: { type: string, format: uuid }
         anchor: { type: string }
         title: { type: string }
@@ -7525,6 +7614,33 @@ components:
         href: { type: string }
         status: { type: string }
         color_index: { type: integer }
+        content_type: { type: string, description: Attachments and Library items }
+    Embed:
+      type: object
+      required: [ref, target, available]
+      description: |
+        One ![[…]] resolved for the caller. A page, heading or block comes as
+        markdown; a file, Design frame or Library item as a URL to its bytes.
+        An embed the caller can't see answers exactly as a missing one.
+      properties:
+        ref: { type: string, description: "The text inside ![[…]]" }
+        target: { $ref: "#/components/schemas/LinkTarget" }
+        available: { type: boolean }
+        markdown: { type: string }
+        content_url: { type: string }
+        content_type: { type: string }
+    PageAttachment:
+      type: object
+      required: [id, page_id, name, content_type, size_bytes, sha256, href, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        page_id: { type: string, format: uuid }
+        name: { type: string, description: "Embed it with ![[name]]" }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+        href: { type: string }
+        created_at: { type: string, format: date-time }
     ResolvedLink:
       type: object
       required: [ref, target]

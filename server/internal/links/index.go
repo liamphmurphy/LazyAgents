@@ -33,13 +33,17 @@ func Index(ctx context.Context, q *store.Queries, ws uuid.UUID, src Source, md s
 		if r.Target == "" {
 			continue // [[#Heading]]: a link within the same page
 		}
-		t, err := Resolve(ctx, q, ws, r.Target, r.Anchor)
+		var from *uuid.UUID
+		if src.Kind == SourceArtifact {
+			from = &src.ID
+		}
+		t, err := ResolveFrom(ctx, q, ws, from, r.Target, r.Anchor)
 		if err != nil {
 			return err
 		}
 		anchor := t.Anchor
 		if t.Kind == KindUnresolved && r.Anchor != "" {
-			anchor = Slug(r.Anchor) // kept so the link becomes a section link once resolved
+			anchor = AnchorKey(r.Anchor) // kept so the link becomes a section or block link once resolved
 		}
 		if err := q.InsertLink(ctx, store.InsertLinkParams{
 			WorkspaceID: ws, SourceKind: src.Kind, SourceID: src.ID, SourceVersionID: src.VersionID, SourceTicketID: src.TicketID,

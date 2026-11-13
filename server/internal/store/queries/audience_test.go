@@ -16,6 +16,13 @@ var audienceExceptions = map[string]string{
 	"DeletePropertyAliases": "publish bookkeeping for this visible locked page by artifact id",
 	"AddPropertyAlias":      "publish bookkeeping after visible path and alias collision checks; conflict scoped to artifact id",
 
+	"PageBlobInUse":              "content-hash dedup under the blob lock; returns only a boolean",
+	"GetPageAttachmentByName":    "upload replaces a name on a page already found visible and locked",
+	"InsertPageAttachment":       "insert after a visible page lookup",
+	"DeletePageAttachment":       "delete after a visible page lookup",
+	"SweepUnusedPageAttachments": "system sweep; returns ids only",
+	"TakeDeckBlobSweep":          "system blob sweep; returns only whether a key is unused",
+
 	"CreateArtifact":              "insert only; audience is chosen by trusted service code",
 	"NextADRNumber":               "number allocation, not a page reader; ADRs are shared",
 	"ADRNumberTaken":              "number allocation; no private note data",
@@ -47,7 +54,7 @@ var audienceExceptions = map[string]string{
 	"ListArtifactUnlinkedReaders": "REST handler checks artifact visibility first",
 }
 var namedQuery = regexp.MustCompile(`(?m)^-- name: (\w+) :\w+`)
-var pageTable = regexp.MustCompile(`(?i)\b(artifacts|knowledge_links|artifact_sections|artifact_aliases|artifact_versions|page_tags|page_aliases)\b`)
+var pageTable = regexp.MustCompile(`(?i)\b(artifacts|knowledge_links|artifact_sections|artifact_aliases|artifact_versions|page_tags|page_aliases|page_attachments)\b`)
 var sqlComment = regexp.MustCompile(`(?m)--[^\n]*`)
 
 func guarded(name, sql string) bool {

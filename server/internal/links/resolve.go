@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +21,10 @@ import (
 const (
 	KindArtifact   = "artifact"
 	KindSection    = "section"
+	KindBlock      = "block" // a paragraph or list item marked "^id"; Anchor is "^id"
+	KindAttachment = "attachment"
+	KindDesign     = "design"  // a Designs canvas; Anchor is a frame's node id
+	KindLibrary    = "library" // a Library item
 	KindTicket     = "ticket"
 	KindEpic       = "epic"
 	KindAgent      = "agent"
@@ -38,6 +43,23 @@ type Target struct {
 	Href         string     `json:"href,omitempty"`
 	Status       string     `json:"status,omitempty"`      // tickets
 	ColorIndex   int        `json:"color_index,omitempty"` // agents
+	ContentType  string     `json:"content_type,omitempty"` // attachments and Library items
+}
+
+// IsPageKind reports whether a target kind is an artifact or a part of one.
+func IsPageKind(kind string) bool {
+	return kind == KindArtifact || kind == KindSection || kind == KindBlock
+}
+
+// AnchorKey is how an anchor is stored: "^id" for a block, else the heading slug.
+func AnchorKey(anchor string) string {
+	if anchor = strings.TrimSpace(anchor); anchor == "" {
+		return ""
+	}
+	if id, ok := BlockID(anchor); ok {
+		return "^" + id
+	}
+	return Slug(anchor)
 }
 
 var (
@@ -68,10 +90,46 @@ func ArtifactTarget(a store.Artifact, anchor string) Target {
 	}
 	if anchor != "" {
 		t.Kind = KindSection
+		if strings.HasPrefix(anchor, "^") {
+			t.Kind = KindBlock
+		}
 		t.Anchor = anchor
 		t.Href += "#" + anchor
 	}
 	return t
+}
+
+// AttachmentHref is where an attachment's bytes are served.
+func AttachmentHref(id uuid.UUID) string { return "/api/v1/wiki/attachments/" + id.String() + "/content" }
+
+func AttachmentTarget(a store.PageAttachment) Target {
+	return Target{Kind: KindAttachment, ID: &a.ID, Title: a.Name, ContentType: a.ContentType, Href: AttachmentHref(a.ID)}
+}
+
+func DesignTarget(id uuid.UUID, title, node string) Target {
+	t := Target{Kind: KindDesign, ID: &id, Title: title, Anchor: node, Href: "/apps/designs/" + id.String()}
+	if node != "" {
+		t.Href += "?node=" + url.QueryEscape(node)
+	}
+	return t
+}
+
+func LibraryTarget(l store.LibraryItem) Target {
+	return Target{Kind: KindLibrary, ID: &l.ID, Title: l.Title, ContentType: l.ContentType, Href: "/library?item=" + l.ID.String()}
+}
+
+// Embed prefixes for other apps: ![[design:<canvas id>#<node id>]] and
+// ![[library:<item id>]].
+const (
+	DesignPrefix  = "design:"
+	LibraryPrefix = "library:"
+)
+
+// IsFileName reports whether a link names a file (an attachment) rather than
+// a page: it has an extension other than ".md".
+func IsFileName(target string) bool {
+	ext := strings.ToLower(path.Ext(target))
+	return ext != "" && ext != ".md" && len(ext) <= 6 && !strings.ContainsAny(ext, " ")
 }
 
 func TicketTarget(t store.Ticket) Target {
@@ -97,14 +155,43 @@ func found(err error) (bool, error) {
 // key, note path, note title, another artifact's title, epic name, then a
 // renamed note's old path. Nothing found is an unresolved (ghost) target.
 func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor string) (Target, error) {
+	return ResolveFrom(ctx, q, ws, nil, target, anchor)
+}
+
+// ResolveFrom is Resolve for a link written on page from (nil elsewhere):
+// ![[file]] prefers that page's own attachment. Designs, Library items and
+// attachments resolve only for a viewer who may see them, as pages do.
+func ResolveFrom(ctx context.Context, q *store.Queries, ws uuid.UUID, from *uuid.UUID, target, anchor string) (Target, error) {
 	target = strings.TrimSpace(target)
-	slug := ""
-	if anchor = strings.TrimSpace(anchor); anchor != "" {
-		slug = Slug(anchor)
-	}
+	slug := AnchorKey(anchor)
+	anchor = strings.TrimSpace(anchor)
 	ghost := Target{Kind: KindUnresolved, Title: target}
 	if target == "" {
 		return ghost, nil
+	}
+	viewer := pageview.From(ctx).UserID
+
+	if rest, ok := cutPrefixFold(target, DesignPrefix); ok {
+		id, err := uuid.Parse(strings.TrimSpace(rest))
+		if err != nil || viewer == nil {
+			return ghost, nil
+		}
+		cv, err := q.GetMyCanvas(ctx, store.GetMyCanvasParams{ID: id, WorkspaceID: ws, UserID: *viewer})
+		if ok, err := found(err); err != nil || !ok || cv.Kind != "design" {
+			return ghost, err
+		}
+		return DesignTarget(cv.ID, cv.Title, anchor), nil
+	}
+	if rest, ok := cutPrefixFold(target, LibraryPrefix); ok {
+		id, err := uuid.Parse(strings.TrimSpace(rest))
+		if err != nil || viewer == nil {
+			return ghost, nil
+		}
+		l, err := q.GetLibraryItem(ctx, store.GetLibraryItemParams{ID: id, WorkspaceID: ws, UserID: *viewer})
+		if ok, err := found(err); err != nil || !ok {
+			return ghost, err
+		}
+		return LibraryTarget(l), nil
 	}
 
 	if h, ok := strings.CutPrefix(target, "@"); ok {
@@ -154,7 +241,20 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor
 	if ok, err := found(err); err != nil || ok {
 		return ArtifactTarget(a, slug), err
 	}
+	if IsFileName(target) {
+		pa, err := q.FindVisiblePageAttachment(ctx, store.FindVisiblePageAttachmentParams{WorkspaceID: ws, Name: TitleOf(path), Viewer: viewer, FromPage: from})
+		if ok, err := found(err); err != nil || ok {
+			return AttachmentTarget(pa), err
+		}
+	}
 	return ghost, nil
+}
+
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return s[len(prefix):], true
+	}
+	return s, false
 }
 
 // NormalizePath trims each segment and drops empty ones and a ".md" suffix:

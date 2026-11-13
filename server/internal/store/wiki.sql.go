@@ -160,10 +160,10 @@ LEFT JOIN artifacts ar ON l.source_kind = 'artifact' AND ar.id = l.source_id
 LEFT JOIN tickets t ON t.id = l.source_ticket_id
 LEFT JOIN comments c ON l.source_kind = 'comment' AND c.id = l.source_id
 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(ar.audience, ar.owner_user_id, $1::uuid)))
-  AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid)))
+  AND (l.target_kind NOT IN ('artifact','section','block') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid)))
   AND l.workspace_id = $2
   AND l.target_id = $3
-  AND (l.target_kind = $4 OR ($4 = 'artifact' AND l.target_kind = 'section'))
+  AND (l.target_kind = $4 OR ($4 = 'artifact' AND l.target_kind IN ('section', 'block')))
 ORDER BY l.created_at DESC, l.position
 LIMIT 200
 `
@@ -240,7 +240,7 @@ func (q *Queries) Backlinks(ctx context.Context, arg BacklinksParams) ([]Backlin
 
 const countBacklinks = `-- name: CountBacklinks :one
 SELECT count(DISTINCT (source_kind, source_id))::int FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
-WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid))) AND target_id = $2 AND target_kind IN ('artifact', 'section')
+WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid))) AND target_id = $2 AND target_kind IN ('artifact', 'section', 'block')
 `
 
 type CountBacklinksParams struct {
@@ -622,7 +622,7 @@ SELECT s.id, s.title, s.path, s.body_md,
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»') END::text AS snippet,
   ((s.sim + s.fts + CASE WHEN s.exact THEN 0.5 ELSE 0 END) *
     (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
-                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid) AND ($2::boolean OR src.audience <> 'agent'))) AND l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $1::uuid) AND ($2::boolean OR src.audience <> 'agent'))) AND l.target_id = s.id AND l.target_kind IN ('artifact', 'section', 'block')))))::float8 AS score
 FROM scored s
 WHERE s.lq = '' OR s.exact OR s.sim >= 0.3
 ORDER BY score DESC, lower(split_part(s.path, '/', 2)), s.ltitle
@@ -727,12 +727,12 @@ const graphEdges = `-- name: GraphEdges :many
 SELECT DISTINCT
   CASE WHEN l.source_kind = 'artifact' THEN 'artifact' ELSE 'ticket' END::text AS source_kind,
   CASE WHEN l.source_kind = 'artifact' THEN l.source_id ELSE l.source_ticket_id END::uuid AS source_id,
-  CASE WHEN l.target_kind = 'section' THEN 'artifact' ELSE l.target_kind END::text AS target_kind,
+  CASE WHEN l.target_kind IN ('section', 'block') THEN 'artifact' ELSE l.target_kind END::text AS target_kind,
   l.target_id::uuid AS target_id
 FROM knowledge_links l
 WHERE (l.source_kind <> 'artifact' OR EXISTS (SELECT 1 FROM artifacts src WHERE src.id = l.source_id AND artifact_visible(src.audience, src.owner_user_id, $1::uuid) AND ($2::boolean OR src.audience <> 'agent')))
- AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid) AND ($2::boolean OR dst.audience <> 'agent')))
- AND l.workspace_id = $3 AND l.target_kind <> 'unresolved'
+ AND (l.target_kind NOT IN ('artifact','section','block') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, $1::uuid) AND ($2::boolean OR dst.audience <> 'agent')))
+ AND l.workspace_id = $3 AND l.target_kind NOT IN ('unresolved', 'attachment', 'design', 'library')
   AND (
     (CASE WHEN l.source_kind = 'artifact' THEN l.source_id ELSE l.source_ticket_id END) = ANY($4::uuid[])
     OR l.target_id = ANY($4::uuid[])
@@ -1554,10 +1554,11 @@ func (q *Queries) RelevantPatterns(ctx context.Context, arg RelevantPatternsPara
 
 const resolveLinks = `-- name: ResolveLinks :execrows
 UPDATE knowledge_links SET
-  target_kind = CASE WHEN target_anchor <> '' AND $2::text = 'artifact' THEN 'section' ELSE $2::text END,
+  target_kind = CASE WHEN target_anchor LIKE '^%' AND $2::text = 'artifact' THEN 'block'
+    WHEN target_anchor <> '' AND $2::text = 'artifact' THEN 'section' ELSE $2::text END,
   target_id = $3
 WHERE knowledge_links.workspace_id = $1 AND knowledge_links.target_kind = 'unresolved' AND lower(knowledge_links.target_text) = lower($4)
-  AND ($2::text NOT IN ('artifact', 'section') OR EXISTS (
+  AND ($2::text NOT IN ('artifact', 'section', 'block') OR EXISTS (
     SELECT 1 FROM artifacts dst WHERE dst.id = $3
       AND (dst.audience <> 'private' OR EXISTS (
         SELECT 1 FROM artifacts src WHERE knowledge_links.source_kind = 'artifact'
@@ -1593,7 +1594,7 @@ SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, 
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   (ts_rank(ar.search, websearch_to_tsquery('english', $1)) *
     (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
-                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $2::uuid) AND ($3::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $2::uuid) AND ($3::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section', 'block'))))
    + CASE WHEN $4::boolean THEN word_similarity(lower($1), lower(ar.title)) ELSE 0 END)::float8 AS score
 FROM artifacts ar
 WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $5 AND ar.current_version_id IS NOT NULL

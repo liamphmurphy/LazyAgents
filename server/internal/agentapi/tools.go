@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/links"
 	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
@@ -636,9 +637,15 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	body := *v.BodyMd
 	anchor := t.Anchor
 	if in.Section != "" {
-		anchor = artifacts.Slug(in.Section)
+		anchor = links.AnchorKey(in.Section)
 	}
-	if anchor != "" {
+	if id, isBlock := links.BlockID(anchor); isBlock {
+		b, ok := links.FindBlock(body, id)
+		if !ok {
+			return nil, apperr.Invalid("section", "no block ^%s; read the page without section to see it", id)
+		}
+		body = b.Text
+	} else if anchor != "" {
 		sec, ok := artifacts.SectionText(body, anchor)
 		if !ok {
 			return nil, apperr.Invalid("section", "no section %q; read the page without section to see its outline", anchor)
@@ -646,7 +653,11 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 		body = sec
 	}
 	runID := readRunID(ctx, d, c, in.Ticket)
-	if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, anchor, nil); err != nil {
+	readAnchor := anchor
+	if strings.HasPrefix(anchor, "^") {
+		readAnchor = "" // a block read cites the page
+	}
+	if err := artifacts.RecordRead(ctx, d.Q, a, c.Agent.ID, runID, readAnchor, nil); err != nil {
 		return nil, err
 	}
 	outline := []map[string]any{}
@@ -664,6 +675,29 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 		}
 	}
 	out := map[string]any{"title": a.Title, "type": a.Type, "version": v.Label, "markdown": body, "outline": outline, "links": linksOut}
+	// Embedded content, resolved for this caller: a run never gets a private
+	// page's text, which answers as "unavailable" like a missing page.
+	if refs := wiki.EmbedRefs(body); len(refs) > 0 {
+		es, err := wiki.ResolveEmbeds(ctx, d.Q, ws, &a.ID, refs)
+		if err != nil {
+			return nil, err
+		}
+		embeds := make([]map[string]any, len(es))
+		for i, e := range es {
+			m := map[string]any{"ref": "![[" + e.Ref + "]]", "available": e.Available}
+			if e.Available {
+				m["title"], m["kind"] = e.Target.Title, e.Target.Kind
+				if e.Markdown != "" {
+					m["markdown"] = e.Markdown
+				}
+				if e.ContentType != "" && e.Markdown == "" {
+					m["content_type"] = e.ContentType
+				}
+			}
+			embeds[i] = m
+		}
+		out["embeds"] = embeds
+	}
 	if a.Path != nil {
 		out["path"] = *a.Path
 	}

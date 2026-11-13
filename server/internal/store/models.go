@@ -899,6 +899,20 @@ type MetricSnapshot struct {
 	GeneratedAt time.Time
 }
 
+type PageAttachment struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	ArtifactID    uuid.UUID
+	Name          string
+	ContentType   string
+	SizeBytes     int64
+	Sha256        string
+	BlobKey       string
+	CreatedByType string
+	CreatedByID   uuid.UUID
+	CreatedAt     time.Time
+}
+
 type PageTag struct {
 	ArtifactID uuid.UUID
 	Tag        string

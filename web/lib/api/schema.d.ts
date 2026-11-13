@@ -1310,6 +1310,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wiki/pages/{id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        /** The files attached to a page */
+        get: operations["listPageAttachments"];
+        put?: never;
+        /**
+         * Attach an image, PDF, audio or video file to a page
+         * @description At most 50 MB. Stored by content hash, so an identical file is stored
+         *     once. Uploading a file with the name of one already on the page
+         *     replaces it (an identical one is returned unchanged). Embed it with
+         *     ![[name]]; an attachment no page embeds is removed after an hour.
+         */
+        post: operations["uploadPageAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/attachments/{attachmentId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /** An attachment's bytes (404 unless you can see its page) */
+        get: operations["getPageAttachmentContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wiki/suggestions": {
         parameters: {
             query?: never;
@@ -1390,6 +1435,23 @@ export interface paths {
         };
         /** Resolve [[link]] texts to what they point at (for rendering) */
         get: operations["resolveLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge/embeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve ![[embed]] texts to their content (for rendering in place) */
+        get: operations["resolveEmbeds"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6693,10 +6755,10 @@ export interface components {
         /** @description What a [[link]] points at, with enough to render it */
         LinkTarget: {
             /**
-             * @description chat, run, workflow, persona, memory and library only appear in GET /search hits
+             * @description chat, run, workflow, persona and memory only appear in GET /search hits; block is a [[Page#^id]] link (its anchor starts with ^); attachment, design (anchor = frame node id) and library come from embeds
              * @enum {string}
              */
-            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "run" | "workflow" | "persona" | "memory" | "library" | "unresolved";
+            kind: "artifact" | "section" | "block" | "ticket" | "epic" | "agent" | "attachment" | "design" | "comment" | "chat" | "run" | "workflow" | "persona" | "memory" | "library" | "unresolved";
             /** Format: uuid */
             id?: string;
             anchor?: string;
@@ -6707,6 +6769,37 @@ export interface components {
             href?: string;
             status?: string;
             color_index?: number;
+            /** @description Attachments and Library items */
+            content_type?: string;
+        };
+        /**
+         * @description One ![[…]] resolved for the caller. A page, heading or block comes as
+         *     markdown; a file, Design frame or Library item as a URL to its bytes.
+         *     An embed the caller can't see answers exactly as a missing one.
+         */
+        Embed: {
+            /** @description The text inside ![[…]] */
+            ref: string;
+            target: components["schemas"]["LinkTarget"];
+            available: boolean;
+            markdown?: string;
+            content_url?: string;
+            content_type?: string;
+        };
+        PageAttachment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            page_id: string;
+            /** @description Embed it with ![[name]] */
+            name: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            sha256: string;
+            href: string;
+            /** Format: date-time */
+            created_at: string;
         };
         ResolvedLink: {
             ref: string;
@@ -11133,6 +11226,88 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listPageAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachments by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        attachments: components["schemas"]["PageAttachment"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadPageAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ArtifactId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The stored attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageAttachment"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPageAttachmentContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     listWikiSuggestions: {
         parameters: {
             query?: {
@@ -11249,6 +11424,34 @@ export interface operations {
                 content: {
                     "application/json": {
                         links: components["schemas"]["ResolvedLink"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resolveEmbeds: {
+        parameters: {
+            query: {
+                /** @description Embed texts as written inside ![[…]], without the brackets */
+                ref: string[];
+                /** @description The page they're written on, for ![[#Heading]] and its own attachments */
+                from?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per distinct ref */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        embeds: components["schemas"]["Embed"][];
                     };
                 };
             };

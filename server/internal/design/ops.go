@@ -327,6 +327,17 @@ func find(d Doc, id string) (loc, bool) {
 	return out, found
 }
 
+// FindNode returns a node (a frame, component or any other node) of a design
+// body by id, for embedding it elsewhere.
+func FindNode(body, id string) (map[string]any, bool) {
+	d, err := Parse(body)
+	if err != nil {
+		return nil, false
+	}
+	l, ok := find(d, id)
+	return l.n, ok
+}
+
 func findPage(d Doc, id string) (int, map[string]any, bool) {
 	for i, p := range pages(d) {
 		if p["id"] == id {

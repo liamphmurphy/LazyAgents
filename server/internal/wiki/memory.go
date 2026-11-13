@@ -98,7 +98,7 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 			return nil, err
 		}
 		for _, l := range out {
-			if l.TargetID != nil && (l.TargetKind == links.KindArtifact || l.TargetKind == links.KindSection) {
+			if l.TargetID != nil && links.IsPageKind(l.TargetKind) {
 				if a, ok := note(*l.TargetID); ok {
 					add(a, "Linked from "+ticket.Key)
 				}
@@ -116,7 +116,7 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 				return nil, err
 			}
 			for _, l := range ls {
-				if l.TargetID != nil && (l.TargetKind == links.KindArtifact || l.TargetKind == links.KindSection) {
+				if l.TargetID != nil && links.IsPageKind(l.TargetKind) {
 					if a, ok := note(*l.TargetID); ok {
 						add(a, "Linked from "+titles[aid])
 					}

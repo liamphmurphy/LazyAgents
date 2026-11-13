@@ -58,7 +58,7 @@ func Backlinks(ctx context.Context, q *store.Queries, ws uuid.UUID, ref Ref) ([]
 		if len(m.Snippets) < 3 && !contains(m.Snippets, r.Snippet) {
 			m.Snippets = append(m.Snippets, r.Snippet)
 		}
-		if r.TargetKind == links.KindSection && r.TargetAnchor != "" && !contains(m.Anchors, r.TargetAnchor) {
+		if (r.TargetKind == links.KindSection || r.TargetKind == links.KindBlock) && r.TargetAnchor != "" && !contains(m.Anchors, r.TargetAnchor) {
 			m.Anchors = append(m.Anchors, r.TargetAnchor)
 		}
 	}
@@ -311,7 +311,7 @@ func LookupRef(ctx context.Context, q *store.Queries, ws uuid.UUID, s string) (R
 		} else if err != nil {
 			return Ref{}, links.Target{}, err
 		}
-		return Ref{Kind: links.KindArtifact, ID: id}, links.ArtifactTarget(a, sectionSlug(r.Anchor)), nil
+		return Ref{Kind: links.KindArtifact, ID: id}, links.ArtifactTarget(a, links.AnchorKey(r.Anchor)), nil
 	}
 	t, err := links.Resolve(ctx, q, ws, r.Target, r.Anchor)
 	if err != nil {
@@ -321,7 +321,7 @@ func LookupRef(ctx context.Context, q *store.Queries, ws uuid.UUID, s string) (R
 		return Ref{}, t, apperr.ErrNotFound
 	}
 	kind := t.Kind
-	if kind == links.KindSection {
+	if links.IsPageKind(kind) {
 		kind = links.KindArtifact
 	}
 	return Ref{Kind: kind, ID: *t.ID}, t, nil

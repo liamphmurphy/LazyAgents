@@ -47,10 +47,11 @@ SELECT pg_advisory_xact_lock(hashtextextended('deck-blob:' || @blob_key::text, 0
 SELECT blob_key FROM deck_blob_sweep WHERE queued_at < @before ORDER BY queued_at, blob_key LIMIT @row_limit;
 
 -- name: TakeDeckBlobSweep :one
--- Dequeues a key that's still due, saying whether any deck or design still uses it.
+-- Dequeues a key that's still due, saying whether any deck, design or page attachment still uses it.
 DELETE FROM deck_blob_sweep s WHERE s.blob_key = @blob_key AND s.queued_at < @before
 RETURNING (NOT EXISTS (SELECT 1 FROM deck_assets a WHERE a.blob_key = s.blob_key)
-  AND NOT EXISTS (SELECT 1 FROM design_assets a WHERE a.blob_key = s.blob_key))::boolean AS unused;
+  AND NOT EXISTS (SELECT 1 FROM design_assets a WHERE a.blob_key = s.blob_key)
+  AND NOT EXISTS (SELECT 1 FROM page_attachments a WHERE a.blob_key = s.blob_key))::boolean AS unused;
 
 -- name: RequeueDeckBlobSweep :exec
 -- Sends a key whose blob couldn't be deleted to the back of the queue.

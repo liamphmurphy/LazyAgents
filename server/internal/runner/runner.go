@@ -32,6 +32,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/slides"
 	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
 
@@ -670,11 +671,16 @@ func (r *Runner) sweepChatVideos(ctx context.Context) {
 	}
 }
 
-// sweepDeckBlobs deletes a batch of Slides image blobs no deck uses any more
-// (slides.SweepBlobs). A failed delete is logged and retried by a later sweep.
+// sweepDeckBlobs releases page attachments nothing embeds (wiki.SweepAttachments),
+// then deletes a batch of image and attachment blobs no deck, design or page
+// uses any more (slides.SweepBlobs). A failed delete is logged and retried by
+// a later sweep.
 func (r *Runner) sweepDeckBlobs(ctx context.Context) {
 	if r.Attachments == nil {
 		return
+	}
+	if _, err := wiki.SweepAttachments(ctx, store.New(r.Pool), time.Now().Add(-wiki.AttachmentSweepDelay), 100); err != nil {
+		r.Log.Warn("sweep page attachments", "err", err)
 	}
 	if _, err := slides.SweepBlobs(ctx, r.Pool, r.Attachments, r.Cfg.AttachmentBucket, time.Now().Add(-slides.BlobSweepDelay), 100); err != nil {
 		r.Log.Warn("sweep deck blobs", "err", err)
