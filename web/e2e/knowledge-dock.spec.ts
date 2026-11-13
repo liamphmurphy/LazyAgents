@@ -6,12 +6,15 @@ test.use({ viewport: { width: 1440, height: 900 } });
 
 const P = "55555555-5555-4555-8555-555555555555";
 const Q = "66666666-6666-4666-8666-666666666666";
+const F1 = "88888888-8888-4888-8888-888888888881";
+const F2 = "88888888-8888-4888-8888-888888888882";
 const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
 
 async function install(page: Page, options: MockOptions = {}) {
   const chat = await installChatApi(page, { replyDelayMs: 10, ...options });
   const s = { attached: [] as string[], page: { id: P, title: "Reading list", path: "Reading list", audience: "private", body_md: "Notes", version_id: "v1", seq: 1, properties: {}, direct: false, paused: false, chat_id: null as string | null, url: `/knowledge/${P}`, embeds: [], reviews: [], versions: [] } };
-  const pages = [s.page, { ...s.page, id: Q, title: "Other notes", path: "Other notes", body_md: "Second page", url: `/knowledge/${Q}` }];
+  const pages = [s.page, { ...s.page, id: Q, title: "Other notes", path: "Other notes", body_md: "Second page", url: `/knowledge/${Q}` },
+    { ...s.page, id: F1, title: "Dawn", path: "Campaign/Sessions/Dawn", url: `/knowledge/${F1}` }, { ...s.page, id: F2, title: "Harbour", path: "Campaign/Harbour", url: `/knowledge/${F2}` }];
   await page.route(/\/api\/v1\/knowledge\//, (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace("/api/v1/knowledge", "");
@@ -264,4 +267,36 @@ test("switching persona keeps the draft and page context inside Knowledge", asyn
   await input.press("Enter");
   await expect.poll(() => s.chat.posted.length).toBe(1);
   expect(s.chat.posted[0].body.context_refs).toEqual([{ kind: "page", id: P }]);
+});
+
+test("off a page, messages say which Knowledge screen the person is on", async ({ page }) => {
+  const s = await install(page);
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
+  await expect(dock(page).getByText("On: Home", { exact: true })).toBeVisible();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await input.fill("Tidy my notes");
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  expect(s.chat.posted[0].body.body).toBe("Tidy my notes\n\n<!-- vesper:knowledge-context -->\nOn the Knowledge Home screen, not viewing a page.");
+});
+
+test("Ask a Persona on a folder attaches its path and pages", async ({ page }) => {
+  const s = await install(page);
+  await page.goto("/knowledge");
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  await explorer.getByRole("button", { name: "Campaign", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Ask a Persona", exact: true }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await expect(input).toBeFocused();
+  await expect(dock(page).getByRole("button", { name: "Remove folder Campaign" })).toBeVisible();
+  expect(s.chat.posted).toHaveLength(0);
+  await input.fill("Move these into Archive");
+  await input.press("Enter");
+  await expect.poll(() => s.chat.posted.length).toBe(1);
+  const body = s.chat.posted[0].body.body;
+  expect(body).toContain("Attached folder Campaign/ (2 pages):\n- [[Campaign/Sessions/Dawn]]\n- [[Campaign/Harbour]]");
+  expect(s.chat.posted[0].body.context_refs ?? []).toEqual([]);
+  await expect(dock(page).getByRole("button", { name: "Remove folder Campaign" })).toHaveCount(0);
 });

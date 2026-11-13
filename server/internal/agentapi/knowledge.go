@@ -45,6 +45,43 @@ type NewPageIn struct {
 	Suggest    bool                 `json:"suggest,omitempty"`
 }
 
+type MovePageIn struct {
+	Ref string `json:"ref" jsonschema:"The page to move: its id, title, path or [[link]]"`
+	To  string `json:"to" jsonschema:"Its new path, folders and name, e.g. Projects/Harbour. Keep the name to only change its folder; keep the folder to only rename it."`
+}
+type MoveFolderIn struct {
+	From string `json:"from" jsonschema:"The folder to move, e.g. Campaign/Sessions"`
+	To   string `json:"to" jsonschema:"Its new path, e.g. Archive/Sessions. Every page under it keeps its place inside."`
+}
+
+func movePage(ctx context.Context, d Deps, c agents.Caller, in MovePageIn) (any, error) {
+	scope, err := personChatScope(ctx, d, c, "move_page")
+	if err != nil {
+		return nil, err
+	}
+	a, _, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
+	if err != nil {
+		return nil, err
+	}
+	moved, err := d.Wiki.MovePageAsPersona(ctx, c.Agent.WorkspaceID, scope.UserID, a.ID, in.To)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": moved.ID, "from": a.Path, "path": moved.Path, "url": wiki.PageURL(moved.ID, moved.Title), "note": "Moved. The old path still resolves as an alias, so [[links]] to it keep working."}, nil
+}
+
+func moveFolder(ctx context.Context, d Deps, c agents.Caller, in MoveFolderIn) (any, error) {
+	scope, err := personChatScope(ctx, d, c, "move_folder")
+	if err != nil {
+		return nil, err
+	}
+	moved, err := d.Wiki.MoveFolderAsPersona(ctx, c.Agent.WorkspaceID, scope.UserID, in.From, in.To)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"moved": len(moved), "page_ids": moved, "note": "Moved every page in one step. Old paths still resolve as aliases."}, nil
+}
+
 func listPages(ctx context.Context, d Deps, c agents.Caller, in ListPagesIn) (any, error) {
 	if in.SavedPage != "" {
 		a, _, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.SavedPage)

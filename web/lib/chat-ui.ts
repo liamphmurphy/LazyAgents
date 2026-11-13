@@ -386,6 +386,9 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
     case "suggest_links":
     case "write_note":
       return status("wiki", "writing a wiki note");
+    case "move_page":
+    case "move_folder":
+      return status("wiki", "moving pages");
     case "get_ticket":
     case "list_epics":
     case "list_tickets":

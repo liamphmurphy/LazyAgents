@@ -62,6 +62,71 @@ func (f FolderScope) clean() (string, error) {
 // a folder is moving it beside itself. Each page keeps its old path as an
 // alias, as a single rename does. It returns the pages it moved.
 func (s *Service) MoveFolder(ctx context.Context, ws, userID uuid.UUID, from FolderScope, to string) ([]uuid.UUID, error) {
+	return s.moveFolder(ctx, ws, userID, from, to, nil)
+}
+
+// MoveFolderAsPersona moves a folder of the person's own pages for a persona
+// in their chat. It moves nothing unless the persona may move every page in
+// it (see personaMayMove).
+func (s *Service) MoveFolderAsPersona(ctx context.Context, ws, userID uuid.UUID, from, to string) ([]uuid.UUID, error) {
+	if err := personaMovePath("to", to); err != nil {
+		return nil, err
+	}
+	return s.moveFolder(ctx, ws, userID, FolderScope{Folder: from}, to, personaMayMove)
+}
+
+// MovePageAsPersona moves one page to a new path (folder and name) for a
+// persona in the person's chat, under the same rules as MoveFolderAsPersona.
+func (s *Service) MovePageAsPersona(ctx context.Context, ws, userID, id uuid.UUID, to string) (store.Artifact, error) {
+	if err := personaMovePath("to", to); err != nil {
+		return store.Artifact{}, err
+	}
+	ctx = pageview.Person(ctx, userID)
+	var a store.Artifact
+	err := s.tx(ctx, ws, func(q *store.Queries) error {
+		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws, Viewer: &userID})
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.Type != "note") {
+			return apperr.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := personaMayMove(cur); err != nil {
+			return err
+		}
+		a, err = renameNote(ctx, q, ws, id, to)
+		return err
+	})
+	return a, err
+}
+
+// personaMayMove follows the page's persona controls. A move can't wait as a
+// suggestion the way an edit does, so only a page whose persona changes apply
+// at once can be moved; the person moves the rest from the explorer.
+func personaMayMove(a store.Artifact) error {
+	if a.Audience == "agent" || personaMovePath("from", *a.Path) != nil {
+		return apperr.Invalid("from", "%q is agent knowledge, which personas don't move", *a.Path)
+	}
+	if a.PersonaPaused {
+		return apperr.Conflict("persona edits are paused on %q, so it wasn't moved", *a.Path)
+	}
+	if !a.PersonaDirect {
+		return apperr.Conflict("persona changes to %q wait for review, so it can't be moved by a persona; ask the person to move it in the Knowledge explorer", *a.Path)
+	}
+	return nil
+}
+
+// personaMovePath keeps persona moves out of agent memory and team patterns,
+// where a path decides who may read and write the page.
+func personaMovePath(field, path string) error {
+	p := strings.ToLower(strings.Trim(strings.TrimSpace(path), "/"))
+	if p == "agents" || p == "patterns" || strings.HasPrefix(p, "agents/") || strings.HasPrefix(p, "patterns/") {
+		return apperr.Invalid(field, "personas can't move pages into or out of agents/ or patterns/")
+	}
+	return nil
+}
+
+func (s *Service) moveFolder(ctx context.Context, ws, userID uuid.UUID, from FolderScope, to string, check func(store.Artifact) error) ([]uuid.UUID, error) {
 	src, err := from.clean()
 	if err != nil {
 		return nil, err
@@ -85,6 +150,14 @@ func (s *Service) MoveFolder(ctx context.Context, ws, userID uuid.UUID, from Fol
 		}
 		if len(pages) == 0 {
 			return apperr.ErrNotFound
+		}
+		// Check them all first, so a refused page leaves the folder whole.
+		if check != nil {
+			for _, p := range pages {
+				if err := check(p); err != nil {
+					return err
+				}
+			}
 		}
 		for _, p := range pages {
 			if _, err := renameNote(ctx, q, ws, p.ID, dst+strings.TrimPrefix(*p.Path, src)); err != nil {

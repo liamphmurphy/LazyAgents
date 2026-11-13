@@ -1224,6 +1224,8 @@ var Tools = []Tool{
 	define("patch_page", "Propose 1–100 anchored text replacements against base_version. Always reviewed before applying; each change has a reason.", patchPage),
 	define("set_properties", "Propose property/tag/alias edits against base_version. Null deletes a key. Cannot change audience.", setProperties),
 	define("create_page", "Create a Knowledge page, optionally using a template or recording a literature source. Private in a person's chat; shared for runs.", createPage),
+	define("move_page", "Move or rename one of the person's Knowledge pages: give its new path. Only in a person's chat; applies at once on pages whose persona changes apply directly, and is refused on paused or review-first pages. The old path stays as an alias.", movePage),
+	define("move_folder", "Move or rename one of the person's Knowledge folders with every page under it, in one step. Only in a person's chat; moves nothing if any page in it is paused or review-first. Old paths stay as aliases.", moveFolder),
 	define("capture_note", "Capture a fleeting note in the person's Knowledge inbox.", captureNote),
 	define("suggest_links", "Find unlinked mentions and related pages; submit chosen changes with patch_page for review.", suggestLinks),
 	define("write_note", "Write a wiki note. Under agents/<your handle>/ (always writable) keep only durable lessons that would help a future run on this codebase, not a log of what you did. General, reusable lessons go through propose_pattern; project decisions go in ADR/Architecture notes. Other pages follow your wiki:write scope (allowed edits directly, requires_approval saves a suggestion). Link what it's about with [[…]].", writeNote),

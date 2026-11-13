@@ -260,6 +260,26 @@ function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onC
   );
 }
 
+// A folder's pages go into the message as context; past this many the persona lists the rest itself.
+const FOLDER_CONTEXT_PAGES = 50;
+
+/** The paths of the pages under a folder, depth first, up to limit. */
+function pagePaths(folder: TreeFolder, limit: number): string[] {
+  const out: string[] = [];
+  const walk = (f: TreeFolder) => {
+    for (const c of f.folders) {
+      if (out.length >= limit) return;
+      walk(c);
+    }
+    for (const p of f.pages) {
+      if (out.length >= limit) return;
+      out.push(p.path);
+    }
+  };
+  walk(folder);
+  return out;
+}
+
 const pageIdOf = (pathname: string) => /^\/knowledge\/([0-9a-f-]{36})/.exec(pathname)?.[1];
 
 function Explorer({ pathname }: { pathname: string }) {
@@ -421,6 +441,8 @@ function Explorer({ pathname }: { pathname: string }) {
       { icon: "trash", label: "Delete", danger: true, onSelect: () => openDialog({ kind: "delete", target: { kind: "page", page: p } }) },
     ],
     folderMenu: (f) => [
+      { icon: "msg", label: "Ask a Persona", onSelect: () => chat.askFolder({ path: f.path, pages: pagePaths(f, FOLDER_CONTEXT_PAGES), count: f.count }) },
+      "separator",
       { icon: "plus", label: "New page", onSelect: () => newPageIn(f.path) },
       { icon: "folder", label: "New folder", onSelect: () => openDialog({ kind: "folder", parent: f.path }) },
       "separator",
