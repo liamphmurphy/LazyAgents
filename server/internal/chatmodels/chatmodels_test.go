@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -53,7 +54,7 @@ func TestLocalCatalogWithoutAppSecretUsesDiscovery(t *testing.T) {
 		return []Model{{ID: harness + "-live", Default: true}}, nil
 	}}
 	list, err := catalog.List(context.Background(), nil, uuid.New())
-	if err != nil || calls != 2 {
+	if err != nil || calls != len(chatHarnesses) {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 	for _, h := range list {
@@ -116,5 +117,83 @@ func TestResolveEffort(t *testing.T) {
 func TestKnownEffortsDropsUltra(t *testing.T) {
 	if got := knownEfforts([]string{"max", "ultra", "low"}); !slices.Equal(got, []string{"low", "max"}) {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestDiscoverGeminiKeepsChatModelsAndSendsKeyInHeader(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("x-goog-api-key") != "AIza-test" || r.URL.Query().Get("key") != "" {
+			t.Errorf("the key must travel in the x-goog-api-key header only: %v %q", r.Header, r.URL.RawQuery)
+		}
+		if r.URL.Query().Get("pageToken") == "" {
+			w.Write([]byte(`{"models":[
+				{"name":"models/gemini-2.5-flash","displayName":"Gemini 2.5 Flash","supportedGenerationMethods":["generateContent"]},
+				{"name":"models/gemini-embedding-001","supportedGenerationMethods":["embedContent"]},
+				{"name":"models/gemini-2.5-flash-image","supportedGenerationMethods":["generateContent"]},
+				{"name":"models/gemma-3-27b","supportedGenerationMethods":["generateContent"]}],"nextPageToken":"p2"}`))
+			return
+		}
+		w.Write([]byte(`{"models":[
+			{"name":"models/gemini-2.5-pro","displayName":"Gemini 2.5 Pro","supportedGenerationMethods":["generateContent","countTokens"]},
+			{"name":"models/gemini-3-pro-preview","supportedGenerationMethods":["generateContent"]},
+			{"name":"models/gemini-2.5-flash","supportedGenerationMethods":["generateContent"]}]}`))
+	}))
+	defer srv.Close()
+	models, err := discoverGemini(context.Background(), srv.Client(), srv.URL, "AIza-test")
+	if err != nil || calls != 2 {
+		t.Fatalf("calls=%d err=%v", calls, err)
+	}
+	var ids []string
+	var def string
+	for _, m := range models {
+		ids = append(ids, m.ID)
+		if m.Default {
+			def = m.ID
+		}
+		if len(m.Efforts) != 0 {
+			t.Errorf("%s offers efforts %v: Antigravity models show no effort control", m.ID, m.Efforts)
+		}
+	}
+	if want := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"}; !slices.Equal(ids, want) {
+		t.Fatalf("ids = %v, want %v", ids, want)
+	}
+	if def != "gemini-2.5-pro" {
+		t.Fatalf("default = %q, want the stable pro model", def)
+	}
+}
+
+func TestDiscoverGeminiFailureDoesNotExposeProviderBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		w.Write([]byte(`API key not valid: AIza-test`))
+	}))
+	defer srv.Close()
+	_, err := discoverGemini(context.Background(), srv.Client(), srv.URL, "AIza-test")
+	if err == nil || err.Error() != "provider model discovery failed (403)" {
+		t.Fatal(err)
+	}
+}
+
+func TestParseAgyModels(t *testing.T) {
+	got, err := ParseAgyModels(strings.NewReader("Available models:\n\n* gemini-3.8-flash-medium  Fast\n  gemini-4-hydrogen-high\n- gemini-4-hydrogen-high duplicate\nnote: these change\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != "gemini-3.8-flash-medium" || !got[0].Default || got[0].Label != "Fast" || got[1].ID != "gemini-4-hydrogen-high" || got[1].Default {
+		t.Fatalf("models = %+v", got)
+	}
+	if _, err := ParseAgyModels(strings.NewReader("ERROR: authentication required\n")); err == nil {
+		t.Fatal("a listing with no model slugs must be an error, not an empty catalog")
+	}
+}
+
+func TestAntigravityIsAChatHarnessWithItsOwnKey(t *testing.T) {
+	if !slices.Contains(chatHarnesses, agentdef.HarnessAntigravity) || KeySecret[agentdef.HarnessAntigravity] != "harness:google" || labels[agentdef.HarnessAntigravity] != "Antigravity" {
+		t.Fatal("Antigravity must be registered in the catalog")
+	}
+	if PlanLogin(agentdef.HarnessAntigravity, "AIzaSyExample") {
+		t.Fatal("Antigravity has no plan login: Vesper never handles Google OAuth tokens")
 	}
 }

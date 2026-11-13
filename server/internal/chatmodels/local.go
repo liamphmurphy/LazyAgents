@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ func DiscoverLocal(ctx context.Context, name, _ string) ([]Model, error) {
 		return nil, err
 	}
 	args := argv[1:]
-	override := map[string]string{agentdef.HarnessClaudeCode: "RUNNER_CLAUDE_BIN", agentdef.HarnessCodex: "RUNNER_CODEX_BIN"}[name]
+	override := map[string]string{agentdef.HarnessClaudeCode: "RUNNER_CLAUDE_BIN", agentdef.HarnessCodex: "RUNNER_CODEX_BIN", agentdef.HarnessAntigravity: "RUNNER_ANTIGRAVITY_BIN"}[name]
 	bin := os.Getenv(override)
 	if bin == "" {
 		return nil, fmt.Errorf("chatmodels: %s is not set; only a fake harness is asked for models on the host", override)
@@ -50,6 +51,10 @@ func DiscoverLocal(ctx context.Context, name, _ string) ([]Model, error) {
 		return nil, fmt.Errorf("local harness could not start")
 	}
 	defer func() { stdin.Close(); cmd.Process.Kill(); cmd.Wait() }()
+	if name == agentdef.HarnessAntigravity {
+		// `agy models` prints a list and exits: nothing to converse with.
+		return ParseAgyModels(io.LimitReader(stdout, 1<<20))
+	}
 	return ListOverStdio(name, stdin, stdout)
 }
 
@@ -61,6 +66,8 @@ func DiscoveryArgv(name string) ([]string, error) {
 		return []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}, nil
 	case agentdef.HarnessCodex:
 		return []string{"codex", "app-server"}, nil
+	case agentdef.HarnessAntigravity:
+		return []string{"agy", "models"}, nil
 	}
 	return nil, fmt.Errorf("unsupported harness")
 }
@@ -221,4 +228,37 @@ func normalizeLocalModels(models []Model) []Model {
 		models[0].Default = true
 	}
 	return models
+}
+
+// agyModelSlug is what `agy models` leads a line with: a model slug such as
+// gemini-3.8-flash-medium. Headings, blank lines and prose don't match.
+var agyModelSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+
+// ParseAgyModels reads the output of `agy models`: one model per line, its slug
+// first, an optional description after it (a leading bullet or "*" marks the
+// default). The listing's format is documented only as "list slugs with agy
+// models", so anything that isn't slug-first is skipped rather than guessed at.
+func ParseAgyModels(r io.Reader) ([]Model, error) {
+	out := []Model{}
+	seen := map[string]bool{}
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		isDefault := strings.HasPrefix(line, "*") || strings.Contains(strings.ToLower(line), "(default)")
+		line = strings.TrimSpace(strings.TrimLeft(line, "*-• "))
+		slug, rest, _ := strings.Cut(line, " ")
+		if !agyModelSlug.MatchString(slug) || !strings.ContainsAny(slug, "-0123456789") || seen[slug] {
+			continue
+		}
+		seen[slug] = true
+		label := strings.TrimSpace(strings.ReplaceAll(rest, "(default)", ""))
+		out = append(out, Model{ID: slug, Label: label, Default: isDefault})
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("agy listed no models")
+	}
+	return normalizeLocalModels(out), nil
 }
