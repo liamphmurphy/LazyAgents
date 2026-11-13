@@ -33,17 +33,17 @@ export const dockKey = (app: string) => `lazyagents.editor-dock.${app}`;
 type KV = Pick<Storage, "getItem" | "setItem">;
 
 /**
- * The remembered dock for `app`: open unless stored otherwise, on the stored tab if it still
- * exists, else the first. Never hidden: ⌘. lasts for the visit only.
+ * The remembered dock for `app`: `defaultOpen` (open unless an app says otherwise) until stored
+ * otherwise, on the stored tab if it still exists, else the first. Never hidden: ⌘. lasts for the visit only.
  */
-export function loadDock(store: KV | undefined, app: string, tabs: string[]): DockState {
-  const fallback: DockState = { open: true, tab: tabs[0] ?? "", hidden: false };
+export function loadDock(store: KV | undefined, app: string, tabs: string[], defaultOpen = true): DockState {
+  const fallback: DockState = { open: defaultOpen, tab: tabs[0] ?? "", hidden: false };
   try {
     const raw = store?.getItem(dockKey(app));
     if (!raw) return fallback;
     const v = JSON.parse(raw) as { open?: unknown; tab?: unknown };
     return {
-      open: typeof v.open === "boolean" ? v.open : true,
+      open: typeof v.open === "boolean" ? v.open : defaultOpen,
       tab: typeof v.tab === "string" && tabs.includes(v.tab) ? v.tab : fallback.tab,
       hidden: false,
     };
