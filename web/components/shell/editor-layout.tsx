@@ -283,7 +283,8 @@ export function Dock({
                 )}
               >
                 <TabIcon tab={t} />
-                {t.label}
+                {/* Past three tabs the strip runs out of room: the others show their icon, and the label stays for screen readers. */}
+                <span className={cx(tabs.length > 3 && t.id !== active?.id && "sr-only")}>{t.label}</span>
                 {t.badge}
               </button>
             ))}

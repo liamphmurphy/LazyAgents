@@ -14,31 +14,22 @@ import { SideHeading, useToday } from "./kit";
 
 export type SideTab = "links" | "outline" | "calendar" | "history";
 
-const TABS: [SideTab, IconName, string][] = [
+/** A page's side panels, Obsidian-style. They are tabs of the Knowledge dock, beside Chat, so a page has one right sidebar. */
+export const SIDE_TABS: [SideTab, IconName, string][] = [
   ["links", "link", "Links"],
   ["outline", "epics", "Outline"],
   ["calendar", "clock", "Calendar and inbox"],
   ["history", "history", "History"],
 ];
 
-/** The page's right sidebar, Obsidian-style: one panel at a time, picked from the icons on top. */
-export function PageSide({ page, tab, onTab, persona }: { page: Page; tab: SideTab; onTab: (t: SideTab) => void; persona: string }) {
+export function SidePanel({ page, tab, persona }: { page: Page; tab: SideTab; persona: string }) {
   return (
-    <aside aria-label="Page sidebar" className="hidden w-[340px] flex-none flex-col border-l border-border-subtle bg-panel xl:flex">
-      <div role="tablist" className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle px-2.5">
-        {TABS.map(([t, icon, label]) => (
-          <button key={t} role="tab" aria-selected={tab === t} aria-label={label} title={label} onClick={() => onTab(t)} className={cx("grid h-[26px] w-8 place-items-center rounded-md", tab === t ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover")}>
-            <Icon name={icon} size={15} />
-          </button>
-        ))}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {tab === "links" && <LinksPanel page={page} />}
-        {tab === "outline" && <OutlinePanel body={page.body_md ?? ""} />}
-        {tab === "calendar" && <CalendarPanel />}
-        {tab === "history" && <HistoryPanel page={page} persona={persona} />}
-      </div>
-    </aside>
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      {tab === "links" && <LinksPanel page={page} />}
+      {tab === "outline" && <OutlinePanel body={page.body_md ?? ""} />}
+      {tab === "calendar" && <CalendarPanel />}
+      {tab === "history" && <HistoryPanel page={page} persona={persona} />}
+    </div>
   );
 }
 

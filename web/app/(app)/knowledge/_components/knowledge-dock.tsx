@@ -18,9 +18,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { refKey } from "@/lib/chat-context";
 import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
 import { isFolder, useKnowledgeChat, type FolderAttachment, type PageAttachment } from "./chat-context";
+import { SIDE_TABS, SidePanel } from "./page-side";
 
 const APP = "knowledge";
-const TABS = ["chat"];
+// Chat everywhere; a page adds its side panels (Links, Outline, Calendar, History).
+const TABS = ["chat", ...SIDE_TABS.map(([t]) => t)];
 /** The chat for screens that aren't a page (Home, Graph, Connect). A page's own chat is the one it's attached to. */
 const GENERAL_CHAT_KEY = "vesper.knowledge.chat";
 /** Where the dock keeps the chats for screens that aren't a page. */
@@ -38,7 +40,7 @@ function screenOf(pathname: string): string {
  * folded in each new browser tab. On a page it is that page's chat; elsewhere one general Knowledge chat.
  */
 export function KnowledgeDock({ pageId }: { pageId?: string }) {
-  const { request } = useKnowledgeChat();
+  const { request, panel } = useKnowledgeChat();
   const screen = screenOf(usePathname());
   const uid = useId();
   const page = usePage(pageId).data;
@@ -65,6 +67,11 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   if (request !== seenRequest) {
     setSeenRequest(request);
     dispatch({ type: "open", tab: "chat" });
+  }
+  const [seenPanel, setSeenPanel] = useState(panel.n);
+  if (panel.n !== seenPanel) {
+    setSeenPanel(panel.n);
+    dispatch({ type: "open", tab: panel.tab });
   }
 
   useEffect(() => {
@@ -141,6 +148,9 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
         />
       ),
     },
+    ...(pageId && page
+      ? SIDE_TABS.map(([t, icon, label]): DockTab => ({ id: t, label, icon, content: <SidePanel page={page} tab={t} persona={(chat?.speaker ?? chat?.persona)?.name ?? "Persona"} /> }))
+      : []),
   ];
   // Hidden below md: the page sidebar and explorer already fill a phone.
   return (

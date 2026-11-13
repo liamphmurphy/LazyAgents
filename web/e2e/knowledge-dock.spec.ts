@@ -87,13 +87,13 @@ test("a remembered general chat that no longer exists falls back to Start a chat
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("vesper.knowledge.chat"))).toBeNull();
 });
 
-test("on a page the dock holds that page's chat, and ⌘J opens it, with the page's own sidebar free of a Chat tab", async ({ page }) => {
+test("on a page the dock holds that page's chat, and ⌘J opens it", async ({ page }) => {
   const s = await install(page);
   await page.goto(`/knowledge/${P}`);
   await expect(dock(page)).toHaveCount(0);
   await expect(rail(page)).toBeVisible();
-  // The page's own sidebar no longer carries a Chat tab.
-  await expect(page.getByRole("complementary", { name: "Page sidebar" }).getByRole("tab", { name: "Chat" })).toHaveCount(0);
+  // One right sidebar: the page's panels are the dock's, not a second aside beside it.
+  await expect(page.getByRole("complementary", { name: "Page sidebar" })).toHaveCount(0);
 
   await page.keyboard.press(`${mod}+j`);
   await expect(dock(page)).toBeVisible();
@@ -372,4 +372,21 @@ test("on a page the starters are about that page", async ({ page }) => {
   await expect(starters.getByRole("button", { name: /Summarise this page/ })).toBeVisible();
   await expect(dock(page).getByText(/on “Reading list”/)).toBeVisible();
   await expect(dock(page).getByText("Tune PR #387")).toHaveCount(0);
+});
+
+test("a page's Links, Outline, Calendar and History are dock tabs beside Chat, and the edit-mode pill opens History", async ({ page }) => {
+  await install(page);
+  await page.goto(`/knowledge/${P}`);
+  for (const name of ["Links", "Outline", "Calendar and inbox", "History"]) await expect(rail(page).getByRole("button", { name: `Open ${name}` })).toBeVisible();
+  await rail(page).getByRole("button", { name: "Open Links" }).click();
+  await expect(dock(page).getByRole("tab", { name: "Links" })).toHaveAttribute("aria-selected", "true");
+  await dock(page).getByRole("tab", { name: /Chat/ }).click();
+  await expect(dock(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("button", { name: /suggests changes|edits directly|paused/ }).click();
+  await expect(dock(page).getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+
+  // Off a page there is only Chat.
+  await page.goto("/knowledge");
+  await expect(rail(page).getByRole("button", { name: "Open Links" })).toHaveCount(0);
 });

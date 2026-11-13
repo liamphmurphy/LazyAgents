@@ -17,7 +17,6 @@ import { Banner, Skeleton } from "@/components/ui/primitives";
 import { DocEditor, type DocEditorHandle, type SaveState } from "@/app/(app)/apps/docs/_components/doc-editor";
 import { AUDIENCE, AudienceChip, StatusBar, Tag } from "./kit";
 import { ReviewBar, ReviewList, undecided } from "./page-review";
-import { PageSide, type SideTab } from "./page-side";
 import { QueryTable } from "./query-table";
 import { useKnowledgeTab } from "./shell";
 import { useKnowledgeChat } from "./chat-context";
@@ -53,14 +52,13 @@ export function PageScreen({ id }: { id: string }) {
 }
 
 function Loaded({ page: p }: { page: Page }) {
-  const { ask, registerDraft } = useKnowledgeChat();
+  const { ask, registerDraft, openPanel } = useKnowledgeChat();
   const router = useRouter();
   const save = useSavePage(p.id);
   const chat = useChat(p.chat_id ?? undefined).data;
   const running = chat?.state === "running";
   const persona = (chat?.speaker ?? chat?.persona)?.name ?? "Persona";
   const send = useSendChatMessage(p.chat_id ?? "");
-  const [tab, setTab] = useState<SideTab>("links");
   const [state, setState] = useState<{ s: SaveState; message?: string }>({ s: "saved" });
   const editor = useRef<DocEditorHandle>(null);
   const selected = useRef<string | undefined>(undefined);
@@ -118,7 +116,7 @@ function Loaded({ page: p }: { page: Page }) {
             ))}
           </nav>
           <AudienceMenu audience={p.audience} onChange={(audience) => save.mutate({ audience })} />
-          <button onClick={() => setTab("history")} className="flex h-[26px] items-center gap-2 rounded-full border border-border bg-surface pl-1.5 pr-3 text-xs font-medium text-fg-secondary hover:border-border-strong">
+          <button onClick={() => openPanel("history")} className="flex h-[26px] items-center gap-2 rounded-full border border-border bg-surface pl-1.5 pr-3 text-xs font-medium text-fg-secondary hover:border-border-strong">
             <span className="grid size-4 place-items-center rounded-full bg-[#3FC1B033] text-[9px] font-bold text-[#3FC1B0]">{persona[0]}</span>
             {modeLabel}
           </button>
@@ -130,7 +128,7 @@ function Loaded({ page: p }: { page: Page }) {
           >
             <Icon name="link" size={15} />
           </button>
-          <MoreMenu page={p} onHistory={() => setTab("history")} />
+          <MoreMenu page={p} onHistory={() => openPanel("history")} />
         </header>
         <ReviewBar page={p} persona={persona} direct={p.direct} />
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -210,7 +208,6 @@ function Loaded({ page: p }: { page: Page }) {
           }
         />
       </div>
-      <PageSide page={p} tab={tab} onTab={setTab} persona={persona} />
     </div>
   );
 }

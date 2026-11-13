@@ -13,6 +13,9 @@ export const isFolder = (a: Attachment): a is FolderAttachment => a.kind === "fo
 function useContextState() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [request, setRequest] = useState(0);
+  // A page's header asks the dock to show one of its side panels (History from the edit-mode pill).
+  const [panel, setPanel] = useState<{ tab: string; n: number }>({ tab: "", n: 0 });
+  const openPanel = useCallback((tab: string) => setPanel((p) => ({ tab, n: p.n + 1 })), []);
   const handled = useRef(0);
   const drafts = useRef(new Map<string, () => string | undefined>());
   const ask = useCallback((page: PageContext, quote?: string) => {
@@ -36,7 +39,7 @@ function useContextState() {
     handled.current = n;
     return true;
   }, []);
-  return useMemo(() => ({ attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest }), [attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest]);
+  return useMemo(() => ({ attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest, panel, openPanel }), [attachments, request, ask, askFolder, remove, registerDraft, readDraft, claimRequest, panel, openPanel]);
 }
 
 const Context = createContext<ReturnType<typeof useContextState> | null>(null);
