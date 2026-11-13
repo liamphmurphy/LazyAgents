@@ -275,11 +275,15 @@ func (s *Server) toMessages(ctx context.Context, msgs []store.ChatMessage) ([]ap
 			h := api.Harness(*m.Harness)
 			item.Harness = &h
 		}
-		if m.RunTurnID != nil && m.Role == "assistant" {
+		if m.RunTurnID != nil && (m.Role == "assistant" || m.Role == "system") {
 			if t, ok := turnsByID[*m.RunTurnID]; ok {
+				// A system message with a turn is how that turn ended (it failed), so the
+				// chat can keep the turn's steps beside it.
 				n := int(t.Seq)
 				item.TurnSeq = &n
-				setTurnEffort(&item, t)
+				if m.Role == "assistant" {
+					setTurnEffort(&item, t)
+				}
 			}
 		}
 		refs, _ := recode[[]api.ChatContextRef](jsonOrEmpty(m.ContextRefs))

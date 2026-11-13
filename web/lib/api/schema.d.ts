@@ -8398,7 +8398,7 @@ export interface components {
             model?: string;
             /** Format: uuid */
             run_id?: string;
-            /** @description The run turn that produced an assistant message */
+            /** @description The run turn that produced an assistant message, or that a system message ended (the turn failed) */
             turn_seq?: number;
             context_refs?: components["schemas"]["ChatContextRef"][];
             citations?: components["schemas"]["ChatCitation"][];
