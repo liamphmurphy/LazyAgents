@@ -55,6 +55,7 @@ services:
       RUNNER_IMAGE: ${RUNNER_IMAGE:-vesper/agent-base:latest}
       RUNNER_MAX_CONCURRENT: ${RUNNER_MAX_CONCURRENT:-4}
       ROLLOVER_CONTEXT_TOKENS: ${ROLLOVER_CONTEXT_TOKENS:-150000}
+      RUNNER_REPO_MAP: ${RUNNER_REPO_MAP:-false}
       # Each turn's sandboxed Docker API socket; turns mount the volume read-only.
       RUNNER_DOCKER_PROXY_DIR: /run/lazyagents-docker
       RUNNER_DOCKER_PROXY_VOLUME: lazyagents-dev-docker-proxy
