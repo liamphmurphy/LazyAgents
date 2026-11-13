@@ -128,7 +128,7 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
     <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-6 flex-col gap-3">
       <div>
         <h2 id={`${id}-title`} className="type-title">{title}</h2>
-        {lead && <p className="mt-1 text-[13px] text-fg-secondary">{lead}</p>}
+        {lead && <p className="mt-1 text-sm text-fg-secondary">{lead}</p>}
       </div>
       {children}
     </section>
@@ -177,7 +177,7 @@ function WorkspaceSection() {
           ) : (
             <span className="text-pill-human-fg">SECRETS_KEY isn’t set</span>
           )}
-          <span className="mt-1 block text-[11.5px] text-fg-tertiary">If missing: secrets are read-only and runs get no harness keys or git credentials.</span>
+          <span className="mt-1 block text-xs text-fg-tertiary">If missing: secrets are read-only and runs get no harness keys or git credentials.</span>
         </Row>
       </dl>
     </Card>
@@ -201,7 +201,7 @@ function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
         onChange={(host_folder_workspaces) => update.mutate({ host_folder_workspaces })}
         label="Keep new checkouts in a folder on this machine"
       />
-      <span className="mt-1 block text-[11.5px] text-fg-tertiary">
+      <span className="mt-1 block text-xs text-fg-tertiary">
         {dirs.length > 0 ? (
           <>
             New runs check out into <code className="font-mono">{dirs.join(", ")}/&lt;run&gt;</code>, so you can open the code in your own editor while the agent works. Runs that already have a workspace keep it where it is.
@@ -212,7 +212,7 @@ function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
           </>
         )}
       </span>
-      {update.isError && <span className="mt-1 block text-[11.5px] text-pill-blocked-fg">Couldn’t save: {update.error.message}</span>}
+      {update.isError && <span className="mt-1 block text-xs text-pill-blocked-fg">Couldn’t save: {update.error.message}</span>}
     </>
   );
 }
@@ -284,13 +284,13 @@ function RunnerSection() {
         <dl>
           <Row label="Backend">
             <span className="font-mono text-[12px] text-fg-secondary">RUNNER_BACKEND = {current(backends)}</span>
-            <span className="mt-1 block text-[11.5px] text-fg-tertiary">
+            <span className="mt-1 block text-xs text-fg-tertiary">
               docker runs each harness in a container that only receives the secrets its scopes allow. fake runs stand-in harnesses on the runner’s machine, for tests and playgrounds.
             </span>
           </Row>
           <Row label="Slots">
             <span className="font-mono text-[12px] text-fg-secondary">RUNNER_MAX_CONCURRENT = {current(slots)}</span>
-            <span className="mt-1 block text-[11.5px] text-fg-tertiary">
+            <span className="mt-1 block text-xs text-fg-tertiary">
               How many runs one runner executes at once (1–32). Extra dispatched runs wait in the queue until a slot frees up.
             </span>
           </Row>
