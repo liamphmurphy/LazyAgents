@@ -69,7 +69,16 @@ const PAGE = "flex min-h-0 min-w-0 flex-1 flex-col";
  */
 function SectionFade({ children }: { children: ReactNode }) {
   const section = useSelectedLayoutSegment();
-  return <div key={section} className={`motion-page ${PAGE}`}>{children}</div>;
+  // Work screens scroll within the viewport, with room for the banner and tab bar.
+  const work = section === "runs" || section === "tickets";
+  return (
+    <div key={section} className={`motion-page ${work ? "flex h-app min-h-0 min-w-0 flex-none flex-col overflow-hidden" : PAGE}`}>
+      <SystemBanner />
+      {work ? (
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>
+      ) : children}
+    </div>
+  );
 }
 
 /**
@@ -100,9 +109,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarSkeleton />
       )}
       <main className={compact ? "flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-h,0px)]" : "flex min-w-0 flex-[999_1_560px] flex-col"}>
-        <SystemBanner />
         {/* The segment needs a Suspense boundary for prerendering; the page still paints meanwhile. */}
-        <Suspense fallback={<div className={PAGE}>{children}</div>}>
+        <Suspense fallback={<div className={PAGE}><SystemBanner />{children}</div>}>
           <SectionFade>{children}</SectionFade>
         </Suspense>
       </main>
