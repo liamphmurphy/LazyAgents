@@ -63,6 +63,7 @@ const paths = {
   gamepad: <><path d="M5 5h6a3.5 3.5 0 0 1 3.4 4.2l-.4 1.9a1.6 1.6 0 0 1-2.8.7L9.8 10.5H6.2l-1.4 1.3a1.6 1.6 0 0 1-2.8-.7l-.4-1.9A3.5 3.5 0 0 1 5 5z" /><path d="M5.5 7v2M4.5 8h2" /><circle cx="10.6" cy="8" r=".6" fill="currentColor" /></>,
   compass: <><circle cx="8" cy="8" r="5.5" /><path d="m10.5 5.5-1.4 3.6-3.6 1.4 1.4-3.6z" /></>,
   dumbbell: <path d="M5.5 8h5M4 5v6M2.5 6.5v3M12 5v6M13.5 6.5v3" />,
+  audio: <path d="M2.5 6.5v3M5.2 4.5v7M8 2.5v11M10.8 4.5v7M13.5 6.5v3" />,
   film: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="m6.7 6 3.3 2-3.3 2z" /></>,
   library: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><circle cx="6" cy="6.5" r="1.2" /><path d="m2.5 11 3.2-3 2.6 2.4 1.7-1.6 3.5 3.2" /></>,
 } as const;

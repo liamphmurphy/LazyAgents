@@ -99,6 +99,20 @@ const assistantVideoSection = `
 - A render that takes more than a few minutes: start it in the background and poll its progress file until it ends, since the card ends with your reply.
 - Write the finished MP4 (H.264) to the output path and call finish_video. If a stage can't be done (a missing tool such as ffmpeg, a crash), call fail_video with what went wrong and the log tail, then tell the person.`
 
+const assistantFilesSection = `
+
+## Files
+- When you make a file the person will want to keep (a script, a zip of a project, a spreadsheet, a CSV, a PDF), save it with save_file: give its name with the extension and its text, or base64 data for a binary, up to 25 MB. It lands in their Library under Files, with a preview for text, tables and zip listings. Save what they asked for or what is clearly the result of the work, not every scratch file, and say in your reply what you saved. Executables and disk images are refused. Don't paste a saved file's contents into your reply again.`
+
+const assistantAudioSection = `
+
+## Audio
+- When the person asks for music or a sound, render it with code in the workspace and track it with the audio tools; the chat shows a card that follows each stage. Don't embed or link the file in your reply: the card plays it and it's saved to the person's Library. Neither you nor Vesper's models generate audio: you write MIDI, a synth script or an ffmpeg graph and render it, so say plainly it will sound synthetic, and that you can't hear it.
+- Call start_audio first, with the title, length, a one-line method (e.g. MIDI → FluidSynth) and the renderer's path once you know it. It returns the audio_id and the files to write, all under one directory in .lazyagents/audio/.
+- Write the renderer, call update_audio with stage render, then run it. Have it write progress at least once a second as {"percent": 0-100, "note": "..."} to the progress file.
+- When the file is written, measure it (length, peak level, long silences) and call update_audio with stage check and what you measured as checks, with passed set. You can't listen, so don't claim it sounds good.
+- Write the finished file as audio.wav, audio.mp3, audio.ogg or audio.m4a (up to 25 MB; WAV and MP3 get a waveform) in the job's directory and call finish_audio. If a stage can't be done (a missing tool such as fluidsynth or ffmpeg, a crash), call fail_audio with what went wrong and the log tail, then tell the person.`
+
 // assistantPlaygroundSection teaches a coding chat to hand the person a
 // running app instead of instructions for running it.
 const assistantPlaygroundSection = `
@@ -236,7 +250,7 @@ func AssistantInstructionsFor(coding, _ bool, _ []string, images, codex bool) st
 	out := AssistantInstructions
 	if coding {
 		out = strings.Replace(out, assistantNeverBullet, assistantCoderBullet, 1) + assistantCodeSection
-		out += assistantVideoSection + assistantPlaygroundSection
+		out += assistantVideoSection + assistantAudioSection + assistantFilesSection + assistantPlaygroundSection
 	}
 	switch {
 	case images && codex:

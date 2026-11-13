@@ -34,8 +34,8 @@ func (e *designsEnv) saveExport(id, filename string, data []byte) (int, map[stri
 	return res.StatusCode, out
 }
 
-// Each export format lands in the Library as its own kind, typed by its
-// content, tied to the design's chat and counted against the Library cap; a
+// Each export format lands in the Library as an export, typed by its content,
+// linked to its design and the design's chat and counted against the Library cap; a
 // refused file (wrong type, a full Library) stores neither a row nor an
 // object.
 func TestSaveDesignExportToLibrary(t *testing.T) {
@@ -49,14 +49,17 @@ func TestSaveDesignExportToLibrary(t *testing.T) {
 		ctype string
 		file  string
 	}{
-		{"Checkout – Payment.png", pngSized(t, 30, 20, 2), "image", "image/png", "Checkout – Payment.png"},
-		{"Checkout – Payment.svg", []byte(svg), "diagram", "image/svg+xml", "Checkout – Payment.svg"},
-		{"Checkout – all frames.pdf", []byte("%PDF-1.3\n%\xba\xdf\xac\xe0\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"), "document", "application/pdf", "Checkout – all frames.pdf"},
+		{"Checkout – Payment.png", pngSized(t, 30, 20, 2), "export", "image/png", "Checkout – Payment.png"},
+		{"Checkout – Payment.svg", []byte(svg), "export", "image/svg+xml", "Checkout – Payment.svg"},
+		{"Checkout – all frames.pdf", []byte("%PDF-1.3\n%\xba\xdf\xac\xe0\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"), "export", "application/pdf", "Checkout – all frames.pdf"},
 		// The content decides the type, and the name gets its extension.
-		{"export.bin", []byte(svg), "diagram", "image/svg+xml", "export.svg"},
+		{"export.bin", []byte(strings.Replace(svg, "Pay", "Pay now", 1)), "export", "image/svg+xml", "export.svg"},
 	}
 	for _, c := range cases {
 		code, out := e.saveExport(id, c.name, c.data)
+		if src, _ := out["export_source"].(map[string]any); src["kind"] != "designs" || src["id"] != id || src["status"] != "current" || src["title"] != "Checkout" {
+			t.Fatalf("%s: export source %v", c.name, src)
+		}
 		if code != http.StatusCreated || out["kind"] != c.kind || out["content_type"] != c.ctype || out["filename"] != c.file || out["chat_id"] != chat || out["size_bytes"] != float64(len(c.data)) {
 			t.Fatalf("%s: %d %v", c.name, code, out)
 		}
@@ -70,7 +73,7 @@ func TestSaveDesignExportToLibrary(t *testing.T) {
 			t.Fatalf("%s content: %d %q", c.name, res.StatusCode, res.Header.Get("Content-Type"))
 		}
 	}
-	if keys := e.s3.keys(avatarBucket + "/library-designs/"); len(keys) != len(cases) {
+	if keys := e.s3.keys(avatarBucket + "/library-exports/"); len(keys) != len(cases) {
 		t.Fatalf("stored %v", keys)
 	}
 	items := func() int {
@@ -95,13 +98,14 @@ func TestSaveDesignExportToLibrary(t *testing.T) {
 		VALUES ($1, $2, 'image', 'Big', 'big.png', 'image/png', $3, 'big-object')`, e.me.WorkspaceID, e.me.ID, runs.MaxGeneratedImageStorageBytes-100); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := e.saveExport(id, "late.png", pngSized(t, 30, 20, 2)); code != http.StatusUnprocessableEntity || !strings.Contains(out["message"].(string), "Library is full") {
+	// New content: re-saving bytes already kept stores nothing, so it isn't refused.
+	if code, out := e.saveExport(id, "late.png", pngSized(t, 31, 20, 2)); code != http.StatusUnprocessableEntity || !strings.Contains(out["message"].(string), "Library is full") {
 		t.Fatalf("full Library: %d %v", code, out)
 	}
 	if n := items(); n != before+1 {
 		t.Fatalf("items after refusals = %d, want %d", n, before+1)
 	}
-	if keys := e.s3.keys(avatarBucket + "/library-designs/"); len(keys) != len(cases) {
+	if keys := e.s3.keys(avatarBucket + "/library-exports/"); len(keys) != len(cases) {
 		t.Fatalf("a refused save stored an object: %v", keys)
 	}
 
@@ -120,7 +124,7 @@ func TestSaveDesignExportToLibrary(t *testing.T) {
 	if n := items(); n != before+1 {
 		t.Fatalf("unauthorized save changed Library items: %d", n)
 	}
-	if keys := e.s3.keys(avatarBucket + "/library-designs/"); len(keys) != len(cases) {
+	if keys := e.s3.keys(avatarBucket + "/library-exports/"); len(keys) != len(cases) {
 		t.Fatalf("unauthorized save stored an object: %v", keys)
 	}
 	doc := e.want("POST", "/docs", map[string]any{"title": "Notes"}, http.StatusCreated)

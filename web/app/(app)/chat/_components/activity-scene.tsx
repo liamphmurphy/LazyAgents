@@ -525,6 +525,24 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       </g>
     </>
   ),
+  // Waveform bars rise one by one as the render advances, then a play badge lands.
+  "audio-render": (
+    <>
+      <rect className="scene-paper" x="16" y="3" width="100" height="36" rx="3" />
+      {[0.35, 0.6, 0.9, 0.5, 0.75, 1, 0.55, 0.8, 0.4, 0.65].map((h, i) => (
+        <g key={i}>
+          <rect className="scene-empty" x={23 + i * 9} y={21 - h * 14} width="4.5" height={h * 28} rx="2" />
+          <rect className={`scene-accent scene-story scene-au-b${i % 5}`} x={23 + i * 9} y={21 - h * 14} width="4.5" height={h * 28} rx="2" />
+        </g>
+      ))}
+      <path className="scene-line" opacity="0.3" d="M16 48H116" />
+      <path className="scene-line-accent scene-story scene-au-bar" d="M16 48H116" />
+      <g className="scene-story scene-au-badge">
+        <circle className="scene-done" cx="104" cy="12" r="7.5" />
+        <path d="M101.8 8.5v7l5.6-3.5z" fill="var(--surface)" />
+      </g>
+    </>
+  ),
   // Bars rise, a trend line draws over them, and a coin lands.
   finance: (
     <>

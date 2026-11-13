@@ -231,15 +231,21 @@ func (s *Service) moveChatVideo(ctx context.Context, ws, runID, id uuid.UUID, ch
 // videoTurn checks the run is a coding chat answering a message, returning the
 // run, its chat and the turn being answered.
 func (s *Service) videoTurn(ctx context.Context, q *store.Queries, ws, runID uuid.UUID) (store.Run, store.ChatSession, store.RunTurn, error) {
+	return s.codingChatTurn(ctx, q, ws, runID, "video", "Rendering a video")
+}
+
+// codingChatTurn is videoTurn for any tool family: tools names it in the
+// refusals ("video" for the video tools) and task says what needs code.
+func (s *Service) codingChatTurn(ctx context.Context, q *store.Queries, ws, runID uuid.UUID, tools, task string) (store.Run, store.ChatSession, store.RunTurn, error) {
 	run, err := q.GetRun(ctx, store.GetRunParams{ID: runID, WorkspaceID: ws})
 	if err != nil {
 		return run, store.ChatSession{}, store.RunTurn{}, err
 	}
 	if run.Purpose != "chat" {
-		return run, store.ChatSession{}, store.RunTurn{}, apperr.Conflict("the video tools only work in a chat")
+		return run, store.ChatSession{}, store.RunTurn{}, apperr.Conflict("the %s tools only work in a chat", tools)
 	}
 	if run.State != "running" {
-		return run, store.ChatSession{}, store.RunTurn{}, apperr.Conflict("the video tools only work while you are answering a message")
+		return run, store.ChatSession{}, store.RunTurn{}, apperr.Conflict("the %s tools only work while you are answering a message", tools)
 	}
 	chat, err := q.ChatSessionForRun(ctx, &run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -253,11 +259,11 @@ func (s *Service) videoTurn(ctx context.Context, q *store.Queries, ws, runID uui
 		return run, chat, store.RunTurn{}, err
 	}
 	if !caps.Code {
-		return run, chat, store.RunTurn{}, apperr.Conflict("Rendering a video needs a chat that can run code; tell the person this chat can't.")
+		return run, chat, store.RunTurn{}, apperr.Conflict("%s needs a chat that can run code; tell the person this chat can't.", task)
 	}
 	turn, err := q.RunningChatTurn(ctx, run.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return run, chat, turn, apperr.Conflict("the video tools only work while you are answering a message")
+		return run, chat, turn, apperr.Conflict("the %s tools only work while you are answering a message", tools)
 	}
 	return run, chat, turn, err
 }

@@ -356,6 +356,9 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			if err := q.LinkChatVideoJobsToMessage(ctx, store.LinkChatVideoJobsToMessageParams{MessageID: &msg.ID, RunID: &run.ID, TurnID: &turn.ID}); err != nil {
 				return err
 			}
+			if err := q.LinkChatAudioJobsToMessage(ctx, store.LinkChatAudioJobsToMessageParams{MessageID: &msg.ID, RunID: &run.ID, TurnID: &turn.ID}); err != nil {
+				return err
+			}
 			// A failed reply gets no follow-up turn, so the person hears of its
 			// image requests here. (A reply's own jobs are reported below.)
 			if role == "system" {

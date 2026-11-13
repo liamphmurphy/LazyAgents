@@ -165,6 +165,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const personaRequests: string[] = [];
   // Chat videos by chat: "video: <state>" puts one on the reply, "video-live: <stage>" shows one while the turn runs.
   const videos = new Map<string, Record<string, unknown>[]>();
+  // Chat audio the same way: "audio: <state>" and "audio-live: <stage>".
+  const audio = new Map<string, Record<string, unknown>[]>();
   // The persona_id each GET /chats asked for ("" when omitted, i.e. the default).
   const chatPersonaFilters: string[] = [];
   let n = 0;
@@ -249,6 +251,15 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       if (prompt.startsWith("video:")) list.push(mockVideo(prompt.slice(6).trim(), c.current_run_id!));
       for (const v of list) if (!v.message_id && v.run_id === c.current_run_id) v.message_id = reply.id;
       videos.set(c.id, list);
+      void emit(c);
+      return;
+    }
+    if (prompt.startsWith("audio:") || prompt.startsWith("audio-live:")) {
+      const reply = add(c, "assistant", "Here's the render: 24 s of MIDI through a soundfont. I measured it but can't listen.", { harness: c.harness, model: c.model, run_id: c.current_run_id, ...USAGE });
+      const list = audio.get(c.id) ?? [];
+      if (prompt.startsWith("audio:")) list.push(mockAudio(prompt.slice(6).trim(), c.current_run_id!));
+      for (const a of list) if (!a.message_id && a.run_id === c.current_run_id) a.message_id = reply.id;
+      audio.set(c.id, list);
       void emit(c);
       return;
     }
@@ -421,6 +432,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (/^\/chats\/[^/]+\/playground$/.test(path)) return json({ playground: null });
     const videoList = /^\/chats\/([^/]+)\/videos$/.exec(path);
     if (videoList) return json({ videos: videos.get(videoList[1]) ?? [] });
+    const audioList = /^\/chats\/([^/]+)\/audio$/.exec(path);
+    if (audioList) return json({ audio: audio.get(audioList[1]) ?? [] });
+    if (/^\/chats\/[^/]+\/audio\/[^/]+\/content$/.test(path)) return route.fulfill({ status: 200, contentType: "audio/wav", body: mockWav() });
     const frame = /^\/chats\/[^/]+\/videos\/[^/]+\/frames\/([a-z]+)\/(\d+)$/.exec(path);
     if (frame) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: frameSvg(frame[1], Number(frame[2])) });
     if (/^\/library\/[^/]+\/poster$/.test(path)) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: frameSvg("poster", 0) });
@@ -867,6 +881,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         c.error = undefined;
         c.current_run_id = uuid();
         touch(c);
+        if (text.startsWith("audio-live:")) audio.set(c.id, [...(audio.get(c.id) ?? []), mockAudio(text.slice(11).trim(), c.current_run_id)]);
         if (text.startsWith("video-live:")) videos.set(c.id, [...(videos.get(c.id) ?? []), mockVideo(text.slice(11).trim(), c.current_run_id)]);
         if (text.startsWith("slow:")) {
           const events = runEvents.get(c.current_run_id) ?? [];
@@ -1116,6 +1131,55 @@ export function mockVideo(state: string, runId: string): Record<string, unknown>
     ...(state === "done" ? { library_item_id: "11111111-vvvv-4vvv-8vvv-000000000001".replace(/v/g, "0"), finished_at: new Date().toISOString(),
       output: { filename: "black-cat-on-a-rainy-cyberpunk-street.mp4", content_type: "video/mp4", size_bytes: 25_270_000, codec: "H.264", duration_ms: 15000 } } : {}),
     frames, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+}
+
+/** A quiet tone, `seconds` long (one by default): enough for an <audio> element to load. */
+export function mockWav(seconds = 1): Buffer {
+  const rate = 8000;
+  const data = Buffer.alloc(rate * 2 * seconds);
+  for (let i = 0; i < rate * seconds; i++) data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 3000), i * 2);
+  const head = Buffer.alloc(44);
+  head.write("RIFF", 0);
+  head.writeUInt32LE(36 + data.length, 4);
+  head.write("WAVEfmt ", 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(rate, 24);
+  head.writeUInt32LE(rate * 2, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write("data", 36);
+  head.writeUInt32LE(data.length, 40);
+  return Buffer.concat([head, data]);
+}
+
+/**
+ * Chat audio at one state: compose, render, check, save, done, failed or stopped, with the
+ * progress, checks and waveform the card shows at that point.
+ */
+export function mockAudio(state: string, runId: string): Record<string, unknown> {
+  const id = `0000000a-0000-4000-8000-${String(Math.floor(Math.random() * 1e12)).padStart(12, "0")}`;
+  const order = ["compose", "render", "check", "save"];
+  const stage = state === "done" ? "save" : state === "failed" || state === "stopped" ? "render" : state;
+  const at = order.indexOf(stage);
+  const peaks = Array.from({ length: 64 }, (_, i) => Math.round(255 * (0.3 + 0.7 * Math.abs(Math.sin(i / 5)))));
+  return {
+    id, title: "Metal riff demo", duration_ms: 24000, method: "MIDI → FluidSynth (GeneralUser GS)",
+    stage, state: state === "done" ? "done" : state === "failed" || state === "stopped" ? "failed" : "running",
+    ...(state === "failed" ? { failure_kind: "error", error: "fluidsynth isn't installed in this runner image.", error_log: "sh: 1: fluidsynth: not found\nexit status 127" } : {}),
+    ...(state === "stopped" ? { failure_kind: "stopped", error: "Stopped before the audio was finished." } : {}),
+    script_path: "scratch/riff.py",
+    checks: at >= 2 || state === "done" ? [
+      { label: "Peak stays under -1 dBFS", passed: true },
+      { label: "No silence longer than 1 s", ...(state === "done" ? { passed: true } : {}) },
+    ] : [],
+    percent: state === "done" ? 100 : at === 1 ? 54 : at >= 2 ? 100 : 0, stage_note: at === 1 ? "Rendering MIDI with FluidSynth" : "",
+    run_id: runId,
+    ...(state === "done" ? { library_item_id: "00000000-aaaa-4aaa-8aaa-000000000001", finished_at: new Date().toISOString(), peaks,
+      output: { filename: "metal-riff-demo.wav", content_type: "audio/wav", size_bytes: 4_200_000, duration_ms: 24000 } } : {}),
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };
 }
 

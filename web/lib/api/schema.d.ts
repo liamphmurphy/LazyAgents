@@ -2097,11 +2097,17 @@ export interface paths {
         get: operations["listLibraryItems"];
         put?: never;
         /**
-         * Add an image of your own to your Library
-         * @description Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
-         *     Library, e.g. a photo to use as their reference image. It counts
-         *     against the same storage cap as generated images. 422 for another
-         *     type, an empty file, one over the limit or a full Library.
+         * Add an image or audio file of your own to your Library
+         * @description Stores one image (PNG, JPEG, GIF or WebP), audio file (MP3, WAV,
+         *     OGG or M4A) or any other file, up to 25 MB, in the caller's Library,
+         *     e.g. a photo to use as their reference image, a voice memo, a script,
+         *     a zip or a spreadsheet. Anything that isn't an image or audio is kept
+         *     as a file and only ever downloaded: executables and disk images are
+         *     refused, and a zip is listed, never unpacked. It counts against the same
+         *     storage cap as generated images. An audio file is checked against its
+         *     name, and its length and waveform are read for WAV and MP3. 422 for
+         *     a file that isn't what its name says, an executable or disk image, an empty file,
+         *     one over the limit or a full Library.
          */
         post: operations["uploadLibraryItem"];
         delete?: never;
@@ -2212,7 +2218,11 @@ export interface paths {
         delete: operations["deleteLibraryItem"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename an item in your Library
+         * @description 404 unless it is yours. 422 for an empty or over-long title.
+         */
+        patch: operations["renameLibraryItem"];
         trace?: never;
     };
     "/library/{itemId}/reference": {
@@ -2261,6 +2271,30 @@ export interface paths {
          * @description 404 unless it is yours.
          */
         get: operations["getLibraryItemContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{itemId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A file's contents at a glance
+         * @description The first 200 lines of a text or code file, the first 20 rows of a CSV
+         *     or TSV, or the names in a zip, read when asked for. Nothing is run,
+         *     rendered or unpacked. 404 unless it is your file.
+         */
+        get: operations["getLibraryFilePreview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2678,6 +2712,54 @@ export interface paths {
          * @description Supports a single byte Range, so players can seek.
          */
         get: operations["getChatVideoContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The chat's audio, oldest first
+         * @description Audio a coding chat renders with code during its turn (MIDI through a
+         *     soundfont, a synth script, ffmpeg). Each follows its stages (compose,
+         *     render, check, save) as the agent and its renderer report them; a
+         *     finished one is also kept in the Library.
+         */
+        get: operations["listChatAudio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/audio/{audioId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+                audioId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A finished audio file, for playing or downloading
+         * @description Supports a single byte Range, so players can seek.
+         */
+        get: operations["getChatAudioContent"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3755,6 +3837,32 @@ export interface paths {
         patch: operations["renameDeck"];
         trace?: never;
     };
+    "/slides/{canvasId}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save an export of a deck (PDF or PowerPoint) to the Library
+         * @description Stores one finished export file, built by the Export menu, as an
+         *     export linked to its deck. The file's content decides its type: a PDF,
+         *     or a .pptx (a zip holding ppt/presentation.xml). It counts against the
+         *     Library's 1 GB storage cap. 404 for anyone else's deck; 422 for another
+         *     type, an empty file, one over 25 MB or a full Library.
+         */
+        post: operations["saveDeckExportToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/slides/{canvasId}/duplicate": {
         parameters: {
             query?: never;
@@ -4060,10 +4168,9 @@ export interface paths {
         put?: never;
         /**
          * Save an export of a design (PNG, SVG or PDF) to the Library
-         * @description Stores one finished export file, built by the Export menu, in the
-         *     caller's Library: a PNG as an image, an SVG as a diagram and a PDF as
-         *     a document, titled after the file name. The file's content decides
-         *     its type, not its name. It counts against the Library's 1 GB storage
+         * @description Stores one finished export file (PNG, SVG or PDF), built by the Export
+         *     menu, as an export linked to its design, titled after the file name.
+         *     The file's content decides its type, not its name. It counts against the Library's 1 GB storage
          *     cap. 404 for anyone else's design; 422 for another type, an empty
          *     file, one over 25 MB or a full Library, and then nothing is stored.
          */
@@ -4222,7 +4329,8 @@ export interface paths {
         put?: never;
         /**
          * Save a document's current version to the Library as Markdown
-         * @description Keeps a copy of the text as it is now; later edits don't change it.
+         * @description Keeps a copy of the text as it is now, as an export linked to the
+         *     document; later edits don't change it.
          *     Saving the same text again returns the existing item. It counts
          *     against the Library's storage cap. 404 for anyone else's canvas; 422
          *     for an SVG canvas or a full Library.
@@ -8274,8 +8382,69 @@ export interface components {
         ChatVideos: {
             videos: components["schemas"]["ChatVideo"][];
         };
+        /**
+         * @description compose: the music or sound is being written; render: the renderer is running; check: measuring the file (a persona can't listen, so the checks are numbers); save: storing it
+         * @enum {string}
+         */
+        ChatAudioStage: "compose" | "render" | "check" | "save";
+        ChatAudioOutput: {
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            duration_ms?: number;
+        };
+        ChatAudio: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description The planned length */
+            duration_ms: number;
+            /** @description How it was made, e.g. MIDI → FluidSynth; empty until named */
+            method: string;
+            stage: components["schemas"]["ChatAudioStage"];
+            /** @enum {string} */
+            state: "running" | "done" | "failed";
+            /**
+             * @description Why a failed job failed: stopped when the person stopped the reply
+             * @enum {string}
+             */
+            failure_kind?: "error" | "stopped";
+            error?: string;
+            /** @description The failing command's output */
+            error_log?: string;
+            /** @description The renderer, relative to the chat's workspace; empty until named */
+            script_path: string;
+            checks: components["schemas"]["ChatVideoCheck"][];
+            percent: number;
+            stage_note: string;
+            /** Format: uuid */
+            run_id?: string;
+            /**
+             * Format: uuid
+             * @description The reply it belongs to, once that reply is stored; absent while the turn runs
+             */
+            message_id?: string;
+            /**
+             * Format: uuid
+             * @description Its copy in the Library, while that exists
+             */
+            library_item_id?: string;
+            /** @description The waveform of a finished file the server could decode */
+            peaks?: number[];
+            output?: components["schemas"]["ChatAudioOutput"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        ChatAudios: {
+            audio: components["schemas"]["ChatAudio"][];
+        };
         /** @enum {string} */
-        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video";
+        LibraryItemKind: "image" | "diagram" | "link" | "document" | "video" | "audio" | "file" | "export";
         LibraryItem: {
             /** Format: uuid */
             id: string;
@@ -8323,7 +8492,7 @@ export interface components {
             link_status?: components["schemas"]["LibraryLinkStatus"];
             /** @description For a link: a saved summary, as markdown */
             summary?: string;
-            /** @description For a video: its length */
+            /** @description For a video or audio: its length */
             duration_ms?: number;
             /** @description For a video: frame width in pixels */
             width?: number;
@@ -8331,8 +8500,51 @@ export interface components {
             height?: number;
             /** @description For a video: a poster image is served at /library/{itemId}/poster */
             has_poster?: boolean;
+            /** @description For a file or export: one line under the name, e.g. 18 files, 112 lines or 1,204 rows · 6 columns. Absent when there is nothing to say beyond the size. */
+            detail?: string;
+            export_source?: components["schemas"]["LibraryExportSource"];
+            /** @description For generated audio: how it was made, e.g. MIDI → FluidSynth; absent for an upload */
+            method?: string;
+            /** @description For audio: the waveform, one value (0-255) per bucket. Absent when the server can't decode the format (OGG, M4A); duration_ms is absent then too. */
+            peaks?: number[];
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description For an export: the Slides deck, Design or Doc it was made from, and whether that has changed since */
+        LibraryExportSource: {
+            /** @enum {string} */
+            kind: "slides" | "designs" | "docs";
+            /** Format: uuid */
+            id: string;
+            /** @description The source's current title; absent once it is deleted */
+            title?: string;
+            /**
+             * @description current: not edited since the export; changed: edited since; deleted: gone
+             * @enum {string}
+             */
+            status: "current" | "changed" | "deleted";
+        };
+        /** @description What a file's dialog shows. Nothing is run or rendered: text is shown as text. */
+        LibraryFilePreview: {
+            /** @enum {string} */
+            kind: "text" | "table" | "zip" | "none";
+            /** @description text: the first 200 lines */
+            lines?: string[];
+            /** @description table: the first 20 rows */
+            rows?: string[][];
+            /** @description zip: the first 200 file names */
+            entries?: components["schemas"]["LibraryFileEntry"][];
+            /** @description Lines, rows or files in the whole file; 0 when it isn't known */
+            total: number;
+            truncated: boolean;
+        };
+        LibraryFileEntry: {
+            name: string;
+            /**
+             * Format: int64
+             * @description Uncompressed size in bytes
+             */
+            size: number;
         };
         /** @enum {string} */
         LibraryLinkStatus: "to_read" | "done";
@@ -12848,6 +13060,37 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    renameLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The renamed item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     setLibraryReference: {
         parameters: {
             query?: never;
@@ -12934,6 +13177,30 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             416: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryFilePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFilePreview"];
+                };
+            };
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
@@ -13626,6 +13893,71 @@ export interface operations {
                 };
                 content: {
                     "video/mp4": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            416: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatAudio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat's audio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAudios"];
+                };
+            };
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatAudioContent: {
+        parameters: {
+            query?: {
+                /** @description Serve as an attachment instead of inline */
+                download?: boolean;
+            };
+            header?: {
+                /** @description One byte range, e.g. bytes=0-1023 */
+                Range?: string;
+            };
+            path: {
+                id: components["parameters"]["ChatId"];
+                audioId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The audio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The requested range of the audio */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             404: components["responses"]["Error"];
@@ -15322,6 +15654,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyCanvas"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveDeckExportToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                canvasId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryItem"];
                 };
             };
             404: components["responses"]["Error"];

@@ -139,7 +139,7 @@ func (q *Queries) CreateChatVideoJob(ctx context.Context, arg CreateChatVideoJob
 
 const createLibraryVideo = `-- name: CreateLibraryVideo :one
 INSERT INTO library_items (workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, duration_ms, width, height, poster_key)
-VALUES ($1, $2, 'video', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key
+VALUES ($1, $2, 'video', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id, workspace_id, user_id, kind, title, filename, content_type, size_bytes, blob_key, chat_id, message_id, persona_id, created_at, reference, reference_persona_id, source, url, note, site, video_id, link_status, summary, duration_ms, width, height, poster_key, peaks, method, detail, source_id, source_stamp
 `
 
 type CreateLibraryVideoParams struct {
@@ -204,6 +204,11 @@ func (q *Queries) CreateLibraryVideo(ctx context.Context, arg CreateLibraryVideo
 		&i.Width,
 		&i.Height,
 		&i.PosterKey,
+		&i.Peaks,
+		&i.Method,
+		&i.Detail,
+		&i.SourceID,
+		&i.SourceStamp,
 	)
 	return i, err
 }

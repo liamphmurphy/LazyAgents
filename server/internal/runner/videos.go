@@ -102,6 +102,7 @@ func (s *videoSync) tick(ctx context.Context, final bool) {
 			s.r.saveChatVideo(ctx, s.c, job, final)
 		}
 	}
+	s.tickAudio(ctx, final)
 }
 
 // known is what this sync already copied for the job. A runner that took
@@ -271,6 +272,7 @@ func scriptTail(src string) (int, string) {
 func (r *Runner) finishVideoSync(ctx context.Context, s *videoSync, stop func()) {
 	stop()
 	s.tick(ctx, true)
+	r.failLeftoverAudio(ctx, s.c)
 	jobs, err := r.q().RunningChatVideoJobs(ctx, &s.c.run.ID)
 	if err != nil {
 		r.Log.Warn("chat videos", "run", s.c.run.ID, "err", err)

@@ -201,6 +201,38 @@ type ChatAttachment struct {
 	Source      string
 }
 
+type ChatAudioJob struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	UserID            uuid.UUID
+	ChatID            *uuid.UUID
+	RunID             *uuid.UUID
+	TurnID            *uuid.UUID
+	MessageID         *uuid.UUID
+	PersonaID         *uuid.UUID
+	Title             string
+	DurationMs        int32
+	ScriptPath        string
+	Method            string
+	Stage             string
+	State             string
+	Checks            json.RawMessage
+	Percent           int32
+	StageNote         string
+	Error             *string
+	FailureKind       *string
+	ErrorLog          string
+	OutputBlobKey     *string
+	OutputFilename    *string
+	OutputContentType *string
+	OutputSizeBytes   *int64
+	OutputDurationMs  *int32
+	LibraryItemID     *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	FinishedAt        *time.Time
+}
+
 type ChatCanvas struct {
 	ID                 uuid.UUID
 	SessionID          uuid.UUID
@@ -946,6 +978,11 @@ type LibraryItem struct {
 	Width              *int32
 	Height             *int32
 	PosterKey          *string
+	Peaks              []byte
+	Method             string
+	Detail             string
+	SourceID           *uuid.UUID
+	SourceStamp        *time.Time
 }
 
 type LinkPreview struct {

@@ -3,6 +3,7 @@
 import { Dialog, DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
 import { downloadFile } from "@/lib/api/docs-hooks";
+import { useSaveDeckExport } from "@/lib/api/slides-hooks";
 import { measure } from "@/lib/slides/fonts";
 import { layoutSlide } from "@/lib/slides/layout";
 import { SlideSvg } from "@/lib/slides/render";
@@ -15,6 +16,7 @@ const detail = "text-[11px] text-fg-tertiary";
 
 type Notice = { tone: "ok" | "error" | "busy"; text: string };
 type Format = "pdf" | "pptx";
+type Target = "download" | "library";
 
 /**
  * Every way a deck leaves Vesper (mockup 5/6). `current` saves pending edits
@@ -22,16 +24,17 @@ type Format = "pdf" | "pptx";
  * change. Both formats are built in the browser and downloaded as files.
  * It's the editor header's Share ▾; Present is its own header action.
  */
-export function ExportMenu({ title, current, assetUrl, fontsReady }: { title: string; current: () => Promise<{ deck: Deck; seq: number }>; assetUrl: (id: string) => string; fontsReady: boolean }) {
+export function ExportMenu({ deckId, title, current, assetUrl, fontsReady }: { deckId: string; title: string; current: () => Promise<{ deck: Deck; seq: number }>; assetUrl: (id: string) => string; fontsReady: boolean }) {
   const [notice, setNotice] = useState<Notice>();
-  const [preflight, setPreflight] = useState<{ format: Format; deck: Deck; slides: { n: number; id: string; title: string }[] }>();
+  const save = useSaveDeckExport(deckId);
+  const [preflight, setPreflight] = useState<{ format: Format; to: Target; deck: Deck; slides: { n: number; id: string; title: string }[] }>();
   const abort = useRef<AbortController | null>(null);
   const say = (n: Notice) => {
     setNotice(n);
     if (n.tone !== "busy") setTimeout(() => setNotice((x) => (x === n ? undefined : x)), 6000);
   };
 
-  const build = async (format: Format, deck: Deck) => {
+  const build = async (format: Format, deck: Deck, to: Target) => {
     setPreflight(undefined);
     const ctl = new AbortController();
     abort.current = ctl;
@@ -41,23 +44,29 @@ export function ExportMenu({ title, current, assetUrl, fontsReady }: { title: st
       const exp = await import("@/lib/slides/export");
       const blob = format === "pdf" ? await exp.deckToPdf(deck, assetUrl, (done, total) => setNotice({ tone: "busy", text: `Building PDF… slide ${done} of ${total}` }), ctl.signal) : await exp.deckToPptx(deck, assetUrl);
       if (ctl.signal.aborted) return;
-      downloadFile(title, format, blob);
-      say({ tone: "ok", text: `Downloaded “${title}.${format}”` });
+      if (to === "library") {
+        const name = `${title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "deck"}.${format}`;
+        await save.mutateAsync(new File([blob], name, { type: blob.type }));
+        say({ tone: "ok", text: `Saved “${name}” to your Library` });
+      } else {
+        downloadFile(title, format, blob);
+        say({ tone: "ok", text: `Downloaded “${title}.${format}”` });
+      }
     } catch (e) {
       if (ctl.signal.aborted) return say({ tone: "ok", text: "Export cancelled" });
-      say({ tone: "error", text: `${label} export failed: ${e instanceof Error ? e.message : "try again"}` });
+      say({ tone: "error", text: `${to === "library" ? `Couldn’t save the ${label} to your Library` : `${label} export failed`}: ${e instanceof Error ? e.message : "try again"}` });
     } finally {
       if (abort.current === ctl) abort.current = null;
     }
   };
 
-  const start = (format: Format) => async () => {
+  const start = (format: Format, to: Target = "download") => async () => {
     try {
       const { deck } = await current();
       // Preflight: list slides whose text runs past its box before exporting them that way.
       const slides = deck.slides.flatMap((s, i) => (!s.hidden && layoutSlide(deck, s, measure).overflow.size ? [{ n: i + 1, id: s.id, title: slideTitle(s) }] : []));
-      if (slides.length) setPreflight({ format, deck, slides });
-      else await build(format, deck);
+      if (slides.length) setPreflight({ format, to, deck, slides });
+      else await build(format, deck, to);
     } catch (e) {
       say({ tone: "error", text: `Couldn't save before exporting: ${e instanceof Error ? e.message : "try again"}` });
     }
@@ -90,6 +99,14 @@ export function ExportMenu({ title, current, assetUrl, fontsReady }: { title: st
             <DropdownMenu.Item className={item} onSelect={() => void start("pptx")()}>
               PowerPoint (.pptx)<span className={detail}>Editable in PowerPoint, Keynote, Google Slides</span>
             </DropdownMenu.Item>
+            <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+            <DropdownMenu.Label className="px-2.5 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Library</DropdownMenu.Label>
+            <DropdownMenu.Item className={item} onSelect={() => void start("pdf", "library")()}>
+              Save PDF to Library<span className={detail}>Keeps a copy linked to this deck</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={item} onSelect={() => void start("pptx", "library")()}>
+              Save PowerPoint to Library<span className={detail}>Keeps a copy linked to this deck</span>
+            </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -119,7 +136,7 @@ export function ExportMenu({ title, current, assetUrl, fontsReady }: { title: st
                 <Dialog.Close asChild>
                   <Button variant="outline">Go back and fix</Button>
                 </Dialog.Close>
-                <Button variant="primary" autoFocus onClick={() => preflight && void build(preflight.format, preflight.deck)}>
+                <Button variant="primary" autoFocus onClick={() => preflight && void build(preflight.format, preflight.deck, preflight.to)}>
                   Export anyway
                 </Button>
               </div>

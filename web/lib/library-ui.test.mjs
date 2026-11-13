@@ -2,11 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { LIBRARY_UPLOAD_MAX_BYTES, checkLibraryUpload, referenceBadge, referenceCaption, referenceChoices } from "./library-ui.ts";
 
-test("checkLibraryUpload takes images up to 25 MB", () => {
+test("checkLibraryUpload takes images, audio and files up to 25 MB, and turns executables away", () => {
   assert.equal(checkLibraryUpload({ name: "me.jpg", type: "image/jpeg", size: 1000 }), null);
   assert.equal(checkLibraryUpload({ name: "me.webp", type: "image/webp", size: LIBRARY_UPLOAD_MAX_BYTES }), null);
-  assert.match(checkLibraryUpload({ name: "notes.pdf", type: "application/pdf", size: 10 }), /isn't a PNG/);
-  assert.match(checkLibraryUpload({ name: "x.svg", type: "image/svg+xml", size: 10 }), /isn't a PNG/);
+  // Anything else is kept as a file; only executables and disk images are refused.
+  for (const name of ["notes.pdf", "x.svg", "render.py", "bundle.zip", "q3.csv", "model.xlsx", "README"]) assert.equal(checkLibraryUpload({ name, type: "", size: 10 }), null, name);
+  for (const name of ["setup.exe", "Installer.MSI", "disk.iso", "tool.dmg", "app.jar"]) assert.match(checkLibraryUpload({ name, type: "", size: 10 }), /executables and disk images/, name);
+  // A picture that isn't one of the image types is a mistake worth catching early.
+  assert.match(checkLibraryUpload({ name: "me.png", type: "image/bmp", size: 10 }), /isn't a PNG, JPEG, GIF or WebP image/);
+  // Audio is picked by name: browsers report no type for some of these.
+  for (const name of ["memo.mp3", "memo.WAV", "memo.ogg", "memo.m4a"]) assert.equal(checkLibraryUpload({ name, type: "", size: 1000 }), null, name);
+  assert.equal(checkLibraryUpload({ name: "memo.flac", type: "audio/flac", size: 10 }), null, "other audio is kept as a file");
+  assert.match(checkLibraryUpload({ name: "memo.wav", type: "audio/wav", size: LIBRARY_UPLOAD_MAX_BYTES + 1 }), /25 MB/);
+  assert.match(checkLibraryUpload({ name: "memo.mp3", type: "audio/mpeg", size: 0 }), /empty/);
   assert.match(checkLibraryUpload({ name: "e.png", type: "image/png", size: 0 }), /empty/);
   assert.match(checkLibraryUpload({ name: "big.png", type: "image/png", size: LIBRARY_UPLOAD_MAX_BYTES + 1 }), /25 MB/);
 });

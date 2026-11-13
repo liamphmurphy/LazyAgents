@@ -789,7 +789,7 @@ export function DeckScreen({ id }: { id: string }) {
           <Button key="present" variant="secondary" onClick={() => void present()} disabled={!deck} hint="⌘↵">
             ▶ Present
           </Button>,
-          deck ? <ExportMenu key="share" title={title} current={flush} assetUrl={assetUrl} fontsReady={fonts} /> : undefined,
+          deck ? <ExportMenu key="share" deckId={id} title={title} current={flush} assetUrl={assetUrl} fontsReady={fonts} /> : undefined,
         ]
       : undefined,
   };
