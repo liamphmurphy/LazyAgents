@@ -120,6 +120,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const codexAvailable = opts.codexAvailable ?? true;
   const delay = opts.replyDelayMs ?? 300;
   const chats: Chat[] = [];
+  // Dock chat switcher lists (api: GET/POST /dock-chats), scope → chat ids, newest last.
+  const dockChats = new Map<string, string[]>();
   const messages = new Map<string, Message[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   // The running turn's prompt per chat, which an interruption folds in.
@@ -570,6 +572,15 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     // Sidebar settings dot (LAZYAGENTS-44): both harness keys set, so no dot.
     if (path === "/secrets") return json({ key_configured: true, known: [], secrets: ["harness:anthropic", "harness:openai"].map((name, i) => ({ id: `secret-${i}`, name, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" })) });
     if (path === "/saved-views" && method === "GET") return json({ views: [] });
+    if (path === "/dock-chats" && method === "GET") {
+      const ids = dockChats.get(url.searchParams.get("scope") ?? "") ?? [];
+      return json({ chats: ids.toReversed().map((id) => chats.find((c) => c.id === id)).filter(Boolean) });
+    }
+    if (path === "/dock-chats" && method === "POST") {
+      const b = route.request().postDataJSON() as { scope: string; chat_id: string };
+      dockChats.set(b.scope, [...(dockChats.get(b.scope) ?? []).filter((id) => id !== b.chat_id), b.chat_id]);
+      return route.fulfill({ status: 204 });
+    }
     if (path === "/knowledge/resolve") {
       // Only the plan page resolves, so the live activity line can link it.
       return json({ links: url.searchParams.getAll("ref").filter((r) => r === PLAN.path).map((r) => ({ ref: r, target: PLAN })) });

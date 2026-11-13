@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
 import { Conversation } from "@/app/(app)/chat/_components/conversation";
+import { DockChatSwitcher } from "@/components/domain/dock-chat-switcher";
 
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong. Please try again.";
@@ -51,6 +52,12 @@ export function useFinanceAsk(spaceId: string | undefined) {
   });
   return {
     chatId,
+    /** The Finance space's chats, newest first, for the dock's switcher. */
+    chats: chats.data?.chats ?? [],
+    select: (id: string) => {
+      send.reset();
+      setOwn(id);
+    },
     // Nothing to ask until the overview names the Finance space.
     loading: !spaceId || chats.isLoading,
     ask: (q: string) => send.mutate(q),
@@ -74,16 +81,18 @@ export const PRIVACY_NOTE =
 export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <p className="min-w-0 flex-1 text-[11px] text-fg-tertiary">
-          Answers come from your imported transactions.
-        </p>
-        {ask.chatId && (
-          <Button variant="secondary" onClick={ask.startFresh}>
-            New chat
-          </Button>
-        )}
-      </div>
+      {ask.chats.length > 0 && (
+        <DockChatSwitcher
+          current={ask.chats.find((c) => c.id === ask.chatId)}
+          sections={[{ label: "Finance", chats: ask.chats }]}
+          newLabel="New chat"
+          onSelect={ask.select}
+          onNew={ask.startFresh}
+        />
+      )}
+      <p className="flex-none border-b border-border-subtle px-4 py-2 text-[11px] text-fg-tertiary">
+        Answers come from your imported transactions.
+      </p>
       {ask.loading ? (
         <div aria-busy="true" className="flex flex-col gap-3 p-5">
           <Skeleton className="h-5 w-2/3" />
