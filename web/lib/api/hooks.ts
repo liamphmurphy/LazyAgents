@@ -1330,10 +1330,11 @@ export function provideChatRefs(chatId: string, provider: () => Schemas["ChatCon
   };
 }
 
-export function useSendChatMessage(id: string) {
+export function useSendChatMessage(id: string, prepare?: (body: Schemas["NewChatMessage"]) => Promise<Schemas["NewChatMessage"]>) {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: (body: Schemas["NewChatMessage"]) => {
+    mutationFn: async (input: Schemas["NewChatMessage"]) => {
+      const body = prepare ? await prepare(input) : input;
       const extra = chatRefProviders.get(id)?.() ?? [];
       // A ref the caller attached for the same canvas wins.
       const refs = [...(body.context_refs ?? []), ...extra.filter((r) => !(body.context_refs ?? []).some((x) => x.kind === r.kind && x.id === r.id))];
@@ -1366,10 +1367,10 @@ export function useChatFollowups(id?: string) {
   });
 }
 
-export function useQueueFollowup(id: string) {
+export function useQueueFollowup(id: string, prepare?: (body: string) => Promise<string>) {
   const done = useChatInvalidate();
   return useMutation({
-    mutationFn: (body: string) => unwrap(api.POST("/chats/{id}/followups", { params: { path: { id } }, body: { body } })),
+    mutationFn: async (body: string) => unwrap(api.POST("/chats/{id}/followups", { params: { path: { id } }, body: { body: prepare ? await prepare(body) : body } })),
     onSettled: done,
   });
 }
@@ -1395,10 +1396,10 @@ export function useChatAsides(id?: string) {
   });
 }
 
-export function useStartAside(id: string) {
+export function useStartAside(id: string, prepare?: (body: string) => Promise<string>) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => unwrap(api.POST("/chats/{id}/asides", { params: { path: { id } }, body: { body } })),
+    mutationFn: async (body: string) => unwrap(api.POST("/chats/{id}/asides", { params: { path: { id } }, body: { body: prepare ? await prepare(body) : body } })),
     onSettled: () => qc.invalidateQueries({ queryKey: asidesKey(id) }),
   });
 }

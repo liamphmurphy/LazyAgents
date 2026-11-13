@@ -440,16 +440,24 @@ function dropDraft(id: string) {
  * on desktop, so the header has no Chat/Activity switch there. Chats embedded in an app's dock
  * (Designs, Docs, Slides, Finance) leave it unset and keep the switch.
  */
-export function Conversation({ id, onNew, actions, activityInDock = false }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean }) {
+export type ConversationContext = {
+  composer: ReactNode;
+  prepare: (body: Schemas["NewChatMessage"]) => Promise<Schemas["NewChatMessage"]>;
+  /** Queues and asides accept text only, so the host supplies a snapshot. */
+  prepareText: (body: string) => Promise<string>;
+  onSent: () => void;
+};
+
+export function Conversation({ id, onNew, actions, activityInDock = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
   const messages = useChatMessages(id, target ? 1000 : 200);
   const edit = useEditLastChatMessage(id);
   const models = useChatModels();
-  const send = useSendChatMessage(id);
-  const queue = useQueueFollowup(id);
-  const aside = useStartAside(id);
+  const send = useSendChatMessage(id, context?.prepare);
+  const queue = useQueueFollowup(id, context?.prepareText);
+  const aside = useStartAside(id, context?.prepareText);
   const asideList = useChatAsides(id).data;
   // While a reply runs, how Send sends: queue a follow-up (the default), ask an aside, or interrupt.
   const [sendMode, setSendMode] = useState<SendMode>("followup");
@@ -655,7 +663,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
     const body = quoteForComposer(selected, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined) + question;
     cancel.reset();
     pinned.current = true;
-    send.mutate({ body, ...nextRunSettings }, { onError: () => setText((t) => (t ? `${body}\n\n${t}` : body)) });
+    send.mutate({ body, ...nextRunSettings }, { onSuccess: context?.onSent, onError: () => setText((t) => (t ? `${body}\n\n${t}` : body)) });
     return true;
   };
 
@@ -673,6 +681,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
         ...(context_refs ? { context_refs } : {}), ...(files.ids.length ? { attachment_ids: files.ids } : {}) },
       {
         onSuccess: () => {
+          context?.onSent();
           files.clear();
           snippets.clear();
           setText("");
@@ -697,6 +706,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
     setModeError(null);
     pinned.current = true;
     const sent = () => {
+      context?.onSent();
       setText("");
       snippets.clear();
     };
@@ -709,7 +719,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
   function askAuthor(messageId: string, body: string) {
     pinned.current = true;
     const by = list?.find((m) => m.id === messageId)?.persona;
-    send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body });
+    send.mutate({ body: by && by.id !== (c?.speaker ?? c?.persona)?.id ? `@${by.name} ${body}` : body }, { onSuccess: context?.onSent });
   }
 
   // Before the first message the persona can still change: a chat keeps its persona for life,
@@ -738,7 +748,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
       {
         onSuccess: async (next) => {
           if (draft.trim()) putDraft(next.id, draft);
-          router[old.message_count === 0 ? "replace" : "push"](`/chat/${next.id}`);
+          if (onReplace) {
+            try { await onReplace(next.id); }
+            catch { return; } // The host shows the failure; keep the old chat until the replacement is linked.
+          } else router[old.message_count === 0 ? "replace" : "push"](`/chat/${next.id}`);
           // Only drop the old chat if it is still empty (a message may have come from another tab).
           // If the check or the delete fails, the empty chat just stays in the list.
           const latest = await unwrap(api.GET("/chats/{id}", { params: { path: { id: old.id } } })).catch(() => undefined);
@@ -996,10 +1009,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}
                     actions={{
-                      onQueue: (question) => queue.mutate(question),
+                      onQueue: (question) => queue.mutate(question, { onSuccess: context?.onSent }),
                       onSteer: (question) => {
                         pinned.current = true;
-                        send.mutate({ body: question });
+                        send.mutate({ body: question }, { onSuccess: context?.onSent });
                       },
                       disabled: locked || queue.isPending,
                     }}
@@ -1161,7 +1174,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
                     disabled={locked}
                     onSendNow={(body, done) => {
                       pinned.current = true;
-                      send.mutate({ body }, { onSuccess: done });
+                      send.mutate({ body }, { onSuccess: () => { context?.onSent(); done(); } });
                     }}
                     onEdit={(body) => {
                       setText((t) => (t.trim() ? `${body}\n\n${t}` : body));
@@ -1181,6 +1194,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false }: { i
             </div>
           ) : (
             <>
+            {context?.composer}
             <Composer
               sheetSignal={sheetSignal}
               text={text}

@@ -17,6 +17,8 @@ export type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
 export type Picked = { quote: string; at: number };
 
 export type DocEditorHandle = {
+  /** The text currently visible, including edits waiting to save. */
+  getMarkdown: () => string | undefined;
   /** Saves pending edits now, so a comment or request sees them. */
   flush: () => Promise<void>;
   /** After a conflict: write the person's text over `seq`, or take the current version. */
@@ -152,6 +154,7 @@ export const DocEditor = forwardRef<DocEditorHandle, {
   }
 
   useImperativeHandle(ref, () => ({
+    getMarkdown: () => ed.current?.getMarkdown(),
     flush: save,
     keepMine: async (latest) => {
       conflicted.current = false;

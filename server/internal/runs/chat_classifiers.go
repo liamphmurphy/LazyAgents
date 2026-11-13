@@ -107,6 +107,8 @@ func stepLevel(level string) string {
 
 // classifyTurn applies the rules. It is pure; classifyChatTurn gathers s.
 func classifyTurn(s turnSignals) turnDecision {
+	s.Body = chatRequestText(s.Body)
+	s.PrevUser = chatRequestText(s.PrevUser)
 	t := strings.ToLower(strings.TrimSpace(s.Body))
 	words := len(strings.Fields(t))
 	level := chatmodels.AutoLevel(s.Body)

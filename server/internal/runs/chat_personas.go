@@ -55,6 +55,7 @@ func ChatSpeakerID(chat store.ChatSession) *uuid.UUID {
 // start the text or follow a character that isn't a letter or digit (so an
 // email address isn't a mention), and the name must end at one too.
 func PersonaMentions(body string, ps []store.Persona) []uuid.UUID {
+	body = chatRequestText(body)
 	byLen := slices.Clone(ps)
 	slices.SortStableFunc(byLen, func(a, b store.Persona) int {
 		return utf8.RuneCountInString(b.Name) - utf8.RuneCountInString(a.Name)
@@ -87,6 +88,14 @@ func PersonaMentions(body string, ps []store.Persona) []uuid.UUID {
 
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
 
+// Knowledge appends page context after this marker. It is source material,
+// so mentions and hand-off instructions there must not change chat controls.
+// Keep the marker aligned with knowledge-dock.tsx.
+func chatRequestText(body string) string {
+	request, _, _ := strings.Cut(body, "\n\n<!-- vesper:knowledge-context -->\n")
+	return request
+}
+
 var (
 	relayNumber = `(\d{1,4}|` + strings.Join(slices.Sorted(maps.Keys(numberWords)), "|") + `)`
 	// "talk up to 25 messages", "go for another ten rounds", "no more than 3 replies".
@@ -105,6 +114,7 @@ var numberWords = map[string]int{
 // to each other ("talk up to 25 messages"), capped at MaxRelayLimit. It
 // returns 0 when the message doesn't say, so MaxRelayTurns applies.
 func RelayLimitIn(body string) int {
+	body = chatRequestText(body)
 	if relayUnlimited.MatchString(body) {
 		return MaxRelayLimit
 	}
