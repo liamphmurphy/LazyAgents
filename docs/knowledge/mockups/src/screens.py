@@ -552,7 +552,7 @@ def s_home(x,y):
     return f
 
 def base_editor(f):
-    f.add({"type":"instance","name":"Editor (behind)","component":"n_scr_editor","x":0,"y":0,"w":1440,"h":900})
+    f.k.extend(s_editor(0,0).k)
     f.rect(0,0,1440,900,fill="#05040ACC",name="Scrim")
 ORDER=[s_home,s_editor,s_chat,s_review,s_graph,s_switcher,s_daily,s_query,s_import,s_import_states,s_agent,s_connect]
 def build():
