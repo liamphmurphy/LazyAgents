@@ -48,7 +48,7 @@ test("the chat starts folded to a rail on Home, opens from it, and a general cha
   await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
 
-  // The choice is remembered: open after a reload, with the same chat.
+  // A reload in the same tab keeps it open, with the same chat.
   await page.reload();
   await expect(dock(page)).toBeVisible();
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
@@ -57,6 +57,31 @@ test("the chat starts folded to a rail on Home, opens from it, and a general cha
   await page.locator("body").click({ position: { x: 700, y: 400 } });
   await page.keyboard.press(`${mod}+Backslash`);
   await expect(rail(page)).toBeVisible();
+});
+
+test("a new tab starts folded even if the dock was open elsewhere", async ({ page, context }) => {
+  await install(page);
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await expect(dock(page)).toBeVisible();
+
+  const other = await context.newPage();
+  // Left behind by builds that remembered the open state across visits.
+  await other.addInitScript(() => window.localStorage.setItem("lazyagents.editor-dock.knowledge", JSON.stringify({ open: true, tab: "chat" })));
+  await install(other);
+  await other.goto("/knowledge");
+  await expect(rail(other)).toBeVisible();
+  await expect(dock(other)).toHaveCount(0);
+});
+
+test("a remembered general chat that no longer exists falls back to Start a chat", async ({ page }) => {
+  await install(page);
+  await page.addInitScript(() => window.localStorage.setItem("vesper.knowledge.chat", "77777777-7777-4777-8777-777777777777"));
+  await page.goto("/knowledge");
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await expect(dock(page).getByRole("button", { name: "Start a chat", exact: true })).toBeVisible();
+  await expect(dock(page).getByText("This chat doesn’t exist")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("vesper.knowledge.chat"))).toBeNull();
 });
 
 test("on a page the dock holds that page's chat, and ⌘J opens it, with the page's own sidebar free of a Chat tab", async ({ page }) => {

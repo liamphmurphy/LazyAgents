@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/primitives";
 import { isTyping } from "@/components/shell/shortcuts";
 import { provideChatRefs, useChat, useCreateChat } from "@/lib/api/hooks";
 import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledge-hooks";
-import type { Schemas } from "@/lib/api/client";
+import { ApiError, type Schemas } from "@/lib/api/client";
 import { refKey } from "@/lib/chat-context";
 import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
 import { useKnowledgeChat } from "./chat-context";
@@ -23,7 +23,7 @@ const GENERAL_CHAT_KEY = "vesper.knowledge.chat";
 
 /**
  * The persona chat on the right of every Knowledge screen, on the shared dock: it folds to a rail and starts
- * folded. On a page it is that page's chat; elsewhere one general Knowledge chat.
+ * folded in each new browser tab. On a page it is that page's chat; elsewhere one general Knowledge chat.
  */
 export function KnowledgeDock({ pageId }: { pageId?: string }) {
   const { request } = useKnowledgeChat();
@@ -40,12 +40,13 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    setState(loadDock(window.localStorage, APP, TABS, false));
+    // Per tab (sessionStorage), so a new visit starts folded but a reload keeps it as it was.
+    setState(loadDock(window.sessionStorage, APP, TABS, false));
     setGeneral(window.localStorage.getItem(GENERAL_CHAT_KEY));
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) saveDock(window.localStorage, APP, state);
+    if (loaded) saveDock(window.sessionStorage, APP, state);
   }, [state, loaded]);
   const [seenRequest, setSeenRequest] = useState(request);
   if (request !== seenRequest) {
@@ -75,11 +76,18 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
     return () => cancelAnimationFrame(frame);
   }, [focusChat, uid]);
 
-  const chatId = pageId ? (page?.chat_id ?? undefined) : (general ?? undefined);
+  // The linked chat can be gone (deleted, or an id remembered from another instance): treat it as no chat.
+  const linked = pageId ? (page?.chat_id ?? undefined) : (general ?? undefined);
+  const linkedChat = useChat(linked);
+  const gone = linkedChat.error instanceof ApiError && linkedChat.error.status === 404;
+  const chatId = gone ? undefined : linked;
+  useEffect(() => {
+    if (gone && !pageId && window.localStorage.getItem(GENERAL_CHAT_KEY) === linked) window.localStorage.removeItem(GENERAL_CHAT_KEY);
+  }, [gone, pageId, linked]);
   useEffect(() => {
     if (chatId && pageId) return provideChatRefs(chatId, () => [{ kind: "page", id: pageId }]);
   }, [chatId, pageId]);
-  const chat = useChat(chatId).data;
+  const chat = gone ? undefined : linkedChat.data;
   const running = chat?.state === "running";
   const shown = state.open && !state.hidden;
 
