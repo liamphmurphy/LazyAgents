@@ -2,10 +2,13 @@ package agentapi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -38,7 +41,7 @@ type NewPageIn struct {
 	Body       string               `json:"body"`
 	Properties artifacts.Properties `json:"properties,omitempty"`
 	Template   string               `json:"template,omitempty"`
-	Source     string               `json:"source,omitempty"`
+	Source     string               `json:"source,omitempty" jsonschema:"For a literature note: the URL or citation it is about. A saved link's URL fills the title, source properties and a starting body from the link; for a video transcript pass the video URL and your notes as body."`
 	Suggest    bool                 `json:"suggest,omitempty"`
 }
 
@@ -128,6 +131,11 @@ func setProperties(ctx context.Context, d Deps, c agents.Caller, in PropertiesIn
 	return pageWriteSummary(result), nil
 }
 func createPage(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any, error) {
+	if in.Source != "" {
+		if err := literatureSource(ctx, d, c, &in); err != nil {
+			return nil, err
+		}
+	}
 	if in.Title == "" {
 		return nil, apperr.Invalid("title", "is required")
 	}
@@ -147,10 +155,6 @@ func createPage(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any
 		}
 		body = wiki.RenderTemplate(body, in.Title, time.Now().UTC().Format("2006-01-02"), in.Properties)
 	}
-	if in.Source != "" {
-		in.Properties["source"] = in.Source
-		in.Properties["type"] = "literature"
-	}
 	scopes, _, err := scopesFor(ctx, d, c, in.Ticket)
 	if err != nil {
 		return nil, err
@@ -168,6 +172,53 @@ func createPage(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any
 	}
 	return map[string]any{"id": result.Note.ID, "path": result.Note.Path, "version_id": result.Version.ID, "state": result.State, "url": wiki.PageURL(result.Note.ID, result.Note.Title)}, nil
 }
+
+// literatureSource fills a literature note from the source it cites: when the
+// source is one of the person's saved links, its title, site and (for a video)
+// kind become properties, and its summary and note start an empty body. Any
+// other source (a transcript's video URL, a book) is recorded as written.
+func literatureSource(ctx context.Context, d Deps, c agents.Caller, in *NewPageIn) error {
+	if in.Properties == nil {
+		in.Properties = artifacts.Properties{}
+	}
+	in.Properties["source"] = in.Source
+	in.Properties["type"] = "literature"
+	scope, err := chatScopeFor(ctx, d, c)
+	if err != nil || scope == nil {
+		return err
+	}
+	link, err := d.Q.GetLibraryLink(ctx, store.GetLibraryLinkParams{WorkspaceID: c.Agent.WorkspaceID, UserID: scope.UserID, Url: in.Source})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	in.Properties["source_title"] = link.Title
+	if link.Site != "" {
+		in.Properties["source_site"] = link.Site
+	}
+	if link.VideoID != "" {
+		in.Properties["source_kind"] = "video"
+	}
+	if in.Title == "" {
+		in.Title = link.Title
+	}
+	if in.Body == "" && in.Template == "" {
+		var b strings.Builder
+		fmt.Fprintf(&b, "# %s\n\nSource: [%s](%s)\n", in.Title, link.Title, link.Url)
+		if link.Summary != "" {
+			fmt.Fprintf(&b, "\n## Summary\n\n%s\n", link.Summary)
+		}
+		if link.Note != "" {
+			fmt.Fprintf(&b, "\n## Why I saved it\n\n%s\n", link.Note)
+		}
+		b.WriteString("\n## Notes\n")
+		in.Body = b.String()
+	}
+	return nil
+}
+
 func captureNote(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any, error) {
 	if _, err := personChatScope(ctx, d, c, "capture_note"); err != nil {
 		return nil, err
