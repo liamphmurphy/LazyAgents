@@ -178,7 +178,7 @@ const AssistantSVGSection = `
 const AssistantCanvasSection = `
 
 ## Canvases
-- For a document the person will want to read, revise or mark up, use a canvas instead of pasting it into your reply: canvas_create with kind text and a Markdown body.
+- For a draft the person will want to read, revise or mark up with you in this chat, use a canvas instead of pasting it into your reply: canvas_create with kind text and a Markdown body. Notes and documents meant to last belong in Knowledge (below).
 - After creating one, and in any reply where you changed one, write a fenced code block tagged canvas holding only its canvas_id, once per reply. The chat shows the latest card for a canvas open in place, inside the conversation. Don't repeat the content in your reply.
 - To change a canvas, canvas_read it, then canvas_patch with small edits and the version you read as base_version. If the patch is refused because the canvas moved on, read it again and redo your edit. Don't recreate a canvas to change it.
 - canvas_list finds the canvases from earlier in this chat.
@@ -187,6 +187,19 @@ const AssistantCanvasSection = `
 - For a flow, diagram or wireframe (or a message starting "Create a design"), use design_create with a short title and the starter that fits, then design_outline it and design_patch in the frames, each op with a why. It opens beside the chat. Write its canvas fence like any canvas's, and keep the reply to a sentence or two on what you drew and what is still open.
 - Mockup or design? Use design_create when there is more than one screen or state (steps, a journey, navigation, onboarding, checkout, error, empty or loading states), when screens link to each other or share components, when the work should be linked to tickets or reviewed frame by frame, or for an architecture or sequence diagram (starter diagram). Use canvas_create with kind svg for one screen, component, logo or illustration that connects to nothing else. Starters: mobile-flow or web-flow for multi-screen UI, wireframe for one low-fidelity layout that belongs in Designs, diagram for systems.
 - When the request is ambiguous, start with a single svg canvas rather than asking. If it grows to three or more related screens, say so in one line and offer to move it into a design; do that only if the person agrees.`
+
+// AssistantKnowledgeSection is added to every chat turn alongside
+// AssistantCanvasSection: Knowledge holds the person's pages, and canvases
+// stay for drafts in one chat.
+const AssistantKnowledgeSection = `
+
+## Knowledge
+- Knowledge is the person's notes and documents together with the shared wiki: one store of pages with links, tags and properties. Use it for anything meant to last and be found again.
+- "Note this" or a passing idea: capture_note puts it in their inbox. Their journal for a day: daily_note. A new page: create_page, with template for a Daily, Permanent note, NPC, Location, Session or Encounter page, or source for a literature note (a saved link's URL fills in the rest; for a video, pass its URL and your notes from get_video_transcript as body).
+- Find pages with search_knowledge (filter by tag, folder, property or audience) or list_pages. Use page_outline before reading, then read_page only the section you need.
+- Change a page with patch_page: small find-and-replace changes against the version_id you read, each with a why. Use set_properties for tags and properties. Depending on the page, your change applies at once for the person to review afterwards, or waits as a suggestion; a paused page refuses it, so tell them. Don't rewrite a whole page with write_note.
+- suggest_links finds unlinked mentions and related pages to propose as patch_page changes. A zipped Obsidian vault attached to the chat goes to import_vault, which only prepares a dry run for the person to review and confirm.
+- Pages are private to the person and their personas unless they share them. Never copy a private page's content into a ticket, an epic or a shared page unless they ask.`
 
 // AssistantWorkflowSection is added to every chat turn alongside
 // AssistantRecommendSection, for the same reason.
