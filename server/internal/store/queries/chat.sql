@@ -381,8 +381,11 @@ WHERE c.id = sqlc.arg(id) AND c.last_read_seq < least(sqlc.arg(seq)::bigint, m.t
 
 -- name: PersonaDockChats :many
 -- A person's chats with live or unread activity, newest first.
-SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
+SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id, c.space_id,
   coalesce(c.last_message_at, c.created_at)::timestamptz AS last_activity_at,
+  -- When the running turn began; a turn with no recorded start counts as started when the chat last moved.
+  coalesce((SELECT t.started_at FROM run_turns t WHERE t.run_id = c.current_run_id AND t.status = 'running' ORDER BY t.seq DESC LIMIT 1),
+    c.last_message_at, c.created_at)::timestamptz AS turn_started_at,
   coalesce((SELECT r.harness FROM runs r WHERE r.id = c.current_run_id), c.harness)::text AS harness,
   u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
 FROM chat_sessions c

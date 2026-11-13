@@ -44,7 +44,7 @@ const footer = (page: Page) => page.getByRole("region", { name: "Harness activit
 const bubble = (page: Page, label: string) => page.getByRole("dialog", { name: `${label} usage` });
 
 test("the flat footer replaces the profile and floating orb; settings sit beside collapse", async ({ page }) => {
-  await installFooter(page, { dock: { personas: [], harnesses: harnesses() } });
+  await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses() } });
   await page.goto("/board?project=WEB");
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
   // Only the characters: no "Harnesses · All idle" summary row under them.
@@ -67,7 +67,7 @@ test("the flat footer replaces the profile and floating orb; settings sit beside
 });
 
 test("only connected harnesses show, and the row fits however many there are", async ({ page }) => {
-  const state = { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { connected: false, running: 0 }, agy: { connected: false } }) } };
+  const state = { dock: { personas: [], space_chats: [], harnesses: harnesses({ claude: { running: 0 }, codex: { connected: false, running: 0 }, agy: { connected: false } }) } };
   await installFooter(page, state);
   await page.goto("/board?project=WEB");
   const buttons = footer(page).getByRole("button", { name: /show usage/ });
@@ -90,7 +90,7 @@ test("only connected harnesses show, and the row fits however many there are", a
 });
 
 test("a character opens a bubble with its own usage beside it; Escape restores focus", async ({ page }) => {
-  await installFooter(page, { dock: { personas: [], harnesses: harnesses() } });
+  await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses() } });
   await page.goto("/board?project=WEB");
   const trigger = footer(page).getByRole("button", { name: "Codex, working; show usage" });
   await trigger.click();
@@ -126,7 +126,7 @@ test("a character opens a bubble with its own usage beside it; Escape restores f
 });
 
 test("working follows live harness activity; the approved characters idle at rest", async ({ page }) => {
-  const state = { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } };
+  const state = { dock: { personas: [], space_chats: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } };
   await installFooter(page, state);
   await page.goto("/board?project=WEB");
   const body = (kind: string) => footer(page).locator(`.harness-character.${kind} .body`);
@@ -145,7 +145,7 @@ test("working follows live harness activity; the approved characters idle at res
 });
 
 test("zero, unavailable, checking, warning and limited readings stay distinct", async ({ page }) => {
-  const state = { dock: { personas: [], harnesses: harnesses({ claude: { windows: [{ id: "s", kind: "session" as const, label: "Session", used_percent: 0 }], usage_checking: true }, codex: { usage_available: false, usage_checking: true, windows: [] } }) } };
+  const state = { dock: { personas: [], space_chats: [], harnesses: harnesses({ claude: { windows: [{ id: "s", kind: "session" as const, label: "Session", used_percent: 0 }], usage_checking: true }, codex: { usage_available: false, usage_checking: true, windows: [] } }) } };
   await installFooter(page, state);
   await page.goto("/board?project=WEB");
   const claude = bubble(page, "Claude").locator('[data-harness="claude-code"].harness-usage-row');
@@ -169,7 +169,7 @@ test("zero, unavailable, checking, warning and limited readings stay distinct", 
 
 test("the collapsed rail keeps the footer and opens the bubble to the right, inside the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 650 });
-  await installFooter(page, { dock: { personas: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } }, false);
+  await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } }, false);
   await page.goto("/board?project=WEB");
   await expect(footer(page)).toHaveAttribute("data-rail", "true");
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
@@ -193,7 +193,7 @@ test("the collapsed rail keeps the footer and opens the bubble to the right, ins
 
 test("reduced motion holds all three characters still and opens the bubble without animation", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await installFooter(page, { dock: { personas: [], harnesses: harnesses({ agy: { running: 1 } }) } });
+  await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses({ agy: { running: 1 } }) } });
   await page.goto("/board?project=WEB");
   // evaluateAll does not wait, so let the dock's data reach the footer first.
   await expect(footer(page).getByRole("button", { name: /Antigravity, working/ })).toBeVisible();
@@ -211,7 +211,7 @@ for (const [width, showHarnessActivity] of [[1280, true], [1280, false], [390, f
     await installChatApi(page);
     const id = await openEmptyChat(page);
     const chat: S["PersonaDockChat"] = { id, title: "Read tracking", state: "replied", harness: "codex", unread: 1, last_line: "A reply", last_seq: 3, waiting_approval: false, last_activity_at: new Date().toISOString() };
-    const state: S["PersonaDock"] = { personas: [{ persona: { id: "00000000-0000-4000-8000-000000000001", name: "Assistant", color: "#9fd8c4" }, state: "replied", unread: 1, last_activity_at: chat.last_activity_at, chats: [chat] }], harnesses: [] };
+    const state: S["PersonaDock"] = { personas: [{ persona: { id: "00000000-0000-4000-8000-000000000001", name: "Assistant", color: "#9fd8c4" }, state: "replied", unread: 1, last_activity_at: chat.last_activity_at, chats: [chat] }], space_chats: [], harnesses: [] };
     const reads: number[] = [];
     await page.route("**/api/v1/persona-dock", (route) => route.fulfill({ json: state }));
     await page.route(`**/api/v1/chats/${id}/read`, (route) => {

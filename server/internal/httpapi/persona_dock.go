@@ -88,6 +88,44 @@ func buildPersonaDock(rows []store.PersonaDockChatsRow, personas map[uuid.UUID]s
 	return out
 }
 
+// buildSpaceChats lists the chats in a space that are working or need the
+// person, for the space's row in the menu: working chats first, most recently
+// started on top, then the ones waiting on the person, newest activity first.
+// Unlike the persona dock it keeps the built-in Assistant's chats.
+func buildSpaceChats(rows []store.PersonaDockChatsRow, personas map[uuid.UUID]store.Persona) []api.SpaceChatActivity {
+	out := []api.SpaceChatActivity{}
+	for _, c := range rows {
+		state := dockState(c)
+		if c.SpaceID == nil || state == api.Replied {
+			continue
+		}
+		item := api.SpaceChatActivity{Id: openapi_types.UUID(c.ID), SpaceId: *c.SpaceID, Title: c.Title, State: state, LastActivityAt: c.LastActivityAt}
+		if state == api.Working {
+			started := c.TurnStartedAt
+			item.StartedAt = &started
+		}
+		if id := dockPersona(c); id != nil {
+			if p, ok := personas[*id]; ok {
+				item.Persona = toPersonaSummary(p)
+			}
+		}
+		out = append(out, item)
+	}
+	slices.SortStableFunc(out, func(a, b api.SpaceChatActivity) int {
+		if (a.State == api.Working) != (b.State == api.Working) {
+			if a.State == api.Working {
+				return -1
+			}
+			return 1
+		}
+		if a.State == api.Working {
+			return b.StartedAt.Compare(*a.StartedAt)
+		}
+		return b.LastActivityAt.Compare(a.LastActivityAt)
+	})
+	return out
+}
+
 func (s *Server) GetPersonaDock(ctx context.Context, _ api.GetPersonaDockRequestObject) (api.GetPersonaDockResponseObject, error) {
 	u, _, ws := me(ctx)
 	rows, err := s.Q.PersonaDockChats(ctx, store.PersonaDockChatsParams{WorkspaceID: ws, CreatedBy: u.ID})
@@ -114,7 +152,7 @@ func (s *Server) GetPersonaDock(ctx context.Context, _ api.GetPersonaDockRequest
 	if err != nil {
 		return nil, err
 	}
-	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas), Harnesses: harnesses}, nil
+	return api.GetPersonaDock200JSONResponse{Personas: buildPersonaDock(rows, personas), SpaceChats: buildSpaceChats(rows, personas), Harnesses: harnesses}, nil
 }
 
 func (s *Server) MarkChatRead(ctx context.Context, req api.MarkChatReadRequestObject) (api.MarkChatReadResponseObject, error) {

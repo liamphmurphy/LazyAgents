@@ -204,3 +204,52 @@ func TestChatListCarriesUnreadReplies(t *testing.T) {
 		t.Fatalf("own message counted unread: %v", got)
 	}
 }
+
+func (e *chatEnv) spaceChats() []any {
+	e.t.Helper()
+	return e.want("GET", "/persona-dock", nil, 200)["space_chats"].([]any)
+}
+
+func TestSpaceChatsListWorkingChatsMostRecentlyStartedFirst(t *testing.T) {
+	e := newChatEnv(t)
+	space := e.want("POST", "/chat-spaces", map[string]any{"name": "AIQ"}, 201)["id"].(string)
+	older := e.want("POST", "/chats", map[string]any{"space_id": space}, 201)["id"].(string)
+	newer := e.want("POST", "/chats", map[string]any{"space_id": space}, 201)["id"].(string)
+	outside := e.dockChat(e.dockPersona("Gwen"))
+	e.want("POST", "/chats", map[string]any{"space_id": space}, 201)
+	if len(e.spaceChats()) != 0 {
+		t.Fatal("idle chats are not activity")
+	}
+	// With no recorded turn start, a chat counts as started when it last moved.
+	for id, ago := range map[string]string{older: "1 minute", newer: "10 seconds"} {
+		if _, err := e.pool.Exec(context.Background(), "UPDATE chat_sessions SET state='running', last_message_at=now() - $2::interval WHERE id=$1", id, ago); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.pool.Exec(context.Background(), "UPDATE chat_sessions SET state='running' WHERE id=$1", outside); err != nil {
+		t.Fatal(err)
+	}
+	got := e.spaceChats()
+	if len(got) != 2 || field(got[0], "id") != newer || field(got[1], "id") != older {
+		t.Fatalf("want newer then older, got %v", got)
+	}
+	if field(got[0], "state") != "working" || field(got[0], "space_id") != space || field(got[0], "started_at") == nil {
+		t.Fatalf("row %v", got[0])
+	}
+}
+
+func TestSpaceChatsPutChatsWaitingOnThePersonAfterWorkingOnes(t *testing.T) {
+	e := newChatEnv(t)
+	space := e.want("POST", "/chat-spaces", map[string]any{"name": "AIQ"}, 201)["id"].(string)
+	asking := e.want("POST", "/chats", map[string]any{"space_id": space}, 201)["id"]
+	working := e.want("POST", "/chats", map[string]any{"space_id": space}, 201)["id"]
+	askingID, _ := uuid.Parse(asking.(string))
+	e.reply(askingID, nil, "Which ending do you want?")
+	if _, err := e.pool.Exec(context.Background(), "UPDATE chat_sessions SET state='running' WHERE id=$1", working); err != nil {
+		t.Fatal(err)
+	}
+	got := e.spaceChats()
+	if len(got) != 2 || field(got[0], "id") != working || field(got[1], "id") != asking || field(got[1], "state") != "needs_you" || field(got[1], "started_at") != nil {
+		t.Fatalf("got %v", got)
+	}
+}

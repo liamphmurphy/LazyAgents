@@ -483,7 +483,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       asides.push(String(body().body));
       return json(ref(c), 201);
     }
-    if (path === "/persona-dock") return json({ personas: dock, harnesses: [] });
+    if (path === "/persona-dock") return json({ personas: dock, space_chats: [], harnesses: [] });
     if (path === "/inbox" && method === "GET") return json({ items: inbox });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
     if (path === "/connectors" && method === "GET") return json({ connectors });

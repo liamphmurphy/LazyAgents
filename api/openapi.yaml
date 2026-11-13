@@ -9579,11 +9579,24 @@ components:
         unread: { type: integer }
         last_activity_at: { type: string, format: date-time }
         chats: { type: array, items: { $ref: "#/components/schemas/PersonaDockChat" } }
+    SpaceChatActivity:
+      type: object
+      description: A chat in one of the person's spaces that is working or needs them, for the space's row in the menu.
+      required: [id, space_id, title, state, last_activity_at]
+      properties:
+        id: { type: string, format: uuid }
+        space_id: { type: string, format: uuid }
+        title: { type: string }
+        state: { $ref: "#/components/schemas/PersonaDockState" }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        started_at: { type: string, format: date-time, description: "When the working turn began; absent unless the chat is working" }
+        last_activity_at: { type: string, format: date-time }
     PersonaDock:
       type: object
-      required: [personas, harnesses]
+      required: [personas, space_chats, harnesses]
       properties:
         personas: { type: array, items: { $ref: "#/components/schemas/PersonaDockEntry" } }
+        space_chats: { type: array, items: { $ref: "#/components/schemas/SpaceChatActivity" }, description: "Working chats and chats that need the person, in a space, most recently started first. Unlike personas, includes the built-in Assistant's chats." }
         harnesses: { type: array, items: { $ref: "#/components/schemas/HarnessActivity" }, description: "Claude Code, Codex, then Antigravity: what each is running and how much of its plan allowance is left (Antigravity has none to read: usage_available is false)" }
     UsageWindow:
       type: object
