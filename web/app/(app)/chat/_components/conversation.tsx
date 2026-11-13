@@ -80,6 +80,7 @@ import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitc
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
+import { TicketChangeRequests } from "./ticket-change-requests";
 import { ChatTitleMenu } from "./title-menu";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
@@ -993,6 +994,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               <PersonaProposals chatId={c.id} disabled={c.archived} />
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
               <SecretRequests chatId={c.id} disabled={c.archived} />
+              <TicketChangeRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
                   {selection.auto

@@ -3054,6 +3054,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/ticket-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Ticket edits a persona proposed in this chat, waiting for the person */
+        get: operations["listTicketChangeRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ticket-changes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply once, always allow (applies it and lets the persona edit tickets without asking) or decline
+         * @description Applying runs the edit as the persona that proposed it, with the
+         *     person's approval recorded on the ticket's timeline. When the ticket
+         *     changed since the proposal (a stale revision, a run that has since
+         *     started), nothing is applied: the request is marked failed and the
+         *     response is a 409 or 422 naming why.
+         */
+        post: operations["decideTicketChangeRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/connector-proposals": {
         parameters: {
             query?: never;
@@ -8550,6 +8595,42 @@ export interface components {
             /** @enum {string} */
             decision: "allow" | "always" | "deny";
         };
+        /** @description One line of a proposed ticket edit, as it was when proposed. */
+        TicketChange: {
+            /** @enum {string} */
+            field: "title" | "description" | "status" | "priority" | "estimate" | "epic" | "agent" | "requires_mockup" | "labels" | "due_date" | "criteria" | "pr_url" | "comment" | "blocked_by";
+            /** @description Display name of the field */
+            label: string;
+            /** @description Absent for a comment, which only adds */
+            before?: string;
+            after: string;
+        };
+        TicketChangeRequest: {
+            /** Format: uuid */
+            id: string;
+            ticket_key: string;
+            ticket_title: string;
+            /** @enum {string} */
+            tool: "update_ticket" | "comment_ticket" | "update_ticket_blockers";
+            changes: components["schemas"]["TicketChange"][];
+            /** @enum {string} */
+            state: "pending" | "applied" | "declined" | "failed";
+            /** @description Why applying it failed */
+            error?: string;
+            persona?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        TicketChangeRequestList: {
+            requests: components["schemas"]["TicketChangeRequest"][];
+        };
+        TicketChangeDecision: {
+            /**
+             * @description allow applies it once; always applies it and lets the persona edit tickets without asking; deny declines it
+             * @enum {string}
+             */
+            decision: "allow" | "always" | "deny";
+        };
         ConnectorProposal: {
             /** Format: uuid */
             id: string;
@@ -8807,6 +8888,11 @@ export interface components {
             svg?: boolean;
             /** @description Propose new workflows and edits to them from a chat; each is applied only when the person accepts it. Absent in a request means unchanged (false for a new persona). */
             workflows?: boolean;
+            /**
+             * @description Whether the persona's ticket edits from a chat (update_ticket, comment_ticket, update_ticket_blockers) wait for the person on a card (ask) or apply at once (allow). Canceling, or reopening a canceled ticket, always asks. Absent in a request means unchanged (ask for a new persona).
+             * @enum {string}
+             */
+            ticket_edits?: "ask" | "allow";
         };
         /** @description What a chat needs to render its persona. Absent on a chat means the built-in Assistant. */
         PersonaSummary: {
@@ -14106,6 +14192,56 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTicketChangeRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketChangeRequestList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideTicketChangeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketChangeDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketChangeRequest"];
+                };
             };
             default: components["responses"]["Error"];
         };

@@ -49,9 +49,18 @@ type Actor struct {
 	// chat persona. It's stored on each event's payload as "via" so the
 	// timeline can link back to the conversation that made the change.
 	Via map[string]any
+	// ApprovedBy is the person who approved an agent's change before it
+	// applied (a persona's proposed ticket edit). The change is still the
+	// agent's, but it carries the person's decision: it may cancel a ticket,
+	// reopen a canceled one or change a person's estimate, which otherwise
+	// only people do.
+	ApprovedBy *uuid.UUID
 }
 
 func UserActor(id uuid.UUID) Actor { return Actor{Type: "user", ID: &id} }
+
+// personDecided reports a change a person made or approved.
+func (a Actor) personDecided() bool { return a.Type == "user" || a.ApprovedBy != nil }
 
 type event struct {
 	verb    string

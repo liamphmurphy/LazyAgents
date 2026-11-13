@@ -57,6 +57,9 @@ type NewInput struct {
 	// ImageEngine is the harness that makes this persona's images; "" (or nil)
 	// inherits the workspace's choice.
 	ImageEngine *string
+	// TicketEdits is "ask" (nil: the default) or "allow": whether its ticket
+	// edits from a chat wait for the person.
+	TicketEdits *string
 }
 
 // Patch edits a persona at Revision; nil fields are unchanged.
@@ -71,6 +74,16 @@ type Patch struct {
 	Repos *[]string
 	// ImageEngine changes the image engine ("" inherits the workspace's).
 	ImageEngine *string
+	// TicketEdits changes whether its ticket edits wait for the person.
+	TicketEdits *string
+}
+
+// checkTicketEdits accepts "ask" or "allow".
+func checkTicketEdits(v *string) error {
+	if v != nil && *v != "ask" && *v != "allow" {
+		return apperr.Invalid("ticket_edits", "must be ask or allow")
+	}
+	return nil
 }
 
 // checkImageEngine accepts "" (inherit), "auto" or an image-capable harness.
@@ -192,6 +205,9 @@ func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (
 	if err := checkImageEngine(in.ImageEngine); err != nil {
 		return store.Persona{}, err
 	}
+	if err := checkTicketEdits(in.TicketEdits); err != nil {
+		return store.Persona{}, err
+	}
 	var out store.Persona
 	name, err := normName(in.Name)
 	if err != nil {
@@ -251,6 +267,9 @@ func CreateLocked(ctx context.Context, q *store.Queries, o Owner, in NewInput) (
 		if in.ImageEngine != nil && *in.ImageEngine != "" {
 			out, err = q.SetPersonaImageEngine(ctx, store.SetPersonaImageEngineParams{ID: out.ID, WorkspaceID: o.WorkspaceID, UserID: o.UserID, ImageEngine: *in.ImageEngine})
 		}
+		if err == nil && in.TicketEdits != nil && *in.TicketEdits != out.TicketEdits {
+			out, err = q.SetPersonaTicketEdits(ctx, store.SetPersonaTicketEditsParams{ID: out.ID, WorkspaceID: o.WorkspaceID, UserID: o.UserID, TicketEdits: *in.TicketEdits})
+		}
 	}
 	return out, nameTaken(err)
 }
@@ -298,6 +317,9 @@ func LockOwner(ctx context.Context, q *store.Queries, o Owner) error {
 func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (store.Persona, error) {
 	var out store.Persona
 	if err := checkImageEngine(p.ImageEngine); err != nil {
+		return out, err
+	}
+	if err := checkTicketEdits(p.TicketEdits); err != nil {
 		return out, err
 	}
 	if p.Name != nil {
@@ -357,6 +379,11 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		}
 		if p.ImageEngine != nil && *p.ImageEngine != out.ImageEngine {
 			if out, err = q.SetPersonaImageEngine(ctx, store.SetPersonaImageEngineParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, ImageEngine: *p.ImageEngine}); err != nil {
+				return err
+			}
+		}
+		if p.TicketEdits != nil && *p.TicketEdits != out.TicketEdits {
+			if out, err = q.SetPersonaTicketEdits(ctx, store.SetPersonaTicketEditsParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, TicketEdits: *p.TicketEdits}); err != nil {
 				return err
 			}
 		}

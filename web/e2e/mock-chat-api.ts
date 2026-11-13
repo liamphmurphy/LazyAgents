@@ -127,6 +127,9 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const connectors: { id: string; name: string; slug: string; url: string; auth_kind: unknown; status: string; last_error: string; revision: number; created_at: string; persona_ids: string[]; tools: { name: string; description: string; write: boolean; policy: string }[] }[] = [];
   const connectorApprovals: Record<string, unknown>[] = [];
   const connectorDecisions: string[] = [];
+  // Proposed ticket edits; one with `refuse` set answers its apply with that 409 message.
+  const ticketChanges: Array<Record<string, unknown> & { id: string; refuse?: string }> = [];
+  const ticketChangeDecisions: string[] = [];
   const apiSecrets: Record<string, unknown>[] = [];
   const apiSecretPosts: Record<string, unknown>[] = [];
   const secretApprovals: Record<string, unknown>[] = [];
@@ -497,6 +500,16 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       return route.fulfill({ status: 204 });
     }
     if (/^\/chats\/[^/]+\/connector-proposals$/.test(path) && method === "GET") return json({ proposals: [] });
+    if (/^\/chats\/[^/]+\/ticket-changes$/.test(path) && method === "GET") return json({ requests: ticketChanges.map((r) => ({ ...r, refuse: undefined })) });
+    if (/^\/ticket-changes\/[^/]+$/.test(path) && method === "POST") {
+      const i = ticketChanges.findIndex((r) => path.endsWith(r.id));
+      if (i < 0) return json({ code: "conflict", message: "this change is no longer waiting" }, 409);
+      const decision = body().decision as string;
+      ticketChangeDecisions.push(decision);
+      const [{ refuse, ...r }] = ticketChanges.splice(i, 1);
+      if (refuse && decision !== "deny") return json({ code: "conflict", message: refuse }, 409);
+      return json({ ...r, state: decision === "deny" ? "declined" : "applied" });
+    }
     if (path === "/api-secrets" && method === "GET") return json({ secrets: apiSecrets, key_configured: true });
     if (path === "/api-secrets" && method === "POST") {
       const b = body();
@@ -1019,7 +1032,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
+    return { inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, ticketChanges, ticketChangeDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }
 

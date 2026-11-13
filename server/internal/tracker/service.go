@@ -503,12 +503,12 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 	}
 	// Delayed completion, runner and PR callbacks must not reopen work a person
 	// canceled after the callback's own transaction ended. Only people reopen it.
-	if cur.Status == "canceled" && actor.Type != "user" {
+	if cur.Status == "canceled" && !actor.personDecided() {
 		p.Status = nil
 	}
 	if p.Status != nil && *p.Status != cur.Status {
 		if *p.Status == "canceled" {
-			if actor.Type != "user" {
+			if !actor.personDecided() {
 				return cur, apperr.Conflict("only a person may cancel a ticket")
 			}
 			if _, err := q.ActiveRunForTicket(ctx, &cur.ID); err == nil {
@@ -610,7 +610,7 @@ func applyPatch(ctx context.Context, q *store.Queries, ws uuid.UUID, actor Actor
 		ownershipChanged := points != nil && actor.Type == "user" &&
 			(cur.EstimatedByType == nil || *cur.EstimatedByType != "user" || !ptrEq(actor.ID, cur.EstimatedByID))
 		if !ptrEq(points, cur.EstimatePoints) || !ptrEq(rationale, cur.EstimateRationale) || ownershipChanged {
-			if actor.Type == "agent" && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
+			if actor.Type == "agent" && actor.ApprovedBy == nil && cur.EstimatedByType != nil && *cur.EstimatedByType == "user" {
 				return cur, apperr.Conflict("a person estimated this; comment instead")
 			}
 			if actor.Type == "agent" && (next.Status == "done" || next.Status == "canceled") {

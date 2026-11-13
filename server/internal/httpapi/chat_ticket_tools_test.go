@@ -41,6 +41,7 @@ func TestChatPlansTicketsWithCriteriaAndBlockers(t *testing.T) {
 		t.Fatal(err)
 	}
 	chat, _ = q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat.ID, WorkspaceID: ws})
+	allowTicketEdits(t, q, chat)
 	runID := *chat.CurrentRunID
 	if _, err = q.SetRunState(ctx, store.SetRunStateParams{ID: runID, State: "running"}); err != nil {
 		t.Fatal(err)

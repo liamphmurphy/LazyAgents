@@ -652,7 +652,7 @@ var prURLRe = regexp.MustCompile(`^https://github\.com/[\w.-]+/[\w.-]+/pull/(\d+
 // SetPR records the ticket's pull request. The PR sync job (Phase 5) then
 // keeps its state and diff stats current.
 func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bool) error {
-	if _, _, err := parsePRURL(url); err != nil {
+	if _, _, err := ParsePRURL(url); err != nil {
 		return err
 	}
 	return s.tx(ctx, func(q *store.Queries) error {
@@ -667,7 +667,8 @@ func (s *Service) SetPR(ctx context.Context, c Caller, key, url string, draft bo
 	})
 }
 
-func parsePRURL(url string) (int32, string, error) {
+// ParsePRURL reads a GitHub pull request URL: its number and the URL itself.
+func ParsePRURL(url string) (int32, string, error) {
 	m := prURLRe.FindStringSubmatch(strings.TrimSpace(url))
 	if m == nil {
 		return 0, "", apperr.Invalid("url", "must be a GitHub pull request URL")
@@ -681,7 +682,7 @@ func parsePRURL(url string) (int32, string, error) {
 // sync job follows it from now on: a merge moves the ticket to Done. Work done
 // outside a ticket run (a persona coding in a chat) links its PR this way.
 func LinkPR(ctx context.Context, q *store.Queries, t store.Ticket, actor tracker.Actor, url string, draft bool) error {
-	num, u, err := parsePRURL(url)
+	num, u, err := ParsePRURL(url)
 	if err != nil {
 		return err
 	}

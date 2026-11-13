@@ -387,8 +387,9 @@ SELECT c.id, c.title, c.state, c.persona_id, c.speaker_persona_id,
   u.unread, p.waiting_approval, l.persona_id AS last_persona_id, coalesce(l.body_md, '')::text AS last_body, coalesce(l.seq, 0)::bigint AS last_seq
 FROM chat_sessions c
 CROSS JOIN LATERAL (SELECT count(*)::int AS unread FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' AND m.seq > c.last_read_seq) u
--- waiting_approval: a persona proposal to decide, or a run this chat started waiting on the person.
+-- waiting_approval: a persona or ticket change proposal to decide, or a run this chat started waiting on the person.
 CROSS JOIN LATERAL (SELECT coalesce(EXISTS(SELECT 1 FROM persona_proposals pp WHERE pp.chat_id = c.id AND pp.state = 'pending')
+  OR EXISTS(SELECT 1 FROM ticket_change_requests tc WHERE tc.chat_id = c.id AND tc.state = 'pending')
   OR EXISTS(SELECT 1 FROM chat_ticket_runs ctr JOIN runs r ON r.id = ctr.run_id
     WHERE ctr.chat_id = c.id AND r.state = 'waiting' AND r.wait_reason IN ('human_reply', 'approval')), false)::bool AS waiting_approval) p
 LEFT JOIN LATERAL (SELECT m.persona_id, m.body_md, m.seq FROM chat_messages m WHERE m.session_id = c.id AND m.role = 'assistant' ORDER BY m.seq DESC LIMIT 1) l ON true
