@@ -8934,8 +8934,27 @@ export interface components {
             last_activity_at: string;
             chats: components["schemas"]["PersonaDockChat"][];
         };
+        /** @description A chat in one of the person's spaces that is working or needs them, for the space's row in the menu. */
+        SpaceChatActivity: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            space_id: string;
+            title: string;
+            state: components["schemas"]["PersonaDockState"];
+            persona?: components["schemas"]["PersonaSummary"];
+            /**
+             * Format: date-time
+             * @description When the working turn began; absent unless the chat is working
+             */
+            started_at?: string;
+            /** Format: date-time */
+            last_activity_at: string;
+        };
         PersonaDock: {
             personas: components["schemas"]["PersonaDockEntry"][];
+            /** @description Working chats and chats that need the person, in a space, most recently started first. Unlike personas, includes the built-in Assistant's chats. */
+            space_chats: components["schemas"]["SpaceChatActivity"][];
             /** @description Claude Code, Codex, then Antigravity: what each is running and how much of its plan allowance is left (Antigravity has none to read: usage_available is false) */
             harnesses: components["schemas"]["HarnessActivity"][];
         };
