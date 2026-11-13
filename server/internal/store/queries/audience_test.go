@@ -11,6 +11,26 @@ import (
 // Every exception names the invariant its caller must preserve. New queries
 // cannot inherit an exception just because they live beside a write query.
 var audienceExceptions = map[string]string{
+	"OwnKnowledgeAssetByHash":     "owner-only dedup; owner comes from the authenticated upload or an owned import job",
+	"PutKnowledgeAsset":           "content metadata insert under the uploader hash lock; never a page reader",
+	"StageOrphanKnowledgeAssets":  "system-only garbage collection; tombstones are not returned to callers",
+	"KnowledgeBlobInUse":          "system-only garbage collection checks existence under the blob hash lock",
+	"FinishedKnowledgeArchives":   "system-only garbage collection of completed job archives; returns only storage keys",
+	"MarkKnowledgeArchiveDeleted": "system-only GC bookkeeping after deleting a completed job archive",
+	"NewKnowledgeImport":          "insert owned job; owner comes from authentication, not tool input",
+	"GetKnowledgeImport":          "job reader filters workspace and authenticated owner, independent of page audience",
+	"ListKnowledgeImports":        "job list filters workspace and authenticated owner, independent of page audience",
+	"ClaimKnowledgeImport":        "system-only worker claims jobs with a lease; never exposed to a caller",
+	"UpdateKnowledgeImport":       "system-only lease-checked job progress write",
+	"LockKnowledgeImportLease":    "system-only import transaction checks the unexposed worker lease",
+	"ConfirmKnowledgeImport":      "confirmation requires workspace and authenticated owner and preview state",
+	"RecordImportFile":            "audit insert in the owned, lease-checked import; never exposed without the owned job",
+	"ListImportFiles":             "worker lease or authenticated owner job lock is checked before this internal read",
+	"LockKnowledgeImportForUndo":  "undo filters the job by workspace and authenticated owner",
+	"MarkKnowledgeImportUndone":   "bookkeeping after the authenticated owner job lock",
+	"MarkDocPageIndexed":          "startup backfill bookkeeping; no page content returned",
+
+	"UnindexedDocPages":     "startup-only migration backfill; mapping supplies original chat owner, no output to callers",
 	"DeletePageTags":        "publish bookkeeping after a visible artifact lock",
 	"AddPageTags":           "publish bookkeeping after a visible artifact lock",
 	"DeletePropertyAliases": "publish bookkeeping for this visible locked page by artifact id",
@@ -47,7 +67,7 @@ var audienceExceptions = map[string]string{
 	"ListArtifactUnlinkedReaders": "REST handler checks artifact visibility first",
 }
 var namedQuery = regexp.MustCompile(`(?m)^-- name: (\w+) :\w+`)
-var pageTable = regexp.MustCompile(`(?i)\b(artifacts|knowledge_links|artifact_sections|artifact_aliases|artifact_versions|page_tags|page_aliases)\b`)
+var pageTable = regexp.MustCompile(`(?i)\b(artifacts|knowledge_links|artifact_sections|artifact_aliases|artifact_versions|page_tags|page_aliases|doc_page_redirects|page_comments|page_asset_refs|knowledge_assets|knowledge_imports|knowledge_import_files|knowledge_import_sources)\b`)
 var sqlComment = regexp.MustCompile(`(?m)--[^\n]*`)
 
 func guarded(name, sql string) bool {

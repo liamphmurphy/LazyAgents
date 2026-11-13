@@ -101,6 +101,9 @@ func Resolve(ctx context.Context, q *store.Queries, ws uuid.UUID, target, anchor
 	slug := ""
 	if anchor = strings.TrimSpace(anchor); anchor != "" {
 		slug = Slug(anchor)
+		if strings.HasPrefix(anchor, "^") {
+			slug = anchor
+		}
 	}
 	ghost := Target{Kind: KindUnresolved, Title: target}
 	if target == "" {

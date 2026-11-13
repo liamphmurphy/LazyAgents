@@ -12,6 +12,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -267,11 +268,68 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 	if err != nil {
 		return v, err
 	}
+	if a.Type == "note" && r.body != nil && (by.Type == "agent" || state == Suggested) {
+		oldBody := ""
+		oldProps := Properties{}
+		if a.CurrentVersionID != nil {
+			base, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
+			if err != nil {
+				return v, err
+			}
+			if base.BodyMd != nil {
+				oldBody = *base.BodyMd
+			}
+			oldProps = DecodeProperties(base.Properties)
+		}
+		changes, err := json.Marshal(PageChanges(oldBody, *r.body, oldProps, DecodeProperties(v.Properties), note))
+		if err != nil {
+			return v, err
+		}
+		pending := "pending"
+		v, err = q.SetPageChanges(ctx, store.SetPageChangesParams{ID: v.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID, Changes: changes, ReviewState: &pending})
+		if err != nil {
+			return v, err
+		}
+	}
 	if r.body != nil && a.Type != "mockup" {
 		for i, sec := range Outline(*r.body) {
 			if err := q.InsertSection(ctx, store.InsertSectionParams{
 				VersionID: v.ID, Position: int32(i + 1), Level: int32(sec.Level), Anchor: sec.Anchor, Heading: sec.Heading,
 			}); err != nil {
+				return v, err
+			}
+		}
+	}
+	if r.body != nil && a.Type == "note" {
+		ids := []string{}
+		for id := range links.Blocks(*r.body) {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for i, id := range ids {
+			if err := q.InsertSection(ctx, store.InsertSectionParams{VersionID: v.ID, Position: int32(100000 + i), Level: 6, Anchor: "^" + id, Heading: "^" + id}); err != nil {
+				return v, err
+			}
+		}
+	}
+	if r.body != nil && a.Type == "note" {
+		for _, ref := range links.Parse(*r.body) {
+			raw, ok := strings.CutPrefix(ref.Target, "attachment:")
+			if !ok {
+				continue
+			}
+			id, err := uuid.Parse(strings.SplitN(raw, "/", 2)[0])
+			if err != nil {
+				continue
+			}
+			_, err = q.GetKnowledgeAsset(ctx, store.GetKnowledgeAssetParams{ID: id, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return v, err
+			}
+			if err = q.AddPageAssetRef(ctx, store.AddPageAssetRefParams{VersionID: v.ID, AssetID: id, Viewer: pageview.From(ctx).UserID}); err != nil {
 				return v, err
 			}
 		}

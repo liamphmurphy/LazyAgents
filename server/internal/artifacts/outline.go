@@ -10,9 +10,9 @@ import (
 
 // Section is one markdown heading, in document order.
 type Section struct {
-	Level   int
-	Heading string
-	Anchor  string
+	Level   int    `json:"level"`
+	Heading string `json:"heading"`
+	Anchor  string `json:"anchor"`
 }
 
 var (
@@ -79,6 +79,10 @@ func outlineLines(md string) []lineSection {
 // SectionText returns one section: its heading line through to the next
 // heading of the same or a higher level. ok is false for an unknown anchor.
 func SectionText(md, anchor string) (string, bool) {
+	if strings.HasPrefix(anchor, "^") {
+		s, ok := links.Blocks(md)[strings.TrimPrefix(anchor, "^")]
+		return s, ok
+	}
 	secs := outlineLines(md)
 	lines := strings.Split(md, "\n")
 	for i, s := range secs {

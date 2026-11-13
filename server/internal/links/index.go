@@ -2,6 +2,7 @@ package links
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -39,7 +40,10 @@ func Index(ctx context.Context, q *store.Queries, ws uuid.UUID, src Source, md s
 		}
 		anchor := t.Anchor
 		if t.Kind == KindUnresolved && r.Anchor != "" {
-			anchor = Slug(r.Anchor) // kept so the link becomes a section link once resolved
+			anchor = Slug(r.Anchor)
+			if strings.HasPrefix(r.Anchor, "^") {
+				anchor = r.Anchor
+			} // kept so the link becomes a section link once resolved
 		}
 		if err := q.InsertLink(ctx, store.InsertLinkParams{
 			WorkspaceID: ws, SourceKind: src.Kind, SourceID: src.ID, SourceVersionID: src.VersionID, SourceTicketID: src.TicketID,

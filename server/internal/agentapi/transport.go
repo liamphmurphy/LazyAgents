@@ -58,6 +58,9 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 			}
 			switch {
 			case run.Purpose == "chat":
+				if !slices.Contains(chatTools, name) {
+					return nil, apperr.Conflict("%s isn't available in chats", name)
+				}
 				session, err := d.Q.ChatSessionForRun(ctx, &run.ID)
 				if err != nil {
 					return nil, err
@@ -66,9 +69,6 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 					return nil, apperr.ErrNotFound
 				}
 				ctx = pageview.IncludeAgents(pageview.Person(ctx, session.CreatedBy), true)
-				if !slices.Contains(chatTools, name) {
-					return nil, apperr.Conflict("%s isn't available in chats", name)
-				}
 				if !slices.Contains(asideTools, name) && isAsideRun(run) {
 					return nil, apperr.Conflict("%s isn't available in an aside, which only reads", name)
 				}

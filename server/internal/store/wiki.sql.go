@@ -383,7 +383,7 @@ func (q *Queries) EpicsByIDs(ctx context.Context, arg EpicsByIDsParams) ([]Epics
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
@@ -400,6 +400,7 @@ type ExportNotesRow struct {
 	ID         uuid.UUID
 	Path       *string
 	Title      string
+	Audience   string
 	AuthorType string
 	AuthorID   uuid.UUID
 	CreatedAt  time.Time
@@ -422,6 +423,7 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Exp
 			&i.ID,
 			&i.Path,
 			&i.Title,
+			&i.Audience,
 			&i.AuthorType,
 			&i.AuthorID,
 			&i.CreatedAt,
@@ -441,7 +443,7 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Exp
 }
 
 const findArtifactByTitle = `-- name: FindArtifactByTitle :one
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type <> 'note' AND lower(title) = lower($3)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type <> 'note' AND lower(title) = lower($3)
 ORDER BY updated_at DESC LIMIT 1
 `
 
@@ -473,6 +475,9 @@ func (q *Queries) FindArtifactByTitle(ctx context.Context, arg FindArtifactByTit
 		&i.Path,
 		&i.Audience,
 		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -509,7 +514,7 @@ func (q *Queries) FindEpicByName(ctx context.Context, arg FindEpicByNameParams) 
 }
 
 const findNoteByAlias = `-- name: FindNoteByAlias :one
-SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path, ar.audience, ar.owner_user_id FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
+SELECT ar.id, ar.workspace_id, ar.project_id, ar.epic_id, ar.type, ar.title, ar.number, ar.summary, ar.author_type, ar.author_id, ar.current_version_id, ar.search_text, ar.search, ar.created_at, ar.updated_at, ar.path, ar.audience, ar.owner_user_id, ar.persona_direct, ar.persona_paused, ar.chat_session_id FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
 WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND al.workspace_id = $1 AND lower(al.path) = lower($3)
 ORDER BY (ar.audience = 'private') DESC, al.created_at DESC LIMIT 1
 `
@@ -542,12 +547,15 @@ func (q *Queries) FindNoteByAlias(ctx context.Context, arg FindNoteByAliasParams
 		&i.Path,
 		&i.Audience,
 		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
 
 const findNotesByTitle = `-- name: FindNotesByTitle :many
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(title) = lower($3)
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(title) = lower($3)
   AND current_version_id IS NOT NULL
 ORDER BY (audience = 'private') DESC, length(path), path
 `
@@ -587,6 +595,9 @@ func (q *Queries) FindNotesByTitle(ctx context.Context, arg FindNotesByTitlePara
 			&i.Path,
 			&i.Audience,
 			&i.OwnerUserID,
+			&i.PersonaDirect,
+			&i.PersonaPaused,
+			&i.ChatSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -687,7 +698,7 @@ func (q *Queries) FindPatterns(ctx context.Context, arg FindPatternsParams) ([]F
 
 const getNoteByPath = `-- name: GetNoteByPath :one
 
-SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(path) = lower($3) ORDER BY (audience = 'private') DESC LIMIT 1
+SELECT id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND workspace_id = $1 AND type = 'note' AND lower(path) = lower($3) ORDER BY (audience = 'private') DESC LIMIT 1
 `
 
 type GetNoteByPathParams struct {
@@ -719,6 +730,9 @@ func (q *Queries) GetNoteByPath(ctx context.Context, arg GetNoteByPathParams) (A
 		&i.Path,
 		&i.Audience,
 		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }
@@ -1228,7 +1242,7 @@ func (q *Queries) LockNotePaths(ctx context.Context, dollar_1 uuid.UUID) error {
 }
 
 const lockSuggestion = `-- name: LockSuggestion :one
-SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
+SELECT v.id, v.artifact_id, v.seq, v.label, v.body_md, v.blob_key, v.filename, v.content_type, v.size_bytes, v.note, v.created_by_type, v.created_by_id, v.created_at, v.state, v.based_on_version_id, v.decided_by_id, v.decided_at, v.review_state, v.reviewed_by_user_id, v.reviewed_at, v.review_note, v.review_pins, v.properties, v.changes, v.source_canvas_version_id FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
 WHERE artifact_visible(ar.audience, ar.owner_user_id, $3::uuid) AND v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v
 `
 
@@ -1265,6 +1279,8 @@ func (q *Queries) LockSuggestion(ctx context.Context, arg LockSuggestionParams) 
 		&i.ReviewNote,
 		&i.ReviewPins,
 		&i.Properties,
+		&i.Changes,
+		&i.SourceCanvasVersionID,
 	)
 	return i, err
 }
@@ -1740,7 +1756,7 @@ func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledg
 }
 
 const setNotePath = `-- name: SetNotePath :one
-UPDATE artifacts SET path = $2, title = $3, audience = CASE WHEN lower($2::text) LIKE 'agents/%' OR lower($2::text) LIKE 'patterns/proposed/%' THEN 'agent' WHEN audience = 'agent' THEN 'shared' ELSE audience END WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id
+UPDATE artifacts SET path = $2, title = $3, audience = CASE WHEN lower($2::text) LIKE 'agents/%' OR lower($2::text) LIKE 'patterns/proposed/%' THEN 'agent' WHEN audience = 'agent' THEN 'shared' ELSE audience END WHERE id = $1 RETURNING id, workspace_id, project_id, epic_id, type, title, number, summary, author_type, author_id, current_version_id, search_text, search, created_at, updated_at, path, audience, owner_user_id, persona_direct, persona_paused, chat_session_id
 `
 
 type SetNotePathParams struct {
@@ -1771,6 +1787,9 @@ func (q *Queries) SetNotePath(ctx context.Context, arg SetNotePathParams) (Artif
 		&i.Path,
 		&i.Audience,
 		&i.OwnerUserID,
+		&i.PersonaDirect,
+		&i.PersonaPaused,
+		&i.ChatSessionID,
 	)
 	return i, err
 }

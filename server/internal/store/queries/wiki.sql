@@ -186,7 +186,7 @@ WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) A
 UPDATE artifact_versions SET state = $2, decided_by_id = $3, decided_at = now() WHERE id = $1;
 
 -- name: ExportNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
+SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.created_at, ar.updated_at, v.body_md, v.properties, p.key AS project_key
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id

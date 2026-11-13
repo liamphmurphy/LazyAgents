@@ -1,0 +1,1745 @@
+{
+  "screens": [
+    [
+      "Knowledge home",
+      "Your knowledge",
+      "Notes   \u00b7   Capture inbox (3)   \u00b7   Daily   \u00b7   Templates   \u00b7   Saved queries",
+      "Search by text, tag, property or folder\u2026",
+      "Recent pages\n\nAtomic habits                         #literature         Private\nThe old harbour                     #campaign          Private\nDeploy runbook                     #ops                      Shared",
+      "New page    Quick capture    Today    Import vault"
+    ],
+    [
+      "Page editor",
+      "The old harbour",
+      "Private \u25be     Direct edits \u2713     Pause personas \u25cb     Saved",
+      "Write   \u00b7   Markdown   \u00b7   Properties   \u00b7   History   \u00b7   Export \u25be",
+      "# The old harbour\n\nThe ferry runs twice a day. See [[Locations/Watchtower]].\n\n![[Maps/harbour.png]]\n\n[[^arrival]]    #campaign",
+      "Left: page conversation   |   Centre: document   |   Right dock: outline / links / properties"
+    ],
+    [
+      "Review",
+      "Review persona changes",
+      "2 pending \u00b7 Direct edits, reviewed afterwards",
+      "Accept rest    Reject rest     Direct edits \u2713",
+      "Change 1 \u00b7 Clarify arrival time\n\u2212 The ferry arrives early.\n+ The ferry arrives at dawn.\nAccept    Reject \u00b7 reason\u2026\n\nChange 2 \u00b7 Stale\nYou edited this passage; your text was kept.",
+      "Right dock: Backlinks (4) \u00b7 Unlinked mentions (2) \u00b7 Local graph"
+    ],
+    [
+      "Import upload",
+      "Import an Obsidian vault",
+      "Upload a .zip \u00b7 Up to 2 GB \u00b7 Private by default",
+      "Destination: Imported notes/     Conflicts: Skip / Replace / Keep both",
+      "Drop a zipped vault here or choose file\n\nPreparing report\u2026 38 / 120 files\n\nNo notes or attachments are created until you confirm.",
+      "Invalid archive: Show the reason and allow another file \u00b7 Cancel before confirmation"
+    ],
+    [
+      "Import dry run",
+      "Review vault import",
+      "118 notes \u00b7 24 attachments \u00b7 15 tags \u00b7 142 resolved links \u00b7 3 unresolved",
+      "Renamed (2)   \u00b7   Conflicts (1)   \u00b7   Unsupported, preserved (2)",
+      "[\u2713] Notes/Welcome.md \u2192 Imported notes/Welcome\n[!] Journal/[draft].md \u2192 Journal/draft \u00b7 Original name kept as alias\n[!] Notes/Plan.md \u00b7 Edited in Knowledge \u00b7 Skip / Keep both\n[\u2713] Canvas.canvas \u00b7 Preserve as attachment\n\nConfirm import    Cancel",
+      "Import progress: 87 / 142 \u00b7 Errors listed per file \u00b7 Done: Undo this import"
+    ],
+    [
+      "Capture and daily",
+      "Capture inbox",
+      "Quick note\u2026                                      Capture",
+      "Inbox   \u00b7   Today   \u00b7   Templates   \u00b7   Literature notes",
+      "Call the harbour master\nFile into\u2026    Merge into page\u2026\n\nToday: 2026-11-13\nCreated from Daily template; open the same page each time.\n\nTemplates: Permanent note \u00b7 NPC \u00b7 Location \u00b7 Session \u00b7 Encounter",
+      "Saved query: #campaign, type = location \u00b7 Results as rows / table \u00b7 Save filter"
+    ],
+    [
+      "Agent knowledge",
+      "Agent knowledge",
+      "Your knowledge   |   Agent knowledge",
+      "Search agent memory and proposed patterns\u2026",
+      "agents/tech-lead/Memory\nPatterns/Proposed/Database rollback\n\nAgent pages remain outside your default search and graph.\n\nEmpty: No agent knowledge yet.",
+      "Audience switch on the page belongs to you \u00b7 Sharing one page never shares linked private notes"
+    ],
+    [
+      "Links and maintenance",
+      "Keep notes connected",
+      "Orphans (12)   \u00b7   Unresolved links (3)   \u00b7   Related pages",
+      "Filter: #campaign     Group by folder     Run librarian pass",
+      "Unresolved: [[North gate]] \u00b7 Create page\n\nUnlinked mention: \u201cold harbour\u201d in Session 4\nPropose link \u2192 Per-change review\n\nRelated: Watchtower \u00b7 Ferry schedule\n\nWeekly pass \u2192 Suggestions + Needs you",
+      "Loading, empty and request error states keep the search and retry controls available"
+    ]
+  ],
+  "ops": [
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the knowledge home flow before implementation",
+      "node": {
+        "id": "n_k0",
+        "type": "frame",
+        "name": "Knowledge home",
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k0nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k0brand",
+            "type": "text",
+            "name": "n_k0brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k0title",
+            "type": "text",
+            "name": "n_k0title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Your knowledge",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k0tabs",
+            "type": "text",
+            "name": "n_k0tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Notes   \u00b7   Capture inbox (3)   \u00b7   Daily   \u00b7   Templates   \u00b7   Saved queries",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k0searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k0search",
+            "type": "text",
+            "name": "n_k0search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Search by text, tag, property or folder\u2026",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k0body",
+            "type": "text",
+            "name": "n_k0body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Recent pages",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Atomic habits                         #literature         Private",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "The old harbour                     #campaign          Private",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Deploy runbook                     #ops                      Shared",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k0footer",
+            "type": "text",
+            "name": "n_k0footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "New page    Quick capture    Today    Import vault",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the page editor flow before implementation",
+      "node": {
+        "id": "n_k1",
+        "type": "frame",
+        "name": "Page editor",
+        "x": 1360,
+        "y": 0,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k1nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k1brand",
+            "type": "text",
+            "name": "n_k1brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k1title",
+            "type": "text",
+            "name": "n_k1title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "The old harbour",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k1tabs",
+            "type": "text",
+            "name": "n_k1tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Private \u25be     Direct edits \u2713     Pause personas \u25cb     Saved",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k1searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k1search",
+            "type": "text",
+            "name": "n_k1search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Write   \u00b7   Markdown   \u00b7   Properties   \u00b7   History   \u00b7   Export \u25be",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k1body",
+            "type": "text",
+            "name": "n_k1body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "# The old harbour",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "The ferry runs twice a day. See [[Locations/Watchtower]].",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "![[Maps/harbour.png]]",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "[[^arrival]]    #campaign",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k1footer",
+            "type": "text",
+            "name": "n_k1footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Left: page conversation   |   Centre: document   |   Right dock: outline / links / properties",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the review flow before implementation",
+      "node": {
+        "id": "n_k2",
+        "type": "frame",
+        "name": "Review",
+        "x": 0,
+        "y": 900,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k2nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k2brand",
+            "type": "text",
+            "name": "n_k2brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k2title",
+            "type": "text",
+            "name": "n_k2title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Review persona changes",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k2tabs",
+            "type": "text",
+            "name": "n_k2tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "2 pending \u00b7 Direct edits, reviewed afterwards",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k2searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k2search",
+            "type": "text",
+            "name": "n_k2search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Accept rest    Reject rest     Direct edits \u2713",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k2body",
+            "type": "text",
+            "name": "n_k2body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Change 1 \u00b7 Clarify arrival time",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "\u2212 The ferry arrives early.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "+ The ferry arrives at dawn.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Accept    Reject \u00b7 reason\u2026",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Change 2 \u00b7 Stale",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "You edited this passage; your text was kept.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k2footer",
+            "type": "text",
+            "name": "n_k2footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Right dock: Backlinks (4) \u00b7 Unlinked mentions (2) \u00b7 Local graph",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the import upload flow before implementation",
+      "node": {
+        "id": "n_k3",
+        "type": "frame",
+        "name": "Import upload",
+        "x": 1360,
+        "y": 900,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k3nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k3brand",
+            "type": "text",
+            "name": "n_k3brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k3title",
+            "type": "text",
+            "name": "n_k3title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Import an Obsidian vault",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k3tabs",
+            "type": "text",
+            "name": "n_k3tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Upload a .zip \u00b7 Up to 2 GB \u00b7 Private by default",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k3searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k3search",
+            "type": "text",
+            "name": "n_k3search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Destination: Imported notes/     Conflicts: Skip / Replace / Keep both",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k3body",
+            "type": "text",
+            "name": "n_k3body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Drop a zipped vault here or choose file",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Preparing report\u2026 38 / 120 files",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "No notes or attachments are created until you confirm.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k3footer",
+            "type": "text",
+            "name": "n_k3footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Invalid archive: Show the reason and allow another file \u00b7 Cancel before confirmation",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the import dry run flow before implementation",
+      "node": {
+        "id": "n_k4",
+        "type": "frame",
+        "name": "Import dry run",
+        "x": 0,
+        "y": 1800,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k4nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k4brand",
+            "type": "text",
+            "name": "n_k4brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k4title",
+            "type": "text",
+            "name": "n_k4title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Review vault import",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k4tabs",
+            "type": "text",
+            "name": "n_k4tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "118 notes \u00b7 24 attachments \u00b7 15 tags \u00b7 142 resolved links \u00b7 3 unresolved",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k4searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k4search",
+            "type": "text",
+            "name": "n_k4search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Renamed (2)   \u00b7   Conflicts (1)   \u00b7   Unsupported, preserved (2)",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k4body",
+            "type": "text",
+            "name": "n_k4body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "[\u2713] Notes/Welcome.md \u2192 Imported notes/Welcome",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "[!] Journal/[draft].md \u2192 Journal/draft \u00b7 Original name kept as alias",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "[!] Notes/Plan.md \u00b7 Edited in Knowledge \u00b7 Skip / Keep both",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "[\u2713] Canvas.canvas \u00b7 Preserve as attachment",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Confirm import    Cancel",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k4footer",
+            "type": "text",
+            "name": "n_k4footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Import progress: 87 / 142 \u00b7 Errors listed per file \u00b7 Done: Undo this import",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the capture and daily flow before implementation",
+      "node": {
+        "id": "n_k5",
+        "type": "frame",
+        "name": "Capture and daily",
+        "x": 1360,
+        "y": 1800,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k5nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k5brand",
+            "type": "text",
+            "name": "n_k5brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k5title",
+            "type": "text",
+            "name": "n_k5title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Capture inbox",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k5tabs",
+            "type": "text",
+            "name": "n_k5tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Quick note\u2026                                      Capture",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k5searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k5search",
+            "type": "text",
+            "name": "n_k5search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Inbox   \u00b7   Today   \u00b7   Templates   \u00b7   Literature notes",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k5body",
+            "type": "text",
+            "name": "n_k5body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Call the harbour master",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "File into\u2026    Merge into page\u2026",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Today: 2026-11-13",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Created from Daily template; open the same page each time.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Templates: Permanent note \u00b7 NPC \u00b7 Location \u00b7 Session \u00b7 Encounter",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k5footer",
+            "type": "text",
+            "name": "n_k5footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Saved query: #campaign, type = location \u00b7 Results as rows / table \u00b7 Save filter",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the agent knowledge flow before implementation",
+      "node": {
+        "id": "n_k6",
+        "type": "frame",
+        "name": "Agent knowledge",
+        "x": 0,
+        "y": 2700,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k6nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k6brand",
+            "type": "text",
+            "name": "n_k6brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k6title",
+            "type": "text",
+            "name": "n_k6title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Agent knowledge",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k6tabs",
+            "type": "text",
+            "name": "n_k6tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Your knowledge   |   Agent knowledge",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k6searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k6search",
+            "type": "text",
+            "name": "n_k6search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Search agent memory and proposed patterns\u2026",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k6body",
+            "type": "text",
+            "name": "n_k6body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "agents/tech-lead/Memory",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Patterns/Proposed/Database rollback",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Agent pages remain outside your default search and graph.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Empty: No agent knowledge yet.",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k6footer",
+            "type": "text",
+            "name": "n_k6footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Audience switch on the page belongs to you \u00b7 Sharing one page never shares linked private notes",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "op": "add_node",
+      "parent": "p_b63ucjzq7w",
+      "why": "Review the links and maintenance flow before implementation",
+      "node": {
+        "id": "n_k7",
+        "type": "frame",
+        "name": "Links and maintenance",
+        "x": 1360,
+        "y": 2700,
+        "w": 1280,
+        "h": 800,
+        "fill": "#17151F",
+        "clip": true,
+        "children": [
+          {
+            "id": "n_k7nav",
+            "type": "shape",
+            "name": "Header",
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 64,
+            "fill": "#211D2C",
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k7brand",
+            "type": "text",
+            "name": "n_k7brand",
+            "x": 24,
+            "y": 22,
+            "w": 1000,
+            "h": 30,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Vesper     /     Knowledge",
+                    "size": 18,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k7title",
+            "type": "text",
+            "name": "n_k7title",
+            "x": 36,
+            "y": 100,
+            "w": 1190,
+            "h": 60,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Keep notes connected",
+                    "size": 32,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k7tabs",
+            "type": "text",
+            "name": "n_k7tabs",
+            "x": 36,
+            "y": 170,
+            "w": 1190,
+            "h": 50,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Orphans (12)   \u00b7   Unresolved links (3)   \u00b7   Related pages",
+                    "size": 16,
+                    "color": "#B8A5DB"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k7searchbox",
+            "type": "shape",
+            "name": "Actions",
+            "x": 36,
+            "y": 226,
+            "w": 1208,
+            "h": 54,
+            "fill": "#2D273A",
+            "radius": 8,
+            "shape": "roundRect"
+          },
+          {
+            "id": "n_k7search",
+            "type": "text",
+            "name": "n_k7search",
+            "x": 52,
+            "y": 243,
+            "w": 1180,
+            "h": 32,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Filter: #campaign     Group by folder     Run librarian pass",
+                    "size": 16,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k7body",
+            "type": "text",
+            "name": "n_k7body",
+            "x": 52,
+            "y": 318,
+            "w": 1180,
+            "h": 340,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Unresolved: [[North gate]] \u00b7 Create page",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Unlinked mention: \u201cold harbour\u201d in Session 4",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Propose link \u2192 Per-change review",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Related: Watchtower \u00b7 Ferry schedule",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              },
+              {
+                "runs": [
+                  {
+                    "text": "Weekly pass \u2192 Suggestions + Needs you",
+                    "size": 20,
+                    "color": "#D9D8E5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n_k7footer",
+            "type": "text",
+            "name": "n_k7footer",
+            "x": 36,
+            "y": 710,
+            "w": 1200,
+            "h": 70,
+            "paragraphs": [
+              {
+                "runs": [
+                  {
+                    "text": "Loading, empty and request error states keep the search and retry controls available",
+                    "size": 15,
+                    "color": "#A19BAE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

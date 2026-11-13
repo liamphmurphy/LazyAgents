@@ -16,6 +16,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/links"
 	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -23,20 +24,88 @@ import (
 // Export writes every published note as an Obsidian-compatible vault: one
 // <path>.md per page, [[wikilinks]] as written, properties as frontmatter.
 func Export(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer) error {
+	return exportVault(ctx, q, ws, w, nil, "")
+}
+func (s *Service) ExportVault(ctx context.Context, ws uuid.UUID, w io.Writer) error {
+	objects, bucket, err := s.vaultObjects()
+	if err != nil {
+		objects = nil
+	}
+	return exportVault(ctx, store.New(s.Pool), ws, w, objects, bucket)
+}
+func exportVault(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer, objects VaultObjects, bucket string) error {
 	rows, err := q.ExportNotes(ctx, store.ExportNotesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return err
 	}
 	z := zip.NewWriter(w)
+	assets := map[string]store.KnowledgeAsset{}
+	filenames := map[string]bool{}
 	for _, r := range rows {
 		if r.Path == nil || r.BodyMd == nil {
 			continue
 		}
-		f, err := z.CreateHeader(&zip.FileHeader{Name: *r.Path + ".md", Method: zip.Deflate, Modified: r.UpdatedAt})
+		name := *r.Path + ".md"
+		if filenames[strings.ToLower(name)] {
+			name = *r.Path + " " + r.ID.String()[:8] + ".md"
+		}
+		filenames[strings.ToLower(name)] = true
+		body := *r.BodyMd
+		if objects != nil {
+			var rewriteErr error
+			body = links.RewriteRefs(body, func(ref links.Ref) string {
+				raw, ok := strings.CutPrefix(ref.Target, "attachment:")
+				if !ok {
+					return ref.Raw
+				}
+				id, err := uuid.Parse(strings.SplitN(raw, "/", 2)[0])
+				if err != nil {
+					return ref.Raw
+				}
+				asset, err := q.GetKnowledgeAsset(ctx, store.GetKnowledgeAssetParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
+				if err != nil {
+					rewriteErr = err
+					return ref.Raw
+				}
+				p := "attachments/" + asset.ContentHash + "/" + path.Base(asset.Filename)
+				assets[p] = asset
+				target := p
+				if ref.Anchor != "" {
+					target += "#" + ref.Anchor
+				}
+				if ref.Display != "" {
+					target += "|" + ref.Display
+				}
+				prefix := ""
+				if ref.Embed {
+					prefix = "!"
+				}
+				return prefix + "[[" + target + "]]"
+			})
+			if rewriteErr != nil {
+				return rewriteErr
+			}
+		}
+		f, err := z.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: r.UpdatedAt})
 		if err != nil {
 			return err
 		}
 		props := artifacts.DecodeProperties(r.Properties)
+		if original, ok := props["vesper_unindexed_aliases"]; ok {
+			extra, _ := artifacts.StringList(original)
+			aliases, _ := artifacts.StringList(props["aliases"])
+			for _, alias := range extra {
+				found := false
+				for _, existing := range aliases {
+					found = found || existing == alias
+				}
+				if !found {
+					aliases = append(aliases, alias)
+				}
+			}
+			props["aliases"] = aliases
+		}
+
 		fm := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 		add := func(k string, v any) error {
 			var n yaml.Node
@@ -46,7 +115,7 @@ func Export(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer) er
 			fm.Content = append(fm.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k}, &n)
 			return nil
 		}
-		for _, kv := range [][2]string{{"vesper_id", r.ID.String()}, {"created", r.CreatedAt.Format(time.RFC3339)}, {"updated", r.UpdatedAt.Format(time.RFC3339)}, {"title", r.Title}} {
+		for _, kv := range [][2]string{{"vesper_id", r.ID.String()}, {"created", r.CreatedAt.Format(time.RFC3339)}, {"updated", r.UpdatedAt.Format(time.RFC3339)}, {"title", r.Title}, {"audience", r.Audience}} {
 			if err := add(kv[0], kv[1]); err != nil {
 				return err
 			}
@@ -72,8 +141,41 @@ func Export(ctx context.Context, q *store.Queries, ws uuid.UUID, w io.Writer) er
 		if err != nil {
 			return err
 		}
-		if _, err := io.WriteString(f, "---\n"+string(b)+"---\n\n"+*r.BodyMd); err != nil {
+		if _, err := io.WriteString(f, "---\n"+string(b)+"---\n\n"+body); err != nil {
 			return err
+		}
+	}
+	if objects != nil {
+		all, err := q.ExportKnowledgeAssets(ctx, store.ExportKnowledgeAssetsParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
+		if err != nil {
+			return err
+		}
+		for _, asset := range all {
+			assets["attachments/"+asset.ContentHash+"/"+path.Base(asset.Filename)] = asset
+		}
+	}
+	names := make([]string, 0, len(assets))
+	for name := range assets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		asset := assets[name]
+		f, err := z.Create(name)
+		if err != nil {
+			return err
+		}
+		object, err := objects.Open(ctx, bucket, asset.BlobKey)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(f, object)
+		closeErr := object.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
 		}
 	}
 	return z.Close()

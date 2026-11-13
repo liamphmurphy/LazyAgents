@@ -37,10 +37,10 @@ WHERE artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid) AND
 -- name: ListArtifactVersions :many
 SELECT id, artifact_id, seq, label, filename, content_type, size_bytes, note, created_by_type, created_by_id, created_at,
   review_state, reviewed_by_user_id, reviewed_at, review_note, review_pins
-FROM artifact_versions WHERE artifact_id = $1 AND EXISTS (SELECT 1 FROM artifacts a WHERE a.id = artifact_id AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)) AND state = 'published' ORDER BY seq DESC;
+FROM artifact_versions WHERE artifact_id = $1 AND EXISTS (SELECT 1 FROM artifacts a WHERE a.id = artifact_id AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)) AND state = 'published' AND label <> 'suggestion' ORDER BY seq DESC;
 
 -- name: CountPublishedVersions :one
-SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published';
+SELECT count(*)::int FROM artifact_versions WHERE artifact_id = $1 AND state = 'published' AND label <> 'suggestion';
 
 -- name: InsertSection :exec
 INSERT INTO artifact_sections (version_id, position, level, anchor, heading) VALUES ($1, $2, $3, $4, $5);

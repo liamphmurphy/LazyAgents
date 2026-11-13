@@ -54,7 +54,7 @@ func StringList(v any) ([]string, error) {
 // ReservedProperty names are export envelope fields, not custom properties.
 func ReservedProperty(k string) bool {
 	switch k {
-	case "vesper_id", "lazyagents_id", "created", "updated", "project", "title":
+	case "vesper_id", "lazyagents_id", "created", "updated", "project", "title", "audience":
 		return true
 	}
 	return false
@@ -232,21 +232,7 @@ func derivedNotePath(ctx context.Context, q *store.Queries, ws uuid.UUID, title,
 	if err := q.LockNotePaths(ctx, ws); err != nil {
 		return "", err
 	}
-	base := strings.Map(func(r rune) rune {
-		if strings.ContainsRune("[]#|^/\\", r) || r < 32 {
-			return ' '
-		}
-		return r
-	}, title)
-	base = strings.Join(strings.Fields(base), " ")
-	// Normalize suffixes before checking collisions; ValidNotePath strips .md.
-	for strings.HasSuffix(base, ".md") {
-		base = strings.TrimSuffix(base, ".md")
-	}
-	base = strings.TrimSpace(base)
-	if base == "" || base == "." || base == ".." {
-		base = "Untitled"
-	}
+	base := NoteSegment(title)
 	budget := 300 - utf8.RuneCountInString(folder)
 	for n := 1; ; n++ {
 		suffix := ""
@@ -315,4 +301,35 @@ func RenameNoteTitleTx(ctx context.Context, q *store.Queries, a store.Artifact, 
 		return a, err
 	}
 	return a, links.ResolvePending(ctx, q, a.WorkspaceID)
+}
+
+// NoteSegment derives the link-safe part of a free display title.
+func NoteSegment(title string) string {
+	base := strings.Map(func(r rune) rune {
+		if strings.ContainsRune("[]#|^/\\", r) || r < 32 {
+			return ' '
+		}
+		return r
+	}, title)
+	base = strings.Join(strings.Fields(base), " ")
+	// Normalize suffixes before checking collisions; ValidNotePath strips .md.
+	for strings.HasSuffix(base, ".md") {
+		base = strings.TrimSuffix(base, ".md")
+	}
+	base = strings.TrimSpace(base)
+	if base == "" || base == "." || base == ".." {
+		base = "Untitled"
+	}
+	return base
+}
+
+func DerivedNotePathInFolder(ctx context.Context, q *store.Queries, ws uuid.UUID, title, folder string) (string, error) {
+	folder = strings.Trim(folder, "/")
+	if folder != "" {
+		if _, err := ValidNotePath(folder + "/placeholder"); err != nil {
+			return "", err
+		}
+		folder += "/"
+	}
+	return derivedNotePath(ctx, q, ws, title, folder, uuid.Nil)
 }

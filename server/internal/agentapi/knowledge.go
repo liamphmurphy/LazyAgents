@@ -1,0 +1,285 @@
+package agentapi
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/liamphmurphy/vesper/server/internal/agents"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
+	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
+)
+
+type ListPagesIn struct {
+	wiki.PageQuery
+	SavedPage string `json:"saved_page,omitempty"`
+}
+type PatchPageIn struct {
+	TicketArg
+	Ref         string           `json:"ref"`
+	BaseVersion uuid.UUID        `json:"base_version"`
+	Changes     []wiki.PagePatch `json:"changes"`
+}
+type PropertiesIn struct {
+	TicketArg
+	Ref         string               `json:"ref"`
+	BaseVersion uuid.UUID            `json:"base_version"`
+	Properties  artifacts.Properties `json:"properties"`
+	Note        string               `json:"note"`
+}
+type NewPageIn struct {
+	TicketArg
+	Title      string               `json:"title"`
+	Folder     string               `json:"folder,omitempty"`
+	Body       string               `json:"body"`
+	Properties artifacts.Properties `json:"properties,omitempty"`
+	Template   string               `json:"template,omitempty"`
+	Source     string               `json:"source,omitempty"`
+	Suggest    bool                 `json:"suggest,omitempty"`
+}
+
+func listPages(ctx context.Context, d Deps, c agents.Caller, in ListPagesIn) (any, error) {
+	if in.SavedPage != "" {
+		a, _, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.SavedPage)
+		if err != nil {
+			return nil, err
+		}
+		return wiki.SavedPageQuery(ctx, d.Q, c.Agent.WorkspaceID, a.ID)
+	}
+	return wiki.QueryPages(ctx, d.Q, c.Agent.WorkspaceID, in.PageQuery)
+}
+func pageOutline(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, error) {
+	a, v, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
+	if err != nil {
+		return nil, err
+	}
+	ls, err := d.Q.LinksFromSource(ctx, store.LinksFromSourceParams{SourceKind: "artifact", SourceID: a.ID})
+	if err != nil {
+		return nil, err
+	}
+	bs, err := wiki.Backlinks(ctx, d.Q, c.Agent.WorkspaceID, wiki.Ref{Kind: "artifact", ID: a.ID})
+	if err != nil {
+		return nil, err
+	}
+	reviews, err := d.Q.ListPageReviews(ctx, store.ListPageReviewsParams{ID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": a.ID, "title": a.Title, "path": a.Path, "version_id": v.ID, "properties": artifacts.DecodeProperties(v.Properties), "outline": artifacts.Outline(pageBody(v.BodyMd)), "outgoing_links": len(ls), "backlinks": len(bs), "pending_reviews": len(reviews)}, nil
+}
+func patchPage(ctx context.Context, d Deps, c agents.Caller, in PatchPageIn) (any, error) {
+	a, v, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
+	if err != nil {
+		return nil, err
+	}
+	if in.BaseVersion != v.ID {
+		return nil, apperr.Conflict("this page changed; read it again before patching")
+	}
+	if len(in.Changes) == 0 || len(in.Changes) > 100 {
+		return nil, apperr.Invalid("changes", "provide 1 to 100 anchored changes")
+	}
+	body := pageBody(v.BodyMd)
+	reasons := []string{}
+	for _, ch := range in.Changes {
+		if ch.Before == "" || strings.Count(body, ch.Before) != 1 {
+			return nil, apperr.Conflict("target text is missing or ambiguous; read the page again")
+		}
+		body = strings.Replace(body, ch.Before, ch.After, 1)
+		reasons = append(reasons, ch.Why)
+	}
+	scopes, _, err := scopesFor(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: body, BaseID: &in.BaseVersion, ForceSuggestion: true, Note: strings.Join(reasons, "; ")})
+	if err != nil {
+		return nil, err
+	}
+	return pageWriteSummary(result), nil
+}
+func setProperties(ctx context.Context, d Deps, c agents.Caller, in PropertiesIn) (any, error) {
+	a, v, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
+	if err != nil {
+		return nil, err
+	}
+	if in.BaseVersion != v.ID {
+		return nil, apperr.Conflict("this page changed; read it again before setting properties")
+	}
+	scopes, _, err := scopesFor(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	props := artifacts.DecodeProperties(v.Properties)
+	for k, val := range in.Properties {
+		if val == nil {
+			delete(props, k)
+		} else {
+			props[k] = val
+		}
+	}
+	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: pageBody(v.BodyMd), BaseID: &in.BaseVersion, Properties: props, ForceSuggestion: true, Note: in.Note})
+	if err != nil {
+		return nil, err
+	}
+	return pageWriteSummary(result), nil
+}
+func createPage(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any, error) {
+	if in.Title == "" {
+		return nil, apperr.Invalid("title", "is required")
+	}
+	if in.Properties == nil {
+		in.Properties = artifacts.Properties{}
+	}
+	body := in.Body
+	if in.Template != "" {
+		if template, ok := wiki.TemplateSet[in.Template]; ok {
+			body = template
+		} else {
+			_, v, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Template)
+			if err != nil {
+				return nil, err
+			}
+			body = pageBody(v.BodyMd)
+		}
+		body = wiki.RenderTemplate(body, in.Title, time.Now().UTC().Format("2006-01-02"), in.Properties)
+	}
+	if in.Source != "" {
+		in.Properties["source"] = in.Source
+		in.Properties["type"] = "literature"
+	}
+	scopes, _, err := scopesFor(ctx, d, c, in.Ticket)
+	if err != nil {
+		return nil, err
+	}
+	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{AutoPath: true, Folder: in.Folder, Title: &in.Title, Body: body, Properties: in.Properties, Mode: wiki.ModeCreate, ForceSuggestion: in.Suggest})
+	if err != nil {
+		return nil, err
+	}
+	if scope, err := chatScopeFor(ctx, d, c); err != nil {
+		return nil, err
+	} else if scope != nil {
+		if err = d.Q.SetPageChat(ctx, store.SetPageChatParams{ID: result.Note.ID, WorkspaceID: c.Agent.WorkspaceID, Viewer: &scope.UserID, ChatID: &scope.ChatID}); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"id": result.Note.ID, "path": result.Note.Path, "version_id": result.Version.ID, "state": result.State, "url": wiki.PageURL(result.Note.ID, result.Note.Title)}, nil
+}
+func captureNote(ctx context.Context, d Deps, c agents.Caller, in NewPageIn) (any, error) {
+	if _, err := personChatScope(ctx, d, c, "capture_note"); err != nil {
+		return nil, err
+	}
+	in.Folder = "Inbox"
+	if in.Properties == nil {
+		in.Properties = artifacts.Properties{}
+	}
+	in.Properties["type"] = "fleeting"
+	in.Properties["zettel_id"] = uuid.NewString()
+	return createPage(ctx, d, c, in)
+}
+func suggestLinks(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, error) {
+	a, _, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
+	if err != nil {
+		return nil, err
+	}
+	linked, err := wiki.Backlinks(ctx, d.Q, c.Agent.WorkspaceID, wiki.Ref{Kind: "artifact", ID: a.ID})
+	if err != nil {
+		return nil, err
+	}
+	mentions, err := wiki.UnlinkedMentions(ctx, d.Q, c.Agent.WorkspaceID, wiki.Ref{Kind: "artifact", ID: a.ID}, linked)
+	if err != nil {
+		return nil, err
+	}
+	hits, err := wiki.Search(ctx, d.Q, c.Agent.WorkspaceID, a.Title, []string{"note"}, nil, 10)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"page_id": a.ID, "unlinked_mentions": mentions, "related_pages": hits, "hint": "Read one relevant section, then submit anchored patch_page changes for review."}, nil
+}
+
+// Keep the normal search ranking for unfiltered queries; filtered discovery
+// shares exactly the same SQL as lists and saved queries.
+func filteredSearch(ctx context.Context, d Deps, c agents.Caller, in SearchIn) (any, error) {
+	props := in.Properties
+	if props == nil {
+		props = artifacts.Properties{}
+	}
+	result, err := wiki.QueryPages(ctx, d.Q, c.Agent.WorkspaceID, wiki.PageQuery{Text: in.Q, Folder: in.Folder, Tag: in.Tag, Audience: in.Audience, Properties: props, Limit: in.Limit})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"results": result.Rows, "has_more": result.HasMore}, nil
+}
+
+func pageBody(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+type DailyNoteIn struct {
+	Date     string `json:"date,omitempty"`
+	Folder   string `json:"folder,omitempty"`
+	Template string `json:"template,omitempty"`
+}
+
+func dailyNote(ctx context.Context, d Deps, c agents.Caller, in DailyNoteIn) (any, error) {
+	scope, err := personChatScope(ctx, d, c, "daily_note")
+	if err != nil {
+		return nil, err
+	}
+	if in.Date == "" {
+		in.Date = time.Now().UTC().Format("2006-01-02")
+	}
+	r, err := d.Wiki.DailyPage(ctx, c.Agent.WorkspaceID, scope.UserID, in.Date, in.Folder, in.Template)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": r.Note.ID, "path": r.Note.Path, "version_id": r.Version.ID}, nil
+}
+
+type ImportVaultIn struct {
+	AttachmentID uuid.UUID `json:"attachment_id"`
+	Folder       string    `json:"folder,omitempty"`
+}
+
+func importVault(ctx context.Context, d Deps, c agents.Caller, in ImportVaultIn) (any, error) {
+	scope, err := personChatScope(ctx, d, c, "import_vault")
+	if err != nil {
+		return nil, err
+	}
+	job, err := d.Wiki.QueueAttachedVault(ctx, c.Agent.WorkspaceID, scope.UserID, in.AttachmentID, in.Folder)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"import_id": job.ID, "state": job.State, "message": "Dry run queued. The person must review and confirm the report before anything imports."}, nil
+}
+
+func pageWriteSummary(r wiki.Result) map[string]any {
+	return map[string]any{"id": r.Note.ID, "path": r.Note.Path, "version_id": r.Version.ID, "state": r.State, "created": r.Created, "changes": r.Version.Changes}
+}
+
+type LibrarianIn struct {
+	Folder string `json:"folder,omitempty"`
+	Tag    string `json:"tag,omitempty"`
+	All    bool   `json:"all,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+}
+
+func librarianPass(ctx context.Context, d Deps, c agents.Caller, in LibrarianIn) (any, error) {
+	if in.Folder == "" && in.Tag == "" && !in.All {
+		return nil, apperr.Invalid("folder", "provide a folder, a tag, or all=true")
+	}
+	if in.Limit <= 0 {
+		in.Limit = 20
+	}
+	scopes, _, err := scopesFor(ctx, d, c, "")
+	if err != nil {
+		return nil, err
+	}
+	return d.Wiki.LibrarianPass(ctx, c.Agent, scopes, wiki.PageQuery{Folder: in.Folder, Tag: in.Tag, Limit: in.Limit})
+}
