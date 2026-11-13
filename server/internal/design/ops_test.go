@@ -157,6 +157,26 @@ func TestDeps(t *testing.T) {
 	}
 }
 
+func TestTouchesNamesMintedNodesInOpOrder(t *testing.T) {
+	o := ops(t, `[
+		{"op":"add_page","page":{"name":"Two"}},
+		{"op":"add_node","parent":"p_flows","node":{"type":"frame","x":0,"y":0,"w":1,"h":1,"children":[{"type":"rect","x":0,"y":0,"w":1,"h":1}]}},
+		{"op":"set_node","id":"n_box","fields":{"x":1}},
+		{"op":"add_sticky","page":"p_flows","x":0,"y":0,"text":"Hi"},
+		{"op":"add_link","from":"n_box","to":"n_box"},
+		{"op":"set_token","set":"s","name":"t","mode":"dark","value":"#000000"},
+		{"op":"link_ticket","node":"n_box","ticket":"T-1"}
+	]`)
+	MintIDs(o)
+	got := Touches(o)
+	frame := o[1]["node"].(map[string]any)["id"].(string)
+	sticky := o[3]["id"].(string)
+	// The frame's root, not its minted child; n_box once although three ops name it.
+	if want := []string{frame, "n_box", sticky}; !slices.Equal(got, want) {
+		t.Fatalf("Touches = %v, want %v", got, want)
+	}
+}
+
 func TestRemintAndStarters(t *testing.T) {
 	fixture, err := Normalize(read(t, fixtureDir+"/acceptance-design.json"))
 	if err != nil {
