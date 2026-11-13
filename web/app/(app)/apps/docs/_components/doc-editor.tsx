@@ -1,6 +1,7 @@
 "use client";
 
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
+import type { AnyExtension } from "@tiptap/core";
 import { Markdown } from "@tiptap/markdown";
 import { Placeholder } from "@tiptap/extensions";
 import type { EditorView } from "@tiptap/pm/view";
@@ -56,7 +57,11 @@ export const DocEditor = forwardRef<DocEditorHandle, {
   onState: (s: SaveState, message?: string) => void;
   onAsk: (instruction: string, after: string) => void;
   onPick: (p: Picked, message?: string) => void;
-}>(function DocEditor({ body, seq, locked, persona, highlights, onSave, onState, onAsk, onPick }, ref) {
+  /** More editor behaviour, e.g. Knowledge's live [[link]] preview. Read once, on mount. */
+  extensions?: AnyExtension[];
+  /** What an empty first line invites; Docs use it for the title. */
+  firstLine?: string;
+}>(function DocEditor({ body, seq, locked, persona, highlights, onSave, onState, onAsk, onPick, extensions = [], firstLine = "Title" }, ref) {
   // What the editor's text was last saved (or loaded) as.
   const based = useRef({ seq, body });
   // Edits since the last save; a save only clears the ones it carried.
@@ -76,7 +81,7 @@ export const DocEditor = forwardRef<DocEditorHandle, {
   // its place. Everything that changes is read through refs.
   const [options] = useState(() => ({
     immediatelyRender: false,
-    extensions: [...docExtensions(), Markdown, Placeholder.configure({ placeholder: ({ pos }: { pos: number }) => (pos === 0 ? "Title" : `Write, or type @${props.current.persona.split(/\s+/)[0]} and what you'd like`) })],
+    extensions: [...docExtensions(), Markdown, ...extensions, Placeholder.configure({ placeholder: ({ pos }: { pos: number }) => (pos === 0 ? firstLine : `Write, or type @${props.current.persona.split(/\s+/)[0]} and what you'd like`) })],
     content: body,
     contentType: "markdown" as const,
     editable: !locked,
