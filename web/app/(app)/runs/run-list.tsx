@@ -279,7 +279,8 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
         </div>
         <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} />
       </div>
-      <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-3">
+      {/* Contain absolute screen-reader labels as well as the visible rows. */}
+      <div ref={listRef} className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-3">
         {data.shownNeeds.length > 0 && (
           <Group id="needs-you" label="Needs you" count={data.shownNeeds.length} tone="human">
             {data.shownNeeds.map((i) => <NeedsRow key={i.id} item={i} active={i.id === selectedNeeds} query={query} />)}
