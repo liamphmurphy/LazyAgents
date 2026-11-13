@@ -35,8 +35,10 @@ func TestKnowledgeQueriesCaptureAndTools(t *testing.T) {
 	if code, out := e.tool(token, "page_outline", map[string]any{"ref": id}); code != 200 || strings.Contains(fmtJSON(out), "A paragraph") {
 		t.Fatalf("outline %d %v", code, out)
 	}
+	// A review-first page keeps the persona's patch as a suggestion.
+	e.want("PUT", "/knowledge/pages/"+id+"/controls", map[string]any{"direct": false, "paused": false}, 200)
 	args := map[string]any{"ref": id, "base_version": version, "changes": []any{map[string]any{"before": "A paragraph.", "after": "A better paragraph.", "why": "Clarify"}}}
-	if code, out := e.tool(token, "patch_page", args); code != 200 {
+	if code, out := e.tool(token, "patch_page", args); code != 200 || out["state"] != "suggested" {
 		t.Fatalf("patch %d %v", code, out)
 	}
 	reviewed := e.want("GET", "/knowledge/pages/"+id, nil, 200)
@@ -45,6 +47,20 @@ func TestKnowledgeQueriesCaptureAndTools(t *testing.T) {
 	}
 	review := reviewed["reviews"].([]any)[0].(map[string]any)
 	e.want("POST", "/knowledge/pages/"+id+"/reviews/"+review["id"].(string)+"/resolve", map[string]any{"decisions": []any{map[string]any{"index": 0, "accept": true}}}, 200)
+	// A direct page applies it at once, with the change left for review afterwards.
+	e.want("PUT", "/knowledge/pages/"+id+"/controls", map[string]any{"direct": true, "paused": false}, 200)
+	accepted := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+	direct := map[string]any{"ref": id, "base_version": accepted["version_id"], "changes": []any{map[string]any{"before": "A better paragraph.", "after": "The best paragraph.", "why": "Tighten"}}}
+	if code, out := e.tool(token, "patch_page", direct); code != 200 || out["state"] != "published" {
+		t.Fatalf("direct patch %d %v", code, out)
+	}
+	applied := e.want("GET", "/knowledge/pages/"+id, nil, 200)
+	if !strings.Contains(applied["body_md"].(string), "The best paragraph.") || len(applied["reviews"].([]any)) != 1 {
+		t.Fatalf("direct patch didn't apply for review afterwards %v", applied)
+	}
+	if code, out := e.tool(token, "set_properties", map[string]any{"ref": id, "base_version": applied["version_id"], "properties": map[string]any{"role": "harbour"}}); code != 200 || out["state"] != "published" {
+		t.Fatalf("direct set_properties %d %v", code, out)
+	}
 	// Every page tool uses the ticket principal, including ID-based writes.
 	atlas, err := e.q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: e.me.WorkspaceID, Handle: "atlas"})
 	if err != nil {

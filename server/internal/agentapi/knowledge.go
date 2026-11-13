@@ -135,12 +135,21 @@ func patchPage(ctx context.Context, d Deps, c agents.Caller, in PatchPageIn) (an
 	if err != nil {
 		return nil, err
 	}
-	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: body, BaseID: &in.BaseVersion, ForceSuggestion: true, Note: strings.Join(reasons, "; ")})
+	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: body, BaseID: &in.BaseVersion, ForceSuggestion: reviewOutsidePersonChat(ctx), Note: strings.Join(reasons, "; ")})
 	if err != nil {
 		return nil, err
 	}
 	return pageWriteSummary(result), nil
 }
+// reviewOutsidePersonChat is whether an edit must wait as a suggestion
+// whatever the page says. In a person's chat the page's persona controls
+// decide (wiki.Service.write): a page set to direct edits applies them at once
+// for review afterwards, the rest wait. Runs without a person, such as ticket
+// agents, always suggest.
+func reviewOutsidePersonChat(ctx context.Context) bool {
+	return pageview.From(ctx).UserID == nil
+}
+
 func setProperties(ctx context.Context, d Deps, c agents.Caller, in PropertiesIn) (any, error) {
 	a, v, err := wiki.OpenPage(ctx, d.Q, c.Agent.WorkspaceID, in.Ref)
 	if err != nil {
@@ -161,7 +170,7 @@ func setProperties(ctx context.Context, d Deps, c agents.Caller, in PropertiesIn
 			props[k] = val
 		}
 	}
-	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: pageBody(v.BodyMd), BaseID: &in.BaseVersion, Properties: props, ForceSuggestion: true, Note: in.Note})
+	result, err := d.Wiki.AgentWrite(ctx, c.Agent, scopes, wiki.Save{Path: *a.Path, Body: pageBody(v.BodyMd), BaseID: &in.BaseVersion, Properties: props, ForceSuggestion: reviewOutsidePersonChat(ctx), Note: in.Note})
 	if err != nil {
 		return nil, err
 	}
