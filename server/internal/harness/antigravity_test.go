@@ -2,6 +2,7 @@ package harness
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,35 +11,52 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 )
 
+// antigravity-turn.jsonl is a real agy 1.5.8 read-only chat turn recorded by
+// TestAgyProbe: an MCP call, a read, a command and a subagent the policy
+// denied, and a write the static deny rule stopped (testdata/README.md).
 func TestAntigravityTurn(t *testing.T) {
 	evs, res := parse(t, Antigravity{}, "antigravity-turn.jsonl", "")
-	want := "lifecycle message tool_call:whoami tool_result:whoami tool_call:Bash tool_result:Bash message usage"
+	want := "lifecycle message tool_call:list_tickets tool_result:list_tickets tool_call:Read tool_result:Read tool_call:Bash tool_result:Bash tool_call:Write tool_result:Write tool_call:Agent tool_result:Agent message usage"
 	if got := types(evs); got != want {
 		t.Fatalf("events:\n got %s\nwant %s", got, want)
 	}
-	if res.SessionID != "conv-1" || res.Final != "Done." || res.IsError {
+	if res.SessionID != "e94c1262-923f-4bbb-bf7f-2d9cd9792aa9" || res.Final != "Done.\n" || res.IsError {
 		t.Fatalf("result = %+v", res)
 	}
-	var texts []string
+	if evs[0].Payload["session_id"] != res.SessionID {
+		t.Fatalf("init carries the conversation id: %+v", evs[0].Payload)
+	}
+	results := map[string]map[string]any{}
 	for _, e := range evs {
-		if e.Type == "message" {
-			texts = append(texts, e.Payload["text"].(string))
+		if e.Type == "tool_result" {
+			results[e.Payload["tool"].(string)] = e.Payload
 		}
 	}
-	if !slices.Equal(texts, []string{"I'll check who I am.", "Done."}) {
-		t.Fatalf("a step's text deltas must join into one message: %q", texts)
+	if results["list_tickets"]["is_error"] != false || results["list_tickets"]["output"] != "LAZYAGENTS-1 probe ticket" || results["Read"]["is_error"] != false {
+		t.Fatalf("allowed tools: %v", results)
 	}
-	if res.Usage.ToolCalls != 2 || res.Usage.InputTokens != 1200 || res.Usage.OutputTokens != 200 || res.Usage.CachedTokens != 400 || res.Usage.CostSource != "unknown" {
-		t.Fatalf("usage = %+v", res.Usage)
+	// A step that ends in ERROR is a failed call, not a missing one.
+	if r := results["Bash"]; r["is_error"] != true || !strings.Contains(r["output"].(string), "denied by pre-tool hook: probe policy") {
+		t.Fatalf("denied command: %v", r)
+	}
+	if r := results["Write"]; r["is_error"] != true || !strings.Contains(r["output"].(string), "Matches user-configured deny rule") {
+		t.Fatalf("statically denied write: %v", r)
+	}
+	if r := results["Agent"]; r["is_error"] != true {
+		t.Fatalf("denied subagent: %v", r)
+	}
+	// Six requests of 200 uncached + 1000 cached input and 37 output (30 + 7
+	// thinking) each, as the stub's usageMetadata said.
+	u := res.Usage
+	if u.ToolCalls != 5 || u.InputTokens != 7200 || u.CachedTokens != 6000 || u.CacheReportedInputTokens != 7200 || u.OutputTokens != 222 || u.ContextTokens != 1200 || u.CostSource != "unknown" {
+		t.Fatalf("usage = %+v", u)
 	}
 	for _, e := range evs {
-		if e.Type == "tool_result" && e.Payload["tool"] == "Bash" && e.Payload["is_error"] != true {
-			t.Fatalf("a tool error was lost: %+v", e)
-		}
 		if e.Type == "usage" {
 			if _, ok := e.Payload["cost_usd"]; ok || e.Payload["cost_known"] != false {
 				t.Fatalf("agy reports no cost: %+v", e.Payload)
@@ -47,14 +65,41 @@ func TestAntigravityTurn(t *testing.T) {
 	}
 }
 
+// A resumed conversation's result.usage also counts its earlier turns (seen
+// with --conversation against the stub): only this process's steps are billed.
+func TestAntigravityResumedTurnCountsOnlyItsOwnRequests(t *testing.T) {
+	p := (Antigravity{}).NewParser("")
+	for _, l := range []string{
+		`{"event":"init","conversation_id":"c","init":{"cwd":"/workspace"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c","step_index":4,"state":"DONE","step_type":"agent_response","text_delta":"resumed\n","usage":{"input_tokens":200,"output_tokens":37,"thinking_tokens":7,"cache_read_tokens":1000,"total_tokens":237}}}`,
+		`{"event":"result","result":{"conversation_id":"c","status":"SUCCESS","response":"resumed\n","num_turns":2,"usage":{"input_tokens":400,"output_tokens":74,"thinking_tokens":14,"cache_read_tokens":2000,"total_tokens":474}}}`,
+	} {
+		p.Line([]byte(l))
+	}
+	if u := p.Result().Usage; u.InputTokens != 1200 || u.OutputTokens != 37 || u.CachedTokens != 1000 {
+		t.Fatalf("usage = %+v, want this turn's one request", u)
+	}
+	// A failure before any request reports no usage, not the earlier turns'.
+	p = (Antigravity{}).NewParser("")
+	evs := p.Line([]byte(`{"event":"result","result":{"conversation_id":"c","status":"ERROR","error":"Error 503","usage":{"input_tokens":400,"output_tokens":74}}}`))
+	if u := p.Result().Usage; u.InputTokens != 0 || u.OutputTokens != 0 || types(evs) != "error" {
+		t.Fatalf("usage = %+v, events %s", u, types(evs))
+	}
+}
+
 func TestAntigravityQuotaFailureIsALimit(t *testing.T) {
 	_, res := parse(t, Antigravity{}, "antigravity-error.jsonl", "")
-	if !res.IsError || !strings.Contains(res.Error, "exceeded your quota") || !res.UsageLimited {
+	if !res.IsError || !strings.Contains(res.Error, "exceeded your current quota") || !res.UsageLimited {
 		t.Fatalf("a quota failure must be a usage limit so fallbacks apply: %+v", res)
 	}
+	now := time.Now()
+	if at, ok := LimitReset(res.Error, now); !ok || !at.Equal(now.Add(41*time.Second)) {
+		t.Fatalf("the RetryInfo delay is the reset time: %v %v", at, ok)
+	}
 	p := (Antigravity{}).NewParser("")
-	evs := p.Line([]byte(`AGY_ERROR: {"message":"model overloaded"}`))
-	if len(evs) != 1 || evs[0].Type != "error" || p.Result().Error != "model overloaded" {
+	// As agy 1.5.8 prints it on stderr.
+	evs := p.Line([]byte(`AGY_ERROR: {"short_error":"agent executor error: model overloaded","status":"UNAVAILABLE","error_code":503,"code_kind":"http","retryable":true,"error_id":"e-1"}`))
+	if len(evs) != 1 || evs[0].Type != "error" || p.Result().Error != "agent executor error: model overloaded" {
 		t.Fatalf("AGY_ERROR line: %+v %+v", evs, p.Result())
 	}
 }
@@ -255,14 +300,23 @@ func TestAgyPolicyHookAgreesWithTheParser(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"run_command", map[string]any{"CommandLine": "go test ./..."}},
+		// The tools agy 1.5.8 declares to the model, with their real argument keys.
+		{"run_command", map[string]any{"CommandLine": "go test ./...", "toolSummary": "Run tests", "WaitMsBeforeAsync": 500.0}},
+		{"read_file", map[string]any{"Path": "/workspace/a.go", "StartLine": 1.0}},
+		{"write_file", map[string]any{"Path": "/workspace/b.go", "Content": "package b"}},
+		{"edit_file", map[string]any{"Path": "/workspace/c.go", "Target": "a", "Replacement": "b"}},
+		{"call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "get_ticket", "Arguments": map[string]any{"ticket": "X-1"}}},
+		{"call_mcp_tool", map[string]any{"ServerName": "lazyagents"}},
+		{"invoke_subagent", map[string]any{"TypeName": "general", "Role": "helper", "Prompt": "run ls"}},
+		{"swarm", map[string]any{"action": "add"}},
+		{"search_web", map[string]any{"query": "go slog"}},
+		// agy's internal names (init's tool list), should a step report one.
 		{"view_file", map[string]any{"AbsolutePath": "/workspace/a.go"}},
 		{"write_to_file", map[string]any{"TargetFile": "/workspace/b.go"}},
 		{"replace_file_content", map[string]any{"TargetFile": "/workspace/c.go"}},
 		{"list_dir", map[string]any{"DirectoryPath": "/workspace"}},
 		{"grep_search", map[string]any{"Query": "TODO", "SearchPath": "/workspace"}},
 		{"find_by_name", map[string]any{"Pattern": "*.go", "SearchPath": "/workspace"}},
-		{"search_web", map[string]any{"query": "go slog"}},
 		{"read_url_content", map[string]any{"Url": "https://go.dev"}},
 		{"mcp_lazyagents_get_ticket", map[string]any{"ticket": "X-1"}},
 		{"browser_subagent", map[string]any{"Task": "x"}},
@@ -295,11 +349,37 @@ func TestAgyPolicyHookAgreesWithTheParser(t *testing.T) {
 
 func TestAntigravityToolNamesInEvents(t *testing.T) {
 	for in, want := range map[string]string{
-		"run_command": "Bash", "view_file": "Read", "write_to_file": "Write", "replace_file_content": "Edit",
+		"run_command": "Bash", "read_file": "Read", "write_file": "Write", "edit_file": "Edit", "invoke_subagent": "Agent",
+		"view_file": "Read", "write_to_file": "Write", "replace_file_content": "Edit", "call_mcp_tool": "call_mcp_tool",
 		"mcp_lazyagents_search_knowledge": "mcp__lazyagents_search_knowledge", "browser_subagent": "browser_subagent",
 	} {
 		if got, _ := antigravityTool(in, nil); got != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
+	}
+	// Every MCP tool arrives through call_mcp_tool; the policy must see it as
+	// that server's tool, or a read-only chat is refused its own tools.
+	tool, input := antigravityTool("call_mcp_tool", map[string]any{"ServerName": "lazyagents", "ToolName": "list_tickets", "Arguments": map[string]any{"q": "x"}})
+	if tool != "mcp__lazyagents__list_tickets" || input["q"] != "x" {
+		t.Fatalf("call_mcp_tool → %s %v", tool, input)
+	}
+}
+
+// agy 1.5.8 lists .agents/skills/<name>/SKILL.md to the model, as Codex reads
+// it (TestAgyProbe checks the real CLI), so skills go there and the chat's
+// AGENTS.md doesn't point at a copy elsewhere.
+func TestAntigravitySkillsAreNative(t *testing.T) {
+	s := spec("repo:read", "allowed")
+	s.Skills = []agentdef.Skill{{Name: "review", Description: "Review a diff", Body: "Read it all."}}
+	inv, _ := agyInvocation(t, s, Turn{Prompt: "go"})
+	if len(inv.Files[".agents/skills/review/SKILL.md"]) == 0 || !strings.Contains(string(inv.Files[SkillsExcludeFile]), "/.agents/skills/review/") {
+		t.Fatalf("files = %v", slices.Collect(maps.Keys(inv.Files)))
+	}
+	if _, ok := inv.Files[".lazyagents/skills/review/SKILL.md"]; ok {
+		t.Fatal("a second copy outside the native location")
+	}
+	s.Harness = agentdef.HarnessAntigravity
+	if md := string(ChatAgentsMD(s, nil, "PAY", "", nil)); strings.Contains(md, "## Skills") {
+		t.Fatalf("the index would point at files that aren't there:\n%s", md)
 	}
 }

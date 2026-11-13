@@ -345,7 +345,7 @@ func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project,
 		}
 	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
-	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode {
+	if len(spec.Skills) > 0 && spec.Harness != agentdef.HarnessClaudeCode && spec.Harness != agentdef.HarnessAntigravity { // those two discover their skills
 		b.WriteString(skillsIndex(spec.Skills))
 	}
 	if persona != nil {
@@ -584,7 +584,7 @@ func delegationSection(spec agentdef.Resolved) string {
 // UsageLimit reports provider exhaustion from an error, never ordinary tool output.
 func UsageLimit(message string) bool {
 	s := strings.ToLower(message)
-	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit", "hit your session limit"} {
+	for _, marker := range []string{"rate_limit", "usage_limit_reached", "insufficient_quota", "usage limit", "rate limit", "rate-limit", "quota exceeded", "exceeded your quota", "exceeded your current quota", "resource_exhausted", "credit balance is too low", "out of extra usage", "you've hit your limit", "you have hit your limit", "hit your session limit"} {
 		if strings.Contains(s, marker) {
 			return true
 		}
@@ -592,16 +592,30 @@ func UsageLimit(message string) bool {
 	return false
 }
 
-var limitResetRE = regexp.MustCompile(`(?i)(?:resets|try again at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
+var (
+	limitResetRE = regexp.MustCompile(`(?i)(?:resets|try again at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
+	// retryDelayRE is a Gemini google.rpc.RetryInfo as agy prints it:
+	// "Details: [map[@type:…RetryInfo retryDelay:41s]]".
+	retryDelayRE = regexp.MustCompile(`retryDelay["':=\s]+(\d+(?:\.\d+)?)s\b`)
+)
 
 // LimitReset reads when a usage limit lifts from the CLI's message, e.g.
-// Claude's "resets 9:20pm (America/Los_Angeles)" or Codex's "try again at
-// 11:32 PM". It returns the next such clock time strictly after now; a zone
-// that is missing or unknown falls back to now's location.
+// Claude's "resets 9:20pm (America/Los_Angeles)", Codex's "try again at
+// 11:32 PM" or Gemini's "retryDelay:41s" (via Antigravity). It returns the
+// next such clock time strictly after now; a zone that is missing or unknown
+// falls back to now's location.
 func LimitReset(msg string, now time.Time) (time.Time, bool) {
 	m := limitResetRE.FindStringSubmatch(msg)
 	if m == nil {
-		return time.Time{}, false
+		d := retryDelayRE.FindStringSubmatch(msg)
+		if d == nil {
+			return time.Time{}, false
+		}
+		secs, err := strconv.ParseFloat(d[1], 64)
+		if err != nil || secs <= 0 {
+			return time.Time{}, false
+		}
+		return now.Add(time.Duration(secs * float64(time.Second))), true
 	}
 	hour, _ := strconv.Atoi(m[1])
 	min := 0

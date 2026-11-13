@@ -631,8 +631,10 @@ included in the runner image.
 Antigravity has no hook-listing command to preflight with. Its turns fail closed a
 different way: `agy` only runs what the deny rules, the allow rules for Vesper's own
 tools and the policy hook leave it, so a hook that doesn't load leaves a turn able
-to do (almost) nothing. See [contracts/antigravity.md](contracts/antigravity.md),
-which also lists what is still unverified against the real CLI.
+to do (almost) nothing. Both layers were verified against agy 1.5.8: the deny
+rules hold even when the hook approves. See [contracts/antigravity.md](contracts/antigravity.md)
+and its decision record [contracts/ADR-antigravity.md](contracts/ADR-antigravity.md),
+including what still needs a real Gemini key to settle (image generation).
 
 ### Antigravity
 

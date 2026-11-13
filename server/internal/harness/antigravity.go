@@ -25,8 +25,9 @@ const (
 	agyLaunchPath = ".lazyagents/agy-launch.py"
 )
 
-// Antigravity runs `agy -p … --output-format stream-json`. Its contract is from
-// Google's docs (docs/contracts/antigravity.md), not yet from a real CLI run.
+// Antigravity runs `agy -p … --output-format stream-json`. Its contract
+// (docs/contracts/antigravity.md) was recorded from agy 1.5.8 against a
+// scripted Gemini endpoint; TestAgyProbe re-checks it against a real binary.
 //
 // Headless it authenticates with GEMINI_API_KEY and settings.modelProvider
 // "gemini" (agy's own account login is a Google OAuth token, which Vesper must
@@ -121,7 +122,7 @@ func (Antigravity) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		argv = append(argv, "--conversation", t.SessionID)
 	}
 
-	files := SkillFiles(spec.Skills, false) // no native location is documented: the AGENTS.md index points at these
+	files := SkillFilesFor(spec.Skills, agentdef.HarnessAntigravity) // agy 1.5.8 lists .agents/skills/*/SKILL.md to the model
 	files[agyPolicyPath] = agyPolicyHook
 	files[agyLaunchPath] = agyLauncher
 	files[agyConfigPath] = body
@@ -186,11 +187,9 @@ func (Antigravity) NewParser(model string) Parser { return &agyParser{model: mod
 // ---------------------------------------------------------------- stream
 
 type agyUsage struct {
-	InputTokens     int64 `json:"input_tokens"`
-	OutputTokens    int64 `json:"output_tokens"`
-	ThinkingTokens  int64 `json:"thinking_tokens"`
+	InputTokens     int64 `json:"input_tokens"`  // without the cache reads
+	OutputTokens    int64 `json:"output_tokens"` // with the thinking tokens
 	CacheReadTokens int64 `json:"cache_read_tokens"`
-	TotalTokens     int64 `json:"total_tokens"`
 }
 
 type agyToolInfo struct {
@@ -206,20 +205,28 @@ type agyToolInfo struct {
 type agyStep struct {
 	ConversationID string       `json:"conversation_id"`
 	StepIndex      int          `json:"step_index"`
-	State          string       `json:"state"`
+	State          string       `json:"state"` // ACTIVE, then DONE or ERROR
 	StepType       string       `json:"step_type"`
 	ToolName       string       `json:"tool_name"`
 	TextDelta      string       `json:"text_delta"`
 	ToolInfo       *agyToolInfo `json:"tool_info"`
+	// Usage is set on each finished agent_response step: one model request.
+	Usage        *agyUsage `json:"usage"`
+	SubagentInfo *struct {
+		Subagents []struct {
+			TypeName      string `json:"type_name"`
+			Role          string `json:"role"`
+			InitialPrompt string `json:"initial_prompt"`
+		} `json:"subagents"`
+	} `json:"subagent_info"`
 }
 
 // agyEnvelope is the final result, also the shape of `--output-format json`.
 type agyEnvelope struct {
-	ConversationID string    `json:"conversation_id"`
-	Status         string    `json:"status"`
-	Response       string    `json:"response"`
-	Error          string    `json:"error"`
-	Usage          *agyUsage `json:"usage"`
+	ConversationID string `json:"conversation_id"`
+	Status         string `json:"status"`
+	Response       string `json:"response"`
+	Error          string `json:"error"`
 }
 
 type agyLine struct {
@@ -241,21 +248,25 @@ type agyParser struct {
 	called  map[int]bool
 	sawText bool
 	done    bool
+	// stepUsage sums this process's requests. result.usage can't be used when
+	// it exists: it is cumulative over a resumed conversation.
+	stepUsage *agyUsage
+	context   int64 // prompt size of the latest request
 }
 
 var agyImagePath = regexp.MustCompile(`(/[^\s"'<>` + "`" + `\\]+\.(?:png|jpe?g|webp|gif))`)
 
 func (p *agyParser) Line(b []byte) []Event {
 	line := strings.TrimSpace(string(b))
-	// agy prints a failure it can't stream as "AGY_ERROR: {...}".
+	// agy prints a failed turn to stderr as "AGY_ERROR: {...}" too, after the
+	// result line; this reads it should the line reach the parser.
 	if rest, ok := strings.CutPrefix(line, "AGY_ERROR:"); ok {
 		msg := strings.TrimSpace(rest)
 		var e struct {
-			Message string `json:"message"`
-			Error   string `json:"error"`
+			ShortError string `json:"short_error"`
 		}
-		if json.Unmarshal([]byte(msg), &e) == nil {
-			msg = e.Message + e.Error
+		if json.Unmarshal([]byte(msg), &e) == nil && e.ShortError != "" {
+			msg = e.ShortError
 		}
 		return p.fail(msg)
 	}
@@ -265,6 +276,9 @@ func (p *agyParser) Line(b []byte) []Event {
 	}
 	switch l.Event {
 	case "init":
+		if l.ConversationID != "" {
+			p.res.SessionID = l.ConversationID
+		}
 		model := p.model
 		if l.Init != nil && l.Init.Model != "" {
 			model = l.Init.Model
@@ -288,10 +302,15 @@ func (p *agyParser) Line(b []byte) []Event {
 func (p *agyParser) step(s agyStep) []Event {
 	var out []Event
 	if s.ConversationID != "" && p.res.SessionID == "" {
-		p.res.SessionID = s.ConversationID // init comes first and doesn't carry it
+		p.res.SessionID = s.ConversationID
 	}
+	// A step that ended carries its final tool info; DONE and ERROR both end one.
+	ended := s.State != "" && s.State != "ACTIVE"
 	switch s.StepType {
 	case "agent_response":
+		if u := s.Usage; u != nil && ended {
+			p.addStepUsage(*u)
+		}
 		if p.text == nil {
 			p.text = map[int]*strings.Builder{}
 		}
@@ -300,13 +319,29 @@ func (p *agyParser) step(s agyStep) []Event {
 			p.order = append(p.order, s.StepIndex)
 		}
 		p.text[s.StepIndex].WriteString(s.TextDelta)
-		if s.State == "DONE" {
+		if ended {
 			out = append(out, p.flush(s.StepIndex)...)
 		}
-	case "tool":
+	case "tool", "subagent":
 		name := s.ToolName
 		if s.ToolInfo != nil && s.ToolInfo.Name != "" {
 			name = s.ToolInfo.Name
+		}
+		if s.StepType == "subagent" && s.ToolInfo == nil {
+			// A subagent step reports what it was asked in subagent_info, and
+			// ends without output or error text: the model is told why.
+			info := &agyToolInfo{Name: name}
+			if si := s.SubagentInfo; si != nil && len(si.Subagents) > 0 {
+				a := si.Subagents[0]
+				info.Parameters, _ = json.Marshal(map[string]string{"TypeName": a.TypeName, "Role": a.Role, "Prompt": a.InitialPrompt})
+			}
+			if s.State == "ERROR" {
+				info.Error = &struct {
+					Type    string `json:"type"`
+					Message string `json:"message"`
+				}{Type: "SUBAGENT_ERROR", Message: "the subagent did not run"}
+			}
+			s.ToolInfo = info
 		}
 		if name == "" {
 			return out
@@ -321,12 +356,12 @@ func (p *agyParser) step(s agyStep) []Event {
 		}
 		tool, canon := antigravityTool(name, input)
 		tool = strings.TrimPrefix(strings.TrimPrefix(tool, "mcp__"+lazyagentsServer+"_"), "_") // Vesper's own tools read as in Codex's events
-		if !p.called[s.StepIndex] && (s.ToolInfo != nil || s.State == "DONE") {
+		if !p.called[s.StepIndex] && (s.ToolInfo != nil || ended) {
 			p.called[s.StepIndex] = true
 			p.res.Usage.ToolCalls++
 			out = append(out, Event{"tool_call", map[string]any{"id": id, "tool": tool, "input": canon}})
 		}
-		if s.State == "DONE" && s.ToolInfo != nil {
+		if ended && s.ToolInfo != nil {
 			output := rawText(s.ToolInfo.Output)
 			isErr := s.ToolInfo.Error != nil
 			if isErr {
@@ -385,6 +420,19 @@ func contains(s []string, v string) bool {
 	return false
 }
 
+// addStepUsage counts one model request. agy's input_tokens leave out the
+// cache reads and its output_tokens already include thinking (recorded against
+// a stub with known Gemini usageMetadata), so Vesper's input is their sum.
+func (p *agyParser) addStepUsage(u agyUsage) {
+	if p.stepUsage == nil {
+		p.stepUsage = &agyUsage{}
+	}
+	p.stepUsage.InputTokens += u.InputTokens
+	p.stepUsage.OutputTokens += u.OutputTokens
+	p.stepUsage.CacheReadTokens += u.CacheReadTokens
+	p.context = u.InputTokens + u.CacheReadTokens
+}
+
 func (p *agyParser) fail(msg string) []Event {
 	if msg == "" {
 		msg = "agy failed"
@@ -413,14 +461,15 @@ func (p *agyParser) finish(env agyEnvelope) []Event {
 		p.sawText, p.res.Final = true, env.Response
 		out = append(out, Event{"message", map[string]any{"role": "assistant", "text": env.Response}})
 	}
-	if u := env.Usage; u != nil {
+	// Only the steps count: result.usage also holds a resumed conversation's
+	// earlier turns, and no step usage means no request finished.
+	if u := p.stepUsage; u != nil {
 		p.res.Usage.SessionID = p.res.SessionID
-		p.res.Usage.InputTokens = u.InputTokens
-		p.res.Usage.OutputTokens = u.OutputTokens + u.ThinkingTokens
-		if u.CacheReadTokens > 0 && u.CacheReadTokens <= u.InputTokens {
-			p.res.Usage.CachedTokens = u.CacheReadTokens
-			p.res.Usage.CacheReportedInputTokens = u.InputTokens
-		}
+		p.res.Usage.InputTokens = u.InputTokens + u.CacheReadTokens
+		p.res.Usage.OutputTokens = u.OutputTokens
+		p.res.Usage.CachedTokens = u.CacheReadTokens
+		p.res.Usage.CacheReportedInputTokens = p.res.Usage.InputTokens
+		p.res.Usage.ContextTokens = p.context
 		// agy reports tokens but no cost, and Vesper keeps no Gemini price list.
 		p.res.Usage.CostSource = "unknown"
 		out = append(out, Event{"usage", map[string]any{"input_tokens": p.res.Usage.InputTokens, "output_tokens": p.res.Usage.OutputTokens,
@@ -455,13 +504,28 @@ func antigravityTool(name string, args map[string]any) (string, map[string]any) 
 		return ""
 	}
 	pathKeys := []string{"AbsolutePath", "TargetFile", "file_path", "path", "Path", "DirectoryPath", "SearchPath"}
+	// The names agy 1.5.8 declares to the model come first; the others are its
+	// internal names (init's tool list), kept in case a step reports one.
 	switch name {
 	case "run_command":
 		return "Bash", map[string]any{"command": str("CommandLine", "command", "cmd")}
-	case "view_file", "view_file_outline":
+	case "read_file", "view_file", "view_file_outline":
 		return "Read", map[string]any{"file_path": str(pathKeys...)}
-	case "write_to_file", "create_file":
+	case "write_file", "write_to_file", "create_file":
 		return "Write", map[string]any{"file_path": str(pathKeys...)}
+	case "call_mcp_tool":
+		// Every MCP tool goes through this one: name it as Claude Code would, so
+		// the policy governs it as an MCP tool rather than an unknown one.
+		server, tool := str("ServerName"), str("ToolName")
+		if server == "" || tool == "" {
+			return name, args
+		}
+		input, _ := args["Arguments"].(map[string]any)
+		return "mcp__" + server + "__" + tool, input
+	case "invoke_subagent", "define_subagent", "manage_subagents", "swarm", "send_message":
+		// Other agents, which Vesper's policy refuses as it does Claude Code's
+		// (only its explorer, which agy doesn't have).
+		return "Agent", map[string]any{"description": str("Role", "Name", "TypeName", "action")}
 	case "replace_file_content", "multi_replace_file_content", "edit_file":
 		return "Edit", map[string]any{"file_path": str(pathKeys...)}
 	case "list_dir":

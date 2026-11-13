@@ -29,27 +29,20 @@ func RenderSkill(s agentdef.Skill) []byte {
 	return []byte(fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n", name, desc, s.Body))
 }
 
-// SkillFiles returns the workspace files for a resolved definition's skills.
-func SkillFiles(skills []agentdef.Skill, native bool) map[string][]byte {
+// SkillFiles returns the workspace files for a resolved definition's skills,
+// in Claude Code's skill directory and excluded from git.
+func SkillFiles(skills []agentdef.Skill) map[string][]byte {
 	files := map[string][]byte{}
 	if len(skills) == 0 {
 		return files
 	}
-	dir := plainSkillsDir
-	if native {
-		dir = claudeSkillsDir
-	}
 	var exclude []string
 	for _, s := range skills {
-		files[dir+"/"+s.Name+"/SKILL.md"] = RenderSkill(s)
-		if native {
-			exclude = append(exclude, "/"+dir+"/"+s.Name+"/")
-		}
+		files[claudeSkillsDir+"/"+s.Name+"/SKILL.md"] = RenderSkill(s)
+		exclude = append(exclude, "/"+claudeSkillsDir+"/"+s.Name+"/")
 	}
-	if native {
-		sort.Strings(exclude)
-		files[SkillsExcludeFile] = []byte(strings.Join(exclude, "\n") + "\n")
-	}
+	sort.Strings(exclude)
+	files[SkillsExcludeFile] = []byte(strings.Join(exclude, "\n") + "\n")
 	return files
 }
 
@@ -66,8 +59,8 @@ func skillsIndex(skills []agentdef.Skill) string {
 
 // SkillFilesFor installs native skills for the selected harness.
 func SkillFilesFor(skills []agentdef.Skill, name string) map[string][]byte {
-	files := SkillFiles(skills, true)
-	if name != agentdef.HarnessCodex {
+	files := SkillFiles(skills)
+	if name != agentdef.HarnessCodex && name != agentdef.HarnessAntigravity { // both discover .agents/skills
 		return files
 	}
 	out := map[string][]byte{}
