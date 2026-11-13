@@ -59,7 +59,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   expect(api.unhandled).toEqual([]);
 });
 
-test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({ page }) => {
+test("one menu: chats, Work and Apps, with settings in the header", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.route("**/api/v1/runs?*", (route) => route.fulfill({ json: { runs: [], has_more: false } }));
   await page.goto("/runs");
@@ -73,8 +73,9 @@ test("one menu: chats, then Work with the Apps flyout, Spaces and you", async ({
   // Inbox left the menu: the Needs you pill under New chat opens the tray instead.
   await expect(work.getByRole("link")).toHaveText([/^Runs/, "Tickets", "Reports"]);
   await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
-  await expect(nav(page).getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
-  await expect(nav(page).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  await expect(menu.getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
+  await expect(menu.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
 
   // Apps opens a grid to the right: Apps, then Tools, then New space.
   const apps = work.getByRole("button", { name: "Apps" });

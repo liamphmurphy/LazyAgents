@@ -1201,7 +1201,7 @@ export function useChatSearch(q: string) {
 }
 
 /** Who is working, replied or needs the person, across their chats. SSE `chat.updated` refreshes it. */
-/** The activity orb's data: personas with chat activity, plus harness activity and plan usage. */
+/** Sidebar activity: personas with chat activity, plus harness activity and plan usage. */
 export function usePersonaDock() {
   return useQuery({
     queryKey: ["dock"] as const,
