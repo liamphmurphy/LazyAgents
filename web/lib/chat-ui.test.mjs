@@ -1,7 +1,7 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId, rowMark } from "./chat-ui.ts";
+import { connectorCall, activityOf, bareTool, chatStatus, chatCalls, chatStatusOf, chatSteps, stepDetail, chatTitle, foldSteps, formatSpan, NEXT_STEP_AFTER_MS, NEXT_STEP_KEY, QUIET_AFTER_MS, QUIET_RUNNING_MS, quietFor, turnClock, turnPulse, interimLine, intentOf, linkLabel, needsSwitchConfirm, replyCost, runningSince, toolCalls, turnNotes, turnTrace, turnWindows, groupByDay, catalogModelLabel, readableModelId, rowMark } from "./chat-ui.ts";
 
 test("rowMark shows an unread dot until the chat is read or opened, and running wins", () => {
   assert.equal(rowMark({ state: "idle", unread: 0 }), null);
@@ -635,4 +635,89 @@ test("the design kinds have their own scene, with no placeholder left", () => {
   for (const part of [...scenes.matchAll(/scene-dz-([a-z0-9]+)/g)].map((m) => m[1])) assert.match(css, new RegExp(`@keyframes scene-dz-${part} `), `scene-dz-${part} has keyframes`);
   for (const tool of ["design_create", "design_patch"]) assert.equal(chatStatusOf({ tool, input: {} }).kind, "design", tool);
   for (const tool of ["design_render", "design_outline", "design_read", "design_flows"]) assert.equal(chatStatusOf({ tool, input: {} }).kind, "design-view", tool);
+});
+
+// ---- the status card's pulse: alive, between steps, or quiet ----
+
+const T0 = Date.parse("2026-11-09T10:00:00Z");
+const at = (s) => T0 + s * 1000;
+
+test("turnClock times each call from its event to its result, and the turn's newest event", () => {
+  const events = [ev(1, "tool_call", { id: "old", tool: "Read" }), call(5, "Read"), result(9, "c5"), think(12, "Next."), call(14, "Edit")];
+  const clock = turnClock(events, "2026-11-09T10:00:03Z");
+  assert.equal(clock.started, at(3));
+  assert.equal(clock.last, at(14));
+  assert.deepEqual([...clock.calls], [[5, { at: at(5), doneAt: at(9) }], [14, { at: at(14) }]]);
+  assert.equal(turnClock(undefined, "2026-11-09T10:00:03Z").last, undefined);
+});
+
+test("turnPulse is between steps only once the newest call has been done for a few seconds", () => {
+  const events = [call(1, "Read"), result(2, "c1")];
+  const calls = toolCalls(events);
+  const clock = turnClock(events, "2026-11-09T10:00:00Z");
+  assert.equal(turnPulse(calls, clock, at(2) + NEXT_STEP_AFTER_MS - 1).between, false);
+  assert.equal(turnPulse(calls, clock, at(2) + NEXT_STEP_AFTER_MS).between, true);
+  // A call still running is what it's doing, however long it takes.
+  const running = [call(1, "Bash", { command: "go test ./..." })];
+  assert.equal(turnPulse(toolCalls(running), turnClock(running), at(60)).between, false);
+  // Before any call there's nothing to be between.
+  assert.equal(turnPulse([], turnClock([]), at(60)).between, false);
+});
+
+test("turnPulse goes quiet after two minutes without events, or five while a call runs", () => {
+  const done = [call(1, "Read"), result(2, "c1")];
+  const pulse = (events, s) => turnPulse(toolCalls(events), turnClock(events, "2026-11-09T10:00:00Z"), at(s));
+  assert.equal(pulse(done, 2 + 119).quiet, false);
+  assert.equal(pulse(done, 2 + 120).quiet, true);
+  assert.equal(pulse(done, 2 + 120).idle, QUIET_AFTER_MS);
+  const running = [call(1, "Bash", { command: "go test ./..." })];
+  assert.equal(pulse(running, 1 + 240).quiet, false);
+  assert.equal(pulse(running, 1 + QUIET_RUNNING_MS / 1000).quiet, true);
+  // Nothing has happened yet: quiet counts from the turn's start.
+  assert.equal(turnPulse([], turnClock([], "2026-11-09T10:00:00Z"), at(120)).quiet, true);
+  assert.equal(pulse(done, 30).elapsed, 30_000);
+});
+
+test("chatStatus says it's working out the next step, not the call that already finished", () => {
+  const calls = [{ key: 1, tool: "Edit", input: {}, done: true }];
+  assert.equal(chatStatus(calls).phrase, "writing code");
+  assert.deepEqual(chatStatus(calls, true), { kind: "next-step", phrase: "working out the next step" });
+});
+
+test("between steps, the finished step keeps its detail and a stand-in next step is under way", () => {
+  const events = [call(1, "Read", { file_path: "/r/a.go" }), result(3, "c1"), call(4, "Edit", { file_path: "/r/runner.go" }), result(9, "c4")];
+  const calls = toolCalls(events);
+  const clock = turnClock(events, "2026-11-09T10:00:00Z");
+  const { steps } = chatSteps(calls, [], { between: true, clock });
+  assert.deepEqual(steps.map((s) => [s.title, s.state]), [["Reading the code", "done"], ["Writing code", "done"], ["Working out the next step", "active"]]);
+  assert.equal(steps[1].detail, "Editing runner.go");
+  assert.equal(steps[2].key, NEXT_STEP_KEY);
+  assert.equal(steps[2].kind, "next-step");
+  // Each step spans its calls; the stand-in starts when the last call finished.
+  assert.deepEqual(steps.map((s) => [s.startedAt, s.endedAt]), [[at(1), at(3)], [at(4), at(9)], [at(9), undefined]]);
+  // Not between: the newest step is still the active one.
+  assert.deepEqual(chatSteps(calls, [], { clock }).steps.map((s) => s.state), ["done", "active"]);
+});
+
+test("a failed step stays failed when the turn moves on to the next step", () => {
+  const events = [call(1, "Bash", { command: "go test ./..." }), result(2, "c1", { is_error: true })];
+  const { steps } = chatSteps(toolCalls(events), [], { between: true });
+  assert.deepEqual(steps.map((s) => s.state), ["failed", "active"]);
+});
+
+test("a planned turn keeps its plan step active between calls: only the headline changes", () => {
+  const plan = { tool: "TodoWrite", input: { todos: [{ content: "Fix it", status: "in_progress" }, { content: "Test it", status: "pending" }] } };
+  const { steps, planned } = chatSteps([{ key: 1, done: true, ...plan }, { key: 2, tool: "Edit", input: {}, done: true }], [], { between: true });
+  assert.equal(planned, true);
+  assert.deepEqual(steps.map((s) => [s.title, s.state]), [["Fix it", "active"], ["Test it", "planned"]]);
+});
+
+test("formatSpan and quietFor read at a glance", () => {
+  assert.equal(formatSpan(0), "0s");
+  assert.equal(formatSpan(12_400), "12s");
+  assert.equal(formatSpan(252_000), "4m 12s");
+  assert.equal(formatSpan(3_725_000), "1h 02m");
+  assert.equal(quietFor(2 * 60_000), "2 minutes");
+  assert.equal(quietFor(3 * 60_000 + 59_000), "3 minutes");
+  assert.equal(quietFor(61 * 60_000), "over an hour");
 });

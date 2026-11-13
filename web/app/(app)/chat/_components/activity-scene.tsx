@@ -40,65 +40,12 @@ export function useHeldScene(kind: ChatStatusKind) {
   return scene;
 }
 
-const LABELS: Record<ChatStatusKind, string> = {
-  thinking: "Thinking",
-  connector: "Using a connector",
-  secret: "Using a secret",
-  wiki: "Reading the wiki",
-  tickets: "Working on tickets",
-  "ticket-lookup": "Pulling in tickets",
-  "reading-code": "Reading code",
-  "searching-code": "Searching code",
-  "writing-code": "Writing code",
-  tests: "Running tests",
-  build: "Checking the build",
-  install: "Installing dependencies",
-  terminal: "Working in the terminal",
-  github: "Working on GitHub",
-  commit: "Committing changes",
-  push: "Pushing to the repository",
-  "pull-request": "Preparing a pull request",
-  "repo-history": "Looking over the repository",
-  web: "Searching the web",
-  "web-page": "Reading a page",
-  video: "Watching a video",
-  image: "Creating an image",
-  "image-view": "Looking at an image",
-  canvas: "Working on a canvas",
-  "design-view": "Looking at a design",
-  "canvas-comment": "Commenting on a canvas",
-  design: "Designing a flow",
-  playground: "Spinning up a playground",
-  runs: "Checking on runs",
-  workflow: "Working on a workflow",
-  memory: "Memory",
-  "memory-save": "Making a note",
-  "chat-history": "Searching past chats",
-  "repo-search": "Finding a repository",
-  "repo-attach": "Checking out a repository",
-  "video-render": "Rendering a video",
-  finance: "Reading your finances",
-  "finance-sort": "Sorting transactions",
-  persona: "Sketching a persona",
-  schedule: "Scheduling a task",
-  learning: "Building a learning module",
-  research: "Writing up research",
-  space: "Setting up a space",
-  "saved-links": "Checking saved links",
-  projects: "Looking over projects",
-  library: "Searching your Library",
-  inbox: "Checking your Inbox",
-  chart: "Drawing a chart",
-  diagram: "Drawing a diagram",
-  app: "Building an app",
-  choices: "Laying out options",
-};
-
-export const sceneLabel = (kind: ChatStatusKind) => LABELS[kind];
-
 const LEARNING_PATH = "M18 44C34 44 34 16 52 16S70 44 88 44S104 16 114 16";
 
-const CODE_LINES = "M20 10H72 M30 19H112 M30 28H88 M20 37H60 M20 46H108";
+/** The next-step scene's branches out of the finished step: up, straight on, down. */
+const NEXT_BRANCHES = ["M30 28C52 28 62 12 92 12", "M30 28H96", "M30 28C52 28 62 44 92 44"];
+
+const CODE_LINES ="M20 10H72 M30 19H112 M30 28H88 M20 37H60 M20 46H108";
 
 const toX = (px: number) => ({ "--to-x": `${px}px` }) as CSSProperties;
 const toFrom = (px: number) => ({ "--from-x": `${px}px` }) as CSSProperties;
@@ -168,6 +115,26 @@ const SCENES: Record<Exclude<ChatStatusKind, SplitKind>, ReactNode> = {
       <circle className="scene-accent scene-drift-a" cx="54" cy="29" r="4" opacity="0.55" />
       <circle className="scene-accent scene-drift-b" cx="66" cy="23" r="5" />
       <circle className="scene-accent scene-drift-c" cx="78" cy="31" r="3.5" opacity="0.75" />
+    </>
+  ),
+  // From the step just finished, it tries two branches part way, then commits to one and lights its node.
+  "next-step": (
+    <>
+      {NEXT_BRANCHES.map((d) => (
+        <path key={d} className="scene-empty" strokeDasharray="3 3" d={d} />
+      ))}
+      {[
+        [98, 12],
+        [102, 28],
+        [98, 44],
+      ].map(([cx, cy]) => (
+        <circle key={cy} className="scene-empty" cx={cx} cy={cy} r="5" />
+      ))}
+      <path className="scene-line-accent scene-ns-probe scene-ns-probe-a" pathLength={1} d={NEXT_BRANCHES[0]} />
+      <path className="scene-line-accent scene-ns-probe scene-ns-probe-b" pathLength={1} d={NEXT_BRANCHES[2]} />
+      <path className="scene-line-accent scene-ns-commit" pathLength={1} d={NEXT_BRANCHES[1]} />
+      <circle className="scene-accent scene-box scene-ns-chosen" cx="102" cy="28" r="5" />
+      <g className="scene-ns-from">{doneBadge(22, 28)}</g>
     </>
   ),
   wiki: (

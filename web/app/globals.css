@@ -743,6 +743,24 @@
 @keyframes scene-dz-spark { 0%, 70% { transform: scale(0); } 75% { transform: scale(1.3); } 78%, 88% { transform: scale(1); } 100% { transform: scale(0); } }
 @keyframes scene-dz-cur { 0%, 24% { transform: translate(-60px, 2px); opacity: 0; } 28% { transform: translate(-60px, 2px); opacity: 1; } 48%, 88% { transform: none; opacity: 1; } 100% { transform: none; opacity: 0; } }
 
+/*
+ * Working out the next step: from the finished step it tries the upper and lower branches part
+ * way, then commits to the middle one and lights its node. The still frame is that choice made.
+ */
+.scene-ns-probe { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.scene-ns-commit { stroke-dasharray: 1; }
+.scene-ns-probe-a, .scene-ns-probe-b, .scene-ns-commit, .scene-ns-chosen, .scene-ns-from { animation: 4.8s ease-in-out infinite; }
+.scene-ns-probe-a { animation-name: scene-ns-probe-a; }
+.scene-ns-probe-b { animation-name: scene-ns-probe-b; }
+.scene-ns-commit { animation-name: scene-ns-commit; }
+.scene-ns-chosen { animation-name: scene-ns-chosen; animation-timing-function: ease-out; }
+.scene-ns-from { animation-name: scene-ns-from; }
+@keyframes scene-ns-probe-a { 0% { stroke-dashoffset: 1; } 9% { stroke-dashoffset: 0.5; } 18%, 100% { stroke-dashoffset: 1; } }
+@keyframes scene-ns-probe-b { 0%, 16% { stroke-dashoffset: 1; } 25% { stroke-dashoffset: 0.5; } 34%, 100% { stroke-dashoffset: 1; } }
+@keyframes scene-ns-commit { 0%, 32% { stroke-dashoffset: 1; opacity: 1; } 50%, 84% { stroke-dashoffset: 0; opacity: 1; } 96%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes scene-ns-chosen { 0%, 48% { transform: scale(0); opacity: 1; } 55% { transform: scale(1.2); } 60%, 84% { transform: scale(1); opacity: 1; } 96%, 100% { transform: scale(1); opacity: 0; } }
+@keyframes scene-ns-from { 0%, 30% { opacity: 1; } 40% { opacity: 0.6; } 50%, 100% { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   .scene-layer,
   .scene-layer * { animation: none !important; }
