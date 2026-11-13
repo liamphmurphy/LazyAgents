@@ -10,6 +10,9 @@ import (
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
 // memObjects is an in-memory object store for vault archives.
@@ -91,5 +94,54 @@ func TestCancelPreviewedVaultImport(t *testing.T) {
 	e.want("POST", "/knowledge/imports/00000000-0000-0000-0000-000000000000/cancel", nil, 404)
 	if pages := e.want("GET", "/knowledge/pages?folder=Imported", nil, 200); len(pages["rows"].([]any)) != 0 {
 		t.Fatalf("canceled import wrote pages: %v", pages)
+	}
+}
+
+// import_vault starts a dry run from a zip the person sent in chat, and only
+// a dry run: nothing is imported until they confirm.
+func TestImportVaultToolStartsDryRunFromChatAttachment(t *testing.T) {
+	var srv *Server
+	objects := &memObjects{}
+	e := newChatEnvServer(t, nil, func(s *Server) { s.Wiki.Objects = objects; srv = s })
+	ctx := t.Context()
+	chat := e.newChat(nil)
+	chatID := uuid.MustParse(chat["id"].(string))
+	token := e.canvasToken(chatID)
+
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	f, _ := z.Create("Vault/Harbour.md")
+	f.Write([]byte("# Harbour\n"))
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	key := "chat-attachments/" + uuid.NewString()
+	if err := objects.Put(ctx, srv.Wiki.Artifacts.Bucket, key, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "application/zip"); err != nil {
+		t.Fatal(err)
+	}
+	att, err := e.q.CreateChatAttachment(ctx, store.CreateChatAttachmentParams{WorkspaceID: e.me.WorkspaceID, UserID: e.me.ID, Filename: "vault.zip", ContentType: "application/zip", SizeBytes: int64(buf.Len()), BlobKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, out := e.tool(token, "import_vault", map[string]any{"attachment_id": att.ID}); code == 200 {
+		t.Fatalf("an unsent upload started an import: %v", out)
+	}
+	if _, err = e.pool.Exec(ctx, `UPDATE chat_attachments SET message_id=(SELECT id FROM chat_messages WHERE session_id=$2 ORDER BY seq LIMIT 1) WHERE id=$1`, att.ID, chatID); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := e.tool(token, "import_vault", map[string]any{"attachment_id": att.ID, "folder": "Imported"})
+	if code != 200 || out["state"] != "queued" {
+		t.Fatalf("import_vault %d %v", code, out)
+	}
+	if worked, err := srv.Wiki.ProcessNextVault(ctx); err != nil || !worked {
+		t.Fatalf("scan %v %v", worked, err)
+	}
+	job := e.want("GET", "/knowledge/imports/"+out["import_id"].(string), nil, 200)
+	if job["state"] != "preview" || job["plan"].(map[string]any)["notes"] != float64(1) {
+		t.Fatalf("dry run %v", job)
+	}
+	if pages := e.want("GET", "/knowledge/pages?folder=Imported", nil, 200); len(pages["rows"].([]any)) != 0 {
+		t.Fatalf("dry run wrote pages: %v", pages)
 	}
 }
