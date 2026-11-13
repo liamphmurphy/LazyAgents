@@ -1,6 +1,6 @@
 # ADR: Knowledge: one store for Docs and the wiki, audience, identity, properties, suggestions, migration and Obsidian import
 
-- **Status:** Proposed. Implementation tickets start once Liam approves it.
+- **Status:** Accepted. Liam approved it via the relayed review reply, conditional on the changes recorded in §6 (2 GB import limit; a reversible Docs migration that keeps the canvases).
 - **Ticket:** [[LAZYAGENTS-174]], the first ticket of the epic "Knowledge: one store for Docs and the wiki, a Zettelkasten, Obsidian import".
 - **Plan:** canvas `01a1d1ee-bd4f-7c2d-9ace-42812e262274`, sections 1, 2 and 7 (requirement ids R-A, R-I, R-P, R-V, R-M below are the plan's).
 - **Evidence:** `server/internal/wiki/resolve_nested_test.go` (§5), run against `TEST_DATABASE_URL`.
@@ -115,11 +115,11 @@ ALTER TABLE artifacts
 
 | Audience | Who sees it | Who writes it directly |
 |---|---|---|
-| `private` | Its owner, and persona chats **of that owner**. Never another person, never a ticket, epic, planning, workflow, research or delegated run. | The owner; the owner's persona chats per the page's edit switch (§3.5). |
+| `private` | Its owner, and **every persona** in the owner's chats (no per-persona restrictions in v1). Never another person, never a ticket, epic, planning, workflow, research or delegated run. | The owner; personas in the owner's chats, directly by default and reviewed afterwards (§3.5 R-V4). |
 | `shared` | Every person in the workspace, every persona chat, every run. | People; runs per `wiki:write` (direct or suggestion, as `wiki.Decide` today). |
-| `agent` | Same readers as `shared`. Listed apart in the UI ("Agent memory", "Patterns"). | The owning agent (its `agents/<handle>/` namespace, `wiki.Decide` unchanged) and pattern curators. People can edit; it stays `agent`. |
+| `agent` | Agent memory and proposed patterns. Same readers as `shared` in queries, but **hidden from the person's default views**: they appear only in the separate "Agent knowledge" view, and default lists, search and the graph pass `include_agent=false`. | The owning agent (its `agents/<handle>/` namespace, `wiki.Decide` unchanged) and pattern curators. People can edit; it stays `agent`. |
 
-- **R-A1 Defaults.** A person's new page: `private`. A page a persona creates in a person's chat: `private`, owned by that person. A page a ticket or epic run creates: `shared`, or `agent` under `agents/<handle>/` and `Patterns/`. Existing wiki pages: `agent` under `agents/` and `Patterns/`, else `shared`. Migrated Docs: `private` (§3.6). Imported pages: the importer's choice at upload, default `private`.
+- **R-A1 Defaults.** A person's new page: `private`. A page a persona creates in a person's chat: `private`, owned by that person. A page a ticket or epic run creates: `shared`, or `agent` under `agents/<handle>/` and `Patterns/Proposed/`. Existing wiki pages: `agent` under `agents/` and `Patterns/Proposed/`, else `shared` (published patterns are shared guidance; publishing moves a page out of `Patterns/Proposed/`, so its audience follows the path). Migrated Docs: `private` (§3.6). Imported pages: the importer's choice at upload, default `private`.
 - **R-A2 Who may change it.** Only a person: the owner (private ↔ shared) or any person for a shared page (shared → private makes them the owner). `agent` is set by path and can't be changed by hand. No MCP tool changes audience; a persona may *ask* in chat.
 - **R-A3 Sharing a page shares only that page**, never what it links to or embeds.
 - **R-A4 Links across audiences.** The `[[text]]` in a shared page's body is the writer's text and is delivered as written. For a viewer who can't see the target, every resolver treats it as a **ghost**: `read_page`, `get_backlinks`, previews, embeds (`![[…]]` renders "Unavailable page") and autocomplete answer exactly as for a page that doesn't exist, so a run can't tell "private" from "missing". `knowledge_links` keeps the real `target_id`; hiding is at read time, so sharing the target later lights the link up with no reindex.
@@ -164,19 +164,24 @@ ALTER TABLE artifact_versions ADD COLUMN changes jsonb;
 - **R-V1 One model.** Every proposed edit, from a run (`wiki:write` requires approval or unset), from a persona chat on a page with direct edit off, or from an import onto a page the person changed, is a `state='suggested'` version with `based_on_version_id` and `changes`. `changes` is computed on the server when the suggestion is written: a block diff of base → suggested body (the algorithm in `web/lib/doc-review.ts`, ported to Go and shared with the client through the API) plus one change per property key.
 - **R-V2 Per change on the current head.** `POST /pages/{id}/suggestions/{vid}/resolve {decisions}` locks the page, then applies each accepted change to the **current head**: a body change applies where its `before` text (with its context) is found in the head; a property change sets its key. The result is one new published version authored by the person, note "Accepted n of m changes from @handle". The suggestion becomes `published` if every change was accepted, else `rejected` with per-change states.
 - **R-V3 Stale.** A change whose `before`/context can't be found in the head (the person edited that passage since) is marked `stale` and skipped; the person's edit always wins. Rejections with reasons and stale changes go back to the author: a system message in the persona's chat, or a ticket comment for a run.
-- **R-V4 Direct edit switch.** Per page, `artifacts.persona_direct boolean`, default **on for private pages** (today's Docs behaviour) and **off for shared**. With it on, a persona's edit publishes immediately and stores its `changes` with `review_state='pending'`; the person reviews afterwards and a rejection writes a new version reverting that change (what Docs does now, but recorded per change on the server instead of by the client). Runs never get direct edit through this switch; for them `wiki:write` decides, as now.
+- **R-V4 Direct edit, reviewed after (Liam, 2026-11-12), with a per-page switch.** `artifacts.persona_direct boolean NOT NULL`. On a private page it defaults to **on**: personas edit directly, as Docs work today, and the person reviews afterwards. The page's "Suggestions first" switch sets it **off**, and persona edits then arrive as suggestions (R-V1–R-V3). Shared pages default to off. With it on, a persona's edit publishes immediately and stores its `changes` with `review_state='pending'`; the person reviews afterwards and a rejection writes a new version reverting that change (what Docs does now, but recorded per change on the server instead of by the client). Runs never get direct edit through this switch; for them `wiki:write` decides, as now.
 - `design_proposals` stays for Designs: its ops are id-keyed JSON, not text. The review UI shares components (change list, pins, Accept/Reject/Accept rest) with Designs.
 
 ### 3.6 Migration of Docs (R-M1..R-M6)
 
-One goose migration, in SQL, inside one transaction:
+One goose migration, in SQL, inside one transaction. It is **reversible until the old data is dropped**: it copies and never deletes, and its down migration restores Docs (R-M6). Dropping the old Docs data is a separate, later change (R-M5).
 
 - **R-M1 Which rows.** Every `chat_canvases` row with `kind='text'` whose session's space has `app='docs'`. Text canvases in other chats are not migrated (§3.1).
 - **R-M2 Page.** An `artifacts` row: `type='note'`, `audience='private'`, `owner_user_id` = the space's user, `title` = canvas title, `path` = `Docs/<title-derived segment>` with `2`, `3` suffixes per owner (R-I3), `chat_session_id` = the canvas's session, `persona_direct = true`, `created_at` = the canvas's.
 - **R-M3 History.** Each `chat_canvas_versions` row becomes an `artifact_versions` row with the same `seq`, `label 'v<seq>'`, `body_md`, `note`, `created_by_type/id` = `author_type/id`, `created_at`, `state='published'`. `current_version_id` = the highest seq. `reviewed_seq` maps to `review_state`: versions after it by an agent are `pending`. Sections, search text and links are rebuilt by a Go backfill run once after the migration (`vesper migrate` hook), because link parsing lives in Go.
-- **R-M4 Comments.** `chat_canvas_comments` move to a new `page_comments` table with the same columns, `artifact_id` instead of `canvas_id`; anchors are text ranges already and carry over.
-- **R-M5 Docs already promoted to the wiki** become **one** page. A promoted Doc is matched to its wiki page by the version written by `PromoteDocToWiki`: author = the Doc's owner, note `Promoted from the Doc “<title>”`; the most recent match wins. The **wiki page keeps its id, path, audience `shared`, links and backlinks**; the Doc's versions are inserted before the page's versions (seqs renumbered, timestamps kept), the chat and comments attach to the page, and a final version by the system strips the "_Promoted from the Doc …_" footer. If the Doc changed after its promotion, its later text becomes one **suggestion** on the page for the owner to accept per change, never a silent overwrite. Ambiguous matches (two promotions to different pages) migrate as a private page and are listed in the migration report.
-- **R-M6 Addresses and cleanup.** `doc_page_redirects(canvas_id PK, artifact_id)` keeps `/apps/docs/<canvasId>` working; `/wiki/<path>` resolves the path (and aliases) to `/knowledge/<id>/<slug>`. The migrated `chat_canvases` rows are deleted in the same migration after the copy (versions and comments cascade). `doc_page_redirects` is exported with the instance (AGENTS.md: new tables need no transfer change). The migration rewrites rows, so it also runs on imported older archives.
+- **R-M4 Comments.** `chat_canvas_comments` are copied into a new `page_comments` table with the same columns, `artifact_id` instead of `canvas_id`; anchors are text ranges already and carry over.
+- **R-M2b Docs already promoted to the wiki** become **one** page. A promoted Doc is matched to its wiki page by the version written by `PromoteDocToWiki`: author = the Doc's owner, note `Promoted from the Doc “<title>”`; the most recent match wins. The **wiki page keeps its id, path, audience `shared`, links and backlinks**; the Doc's versions are inserted before the page's versions (the page's own seqs are shifted up by the Doc's count, recorded as `seq_shift`; timestamps kept), the chat and comments attach to the page, and a final version by the system strips the "_Promoted from the Doc …_" footer. Every inserted or system version records its source (`artifact_versions.source_canvas_version_id`, or the footer version's id in the mapping row) so the down migration can take them out exactly. If the Doc changed after its promotion, its later text becomes one **suggestion** on the page for the owner to accept per change, never a silent overwrite. Ambiguous matches (two promotions to different pages) migrate as a private page and are listed in the migration report.
+- **R-M5 Dropping the old data** is its own later change, after the migrated pages have been in use: it deletes the migrated `chat_canvases` rows (versions and comments cascade) and the Docs-only columns. Until then the migration stays reversible.
+- **R-M6 Addresses and reversibility.**
+  - `doc_page_redirects(canvas_id PK, artifact_id, merged bool, seq_shift int, footer_version_id uuid NULL)` keeps `/apps/docs/<canvasId>` working and records what the migration did. `/wiki/<path>` resolves the path (and aliases) to `/knowledge/<id>/<slug>`.
+  - **The canvases are kept.** The migrated `chat_canvases`, versions and comments stay untouched; from the migration on, the Docs app and the tools read and write pages, and nothing writes the canvases.
+  - **Down migration restores Docs.** For each mapping row: versions written to the page after the migration are appended to the canvas as new `chat_canvas_versions` (same author, body and time), so no edit is lost; comments created on the page are copied back. A page created from a Doc is then deleted. A merged page (R-M2b) loses the inserted Doc versions and the footer version, and its seqs shift back by `seq_shift`. Then the mapping table, `page_comments` and the new columns are dropped.
+  - `doc_page_redirects` is exported with the instance (AGENTS.md: new tables need no transfer change). The migration rewrites rows, so it also runs on imported older archives.
 
 `db:migrate` is a gated scope: the migration ticket ships the SQL and a dry-run report query; a person applies it.
 
@@ -191,7 +196,7 @@ CREATE TABLE knowledge_imports (
   created_at timestamptz NOT NULL DEFAULT now(), started_at timestamptz, finished_at timestamptz);
 ```
 
-- **Upload.** `POST /knowledge/imports` streams the zip to S3 (limit 500 MB), inserts a `queued` row, returns `202` with the id. Progress and the report come over the existing realtime channel and `GET /knowledge/imports/{id}`.
+- **Upload.** `POST /knowledge/imports` streams the zip to S3 (limit **2 GB by default**, configurable with `KNOWLEDGE_IMPORT_MAX_BYTES`), inserts a `queued` row, returns `202` with the id. Progress and the report come over the existing realtime channel and `GET /knowledge/imports/{id}`.
 - **Worker.** A loop in `vesper serve` claims `queued` rows with `FOR UPDATE SKIP LOCKED` (one import per workspace at a time).
 - **Pass 1, pages.** For each `.md`: split frontmatter → `properties`; match an existing page by `vesper_id`/`lazyagents_id`, else by path under the chosen folder, else create. Paths a vault allows but `ValidNotePath` refuses (`# ^ [ ] |`, more than 9 levels, more than 300 characters) are mapped deterministically (characters replaced by a space; deeper levels joined into the 9th with ` - `) and the original path is stored as an `alias` so links written against it resolve. Unchanged body and properties → no version. A changed page the person edited since its last import → a suggestion (R-V1), not an overwrite. Each file is its own transaction; a failure is reported and the rest continue.
 - **Attachments.** Non-Markdown files become `file` artifacts with the same audience, addressable by vault path for `![[image.png]]` embeds.
@@ -224,7 +229,7 @@ Callers are named by who ultimately triggers them: **P** a person over REST/UI, 
 | `MentionCandidatesArtifacts` (wiki.sql:84) | artifact bodies containing a phrase | `wiki.UnlinkedMentions` (backlinks.go:211) ← `httpapi.GetBacklinks` (wiki.go:259) P | viewer |
 | `SearchKnowledgeArtifacts` (wiki.sql:98) | full text over artifacts + link-count boost | `wiki.Search`/`SearchFuzzy` (graph.go:162,181) ← `searchKnowledge` (tools.go:595) C/R/PL, `RunContext` search (memory.go:165) R, `httpapi.SearchKnowledge` (wiki.go:299) P, global search `httpapi.Search` (attention.go:119) P | viewer on rows **and** on the boost's link sources (R-A5) |
 | `SuggestTargets` (wiki.sql:132) | `[[` autocomplete over notes/artifacts | `wiki.Autocomplete` (graph.go:218) ← `httpapi.SuggestLinks` (wiki.go:241) P | viewer |
-| `FindPatterns` (wiki.sql:233) | published `Patterns/` notes + boost | `wiki.FindPatterns` (patterns.go:254) ← `findPattern` (tools.go:693) C/R, `httpapi.FindPatterns`/`BrowsePatterns` (wiki.go:310,320) P | viewer (patterns are `agent`; filter anyway, boost sources too) |
+| `FindPatterns` (wiki.sql:233) | published `Patterns/` notes + boost | `wiki.FindPatterns` (patterns.go:254) ← `findPattern` (tools.go:693) C/R, `httpapi.FindPatterns`/`BrowsePatterns` (wiki.go:310,320) P | viewer (published patterns are `shared`; filter anyway, boost sources too) |
 | `RelevantPatterns` (wiki.sql:267) | patterns matching ticket words | `RunContext` (memory.go:78) R | viewer |
 | `ListADRDocs` (wiki.sql:293) | ADR artifacts and notes titled "ADR …" | `wiki.ListADRs` (adrs.go:151) ← `httpapi.ListWikiADRs` (wiki.go:336) P | viewer |
 | `ExportNotes` (wiki.sql:178) | every note's current body | `wiki.Export` (vault.go:24) ← `httpapi.ExportWiki` (wiki.go:175) P | viewer (a person exports what they can see). Instance export (`transfer`) reads tables directly and is allowlisted: it is the admin backup. |
@@ -261,7 +266,7 @@ Callers are named by who ultimately triggers them: **P** a person over REST/UI, 
 | `wiki.Search` / `SearchFuzzy` (graph.go:152,158) | SearchKnowledgeArtifacts, SearchKnowledgeTickets | `searchKnowledge` C/R/PL; `RunContext` R; `httpapi.SearchKnowledge` P; global search P | viewer |
 | `wiki.Autocomplete` (graph.go:217) | SuggestTargets | `httpapi.SuggestLinks` P (editor), later the page tools C | viewer |
 | `wiki.FindPatterns` / `BrowsePatterns` (patterns.go:238,285) | FindPatterns | `findPattern` C/R; `httpapi` P | viewer |
-| `wiki.ListProposed` / `loadProposal` / `publishedByTitle` (patterns.go:423,474,345) | ListNotes, GetNoteByPath, FindNotesByTitle | `listProposedPatterns`, `publishPattern`, `rejectPattern`, `proposePattern` R (curators) | viewer `NULL` (patterns are `agent`) |
+| `wiki.ListProposed` / `loadProposal` / `publishedByTitle` (patterns.go:423,474,345) | ListNotes, GetNoteByPath, FindNotesByTitle | `listProposedPatterns`, `publishPattern`, `rejectPattern`, `proposePattern` R (curators) | viewer `NULL` (proposed patterns are `agent`, which runs see) |
 | `wiki.ListADRs` (adrs.go:150) | ListADRDocs | `httpapi.ListWikiADRs` P | viewer |
 | `wiki.Export` (vault.go:23) | ExportNotes | `httpapi.ExportWiki` P | viewer |
 | `wiki.Service.write` / `latestVersion` / `DecideSuggestion` / `Rename` (notes.go) | GetNoteByPath, FindNoteByAlias, LockArtifact, ListSuggestions, LockSuggestion | `SaveAsUser` P, `AgentWrite` (`write_note`) C/R, `Import` P, `PromoteDocToWiki` P, patterns R | the lookup is the writer's viewer; a run can't write over (or learn of) a private page at that path: it gets a new shared page or "already exists" only for visible pages (R-A7 makes the paths independent) |
@@ -294,23 +299,44 @@ The import ticket closes the three gaps in `links.Resolve` (§3.3) and resolves 
 
 ## 6. Decisions Liam made on 2026-11-12
 
-> **To fill in before approval.** The epic's description lists these, but this run could not read the epic or the plan canvas (`get_epic` and `list_epics` need a chat; the canvas is not an artifact). Liam's reply on [[LAZYAGENTS-174]] is copied here verbatim, and any section above that disagrees is changed to match before the ticket closes.
+From the epic, verbatim:
+
+> - The feature is called Knowledge. The default view shows Liam's and personas' pages; agent-internal pages sit behind a separate "Agent knowledge" view.
+> - The artifacts note store becomes the single substrate, and Docs move onto it.
+> - Every page has an audience: private (Liam and personas), shared (also ticket and epic runs), agent (agent memory and proposed patterns, hidden from Liam's default views). It is enforced in queries, never only in the UI.
+> - Every persona reads every private page. No per-persona restrictions in v1.
+> - Online only, over Tailscale. No sync or offline client.
+> - Obsidian vault import from a zip, up to 2 GB by default (configurable).
+> - Functionality first: server, API and tools, tested at the API. The interface comes last, mockups first, on the canvas-first editor shell.
+
+In Liam's relayed review reply:
+
+> - Persona edits: "Direct, reviewed after." Personas edit private pages directly by default, as Docs work today, and he reviews afterwards. A per-page switch turns on suggestions-first. (§3.5 R-V4)
+> - The import upload limit is 2 GB by default and configurable. (§3.7)
+> - The Docs migration keeps the `chat_canvases` rows and its down migration restores Docs; dropping the old data is a later change. (§3.6 R-M5, R-M6)
+
+Where they land: storage §3.1; audience, the Agent knowledge view and every persona §3.2; enforcement in queries §3.2 and the guard test; import limit §3.7; online only means no sync protocol, client-side store or conflict model beyond the existing 409 on a stale base (`wiki.write`); functionality first is the ticket order in §8.
 
 ## 7. Consequences
 
 - Every note reader gains a `Viewer` parameter; the guard test makes forgetting one a CI failure. This is the bulk of the audience ticket and touches every row of §4.
 - `title` stops being derived from the path: code that relies on `TitleOf(path) == title` (`FindNotesByTitle`, `Phrases`, autocomplete) moves to "title or last segment".
-- Docs-space canvases, their versions and comments leave `chat_canvases`; the Docs app, the canvas tools and `PromoteDocToWiki` change in the same epic.
+- Docs-space canvases stay in `chat_canvases`, read-only, until the drop change (R-M5); the Docs app, the canvas tools and `PromoteDocToWiki` move onto pages in this epic.
 - `artifact_aliases` gains a `kind`; every existing row is `moved`.
 - The synchronous wiki import stays only as a wrapper; vault imports are jobs.
 - The Docs per-change review moves from the client to the server (`changes jsonb`), so runs, chats and imports share it.
 
 ## 8. Ticket order this ADR implies
 
+Functionality first (§6): server, API and tools, tested at the API; the interface last.
+
 1. Audience column, `artifact_visible`, `Viewer` through §4, the guard test (blocks everything that exposes pages to runs).
 2. Identity: free titles, path derivation, duplicate suffixes, `/knowledge/<id>` and redirects; resolver gaps (§5).
 3. Properties, tags, aliases (`kind`), frontmatter round trip.
-4. Suggestions with per-change `changes` and the review API (Docs review UI moves onto it).
-5. Docs migration (needs 1–4; `db:migrate` by a person).
+4. Suggestions with per-change `changes`, the direct-edit switch and the review API.
+5. Docs migration, reversible (needs 1–4; `db:migrate` by a person).
 6. Page tools for personas and runs; canvas tools stop handling text.
 7. Obsidian import job and fixture vault (needs 2, 3, 5).
+8. Mockups of the Knowledge interface (default view, Agent knowledge view, page, review), approved by Liam.
+9. The interface on the canvas-first editor shell (needs 8).
+10. Later, separately: drop the old Docs data (R-M5).
