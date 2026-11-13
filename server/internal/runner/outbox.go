@@ -261,3 +261,60 @@ func removeOutboxExec(ctx context.Context, b Backend, runID string, names []stri
 	_, _, err := outboxExec(ctx, b, runID, argv...)
 	return err
 }
+
+// collectAntigravityScript copies the images an Antigravity conversation saved
+// into the outbox, with collectScript's limits. $1 is the conversation id and
+// the rest are image paths its tools said they saved. Antigravity keeps a
+// conversation's artifacts under its own home (~/.gemini/…/<conversation id>/;
+// the exact layout isn't documented), so both ways in are confined to that
+// folder: a path must lie under $HOME/.gemini with no ".." and the conversation
+// directories are found by name inside it. Links are never followed. Files are
+// named agy-<conversation>-<name> so two jobs' "image.png" don't collide.
+var collectAntigravityScript = `conv=$1; shift
+case "$conv" in ""|.*|*/*) exit 2 ;; esac
+root=${HOME:-/nonexistent}/.gemini
+if [ -L "$root" ] || [ ! -d "$root" ]; then exit 0; fi
+if [ -L .lazyagents ] || [ -L ` + outboxDir + ` ]; then exit 0; fi
+mkdir -p ` + outboxDir + ` || exit 1
+n=0
+tag=$(printf '%s' "$conv" | cut -c1-8)
+take() {
+  f=$1
+  [ -f "$f" ] && [ ! -L "$f" ] || return 0
+  name=${f##*/}
+  case "$name" in .*|-*) return 0 ;; esac
+  case "$(printf '%s' "$name" | tr 'A-Z' 'a-z')" in *.png|*.jpg|*.jpeg|*.webp|*.gif) ;; *) return 0 ;; esac
+  [ "$n" -lt ` + strconv.Itoa(OutboxMaxFiles) + ` ] || return 0
+  [ "$(wc -c < "$f")" -le ` + strconv.Itoa(OutboxMaxFileBytes) + ` ] || return 0
+  dest=` + outboxDir + `/agy-$tag-$name
+  [ -e "$dest" ] && return 0
+  cp -- "$f" "$dest" || return 1
+  n=$((n + 1))
+}
+for f in "$@"; do
+  case "$f" in "$root"/*) ;; *) continue ;; esac
+  case "/$f/" in *"/../"*|*"/./"*) continue ;; esac
+  take "$f" || exit 1
+done
+if [ "$n" -eq 0 ]; then
+  for d in $(find "$root" -maxdepth 6 -type d -name "$conv" 2>/dev/null | head -n 4); do
+    [ -L "$d" ] && continue
+    for f in "$d"/* "$d"/*/*; do take "$f" || exit 1; done
+  done
+fi
+`
+
+// antigravityConversationID matches what agy reports as a conversation id, so
+// it can name a directory without escaping it.
+var antigravityConversationID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// collectAntigravityImages runs collectAntigravityScript in the run's
+// workspace, through the backend so it sees the home the step's agy wrote to.
+func collectAntigravityImages(ctx context.Context, b Backend, runID, conversation string, paths []string) error {
+	if !antigravityConversationID.MatchString(conversation) {
+		return fmt.Errorf("runner: bad Antigravity conversation id %q", conversation)
+	}
+	argv := append([]string{"sh", "-c", collectAntigravityScript, "sh", conversation}, paths...)
+	_, _, err := outboxExec(ctx, b, runID, argv...)
+	return err
+}

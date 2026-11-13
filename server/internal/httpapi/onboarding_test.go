@@ -167,3 +167,49 @@ func TestVerifyHarnessAgainstFakeHarness(t *testing.T) {
 		t.Fatalf("missing CLI: %v", out)
 	}
 }
+
+// Antigravity has no subscription path: Google's terms bar storing the login agy
+// keeps, so only a Gemini API key (AIza…) is accepted, and it is checked
+// before it replaces anything.
+func TestVerifyHarnessAntigravityTakesOnlyAGeminiKey(t *testing.T) {
+	var seen []string
+	var srv *Server
+	e := newChatEnvServer(t, func(rs *runs.Service) {
+		rs.RequireHarnessKey = true
+		rs.ModelDiscovery = func(_ context.Context, h, key string) ([]chatmodels.Model, error) {
+			seen = append(seen, h+"="+key)
+			if strings.Contains(key, "revoked") {
+				return nil, context.DeadlineExceeded
+			}
+			return []chatmodels.Model{{ID: "gemini-2.5-pro", Label: "Gemini 2.5 Pro", Default: true}, {ID: "gemini-2.5-flash"}}, nil
+		}
+	}, func(s *Server) { srv = s })
+	box := &secrets.Service{Q: e.q, Box: testBox(t)}
+	e.runs.Secrets = box
+	srv.Secrets = box
+
+	e.invalid("POST", "/harness/antigravity/verify", map[string]any{"kind": "subscription", "credential": "anything"}, "credential", "Gemini API key")
+	e.invalid("POST", "/harness/antigravity/verify", map[string]any{"kind": "api_key", "credential": "sk-ant-api03-x"}, "credential", "AIza")
+	if len(seen) != 0 {
+		t.Fatalf("a malformed credential reached discovery: %v", seen)
+	}
+	out := e.want("POST", "/harness/antigravity/verify", map[string]any{"kind": "api_key", "credential": "AIzaSy-revoked"}, http.StatusOK)
+	if out["ok"] != false || strings.Contains(fmt.Sprint(out), "revoked") {
+		t.Fatalf("refused key: %v", out)
+	}
+	if _, err := box.Reveal(context.Background(), e.me.WorkspaceID, nil, "harness:google"); err == nil {
+		t.Fatal("a refused key was stored")
+	}
+	out = e.want("POST", "/harness/antigravity/verify", map[string]any{"kind": "api_key", "credential": "AIzaSyGood"}, http.StatusOK)
+	if out["ok"] != true || len(out["models"].([]any)) != 2 {
+		t.Fatalf("verify: %v", out)
+	}
+	if got, err := box.Reveal(context.Background(), e.me.WorkspaceID, nil, "harness:google"); err != nil || got != "AIzaSyGood" {
+		t.Fatalf("stored %q, %v", got, err)
+	}
+	// Verifying again with nothing pasted lists the models of what is stored.
+	out = e.want("POST", "/harness/antigravity/verify", nil, http.StatusOK)
+	if out["ok"] != true || seen[len(seen)-1] != "antigravity=AIzaSyGood" {
+		t.Fatalf("recheck: %v seen %v", out, seen)
+	}
+}

@@ -16,7 +16,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// Workflow images: a step with Images set generates pictures on Codex, and
+// Workflow images: a step with Images set generates pictures on an image engine, and
 // they are stored against that step's attempt. A step that makes none passes
 // on what it received, so Generate -> Verify -> Gate -> Chat delivers
 // Generate's image even though Verify only writes text.
@@ -27,13 +27,19 @@ const (
 	MaxWorkflowImagesPerStep = 4
 	// maxWorkflowInputImages bounds what one step is shown from earlier steps.
 	maxWorkflowInputImages = 8
-	// workflowCodexLookup bounds model discovery, which runs under the chat's lock.
-	workflowCodexLookup = 20 * time.Second
+	// workflowImageLookup bounds model discovery, which runs under the chat's lock.
+	workflowImageLookup = 20 * time.Second
 )
 
 const workflowImageInstructions = `
 
 This step generates images. Use your image generation tool, make at most %d, and copy each final file into .lazyagents/outbox/ with cp (png, jpeg, webp or gif). You can't change anything else. An image step that leaves no image in the outbox fails, whatever you submit.`
+
+// workflowImageInstructionsCollected is for Antigravity, whose generator saves
+// into its own folder: the runner moves the images, so the step must not copy.
+const workflowImageInstructionsCollected = `
+
+This step generates images. Use your image generation tool and make at most %d; Vesper collects each image from where your tool saved it, so don't copy or move them. You can't change anything else. An image step that produces no image fails, whatever you submit.`
 
 // WorkflowImage is one stored image and the attempt that made it.
 type WorkflowImage = store.ListWorkflowRunImagesRow
@@ -150,40 +156,55 @@ func workflowImagePersona(ctx context.Context, q *store.Queries, chat store.Chat
 	return "", nil
 }
 
-// workflowCodexModel picks the Codex model for an image step: the chat's own
-// on a Codex chat, else Codex's default. A non-empty reason is why it can't run.
-func (e *WorkflowEngine) workflowCodexModel(ctx context.Context, q *store.Queries, chat store.ChatSession) (model, reason string, err error) {
-	if chat.Harness == agentdef.HarnessCodex && chat.Model != "" {
-		return chat.Model, "", nil
+// workflowImageEngine picks the harness and model for an image step: the step's
+// own engine, else its persona's, else the workspace's. A non-empty reason is why
+// it can't run.
+func (e *WorkflowEngine) workflowImageEngine(ctx context.Context, q *store.Queries, chat store.ChatSession, n WorkflowNode) (engine, model, reason string, err error) {
+	preference := n.Config.ImageEngine
+	if preference == "" {
+		personaEngine, err := workflowPersonaImageEngine(ctx, q, chat, n)
+		if err != nil {
+			return "", "", "", err
+		}
+		if preference, err = ImageEnginePreference(ctx, q, chat.WorkspaceID, personaEngine); err != nil {
+			return "", "", "", err
+		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, workflowCodexLookup)
+	// A chat already on the engine keeps its own model.
+	if (preference == EngineAuto || preference == chat.Harness) && agentdef.CanMakeImages(chat.Harness) && chat.Model != "" {
+		return chat.Harness, chat.Model, "", nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, workflowImageLookup)
 	defer cancel()
 	catalog, err := e.Catalog.List(ctx, q, chat.WorkspaceID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	why := "Codex isn't available"
-	for _, h := range catalog {
-		if h.Harness != agentdef.HarnessCodex {
-			continue
-		}
-		if !h.Available {
-			why = h.UnavailableReason
-			break
-		}
-		for _, m := range h.Models {
-			if model == "" || m.Default {
-				model = m.ID
-			}
-		}
-		if model == "" {
-			why = "no Codex models are available"
-		}
+	engine, model, why := PickImageEngine(catalog, preference)
+	if why != "" {
+		return "", "", "Image steps need an image engine: " + why + ". Connect one in Settings → Connections & secrets, then run this again.", nil
 	}
-	if model == "" {
-		return "", "Image steps run on Codex: " + why + ". Set up Codex in Settings → Connections & secrets, then run this again.", nil
+	return engine, model, "", nil
+}
+
+// workflowPersonaImageEngine is the engine the persona a step runs as has chosen.
+func workflowPersonaImageEngine(ctx context.Context, q *store.Queries, chat store.ChatSession, n WorkflowNode) (string, error) {
+	id := ChatSpeakerID(chat)
+	if n.Config.PersonaID != "" {
+		parsed, err := uuid.Parse(n.Config.PersonaID)
+		if err != nil {
+			return "", nil
+		}
+		id = &parsed
 	}
-	return model, "", nil
+	if id == nil {
+		return "", nil
+	}
+	p, err := q.GetPersona(ctx, store.GetPersonaParams{ID: *id, WorkspaceID: chat.WorkspaceID, UserID: chat.CreatedBy})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return p.ImageEngine, err
 }
 
 var workflowImageLinkRe = regexp.MustCompile(`!\[[^\]]*\]\(([^)]*)\)`)

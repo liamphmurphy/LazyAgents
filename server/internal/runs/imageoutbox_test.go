@@ -63,7 +63,7 @@ func TestImageToolNames(t *testing.T) {
 		"image_gen": true, "image_generation": true, "imagegen": true, "ImageGen": true,
 		"image_gen__imagegen": true, "image_gen.imagegen": true, "image_genimagegen": true, "tools.image_gen__imagegen": false,
 		"mcp__x__image_gen": false, "image_gen_extra": false, "myimagegen": false, "": false, "mcp__lazyagents__generate_image": false,
-		"Bash": false,
+		"Bash":           false,
 		"generate_image": true, // Antigravity's built-in generator
 	} {
 		if got := imageToolName(name); got != want {

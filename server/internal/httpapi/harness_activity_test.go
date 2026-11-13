@@ -20,7 +20,7 @@ func TestBuildHarnessActivity(t *testing.T) {
 		"codex": {Harness: "codex", Available: false, ObservedAt: at, Windows: []usage.Window{}},
 	}
 	got := buildHarnessActivity(running, limits, readings, map[string]bool{"codex": true})
-	if len(got) != 2 || got[0].Harness != "claude-code" || got[1].Harness != "codex" {
+	if len(got) != 3 || got[0].Harness != "claude-code" || got[1].Harness != "codex" || got[2].Harness != "antigravity" {
 		t.Fatalf("order = %+v", got)
 	}
 	c := got[0]
@@ -31,6 +31,10 @@ func TestBuildHarnessActivity(t *testing.T) {
 		t.Fatalf("claude windows = %+v", c.Windows)
 	}
 	x := got[1]
+	// Antigravity is listed with no allowance to read: never "checking", never available.
+	if a := got[2]; a.Label != "Antigravity" || a.UsageAvailable || a.UsageChecking || a.UsageCheckedAt != nil || len(a.Windows) != 0 {
+		t.Fatalf("antigravity = %+v", a)
+	}
 	if x.Running != 0 || x.LimitedUntil == nil || !x.LimitedUntil.Equal(resets) || x.UsageAvailable || x.UsageCheckedAt == nil || len(x.Windows) != 0 || !x.UsageChecking {
 		t.Fatalf("codex = %+v", x)
 	}

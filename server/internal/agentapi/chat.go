@@ -271,8 +271,8 @@ type GenerateImageIn struct {
 	References []string `json:"references,omitempty" jsonschema:"Likenesses to keep: persona when the image shows you, person when it shows the person. Each uses the reference image set in the person's Library; omit when the image shows neither."`
 }
 
-// generateImage queues an image for the runner to make with Codex after this
-// reply (see runs.Service.QueueChatImage).
+// generateImage queues an image for the runner to make with the image engine
+// (Codex or Antigravity) after this reply (see runs.Service.QueueChatImage).
 func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImageIn) (any, error) {
 	s, err := chatScopeFor(ctx, d, c)
 	if err != nil {
@@ -281,10 +281,11 @@ func generateImage(ctx context.Context, d Deps, c agents.Caller, in GenerateImag
 	if s == nil {
 		return nil, apperr.Conflict("generate_image only works in a chat with a person")
 	}
-	if _, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt, in.References); err != nil {
+	job, err := d.Runs.QueueChatImage(ctx, c.Agent.WorkspaceID, *c.RunID, in.Prompt, in.References)
+	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"queued": true, "tell_the_person": "Queued. Codex tries to make the image right after your reply; it may still fail (for example if moderation refuses it). " +
+	return map[string]any{"queued": true, "tell_the_person": "Queued. " + runs.ImageEngineLabel(job.Harness) + " tries to make the image right after your reply; it may still fail (for example if moderation refuses it). " +
 		"Tell the person you're trying to make it; don't describe it as finished or promise it will appear. " +
 		"You'll get a follow-up turn with the image to look at, or the reason it failed, to react to."}, nil
 }

@@ -74,6 +74,9 @@ type Runner struct {
 	DataDir       string // fake: run workspaces
 	ClaudeBin     string // fake: stand-in for `claude`
 	CodexBin      string // fake: stand-in for `codex`
+	// AntigravityBin is the fake backend's stand-in for `agy`. Optional: without
+	// it Antigravity is simply unavailable on that instance.
+	AntigravityBin string
 	// ChatIdleTTL is how long an idle Personal Assistant chat keeps its run
 	// and workspace (RUNNER_CHAT_IDLE_TTL_S).
 	ChatIdleTTL time.Duration
@@ -151,14 +154,15 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("config: VESPER_NO_SIGNIN lets anyone who reaches the API act as you; it's only for a local instance, and PUBLIC_URL=%q isn't a loopback address", c.PublicURL)
 	}
 	r := Runner{
-		Backend:      env("RUNNER_BACKEND", "docker"),
-		Image:        env("RUNNER_IMAGE", "vesper/agent-base:latest"),
-		Network:      env("RUNNER_NETWORK", "lazyagents_agents"),
-		DockerSocket: env("DOCKER_SOCKET", "/var/run/docker.sock"),
-		Stack:        env("RUNNER_STACK", "default"),
-		DataDir:      env("RUNNER_DATA_DIR", ".lazyagents/runs"),
-		ClaudeBin:    env("RUNNER_CLAUDE_BIN", ""),
-		CodexBin:     env("RUNNER_CODEX_BIN", ""),
+		Backend:        env("RUNNER_BACKEND", "docker"),
+		Image:          env("RUNNER_IMAGE", "vesper/agent-base:latest"),
+		Network:        env("RUNNER_NETWORK", "lazyagents_agents"),
+		DockerSocket:   env("DOCKER_SOCKET", "/var/run/docker.sock"),
+		Stack:          env("RUNNER_STACK", "default"),
+		DataDir:        env("RUNNER_DATA_DIR", ".lazyagents/runs"),
+		ClaudeBin:      env("RUNNER_CLAUDE_BIN", ""),
+		CodexBin:       env("RUNNER_CODEX_BIN", ""),
+		AntigravityBin: env("RUNNER_ANTIGRAVITY_BIN", ""),
 
 		DockerProxyDir:    env("RUNNER_DOCKER_PROXY_DIR", ""),
 		DockerProxyVolume: env("RUNNER_DOCKER_PROXY_VOLUME", ""),
