@@ -12,6 +12,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -75,6 +77,7 @@ type Content struct {
 }
 
 type NewArtifact struct {
+	Audience     string // trusted person-only creation override; never exposed to agent tools
 	Properties   json.RawMessage
 	ProjectKey   string // required for PRDs, specs and ADRs; optional for the rest (a chat has no project to file under)
 	Path         string // notes only: "Payments/Ledger/Rollback runbook"
@@ -144,7 +147,10 @@ func (s *Service) resolve(ctx context.Context, ws uuid.UUID, typ string, c Conte
 	}
 	if c.BodyMD != nil {
 		body := strings.ReplaceAll(*c.BodyMD, "\r\n", "\n")
-		if strings.TrimSpace(body) == "" {
+		// A Knowledge page may be empty, as a new note in Obsidian is; every
+		// other artifact needs text. write_note still refuses an empty body,
+		// so a persona can't blank a page.
+		if strings.TrimSpace(body) == "" && typ != "note" {
 			return resolved{}, noop, apperr.Invalid("body_md", "is empty")
 		}
 		if len(body) > MaxMarkdownBytes {
@@ -240,7 +246,7 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 		review = &pending
 	}
 	if r.properties == nil && a.CurrentVersionID != nil {
-		cur, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID})
+		cur, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return store.ArtifactVersion{}, err
 		}
@@ -265,11 +271,68 @@ func writeVersion(ctx context.Context, q *store.Queries, a store.Artifact, r res
 	if err != nil {
 		return v, err
 	}
+	if a.Type == "note" && r.body != nil && (by.Type == "agent" || state == Suggested) {
+		oldBody := ""
+		oldProps := Properties{}
+		if a.CurrentVersionID != nil {
+			base, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
+			if err != nil {
+				return v, err
+			}
+			if base.BodyMd != nil {
+				oldBody = *base.BodyMd
+			}
+			oldProps = DecodeProperties(base.Properties)
+		}
+		changes, err := json.Marshal(PageChanges(oldBody, *r.body, oldProps, DecodeProperties(v.Properties), note))
+		if err != nil {
+			return v, err
+		}
+		pending := "pending"
+		v, err = q.SetPageChanges(ctx, store.SetPageChangesParams{ID: v.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID, Changes: changes, ReviewState: &pending})
+		if err != nil {
+			return v, err
+		}
+	}
 	if r.body != nil && a.Type != "mockup" {
 		for i, sec := range Outline(*r.body) {
 			if err := q.InsertSection(ctx, store.InsertSectionParams{
 				VersionID: v.ID, Position: int32(i + 1), Level: int32(sec.Level), Anchor: sec.Anchor, Heading: sec.Heading,
 			}); err != nil {
+				return v, err
+			}
+		}
+	}
+	if r.body != nil && a.Type == "note" {
+		ids := []string{}
+		for id := range links.Blocks(*r.body) {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for i, id := range ids {
+			if err := q.InsertSection(ctx, store.InsertSectionParams{VersionID: v.ID, Position: int32(100000 + i), Level: 6, Anchor: "^" + id, Heading: "^" + id}); err != nil {
+				return v, err
+			}
+		}
+	}
+	if r.body != nil && a.Type == "note" {
+		for _, ref := range links.Parse(*r.body) {
+			raw, ok := strings.CutPrefix(ref.Target, "attachment:")
+			if !ok {
+				continue
+			}
+			id, err := uuid.Parse(strings.SplitN(raw, "/", 2)[0])
+			if err != nil {
+				continue
+			}
+			_, err = q.GetKnowledgeAsset(ctx, store.GetKnowledgeAssetParams{ID: id, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return v, err
+			}
+			if err = q.AddPageAssetRef(ctx, store.AddPageAssetRefParams{VersionID: v.ID, AssetID: id, Viewer: pageview.From(ctx).UserID}); err != nil {
 				return v, err
 			}
 		}
@@ -371,6 +434,7 @@ func (s *Service) CreateThen(ctx context.Context, ws uuid.UUID, by Actor, in New
 // NoteMetadata supplies the display title and versioned frontmatter when
 // creating a page through the lightweight wiki save path.
 type NoteMetadata struct {
+	Audience   string
 	Title      string
 	Properties json.RawMessage
 }
@@ -381,6 +445,7 @@ func (s *Service) CreateNoteTx(ctx context.Context, q *store.Queries, ws uuid.UU
 	if len(metadata) > 0 {
 		in.Title = metadata[0].Title
 		in.Properties = metadata[0].Properties
+		in.Audience = metadata[0].Audience
 	}
 	r, _, err := s.resolve(ctx, ws, "note", in.Content) // markdown: nothing to clean up
 	if err != nil {
@@ -458,25 +523,23 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 		}
 	}
 	if notePath != nil {
-		if _, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: *notePath}); err == nil {
-			return a, apperr.Invalid("path", "a page called %q already exists", *notePath)
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		audience, _ := NoteAudience(ctx, *notePath, in.Audience)
+		taken, err := q.NotePathTaken(ctx, store.NotePathTakenParams{WorkspaceID: ws, Path: *notePath, Audience: audience, Viewer: pageview.From(ctx).UserID})
+		if err != nil {
 			return a, err
 		}
-		// Explicit paths may reuse historical moved paths, but must not steal
-		// a published frontmatter alias (even for an unpublished suggestion).
-		taken, err := q.PropertyAliasTaken(ctx, store.PropertyAliasTakenParams{WorkspaceID: ws, Path: *notePath})
+		if taken {
+			return a, apperr.Invalid("path", "a page called %q already exists", *notePath)
+		}
+		taken, err = q.PropertyAliasTaken(ctx, store.PropertyAliasTakenParams{WorkspaceID: ws, Path: *notePath, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return a, err
 		}
 		if taken {
 			return a, apperr.Invalid("path", "%q is another page's frontmatter alias", *notePath)
 		}
-		// The new page takes over this path from any renamed page.
-		if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: *notePath}); err != nil {
-			return a, err
-		}
 	}
+
 	var number *int32
 	if in.Number != nil && in.Type != "adr" {
 		return a, apperr.Invalid("number", "only ADRs are numbered")
@@ -505,7 +568,13 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 			number = &n
 		}
 	}
-	a, err := q.CreateArtifact(ctx, store.CreateArtifactParams{
+	audience := "shared"
+	var owner *uuid.UUID
+	if notePath != nil {
+		audience, owner = NoteAudience(ctx, *notePath, in.Audience)
+	}
+
+	a, err := q.CreateArtifact(ctx, store.CreateArtifactParams{Audience: audience, OwnerUserID: owner,
 		WorkspaceID: ws, ProjectID: projectID, EpicID: in.EpicID, Type: in.Type, Title: title, Number: number,
 		Summary: strings.TrimSpace(in.Summary), AuthorType: by.Type, AuthorID: by.ID, Path: notePath,
 	})
@@ -531,7 +600,7 @@ func (s *Service) create(ctx context.Context, q *store.Queries, ws uuid.UUID, by
 
 // AddVersion makes new content current. Labels default to v<seq>.
 func (s *Service) AddVersion(ctx context.Context, ws uuid.UUID, by Actor, id uuid.UUID, in NewVersion) (store.Artifact, error) {
-	cur, err := store.New(s.Pool).GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+	cur, err := store.New(s.Pool).GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return store.Artifact{}, apperr.ErrNotFound
 	} else if err != nil {
@@ -550,7 +619,7 @@ func (s *Service) AddVersion(ctx context.Context, ws uuid.UUID, by Actor, id uui
 			}
 		}
 		var err error
-		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws}); err != nil {
+		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.ErrNotFound
 			}
@@ -641,7 +710,7 @@ func (s *Service) UpdateMeta(ctx context.Context, ws uuid.UUID, id uuid.UUID, p 
 		if err := q.LockNotePaths(ctx, ws); err != nil {
 			return err
 		}
-		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
+		cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		} else if err != nil {
@@ -710,4 +779,26 @@ func DisplayID(typ string, number *int32) *string {
 	}
 	s := fmt.Sprintf("ADR-%03d", *number)
 	return &s
+}
+
+// NoteAudience chooses a new note's audience from trusted request identity.
+// Overrides are validated by the person-only save service. Agent namespaces
+// always determine their own audience, including on publication/move.
+func NoteAudience(ctx context.Context, path, override string) (string, *uuid.UUID) {
+	p := strings.ToLower(path)
+	if strings.HasPrefix(p, "agents/") || strings.HasPrefix(p, "patterns/proposed/") {
+		return "agent", nil
+	}
+	audience := "shared"
+	owner := pageview.From(ctx).UserID
+	if owner != nil {
+		audience = "private"
+	}
+	if override != "" {
+		audience = override
+	}
+	if audience != "private" {
+		owner = nil
+	}
+	return audience, owner
 }

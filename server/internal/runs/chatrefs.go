@@ -11,6 +11,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/canvas"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -52,6 +53,14 @@ type ChatRefDoc struct {
 // and attaching one is an explicit ask to read it. Nothing is returned for a
 // partly resolvable list, so callers queue nothing.
 func ResolveChatRefs(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, refs []ChatContextRef) ([]ChatRefDoc, error) {
+	ctx = pageview.Run(ctx)
+	if chat != uuid.Nil {
+		session, err := q.GetChatSession(ctx, store.GetChatSessionParams{ID: chat, WorkspaceID: ws})
+		if err != nil {
+			return nil, err
+		}
+		ctx = pageview.Person(ctx, session.CreatedBy)
+	}
 	if len(refs) > MaxChatContextRefs {
 		return nil, apperr.Invalid("context_refs", "attach at most %d references", MaxChatContextRefs)
 	}
@@ -119,9 +128,9 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r
 		var err error
 		switch {
 		case r.ID != nil && r.Key == "":
-			a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: *r.ID, WorkspaceID: ws})
+			a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: *r.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		case r.Kind == "page" && r.ID == nil && r.Key != "":
-			a, err = q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: r.Key})
+			a, err = q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: r.Key, Viewer: pageview.From(ctx).UserID})
 		default:
 			return d, bad("give exactly one of id or key (key only for a page's wiki path)")
 		}
@@ -140,7 +149,7 @@ func resolveChatRef(ctx context.Context, q *store.Queries, ws, chat uuid.UUID, r
 		if a.CurrentVersionID == nil {
 			return d, bad("has no published version")
 		}
-		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return d, err
 		}

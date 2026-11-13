@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -13,7 +14,7 @@ type ctxKey struct{}
 
 // WithUser stores the acting user on the request context.
 func WithUser(ctx context.Context, u store.User) context.Context {
-	return context.WithValue(ctx, ctxKey{}, u)
+	return context.WithValue(pageview.Person(ctx, u.ID), ctxKey{}, u)
 }
 
 // UserFrom returns the acting user set by the HTTP middleware.

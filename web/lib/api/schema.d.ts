@@ -1310,68 +1310,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/pages/{id}/suggestions/{versionId}/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-                versionId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resolve individual changes on the current head as the signed-in person
-         * @description Decisions apply atomically and create at most one human version per request. Undecided changes remain pending; rest resolves all remaining changes. Missing or ambiguous targets become stale. Repeated decisions return 409. Rejected and stale changes emit feedback in the originating chat or ticket. Workspace authorization applies; missing pages or versions return 404.
-         */
-        post: operations["resolvePageSuggestion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/pages/{id}/persona-edits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Set direct-edit and pause switches as the signed-in person */
-        put: operations["setPagePersonaEdits"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/pages/{id}/versions/{versionId}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-                versionId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore a published version body and properties as a new human-authored version */
-        post: operations["restorePageVersion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/wiki/suggestions": {
         parameters: {
             query?: never;
@@ -6053,9 +5991,6 @@ export interface components {
         };
         ArtifactVersion: {
             /** Format: uuid */
-            persona_id?: string;
-            changes?: components["schemas"]["PageChange"][];
-            /** Format: uuid */
             id: string;
             seq: number;
             label: string;
@@ -6088,10 +6023,8 @@ export interface components {
             relation: components["schemas"]["ArtifactRelation"];
         };
         Artifact: {
-            persona_direct?: boolean;
-            persona_paused?: boolean;
-            /** Format: uuid */
-            chat_session_id?: string;
+            /** @description private, shared or agent; only a person can change private/shared */
+            audience?: string;
             /** Format: uuid */
             id: string;
             type: components["schemas"]["ArtifactType"];
@@ -6882,6 +6815,8 @@ export interface components {
             [key: string]: unknown;
         };
         WikiPageSummary: {
+            /** @description private, shared or agent; only a person can change private/shared */
+            audience?: string;
             /** Format: uuid */
             id: string;
             path: string;
@@ -6901,6 +6836,11 @@ export interface components {
             suggestions: number;
         };
         NewWikiPage: {
+            /**
+             * @description Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
+             * @enum {string}
+             */
+            audience?: "private" | "shared";
             /** @description Optional explicit unique path; otherwise derived from title with a numeric suffix */
             path?: string;
             /** @description Free display text; duplicate titles are allowed */
@@ -6914,6 +6854,11 @@ export interface components {
             project_key?: string;
         };
         WikiPageSave: {
+            /**
+             * @description Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
+             * @enum {string}
+             */
+            audience?: "private" | "shared";
             /** @description Rename the display title and derive a unique last path segment in the current folder; the old path remains an alias */
             title?: string;
             body_md?: string;
@@ -6931,43 +6876,7 @@ export interface components {
             base_version_id?: string;
             note?: string;
         };
-        PageChange: {
-            i: number;
-            /** @enum {string} */
-            kind: "body" | "property";
-            /** @description Old text or property value */
-            before: unknown;
-            /** @description New text or property value */
-            after: unknown;
-            context_before: string;
-            context_after: string;
-            key?: string;
-            why: string;
-            /** @enum {string} */
-            state: "pending" | "applied" | "accepted" | "rejected" | "stale";
-            reason?: string;
-            /** Format: uuid */
-            decided_by?: string;
-            /** Format: date-time */
-            decided_at?: string;
-        };
-        PageResolution: {
-            decisions?: {
-                i: number;
-                accept: boolean;
-                reason?: string;
-            }[];
-            /** @enum {string} */
-            rest?: "accept" | "reject";
-            /** @description Reason for rest decisions */
-            reason?: string;
-        };
         WikiSuggestion: {
-            /** @description Already applied directly and waiting for review */
-            applied?: boolean;
-            /** Format: uuid */
-            persona_id?: string;
-            changes?: components["schemas"]["PageChange"][];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -9059,6 +8968,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Include agent memory and proposed patterns in discovery; false by default. */
+        IncludeAgent: boolean;
         NodeKind: components["schemas"]["NodeKind"];
         NodeId: string;
         /** @description Ticket key, e.g. PAY-214 */
@@ -9403,6 +9314,8 @@ export interface operations {
     search: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q: string;
                 project?: string;
             };
@@ -11043,6 +10956,8 @@ export interface operations {
     listWikiPages: {
         parameters: {
             query?: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 /** @description Filter by an exact case-insensitive tag (including inline tags) */
                 tag?: string;
             };
@@ -11218,92 +11133,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    resolvePageSuggestion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-                versionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PageResolution"];
-            };
-        };
-        responses: {
-            /** @description Persisted changes with decision states and reasons */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageChange"][];
-                };
-            };
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-            default: components["responses"]["Error"];
-        };
-    };
-    setPagePersonaEdits: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    direct?: boolean;
-                    paused?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Updated */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Error"];
-            default: components["responses"]["Error"];
-        };
-    };
-    restorePageVersion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ArtifactId"];
-                versionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The restored page */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Artifact"];
-                };
-            };
-            404: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-            default: components["responses"]["Error"];
-        };
-    };
     listWikiSuggestions: {
         parameters: {
             query?: {
@@ -11429,6 +11258,8 @@ export interface operations {
     suggestLinks: {
         parameters: {
             query?: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q?: string;
             };
             header?: never;
@@ -11509,6 +11340,8 @@ export interface operations {
     getGraph: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 kind: components["parameters"]["NodeKind"];
                 id: components["parameters"]["NodeId"];
                 depth?: number;
@@ -11534,6 +11367,8 @@ export interface operations {
     searchKnowledge: {
         parameters: {
             query: {
+                /** @description Include agent memory and proposed patterns in discovery; false by default. */
+                include_agent?: components["parameters"]["IncludeAgent"];
                 q: string;
                 kind?: string[];
             };

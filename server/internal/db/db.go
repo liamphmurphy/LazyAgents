@@ -50,6 +50,9 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if err := migrate(ctx, sqldb); err != nil {
 		return err
 	}
+	if err := backfillKnowledge(ctx, pool); err != nil {
+		return fmt.Errorf("knowledge backfill: %w", err)
+	}
 	// River owns its migration history; serialize API/runner startup migrations.
 	tx, err := pool.Begin(ctx)
 	if err != nil {

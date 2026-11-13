@@ -138,6 +138,8 @@ CREATE FUNCTION artifact_visible(audience text, owner uuid, viewer uuid) RETURNS
 - `wiki.Viewer{UserID *uuid.UUID}` is built once per request: REST → the signed-in person; MCP → `RunID` → run purpose `chat` → `chat_sessions.created_by`; any other run → `nil`. Every note-reading function in §4 takes a `Viewer` and every query passes `viewer` to `artifact_visible(...)` for each artifact it returns **and** each link source/target it counts.
 - **Guard test** (`internal/store/queries/audience_test.go`): parses every `-- name:` query in `internal/store/queries/*.sql`; any query that reads `artifacts`, `knowledge_links`, `artifact_sections`, `artifact_aliases`, `artifact_versions` or the new tag/alias tables must call `artifact_visible(` or appear in an allowlist with a reason (writes, locks by id after a visible lookup, admin export). A new unfiltered query fails CI.
 
+**Owner-authorized workflow output exception.** Workflow model steps keep a run viewer and never read private pages. After the person's gate approval, `WorkflowEngine.output` performs the configured terminal wiki append/replace as `workflow_runs.user_id` through `SaveAsUser`. This deterministic effect may write that owner's private page and preserves its audience. It returns only the destination path, never existing body text, and output nodes cannot feed another model step. `TestWikiAudienceWorkflowTerminalWritesAsOwner` covers private append/replace, approval gating, and absence of the private body in model prompts and step outputs.
+
 ### 3.3 Identity (R-I1..R-I3)
 
 - **R-I1 Page id.** `artifacts.id`. The page address is `/knowledge/<id>/<slug>`; the slug is decoration derived from the title and is ignored on lookup. `/wiki/<path>` and `/apps/docs/<canvasId>` redirect to it (§3.6).
@@ -277,6 +279,7 @@ Callers are named by who ultimately triggers them: **P** a person over REST/UI, 
 | `runner.ContextFiles` (prepare.go) | ListTicketArtifacts, GetArtifact, GetArtifactVersion, RunContext | runner R; dispatch preview P | viewer `NULL` |
 | `runner.PlanningContextFile` (prepare.go:551) | GetArtifactVersion of the plan source | PL | viewer `NULL`; starting a plan from a private page is refused (R-A6) |
 | `tracker.AttachArtifact` (tracker/service.go:850) | GetArtifact | REST P; `create_artifact`/ticket tools C/R | R-A6: refuse private pages |
+| `WorkflowEngine.output` (`runs/workflow.go`, `NodeWiki`) | `SaveAsUser` (lookup/current body/write) | deterministic terminal output after the owner's workflow gate approval | **Owner-authorized write exception:** viewer is `workflow_runs.user_id` only for the terminal effect; model steps retain `NULL`. Private body is never returned as step output or model context; see §3.2 and `TestWikiAudienceWorkflowTerminalWritesAsOwner`. |
 
 ## 5. How a bare `[[Note]]` resolves today (measured)
 

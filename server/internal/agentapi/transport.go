@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"log/slog"
 	"net/http"
@@ -43,6 +44,7 @@ func inputSchema[In any]() *jsonschema.Schema {
 func define[In any](name, desc string, fn func(context.Context, Deps, agents.Caller, In) (any, error)) Tool {
 	original := fn
 	fn = func(ctx context.Context, d Deps, c agents.Caller, in In) (any, error) {
+		ctx = pageview.Run(ctx)
 		if c.Agent.Kind == agents.KindAssistant && c.RunID == nil {
 			return nil, apperr.Conflict("the Personal Assistant only works inside chats")
 		}
@@ -59,6 +61,14 @@ func define[In any](name, desc string, fn func(context.Context, Deps, agents.Cal
 				if !slices.Contains(chatTools, name) {
 					return nil, apperr.Conflict("%s isn't available in chats", name)
 				}
+				session, err := d.Q.ChatSessionForRun(ctx, &run.ID)
+				if err != nil {
+					return nil, err
+				}
+				if session.WorkspaceID != c.Agent.WorkspaceID {
+					return nil, apperr.ErrNotFound
+				}
+				ctx = pageview.IncludeAgents(pageview.Person(ctx, session.CreatedBy), true)
 				if !slices.Contains(asideTools, name) && isAsideRun(run) {
 					return nil, apperr.Conflict("%s isn't available in an aside, which only reads", name)
 				}

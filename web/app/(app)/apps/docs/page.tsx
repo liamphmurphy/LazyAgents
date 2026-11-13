@@ -1,5 +1,6 @@
-import { DocsScreen } from "./_components/docs-screen";
+import { redirect } from "next/navigation";
 
+// Docs are Knowledge pages now.
 export default function Page() {
-  return <DocsScreen />;
+  redirect("/knowledge");
 }

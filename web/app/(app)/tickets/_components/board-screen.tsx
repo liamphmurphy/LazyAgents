@@ -68,7 +68,7 @@ export function BoardScreen() {
     </>
   );
   return (
-    <div data-testid="board-screen">
+    <div data-testid="board-screen" className="flex min-h-0 flex-1 flex-col">
       {!compact && <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={boardFilters} />}
       <TicketsLayoutBar layout="board" />
       {compact && boardFilters && <ChipScroller label="Board filters">{boardFilters}</ChipScroller>}
@@ -131,7 +131,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
   const moved = query.data && withBoardMoves(query.data, Object.values(moves.pending));
   const board = moved && (blockedOnly ? onlyBlocked(moved) : moved);
   return (
-    <div className="p-5 max-sm:p-3">
+    <div className="flex min-h-0 flex-1 flex-col p-5 max-sm:p-3">
       {moves.error && <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-state-blocked bg-surface p-3 text-sm">
         <span>{moves.error}</span><button type="button" aria-label="Dismiss move error" onClick={moves.dismissError}>×</button>
       </div>}
@@ -151,7 +151,7 @@ function BoardView({ project, filters, blockedOnly, onOpen }: { project: string;
       </div>}
       {board && <div ref={columns} aria-label="Board columns"
         onScroll={compact ? (e) => setPage(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth))) : undefined}
-        className={cx("relative flex min-h-[calc(100dvh-240px)] overflow-x-auto pb-3", compact ? "snap-x snap-mandatory [scrollbar-width:none]" : "gap-2")}>
+        className={cx("relative flex min-h-0 flex-1 overflow-auto pb-3", compact ? "snap-x snap-mandatory [scrollbar-width:none]" : "gap-2")}>
         {statuses.map((status) => {
           const column = board.columns.find((c) => c.status === status);
           return <section key={status} aria-label={STATUS_NAME[status]} data-testid={`column-${status}`}

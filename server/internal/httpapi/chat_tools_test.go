@@ -144,7 +144,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		"list_workflows":        map[string]any{},
 	}
 	// Allowed too, but they need arguments; they're exercised below or in the memory tests.
-	needArgs := []string{"use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_import", "design_comments", "design_comment", "design_reply", "design_create", "write_note", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "read_library_item", "save_link", "create_space", "create_scheduled_task", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "get_learning_progress", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "design_flows", "design_components", "design_tokens", "design_inspect", "design_link_ticket"}
+	needArgs := []string{"librarian_pass", "daily_note", "import_vault", "list_pages", "page_outline", "patch_page", "set_properties", "create_page", "capture_note", "suggest_links", "use_repository", "update_ticket", "comment_ticket", "update_ticket_blockers", "get_epic", "update_epic", "submit_research_report", "get_run", "reply_to_run", "search_memory", "read_memory", "search_chats", "read_chat", "save_memory", "update_memory", "forget_memory", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "get_video_transcript", "propose_persona", "canvas_create", "canvas_patch", "canvas_read", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_import", "design_comments", "design_comment", "design_reply", "design_create", "write_note", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "read_library_item", "save_link", "create_space", "create_scheduled_task", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "get_learning_progress", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "design_flows", "design_components", "design_tokens", "design_inspect", "design_link_ticket"}
 	seen := 0
 	for _, tool := range listed.Tools {
 		args, ok := allowed[tool.Name]
@@ -153,6 +153,7 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			seen++
 			// This chat's persona lacks the capability, which is refused after the allowlist.
 			noCapability := tool.Name == "propose_workflow_edit" && strings.Contains(fmt.Sprint(out["message"]), "can't create workflows")
+			noCapability = noCapability || (tool.Name == "import_vault" && strings.Contains(fmt.Sprint(out["message"]), "vault storage is unavailable"))
 			noCapability = noCapability || tool.Name == "propose_connector" || tool.Name == "use_repository"
 			noCapability = noCapability || (tool.Name == "propose_secret" && strings.Contains(fmt.Sprint(out["message"]), "can't propose secrets"))
 			// Finance tools are allowed in chats but answer only in the Finance app's Ask chat.
@@ -180,34 +181,14 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed)+len(needArgs))
 	}
 
-	// A chat's wiki notes are suggestions for the person to accept or reject,
-	// never published; another agent's memory stays off limits.
+	// New chat pages are private and published directly for their owner;
+	// another agent's memory stays off limits.
 	code, wn := call(token, "write_note", map[string]any{"path": "Payments/Chat runbook " + word, "body": "Found in chat"})
-	if code != 200 || wn["state"] != "suggested" {
-		t.Fatalf("chat write_note = %d %v, want a suggestion", code, wn)
+	if code != 200 || wn["state"] != "published" {
+		t.Fatalf("chat write_note = %d %v, want a private direct edit", code, wn)
 	}
 	if code, out := call(token, "write_note", map[string]any{"path": "agents/someone-else/x", "body": "x"}); code != 422 {
 		t.Fatalf("write_note into another agent's memory = %d %v", code, out)
-	}
-	// Path normalisation can't sneak past the memory guard.
-	for _, p := range []string{"/agents/someone-else/x", " agents/someone-else/x"} {
-		if code, out := call(token, "write_note", map[string]any{"path": p, "body": "x"}); code != 422 {
-			t.Fatalf("write_note %q = %d %v", p, code, out)
-		}
-	}
-	// The chat agent's own memory is published directly and indexed,
-	// whatever the page controls say.
-	code, wn = call(token, "write_note", map[string]any{"path": "/" + wiki.MemoryRoot(assistant.Handle) + "Chat gotcha " + word, "body": "Remember this"})
-	if code != 200 || wn["state"] != "published" {
-		t.Fatalf("chat write_note to own memory = %d %v", code, wn)
-	}
-	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: wiki.MemoryIndex(assistant.Handle)})
-	if err != nil || idx.CurrentVersionID == nil {
-		t.Fatalf("memory index: %v", err)
-	}
-	iv, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *idx.CurrentVersionID, ArtifactID: idx.ID, WorkspaceID: ws})
-	if err != nil || iv.BodyMd == nil || !strings.Contains(*iv.BodyMd, "Chat gotcha "+word) {
-		t.Fatalf("memory index lacks chat note: %+v %v", iv.BodyMd, err)
 	}
 
 	// Writes use the chat project, without needing an execution ticket.

@@ -102,7 +102,7 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
   const lastLog = [...d.turns].reverse().find((t) => t.has_log)?.seq;
   const title = run.work_title || run.ticket_key || PURPOSE_LABEL[run.purpose];
   return (
-    <div className="flex h-app flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-none items-center gap-1 border-b border-border-subtle px-1 pt-safe">
         <Link href="/runs" aria-label="Back to runs" className="grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
           <Icon name="chev" size={18} className="rotate-90" />

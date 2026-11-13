@@ -14,6 +14,8 @@ type Version = { seq: number; author_type: "user" | "agent"; note: string; body:
 async function install(page: Page, first = "# Trip plan\n\nFly to **Lisbon** on Friday.\n") {
   const mock = await installChatApi(page, { replyDelayMs: 10 });
   // A real chat in the mock, so the doc's conversation can load and send.
+  // (/apps/docs itself now opens Knowledge; a canvas that never became a Doc
+  // still opens in the Doc editor, which these tests cover.)
   await page.goto("/apps/docs");
   const chat = await page.evaluate(() => fetch("/api/v1/chats", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).then((r) => r.json()));
   const chatId = chat.id as string;
@@ -115,47 +117,6 @@ async function caretAtParagraphEnd(page: Page) {
     .poll(() => editor(page).evaluate((el) => (el as unknown as { editor: { state: { selection: { from: number } } } }).editor.state.selection.from))
     .toBe(end);
 }
-
-test("lists documents from the app and from chats, but not mockups", async ({ page }) => {
-  await install(page);
-  await page.reload();
-  const list = page.getByRole("list", { name: "Documents" });
-  await expect(list.getByRole("link")).toHaveCount(2);
-  await expect(list).toContainText("Trip plan");
-  await expect(list).toContainText("Retention policy");
-  await expect(list).toContainText("From Policy chat");
-  await expect(list).not.toContainText("Login screen");
-});
-
-test("a new document opens as a page you type on, beside its chat", async ({ page }) => {
-  const { mock, chatId, s } = await install(page);
-  await page.reload();
-  await page.getByRole("textbox", { name: "New document title" }).fill("Trip plan");
-  await page.getByRole("button", { name: "New document" }).click();
-  await expect(page).toHaveURL(new RegExp(`/apps/docs/${DOC}$`));
-  expect(s.docsPosted).toEqual([{ title: "Trip plan" }]);
-
-  // Formatted, not Markdown source.
-  await expect(editor(page).locator("strong")).toHaveText("Lisbon");
-
-  // Typing saves a version once it pauses, from the version it started on.
-  await caretAtParagraphEnd(page);
-  await page.keyboard.type(" Back on Tuesday.");
-  await expect(page.getByTestId("doc-save-state")).toHaveText("Saved · v2", { timeout: 5000 });
-  expect(s.saves).toEqual([{ base_seq: 1, body: "# Trip plan\n\nFly to **Lisbon** on Friday. Back on Tuesday.", note: "Edited" }]);
-
-  // The chat beside it is the document's own.
-  const chat = page.getByTestId("doc-chat");
-  const composer = chat.getByRole("combobox", { name: "Message" });
-  await composer.fill("Add a day in Porto");
-  await composer.press("Enter");
-  await expect.poll(() => mock.posted.filter((x) => x.chat === chatId).map((x) => x.body.body)).toContain("Add a day in Porto");
-  // Chat lives in the dock; there's no Hide chat button any more.
-  await expect(page.getByRole("button", { name: /Hide chat/ })).toHaveCount(0);
-  // An app's chat keeps its own Chat/Activity switch: only the chat page puts Activity in a dock tab.
-  await chat.getByRole("tablist", { name: "Chat view" }).getByRole("tab", { name: "Activity" }).click();
-  await expect(chat.getByRole("tabpanel", { name: "Activity" })).toBeVisible();
-});
 
 test("opening a document saves nothing, even when the editor tidies it", async ({ page }) => {
   // A table at the end gets a paragraph after it in the editor; that isn't an edit.
