@@ -75,7 +75,7 @@ WITH items AS (
  SELECT 'suggestion:'||v.id,'suggestion',ar.title,v.note,'/wiki/'||ar.path,coalesce(p.key,''),'',v.created_at,v.state<>'suggested',
  CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
  FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
- WHERE ar.workspace_id=$3 AND v.state IN ('suggested','published','rejected') AND v.based_on_version_id IS NOT NULL
+ WHERE artifact_visible(ar.audience, ar.owner_user_id, $1::uuid) AND ar.workspace_id=$3 AND v.state IN ('suggested','published','rejected') AND v.based_on_version_id IS NOT NULL
  UNION ALL
  SELECT 'mockup:'||v.id,'mockup',ar.title,
  CASE v.review_state WHEN 'pending' THEN 'Mockup '||v.label||' is waiting for your approval'
@@ -85,7 +85,7 @@ WITH items AS (
  v.created_at,(v.review_state<>'pending' OR v.id<>ar.current_version_id),
  CASE WHEN v.created_by_type='agent' THEN v.created_by_id END,NULL,ar.id
  FROM artifact_versions v JOIN artifacts ar ON ar.id=v.artifact_id LEFT JOIN projects p ON p.id=ar.project_id
- WHERE ar.workspace_id=$3 AND ar.type='mockup' AND v.review_state IS NOT NULL
+ WHERE artifact_visible(ar.audience, ar.owner_user_id, $1::uuid) AND ar.workspace_id=$3 AND ar.type='mockup' AND v.review_state IS NOT NULL
  UNION ALL
  -- Workflow gates are private to the person who started the run.
  -- A scheduled task's result, and a connector tool waiting for a yes or no; both private.

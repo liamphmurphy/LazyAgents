@@ -1,5 +1,7 @@
 package wiki_test
 
+import "github.com/liamphmurphy/vesper/server/internal/pageview"
+
 import (
 	"archive/zip"
 	"bytes"
@@ -18,12 +20,13 @@ import (
 
 func TestFreeTitlesAndDuplicatePaths(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	title := "A [title] # | ^"
-	first, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &title, Body: "body", Mode: wiki.ModeCreate})
+	first, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Title: &title, Body: "body", Mode: wiki.ModeCreate})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &title, Body: "body", Mode: wiki.ModeCreate})
+	second, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Title: &title, Body: "body", Mode: wiki.ModeCreate})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +39,7 @@ func TestFreeTitlesAndDuplicatePaths(t *testing.T) {
 		}
 	}
 	changed := "Renamed [display]"
-	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: *first.Note.Path, Title: &changed, Body: "body"})
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: *first.Note.Path, Title: &changed, Body: "body"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +54,7 @@ func TestFreeTitlesAndDuplicatePaths(t *testing.T) {
 
 func TestFolderMoveKeepsLinks(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	for n := 0; n < 12; n++ {
 		old := fmt.Sprintf("Old/Nested/Page %d", n)
 		newPath := fmt.Sprintf("New/Nested/Page %d", n)
@@ -75,10 +79,11 @@ func TestFolderMoveKeepsLinks(t *testing.T) {
 
 func TestPropertiesAliasesTagsVault(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	props := artifacts.Properties{"text": "before\n---\nafter\n", "number": 12.5, "date": "2026-11-13", "checkbox": true, "list": []string{"one", "two"}, "link": "[[Target]]", "tags": []string{"#Explicit"}, "aliases": []string{"Alternate name"}}
 	title := "A display [title]"
 	ghost := e.save(t, "Alias source", "[[Alternate name]]")
-	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Metadata/page", Title: &title, Body: "# heading\n\n#Inline/nested #inline/nested `#code`\n```\n#fenced\n```", Properties: props})
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Metadata/page", Title: &title, Body: "# heading\n\n#Inline/nested #inline/nested `#code`\n```\n#fenced\n```", Properties: props})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,12 +95,12 @@ func TestPropertiesAliasesTagsVault(t *testing.T) {
 	if len(ls) != 1 || ls[0].TargetID == nil || *ls[0].TargetID != r.Note.ID {
 		t.Fatalf("alias did not resolve ghost: %+v", ls)
 	}
-	tags, err := e.q.PageTags(e.ctx, r.Note.ID)
+	tags, err := e.q.PageTags(e.ctx, store.PageTagsParams{ArtifactID: r.Note.ID, Viewer: pageview.From(e.ctx).UserID})
 	if err != nil || !reflect.DeepEqual(tags, []string{"explicit", "inline/nested"}) {
 		t.Fatalf("tags: %v %v", tags, err)
 	}
 	tag := "INLINE/nested"
-	rows, err := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws, Tag: &tag})
+	rows, err := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws, Tag: &tag, Viewer: pageview.From(e.ctx).UserID, IncludeAgent: pageview.From(e.ctx).IncludeAgent})
 	if err != nil || len(rows) != 1 || rows[0].ID != r.Note.ID {
 		t.Fatalf("tag filter: %+v %v", rows, err)
 	}
@@ -137,15 +142,16 @@ func TestPropertiesAliasesTagsVault(t *testing.T) {
 	// A different workspace database proves the values came from YAML, rather
 	// than merely being inherited from an existing version.
 	other := setup(t)
+	other.ctx = pageview.Person(other.ctx, other.me.ID)
 	res, err := other.svc.Import(other.ctx, other.ws, other.me.ID, one.Bytes())
 	if err != nil || res.Created != 1 {
 		t.Fatalf("import: %+v %v", res, err)
 	}
-	imported, err := other.q.GetNoteByPath(other.ctx, store.GetNoteByPathParams{WorkspaceID: other.ws, Path: "Metadata/page"})
+	imported, err := other.q.GetNoteByPath(other.ctx, store.GetNoteByPathParams{WorkspaceID: other.ws, Path: "Metadata/page", Viewer: pageview.From(other.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	version, err := other.q.GetArtifactVersion(other.ctx, store.GetArtifactVersionParams{ID: *imported.CurrentVersionID, ArtifactID: imported.ID, WorkspaceID: other.ws})
+	version, err := other.q.GetArtifactVersion(other.ctx, store.GetArtifactVersionParams{ID: *imported.CurrentVersionID, ArtifactID: imported.ID, WorkspaceID: other.ws, Viewer: pageview.From(other.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,8 +168,9 @@ func TestPropertiesAliasesTagsVault(t *testing.T) {
 
 func TestPropertiesStayWithVersions(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	displayTitle := "A stable display title"
-	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Versioned", Title: &displayTitle, Body: "body #old", Properties: artifacts.Properties{"aliases": []string{"Old alias"}, "tags": []string{"old"}}})
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Versioned", Title: &displayTitle, Body: "body #old", Properties: artifacts.Properties{"aliases": []string{"Old alias"}, "tags": []string{"old"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,11 +178,11 @@ func TestPropertiesStayWithVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Body-only saves retain explicit frontmatter while replacing inline tags.
-	r, err = e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Versioned", Body: "edited #new"})
+	r, err = e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Versioned", Body: "edited #new"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tags, _ := e.q.PageTags(e.ctx, r.Note.ID)
+	tags, _ := e.q.PageTags(e.ctx, store.PageTagsParams{ArtifactID: r.Note.ID, Viewer: pageview.From(e.ctx).UserID})
 	if !reflect.DeepEqual(tags, []string{"new", "old"}) {
 		t.Fatal(tags)
 	}
@@ -187,7 +194,7 @@ func TestPropertiesStayWithVersions(t *testing.T) {
 	if pending.Kind != links.KindUnresolved {
 		t.Fatal("suggested alias published")
 	}
-	tags, _ = e.q.PageTags(e.ctx, r.Note.ID)
+	tags, _ = e.q.PageTags(e.ctx, store.PageTagsParams{ArtifactID: r.Note.ID, Viewer: pageview.From(e.ctx).UserID})
 	if !reflect.DeepEqual(tags, []string{"new", "old"}) {
 		t.Fatal(tags)
 	}
@@ -198,7 +205,7 @@ func TestPropertiesStayWithVersions(t *testing.T) {
 	if pending.ID == nil || *pending.ID != r.Note.ID {
 		t.Fatal("accepted alias missing")
 	}
-	moved, err := e.q.FindNoteByAlias(e.ctx, store.FindNoteByAliasParams{WorkspaceID: e.ws, Path: "Versioned"})
+	moved, err := e.q.FindNoteByAlias(e.ctx, store.FindNoteByAliasParams{WorkspaceID: e.ws, Path: "Versioned", Viewer: pageview.From(e.ctx).UserID})
 	if err != nil || moved.ID != r.Note.ID {
 		t.Fatalf("moved alias lost during property replacement: %+v %v", moved, err)
 	}
@@ -206,20 +213,21 @@ func TestPropertiesStayWithVersions(t *testing.T) {
 	if old.Kind != links.KindUnresolved {
 		t.Fatal("removed alias still resolves")
 	}
-	tags, _ = e.q.PageTags(e.ctx, r.Note.ID)
+	tags, _ = e.q.PageTags(e.ctx, store.PageTagsParams{ArtifactID: r.Note.ID, Viewer: pageview.From(e.ctx).UserID})
 	if !reflect.DeepEqual(tags, []string{"pending"}) {
 		t.Fatal(tags)
 	}
-	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Versioned", Body: "stale", BaseID: &r.Version.ID, Properties: artifacts.Properties{"tags": []string{"stale"}}}); err == nil {
+	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Versioned", Body: "stale", BaseID: &r.Version.ID, Properties: artifacts.Properties{"tags": []string{"stale"}}}); err == nil {
 		t.Fatal("stale metadata accepted")
 	}
 }
 
 func TestDerivedPathNormalizesBeforeCheckingUniqueness(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	e.save(t, "Suffix", "original")
 	for _, title := range []string{"Suffix.md", "Suffix.md.md"} {
-		r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &title, Body: "new", Mode: wiki.ModeCreate})
+		r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Title: &title, Body: "new", Mode: wiki.ModeCreate})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,6 +239,7 @@ func TestDerivedPathNormalizesBeforeCheckingUniqueness(t *testing.T) {
 
 func TestConcurrentDuplicateTitles(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	title := "Concurrent [title]"
 	type saved struct {
 		result wiki.Result
@@ -239,7 +248,7 @@ func TestConcurrentDuplicateTitles(t *testing.T) {
 	out := make(chan saved, 8)
 	for n := 0; n < 8; n++ {
 		go func() {
-			r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &title, Body: "body", Mode: wiki.ModeCreate})
+			r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Title: &title, Body: "body", Mode: wiki.ModeCreate})
 			out <- saved{r, err}
 		}()
 	}
@@ -258,6 +267,7 @@ func TestConcurrentDuplicateTitles(t *testing.T) {
 
 func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	vault := func(files map[string]string) []byte {
 		var buf bytes.Buffer
 		z := zip.NewWriter(&buf)
@@ -280,11 +290,11 @@ func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 	if err != nil || res.Created != 1 {
 		t.Fatalf("native YAML: %+v %v", res, err)
 	}
-	a, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Yaml"})
+	a, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Yaml", Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws})
+	v, err := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,11 +318,12 @@ func TestImportNativeYAMLAndMalformedRollback(t *testing.T) {
 
 func TestExplicitCreationPreservesPropertyAliases(t *testing.T) {
 	e := setup(t)
-	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Original", Body: "body", Aliases: &[]string{"Alternate"}})
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Original", Body: "body", Aliases: &[]string{"Alternate"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "alternate", Body: "steal", Mode: wiki.ModeCreate}); !invalid(err) {
+	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "alternate", Body: "steal", Mode: wiki.ModeCreate}); !invalid(err) {
 		t.Fatalf("explicit create stole property alias: %v", err)
 	}
 	if _, err := e.svc.AgentWrite(e.ctx, e.atlas, map[string]agentdef.Mode{}, wiki.Save{Path: "Alternate", Body: "suggestion", Mode: wiki.ModeCreate}); !invalid(err) {
@@ -322,13 +333,14 @@ func TestExplicitCreationPreservesPropertyAliases(t *testing.T) {
 	if err != nil || target.ID == nil || *target.ID != r.Note.ID {
 		t.Fatalf("alias ownership: %+v %v", target, err)
 	}
-	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Original", Body: "body-only edit"}); err != nil {
+	if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: "Original", Body: "body-only edit"}); err != nil {
 		t.Fatalf("inherited alias broke body edit: %v", err)
 	}
 }
 
 func TestConcurrentCreationAndAliasPublication(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	for n := 0; n < 6; n++ {
 		original := fmt.Sprintf("Original %d", n)
 		alias := fmt.Sprintf("Racing alias %d", n)
@@ -337,12 +349,12 @@ func TestConcurrentCreationAndAliasPublication(t *testing.T) {
 		errs := make(chan error, 2)
 		go func() {
 			<-start
-			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: original, Body: "body", Aliases: &[]string{alias}})
+			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: original, Body: "body", Aliases: &[]string{alias}})
 			errs <- err
 		}()
 		go func() {
 			<-start
-			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: alias, Body: "created", Mode: wiki.ModeCreate})
+			_, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: alias, Body: "created", Mode: wiki.ModeCreate})
 			errs <- err
 		}()
 		close(start)
@@ -358,14 +370,14 @@ func TestConcurrentCreationAndAliasPublication(t *testing.T) {
 		if success != 1 {
 			t.Fatalf("create and alias publication: %d successes", success)
 		}
-		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: original, Body: "still editable"}); err != nil {
+		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Path: original, Body: "still editable"}); err != nil {
 			t.Fatal(err)
 		}
-		v, err := e.q.GetArtifact(e.ctx, store.GetArtifactParams{ID: r.Note.ID, WorkspaceID: e.ws})
+		v, err := e.q.GetArtifact(e.ctx, store.GetArtifactParams{ID: r.Note.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
 		if err != nil {
 			t.Fatal(err)
 		}
-		current, err := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *v.CurrentVersionID, ArtifactID: v.ID, WorkspaceID: e.ws})
+		current, err := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *v.CurrentVersionID, ArtifactID: v.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -381,6 +393,7 @@ func TestConcurrentCreationAndAliasPublication(t *testing.T) {
 
 func TestTitleRenamesLastSegmentWithSuffix(t *testing.T) {
 	e := setup(t)
+	e.ctx = pageview.Person(e.ctx, e.me.ID)
 	e.save(t, "Ops/New", "occupied")
 	old := e.save(t, "Ops/Old", "body")
 	title := "New"
@@ -408,7 +421,7 @@ func TestTitleRenamesLastSegmentWithSuffix(t *testing.T) {
 		if _, err := e.svc.UpdateAsUser(e.ctx, e.ws, e.me.ID, a.ID, wiki.Save{Title: &bad}, nil, nil); !invalid(err) {
 			t.Fatalf("invalid title length accepted: %v", err)
 		}
-		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Title: &bad, Body: "body", Mode: wiki.ModeCreate}); !invalid(err) {
+		if _, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Audience: "shared", Title: &bad, Body: "body", Mode: wiki.ModeCreate}); !invalid(err) {
 			t.Fatalf("invalid create title length accepted: %v", err)
 		}
 	}

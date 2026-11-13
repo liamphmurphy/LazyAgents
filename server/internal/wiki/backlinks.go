@@ -15,6 +15,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -36,7 +37,7 @@ type Mention struct {
 
 // Backlinks are the linked mentions of a target, one entry per source.
 func Backlinks(ctx context.Context, q *store.Queries, ws uuid.UUID, ref Ref) ([]Mention, error) {
-	rows, err := q.Backlinks(ctx, store.BacklinksParams{WorkspaceID: ws, TargetID: &ref.ID, TargetKind: ref.Kind})
+	rows, err := q.Backlinks(ctx, store.BacklinksParams{WorkspaceID: ws, TargetID: &ref.ID, TargetKind: ref.Kind, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +98,7 @@ func deref[T any](p *T) T {
 func Phrases(ctx context.Context, q *store.Queries, ws uuid.UUID, ref Ref) (phrases []string, link string, err error) {
 	switch ref.Kind {
 	case links.KindArtifact:
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return nil, "", err
 		}
@@ -106,7 +107,7 @@ func Phrases(ctx context.Context, q *store.Queries, ws uuid.UUID, ref Ref) (phra
 		}
 		if a.Path != nil {
 			// Link by full path when another note shares the title.
-			same, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: a.Title})
+			same, err := q.FindNotesByTitle(ctx, store.FindNotesByTitleParams{WorkspaceID: ws, Title: a.Title, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return nil, "", err
 			}
@@ -208,7 +209,7 @@ func UnlinkedMentions(ctx context.Context, q *store.Queries, ws uuid.UUID, ref R
 	}
 	out := []Mention{}
 	for _, p := range phrases {
-		arts, err := q.MentionCandidatesArtifacts(ctx, store.MentionCandidatesArtifactsParams{WorkspaceID: ws, ExcludeID: ref.ID, Phrase: p})
+		arts, err := q.MentionCandidatesArtifacts(ctx, store.MentionCandidatesArtifactsParams{WorkspaceID: ws, ExcludeID: ref.ID, Phrase: p, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +258,7 @@ func (s *Service) LinkMention(ctx context.Context, ws, userID uuid.UUID, ref Ref
 	}
 	switch sourceKind {
 	case links.SourceArtifact:
-		if art, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: sourceID, WorkspaceID: ws}); err != nil {
+		if art, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: sourceID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 			return apperr.ErrNotFound
 		}
 		if body, _, err = current(ctx, q, art); err != nil {
@@ -292,7 +293,7 @@ func (s *Service) LinkMention(ctx context.Context, ws, userID uuid.UUID, ref Ref
 		return err
 	}
 	if art.Type == "note" {
-		_, err := s.SaveAsUser(ctx, ws, userID, Save{Path: *art.Path, Body: next, Note: note})
+		_, err := s.SaveAsUser(ctx, ws, userID, Save{PageID: &art.ID, Path: *art.Path, Body: next, Note: note, BaseID: art.CurrentVersionID})
 		return err
 	}
 	_, err = s.Artifacts.AddVersion(ctx, ws, artifacts.Actor{Type: "user", ID: userID}, art.ID, artifacts.NewVersion{Note: note, Content: artifacts.Content{BodyMD: &next}})
@@ -304,7 +305,7 @@ func (s *Service) LinkMention(ctx context.Context, ws, userID uuid.UUID, ref Ref
 func LookupRef(ctx context.Context, q *store.Queries, ws uuid.UUID, s string) (Ref, links.Target, error) {
 	r := links.ParseRef(s)
 	if id, err := uuid.Parse(r.Target); err == nil {
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Ref{}, links.Target{}, apperr.ErrNotFound
 		} else if err != nil {

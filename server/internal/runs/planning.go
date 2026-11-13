@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -120,11 +121,14 @@ func (s *Service) StartPlanning(ctx context.Context, ws, user uuid.UUID, in Plan
 			}
 		}
 		if in.ArtifactID != nil {
-			a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: *in.ArtifactID, WorkspaceID: ws})
+			a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: *in.ArtifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
+			if err == nil && a.Audience == "private" {
+				return apperr.Invalid("artifact_id", "Share the page first")
+			}
 			if err != nil || (a.ProjectID == nil || *a.ProjectID != p.ID) || (a.Type != "prd" && a.Type != "spec") || a.CurrentVersionID == nil {
 				return apperr.Invalid("artifact_id", "pick a markdown PRD or SPEC in this project")
 			}
-			v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+			v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return err
 			}

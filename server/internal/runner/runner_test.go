@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -265,7 +266,7 @@ func TestApprovalRoundTrip(t *testing.T) {
 	}
 	// Context files counted as reads at the start.
 	n := int32(12)
-	adr, _ := e.q.GetADRByNumber(e.ctx, store.GetADRByNumberParams{WorkspaceID: e.ws, Number: &n})
+	adr, _ := e.q.GetADRByNumber(e.ctx, store.GetADRByNumberParams{WorkspaceID: e.ws, Number: &n, Viewer: pageview.From(e.ctx).UserID})
 	readers, _ := e.q.ListArtifactReaders(e.ctx, adr.ID)
 	if len(readers) == 0 {
 		t.Fatal("context file reads not recorded")

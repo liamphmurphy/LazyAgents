@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -36,7 +37,7 @@ func LocalGraph(ctx context.Context, q *store.Queries, ws uuid.UUID, centre Ref,
 	edges := map[Edge]bool{}
 	frontier := []uuid.UUID{centre.ID}
 	for d := 1; d <= depth && len(frontier) > 0; d++ {
-		rows, err := q.GraphEdges(ctx, store.GraphEdgesParams{WorkspaceID: ws, Ids: frontier})
+		rows, err := q.GraphEdges(ctx, store.GraphEdgesParams{WorkspaceID: ws, Ids: frontier, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -67,7 +68,7 @@ func LocalGraph(ctx context.Context, q *store.Queries, ws uuid.UUID, centre Ref,
 		}
 	}
 
-	targets, err := hydrate(ctx, q, ids)
+	targets, err := hydrate(ctx, q, ws, ids)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,14 +93,14 @@ func LocalGraph(ctx context.Context, q *store.Queries, ws uuid.UUID, centre Ref,
 	return nodes, out, nil
 }
 
-func hydrate(ctx context.Context, q *store.Queries, refs map[string]Ref) (map[string]links.Target, error) {
+func hydrate(ctx context.Context, q *store.Queries, ws uuid.UUID, refs map[string]Ref) (map[string]links.Target, error) {
 	by := map[string][]uuid.UUID{}
 	for _, r := range refs {
 		by[r.Kind] = append(by[r.Kind], r.ID)
 	}
 	out := map[string]links.Target{}
 	if ids := by[links.KindArtifact]; len(ids) > 0 {
-		rows, err := q.ArtifactsByIDs(ctx, ids)
+		rows, err := q.ArtifactsByIDs(ctx, store.ArtifactsByIDsParams{WorkspaceID: ws, Ids: ids, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +109,7 @@ func hydrate(ctx context.Context, q *store.Queries, refs map[string]Ref) (map[st
 		}
 	}
 	if ids := by[links.KindTicket]; len(ids) > 0 {
-		rows, err := q.TicketsByIDs(ctx, ids)
+		rows, err := q.TicketsByIDs(ctx, store.TicketsByIDsParams{WorkspaceID: ws, Ids: ids})
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +118,7 @@ func hydrate(ctx context.Context, q *store.Queries, refs map[string]Ref) (map[st
 		}
 	}
 	if ids := by[links.KindEpic]; len(ids) > 0 {
-		rows, err := q.EpicsByIDs(ctx, ids)
+		rows, err := q.EpicsByIDs(ctx, store.EpicsByIDsParams{WorkspaceID: ws, Ids: ids})
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +127,7 @@ func hydrate(ctx context.Context, q *store.Queries, refs map[string]Ref) (map[st
 		}
 	}
 	if ids := by[links.KindAgent]; len(ids) > 0 {
-		rows, err := q.AgentsByIDs(ctx, ids)
+		rows, err := q.AgentsByIDs(ctx, store.AgentsByIDsParams{WorkspaceID: ws, Ids: ids})
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +180,8 @@ func search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, ki
 			tf = types
 		}
 		rows, err := q.SearchKnowledgeArtifacts(ctx, store.SearchKnowledgeArtifactsParams{
-			Q: text, Fuzzy: fuzzy, WorkspaceID: ws, Types: tf, ProjectID: projectID, Lim: int32(limit)})
+			Q: text, Fuzzy: fuzzy, WorkspaceID: ws, Types: tf, ProjectID: projectID, Lim: int32(limit), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +217,7 @@ func sortHits(h []Hit) {
 
 // Autocomplete powers [[ autocomplete.
 func Autocomplete(ctx context.Context, q *store.Queries, ws uuid.UUID, text string) ([]links.Target, error) {
-	rows, err := q.SuggestTargets(ctx, store.SuggestTargetsParams{WorkspaceID: ws, Q: &text})
+	rows, err := q.SuggestTargets(ctx, store.SuggestTargetsParams{WorkspaceID: ws, Q: &text, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}

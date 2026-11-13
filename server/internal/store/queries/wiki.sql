@@ -1,42 +1,42 @@
 -- Wiki pages, [[links]] and backlinks (docs/dev/plan.md §12).
 
 -- name: GetNoteByPath :one
-SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(path) = lower(sqlc.arg(path));
+SELECT * FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND workspace_id = $1 AND type = 'note' AND lower(path) = lower(sqlc.arg(path)) ORDER BY (audience = 'private') DESC LIMIT 1;
 
 -- name: FindNotesByTitle :many
 -- Several notes can share a title in different folders; the shortest path wins.
-SELECT * FROM artifacts WHERE workspace_id = $1 AND type = 'note' AND lower(title) = lower(sqlc.arg(title))
+SELECT * FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND workspace_id = $1 AND type = 'note' AND lower(title) = lower(sqlc.arg(title))
   AND current_version_id IS NOT NULL
-ORDER BY length(path), path;
+ORDER BY (audience = 'private') DESC, length(path), path;
 
 -- name: FindArtifactByTitle :one
-SELECT * FROM artifacts WHERE workspace_id = $1 AND type <> 'note' AND lower(title) = lower(sqlc.arg(title))
+SELECT * FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND workspace_id = $1 AND type <> 'note' AND lower(title) = lower(sqlc.arg(title))
 ORDER BY updated_at DESC LIMIT 1;
 
 -- name: FindNoteByAlias :one
 SELECT ar.* FROM artifact_aliases al JOIN artifacts ar ON ar.id = al.artifact_id
-WHERE al.workspace_id = $1 AND lower(al.path) = lower(sqlc.arg(path))
-ORDER BY al.created_at DESC LIMIT 1;
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND al.workspace_id = $1 AND lower(al.path) = lower(sqlc.arg(path))
+ORDER BY (ar.audience = 'private') DESC, al.created_at DESC LIMIT 1;
 
 -- name: AddAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path) VALUES ($1, $2, $3)
-ON CONFLICT (workspace_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now();
+ON CONFLICT (artifact_id, path) DO UPDATE SET artifact_id = EXCLUDED.artifact_id, kind = 'moved', created_at = now();
 
 -- name: DeleteAlias :exec
-DELETE FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower(sqlc.arg(path));
+DELETE FROM artifact_aliases WHERE workspace_id = $1 AND artifact_id=sqlc.arg(artifact_id) AND lower(path) = lower(sqlc.arg(path)) AND kind='moved';
 
 -- name: FindEpicByName :one
 SELECT * FROM epics WHERE workspace_id = $1 AND lower(name) = lower(sqlc.arg(name)) LIMIT 1;
 
 -- name: SetNotePath :one
-UPDATE artifacts SET path = $2, title = $3 WHERE id = $1 RETURNING *;
+UPDATE artifacts SET path = $2, title = $3, audience = CASE WHEN lower($2::text) LIKE 'agents/%' OR lower($2::text) LIKE 'patterns/proposed/%' THEN 'agent' WHEN audience = 'agent' THEN 'shared' ELSE audience END WHERE id = $1 RETURNING *;
 
 -- name: ListNotes :many
-SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
+SELECT ar.id, ar.path, ar.title, ar.audience, ar.author_type, ar.author_id, ar.updated_at, ar.project_id,
   (ar.current_version_id IS NOT NULL)::bool AS published,
   (SELECT count(*) FROM artifact_versions v WHERE v.artifact_id = ar.id AND v.state = 'suggested')::int AS suggestions
 FROM artifacts ar
-WHERE ar.workspace_id = $1 AND ar.type = 'note'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note'
   AND (sqlc.narg(tag)::text IS NULL OR EXISTS (SELECT 1 FROM page_tags pt WHERE pt.artifact_id = ar.id AND pt.tag = lower(sqlc.narg(tag))))
 ORDER BY lower(ar.path);
 
@@ -56,7 +56,14 @@ SELECT DISTINCT target_text FROM knowledge_links WHERE workspace_id = $1 AND tar
 UPDATE knowledge_links SET
   target_kind = CASE WHEN target_anchor <> '' AND sqlc.arg(target_kind)::text = 'artifact' THEN 'section' ELSE sqlc.arg(target_kind)::text END,
   target_id = sqlc.arg(target_id)
-WHERE workspace_id = $1 AND target_kind = 'unresolved' AND lower(target_text) = lower(sqlc.arg(target_text));
+WHERE knowledge_links.workspace_id = $1 AND knowledge_links.target_kind = 'unresolved' AND lower(knowledge_links.target_text) = lower(sqlc.arg(target_text))
+  AND (sqlc.arg(target_kind)::text NOT IN ('artifact', 'section') OR EXISTS (
+    SELECT 1 FROM artifacts dst WHERE dst.id = sqlc.arg(target_id)
+      AND (dst.audience <> 'private' OR EXISTS (
+        SELECT 1 FROM artifacts src WHERE knowledge_links.source_kind = 'artifact'
+          AND src.id = knowledge_links.source_id AND src.owner_user_id = dst.owner_user_id
+      ))
+  ));
 
 -- name: LinksFromSource :many
 SELECT * FROM knowledge_links WHERE source_kind = $1 AND source_id = $2 ORDER BY position;
@@ -72,21 +79,23 @@ FROM knowledge_links l
 LEFT JOIN artifacts ar ON l.source_kind = 'artifact' AND ar.id = l.source_id
 LEFT JOIN tickets t ON t.id = l.source_ticket_id
 LEFT JOIN comments c ON l.source_kind = 'comment' AND c.id = l.source_id
-WHERE l.workspace_id = sqlc.arg(workspace_id)
+WHERE (l.source_kind <> 'artifact' OR (artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid)))
+  AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, sqlc.narg(viewer)::uuid)))
+  AND l.workspace_id = sqlc.arg(workspace_id)
   AND l.target_id = sqlc.arg(target_id)
   AND (l.target_kind = sqlc.arg(target_kind) OR (sqlc.arg(target_kind) = 'artifact' AND l.target_kind = 'section'))
 ORDER BY l.created_at DESC, l.position
 LIMIT 200;
 
 -- name: CountBacklinks :one
-SELECT count(DISTINCT (source_kind, source_id))::int FROM knowledge_links
-WHERE target_id = sqlc.arg(target_id) AND target_kind IN ('artifact', 'section');
+SELECT count(DISTINCT (source_kind, source_id))::int FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid))) AND target_id = sqlc.arg(target_id) AND target_kind IN ('artifact', 'section');
 
 -- name: MentionCandidatesArtifacts :many
 -- Markdown artifacts whose text mentions a phrase (for unlinked mentions).
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> sqlc.arg(exclude_id)
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND v.body_md IS NOT NULL AND ar.type <> 'mockup' AND ar.id <> sqlc.arg(exclude_id)
   AND (ar.search @@ phraseto_tsquery('english', sqlc.arg(phrase)) OR v.body_md ILIKE '%' || sqlc.arg(phrase) || '%')
 LIMIT 50;
 
@@ -102,11 +111,11 @@ SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, 
   ts_headline('english', ar.search_text, websearch_to_tsquery('english', sqlc.arg(q)),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   (ts_rank(ar.search, websearch_to_tsquery('english', sqlc.arg(q))) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
    + CASE WHEN sqlc.arg(fuzzy)::boolean THEN word_similarity(lower(sqlc.arg(q)), lower(ar.title)) ELSE 0 END)::float8 AS score
 FROM artifacts ar
-WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.current_version_id IS NOT NULL
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = sqlc.arg(workspace_id) AND ar.current_version_id IS NOT NULL
   AND (ar.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR ar.title ILIKE '%' || sqlc.arg(q) || '%'
        OR (sqlc.arg(fuzzy)::boolean AND word_similarity(lower(sqlc.arg(q)), lower(ar.title)) >= 0.3))
   AND (sqlc.narg(types)::text[] IS NULL OR ar.type = ANY(sqlc.narg(types)::text[]))
@@ -134,12 +143,12 @@ LIMIT sqlc.arg(lim);
 -- [[ autocomplete: notes, artifacts, tickets, epics and agents by prefix or substring.
 SELECT kind, id, label, sub, sort FROM (
   SELECT 'note'::text AS kind, ar.id, ar.title AS label, ar.path AS sub, 0 AS sort, ar.updated_at AS at
-    FROM artifacts ar WHERE ar.workspace_id = $1 AND ar.type = 'note' AND ar.current_version_id IS NOT NULL
+    FROM artifacts ar WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type = 'note' AND ar.current_version_id IS NOT NULL
       AND (ar.path ILIKE '%' || sqlc.arg(q) || '%')
   UNION ALL
   SELECT ar.type, ar.id, CASE WHEN ar.type = 'adr' THEN 'ADR-' || lpad(ar.number::text, 3, '0') ELSE ar.title END,
          CASE WHEN ar.type = 'adr' THEN ar.title ELSE upper(ar.type) END, 1, ar.updated_at
-    FROM artifacts ar WHERE ar.workspace_id = $1 AND ar.type <> 'note' AND ar.current_version_id IS NOT NULL
+    FROM artifacts ar WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND ar.type <> 'note' AND ar.current_version_id IS NOT NULL
       AND (ar.title ILIKE '%' || sqlc.arg(q) || '%'
            OR (ar.type = 'adr' AND ('ADR-' || lpad(ar.number::text, 3, '0')) ILIKE '%' || sqlc.arg(q) || '%'))
   UNION ALL
@@ -161,17 +170,17 @@ LIMIT 12;
 SELECT v.id, v.artifact_id, v.label, v.note, v.body_md, v.created_by_type, v.created_by_id, v.created_at,
   v.based_on_version_id, ar.path, ar.title, ar.current_version_id
 FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ar.workspace_id = $1 AND v.state = 'suggested'
   AND (sqlc.narg(artifact_id)::uuid IS NULL OR v.artifact_id = sqlc.narg(artifact_id))
 ORDER BY v.created_at;
 
 -- name: CountSuggestions :one
 SELECT count(*)::int FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE ar.workspace_id = $1 AND v.state = 'suggested';
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ar.workspace_id = $1 AND v.state = 'suggested';
 
 -- name: LockSuggestion :one
 SELECT v.* FROM artifact_versions v JOIN artifacts ar ON ar.id = v.artifact_id
-WHERE v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v;
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND v.id = $1 AND ar.workspace_id = $2 FOR UPDATE OF v;
 
 -- name: DecideVersion :exec
 UPDATE artifact_versions SET state = $2, decided_by_id = $3, decided_at = now() WHERE id = $1;
@@ -181,7 +190,7 @@ SELECT ar.id, ar.path, ar.title, ar.author_type, ar.author_id, ar.created_at, ar
 FROM artifacts ar
 JOIN artifact_versions v ON v.id = ar.current_version_id
 LEFT JOIN projects p ON p.id = ar.project_id
-WHERE ar.workspace_id = $1 AND ar.type = 'note'
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ar.workspace_id = $1 AND ar.type = 'note'
 ORDER BY lower(ar.path);
 
 -- name: GraphEdges :many
@@ -193,23 +202,25 @@ SELECT DISTINCT
   CASE WHEN l.target_kind = 'section' THEN 'artifact' ELSE l.target_kind END::text AS target_kind,
   l.target_id::uuid AS target_id
 FROM knowledge_links l
-WHERE l.workspace_id = sqlc.arg(workspace_id) AND l.target_kind <> 'unresolved'
+WHERE (l.source_kind <> 'artifact' OR EXISTS (SELECT 1 FROM artifacts src WHERE src.id = l.source_id AND artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR src.audience <> 'agent')))
+ AND (l.target_kind NOT IN ('artifact','section') OR EXISTS (SELECT 1 FROM artifacts dst WHERE dst.id = l.target_id AND artifact_visible(dst.audience, dst.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR dst.audience <> 'agent')))
+ AND l.workspace_id = sqlc.arg(workspace_id) AND l.target_kind <> 'unresolved'
   AND (
     (CASE WHEN l.source_kind = 'artifact' THEN l.source_id ELSE l.source_ticket_id END) = ANY(sqlc.arg(ids)::uuid[])
     OR l.target_id = ANY(sqlc.arg(ids)::uuid[])
   );
 
 -- name: TicketsByIDs :many
-SELECT id, key, title, status FROM tickets WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT id, key, title, status FROM tickets WHERE workspace_id = sqlc.arg(workspace_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: ArtifactsByIDs :many
-SELECT id, type, title, path, number FROM artifacts WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT id, type, title, path, number FROM artifacts WHERE workspace_id = sqlc.arg(workspace_id) AND artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR audience <> 'agent') AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: EpicsByIDs :many
-SELECT id, name FROM epics WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT id, name FROM epics WHERE workspace_id = sqlc.arg(workspace_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: AgentsByIDs :many
-SELECT id, name, handle, color_index FROM agents WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT id, name, handle, color_index FROM agents WHERE workspace_id = sqlc.arg(workspace_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: TicketArtifactIDs :many
 SELECT artifact_id FROM ticket_artifacts WHERE ticket_id = $1;
@@ -243,7 +254,7 @@ WITH cand AS (
     lower(sqlc.arg(q)::text) AS lq,
     websearch_to_tsquery('english', sqlc.arg(q)::text) AS tsq
   FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-  WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
+  WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
     AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
     AND (sqlc.narg(topic)::text IS NULL OR lower(split_part(ar.path, '/', 2)) = lower(sqlc.narg(topic)::text))
 ), scored AS (
@@ -258,8 +269,8 @@ SELECT s.id, s.title, s.path, s.body_md,
   CASE WHEN s.lq = '' THEN '' ELSE ts_headline('english', s.search_text, s.tsq,
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»') END::text AS snippet,
   ((s.sim + s.fts + CASE WHEN s.exact THEN 0.5 ELSE 0 END) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l
-                 WHERE l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
+    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR src.audience <> 'agent'))) AND l.target_id = s.id AND l.target_kind IN ('artifact', 'section')))))::float8 AS score
 FROM scored s
 WHERE s.lq = '' OR s.exact OR s.sim >= 0.3
 ORDER BY score DESC, lower(split_part(s.path, '/', 2)), s.ltitle
@@ -274,7 +285,7 @@ WITH cand AS (
   SELECT ar.id, ar.title, ar.path, ar.search,
     to_tsvector('english', ar.title || ' ' || coalesce(substring(v.body_md FROM '(?im)^tags:[ \t]*(.*)$'), '')) AS head
   FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-  WHERE ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
+  WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND ar.workspace_id = sqlc.arg(workspace_id) AND ar.type = 'note' AND v.body_md IS NOT NULL
     AND lower(ar.path) LIKE 'patterns/%/%' AND lower(ar.path) NOT LIKE 'patterns/proposed/%'
 ), hits AS (
   SELECT c.id, c.title, c.path, w.word,
@@ -296,7 +307,7 @@ LIMIT sqlc.arg(lim);
 -- memory and Patterns/), with their current body for status parsing.
 SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.updated_at, v.body_md
 FROM artifacts ar JOIN artifact_versions v ON v.id = ar.current_version_id
-WHERE ar.workspace_id = $1 AND v.body_md IS NOT NULL
+WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $1 AND v.body_md IS NOT NULL
   AND (ar.type = 'adr'
        OR (ar.type = 'note' AND ar.title ~* '^adr([^a-z]|$)'
            AND lower(ar.path) NOT LIKE 'agents/%' AND lower(ar.path) NOT LIKE 'patterns/%'))
@@ -334,6 +345,15 @@ JOIN agents a ON a.id = r.agent_id
 WHERE v.artifact_id = $1 AND (r.run_id IS NULL OR NOT EXISTS (SELECT 1 FROM runs ru WHERE ru.id = r.run_id))
 GROUP BY a.id ORDER BY max(r.read_at) DESC;
 
+-- name: NotePathTaken :one
+-- A path is unique within its audience scope, not across private/shared pages.
+SELECT EXISTS (SELECT 1 FROM artifacts a
+ WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.type='note' AND lower(a.path)=lower(sqlc.arg(path))
+ AND artifact_visible(a.audience, a.owner_user_id, sqlc.narg(viewer)::uuid)
+ AND ((sqlc.arg(audience)::text='private' AND a.audience='private' AND a.owner_user_id=sqlc.narg(viewer)::uuid)
+      OR (sqlc.arg(audience)::text<>'private' AND a.audience<>'private'))
+ AND (sqlc.narg(exclude_id)::uuid IS NULL OR a.id<>sqlc.narg(exclude_id)))::bool;
+
 -- name: LockNotePaths :exec
 SELECT pg_advisory_xact_lock(hashtextextended('note-paths:' || $1::uuid::text, 0));
 
@@ -344,14 +364,14 @@ DELETE FROM page_tags WHERE artifact_id = $1;
 INSERT INTO page_tags (artifact_id, tag) SELECT sqlc.arg(artifact_id)::uuid, unnest(sqlc.arg(tags)::text[]) ON CONFLICT DO NOTHING;
 
 -- name: PageTags :many
-SELECT tag FROM page_tags WHERE artifact_id = $1 ORDER BY tag;
+SELECT pt.tag FROM page_tags pt JOIN artifacts a ON a.id=pt.artifact_id WHERE pt.artifact_id = $1 AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid) ORDER BY pt.tag;
 
 -- name: DeletePropertyAliases :exec
 DELETE FROM artifact_aliases WHERE artifact_id = $1 AND kind = 'alias';
 
 -- name: AddPropertyAlias :exec
 INSERT INTO artifact_aliases (workspace_id, artifact_id, path, kind) VALUES ($1, $2, $3, 'alias')
-ON CONFLICT (workspace_id, path) DO NOTHING;
+ON CONFLICT (artifact_id, path) DO NOTHING;
 
 -- name: PropertyAliasTaken :one
-SELECT EXISTS (SELECT 1 FROM artifact_aliases WHERE workspace_id = $1 AND lower(path) = lower(sqlc.arg(path)) AND kind = 'alias');
+SELECT EXISTS (SELECT 1 FROM artifact_aliases al JOIN artifacts a ON a.id=al.artifact_id WHERE al.workspace_id = $1 AND lower(al.path) = lower(sqlc.arg(path)) AND al.kind = 'alias' AND artifact_visible(a.audience,a.owner_user_id,sqlc.narg(viewer)::uuid));

@@ -114,6 +114,8 @@ type Artifact struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	Path             *string
+	Audience         string
+	OwnerUserID      *uuid.UUID
 }
 
 type ArtifactAlias struct {

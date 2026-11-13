@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -1554,7 +1555,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			now = turn.StartedAt.Add(-time.Millisecond)
 		}
 		for _, f := range ctxFiles {
-			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID}); err == nil {
+			if a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: f.ArtifactID, WorkspaceID: c.run.WorkspaceID, Viewer: pageview.From(ctx).UserID}); err == nil {
 				if f.VersionID != nil {
 					a.CurrentVersionID = f.VersionID
 				}

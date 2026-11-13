@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/links"
@@ -867,11 +868,14 @@ func attachArtifact(ctx context.Context, q *store.Queries, ws uuid.UUID, actor A
 	if err != nil {
 		return err
 	}
-	a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: artifactID, WorkspaceID: ws})
+	a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: artifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return invalid("artifact_id", "unknown artifact")
 	} else if err != nil {
 		return err
+	}
+	if a.Audience == "private" {
+		return invalid("artifact_id", "Share the page first")
 	}
 	n, err := q.AttachArtifact(ctx, store.AttachArtifactParams{TicketID: t.ID, ArtifactID: a.ID, Relation: relation})
 	if err != nil || n == 0 {
@@ -888,7 +892,7 @@ func (s *Service) DetachArtifact(ctx context.Context, ws uuid.UUID, actor Actor,
 		if err != nil {
 			return err
 		}
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: artifactID, WorkspaceID: ws})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: artifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return notFound(err)
 		}

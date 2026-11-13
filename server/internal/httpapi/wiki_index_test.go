@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
@@ -33,7 +34,7 @@ func TestWikiIndexes(t *testing.T) {
 	w := &wiki.Service{Pool: pool, Artifacts: arts, Tracker: &tracker.Service{Pool: pool}}
 	save := func(path, body string) wiki.Result {
 		t.Helper()
-		res, err := w.SaveAsUser(ctx, ws, me.ID, wiki.Save{Path: path, Body: body})
+		res, err := w.SaveAsUser(ctx, ws, me.ID, wiki.Save{Path: path, Body: body, Audience: "shared"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +145,7 @@ func TestWikiIndexes(t *testing.T) {
 	if _, err := q.SetChatRunState(ctx, store.SetChatRunStateParams{ID: otherSess.ID, CurrentRunID: &otherRun.ID, State: "idle"}); err != nil {
 		t.Fatal(err)
 	}
-	a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: page.Note.ID, WorkspaceID: ws})
+	a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: page.Note.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +204,7 @@ func TestWikiIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	foreignPath := "Private"
-	foreignPage, err := q.CreateArtifact(ctx, store.CreateArtifactParams{WorkspaceID: otherWS.ID, Type: "note", Title: "Private workspace page", Path: &foreignPath, AuthorType: "user", AuthorID: me.ID})
+	foreignPage, err := q.CreateArtifact(ctx, store.CreateArtifactParams{Audience: "shared", WorkspaceID: otherWS.ID, Type: "note", Title: "Private workspace page", Path: &foreignPath, AuthorType: "user", AuthorID: me.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

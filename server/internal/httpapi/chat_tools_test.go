@@ -180,11 +180,11 @@ func TestChatRunToolAuthorization(t *testing.T) {
 		t.Fatalf("allowed tools registered: %d of %d", seen, len(allowed)+len(needArgs))
 	}
 
-	// A chat's wiki notes are suggestions for the person to accept or reject,
-	// never published; another agent's memory stays off limits.
+	// New chat pages are private and published directly for their owner;
+	// another agent's memory stays off limits.
 	code, wn := call(token, "write_note", map[string]any{"path": "Payments/Chat runbook " + word, "body": "Found in chat"})
-	if code != 200 || wn["state"] != "suggested" {
-		t.Fatalf("chat write_note = %d %v, want a suggestion", code, wn)
+	if code != 200 || wn["state"] != "published" {
+		t.Fatalf("chat write_note = %d %v, want a private direct edit", code, wn)
 	}
 	if code, out := call(token, "write_note", map[string]any{"path": "agents/someone-else/x", "body": "x"}); code != 422 {
 		t.Fatalf("write_note into another agent's memory = %d %v", code, out)

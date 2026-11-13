@@ -11,6 +11,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -148,7 +149,7 @@ type ADR struct {
 // ListADRs lists ADR documents and wiki pages titled "ADR …": those with open
 // questions first, then the most recently updated.
 func ListADRs(ctx context.Context, q *store.Queries, ws uuid.UUID) ([]ADR, error) {
-	rows, err := q.ListADRDocs(ctx, ws)
+	rows, err := q.ListADRDocs(ctx, store.ListADRDocsParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}

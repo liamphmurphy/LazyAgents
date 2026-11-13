@@ -1,5 +1,7 @@
 package artifacts
 
+import "github.com/liamphmurphy/vesper/server/internal/pageview"
+
 import (
 	"context"
 	"encoding/json"
@@ -179,14 +181,14 @@ func IndexProperties(ctx context.Context, q *store.Queries, a store.Artifact, v 
 	}
 	aliases, _ := StringList(p["aliases"])
 	for _, name := range aliases {
-		other, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: a.WorkspaceID, Path: name})
+		other, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: a.WorkspaceID, Path: name, Viewer: pageview.From(ctx).UserID})
 		if err == nil && other.ID != a.ID {
 			return apperr.Invalid("aliases", "%q is another page's path", name)
 		}
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		other, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: a.WorkspaceID, Path: name})
+		other, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: a.WorkspaceID, Path: name, Viewer: pageview.From(ctx).UserID})
 		if err == nil && other.ID != a.ID {
 			return apperr.Invalid("aliases", "%q belongs to another page", name)
 		}
@@ -263,14 +265,14 @@ func derivedNotePath(ctx context.Context, q *store.Queries, ws uuid.UUID, title,
 		if err != nil {
 			return "", err
 		}
-		if a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil {
+		if a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p, Viewer: pageview.From(ctx).UserID}); err == nil {
 			if a.ID != owner {
 				continue
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}
-		if a, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p}); err == nil {
+		if a, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p, Viewer: pageview.From(ctx).UserID}); err == nil {
 			if a.ID != owner {
 				continue
 			}
@@ -305,7 +307,7 @@ func RenameNoteTitleTx(ctx context.Context, q *store.Queries, a store.Artifact, 
 		}
 	}
 	// Allocation permits only this page's aliases; another page's are skipped.
-	if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: a.WorkspaceID, Path: p}); err != nil {
+	if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: a.WorkspaceID, ArtifactID: a.ID, Path: p}); err != nil {
 		return a, err
 	}
 	a, err = q.SetNotePath(ctx, store.SetNotePathParams{ID: a.ID, Path: &p, Title: title})

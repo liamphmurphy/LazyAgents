@@ -15,6 +15,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
@@ -36,8 +37,9 @@ func toTarget(t links.Target) api.LinkTarget { return same[api.LinkTarget](t) }
 func toMentions(ms []wiki.Mention) []api.Mention { return same[[]api.Mention](ms) }
 
 func (s *Server) ListWikiPages(ctx context.Context, req api.ListWikiPagesRequestObject) (api.ListWikiPagesResponseObject, error) {
+	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	_, _, ws := me(ctx)
-	rows, err := s.Q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Tag: req.Params.Tag})
+	rows, err := s.Q.ListNotes(ctx, store.ListNotesParams{WorkspaceID: ws, Tag: req.Params.Tag, Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +50,7 @@ func (s *Server) ListWikiPages(ctx context.Context, req api.ListWikiPagesRequest
 	out := api.ListWikiPages200JSONResponse{Pages: make([]api.WikiPageSummary, 0, len(rows))}
 	for _, r := range rows {
 		out.Pages = append(out.Pages, api.WikiPageSummary{
-			Id: r.ID, Path: deref(r.Path), Title: r.Title, Author: dir.actor(r.AuthorType, &r.AuthorID),
+			Audience: &r.Audience, Id: r.ID, Path: deref(r.Path), Title: r.Title, Author: dir.actor(r.AuthorType, &r.AuthorID),
 			ProjectId: r.ProjectID, UpdatedAt: r.UpdatedAt, Published: r.Published, Suggestions: int(r.Suggestions),
 		})
 		out.Suggestions += int(r.Suggestions)
@@ -57,7 +59,7 @@ func (s *Server) ListWikiPages(ctx context.Context, req api.ListWikiPagesRequest
 }
 
 func (s *Server) noteDetail(ctx context.Context, ws, id uuid.UUID) (api.Artifact, error) {
-	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+	a, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return api.Artifact{}, err
 	}
@@ -66,7 +68,7 @@ func (s *Server) noteDetail(ctx context.Context, ws, id uuid.UUID) (api.Artifact
 
 func (s *Server) CreateWikiPage(ctx context.Context, req api.CreateWikiPageRequestObject) (api.CreateWikiPageResponseObject, error) {
 	u, _, ws := me(ctx)
-	in := wiki.Save{Path: deref(req.Body.Path), Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, Body: req.Body.BodyMd, Mode: wiki.ModeCreate, ProjectKey: deref(req.Body.ProjectKey)}
+	in := wiki.Save{Path: deref(req.Body.Path), Audience: string(deref(req.Body.Audience)), Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, Body: req.Body.BodyMd, Mode: wiki.ModeCreate, ProjectKey: deref(req.Body.ProjectKey)}
 	if strings.TrimSpace(in.Body) == "" {
 		// A new page from a ghost link starts with its title.
 		title := links.TitleOf(links.NormalizePath(in.Path))
@@ -89,9 +91,9 @@ func (s *Server) CreateWikiPage(ctx context.Context, req api.CreateWikiPageReque
 func (s *Server) GetWikiPage(ctx context.Context, req api.GetWikiPageRequestObject) (api.GetWikiPageResponseObject, error) {
 	_, _, ws := me(ctx)
 	p := links.NormalizePath(req.Params.Path)
-	a, err := s.Q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p})
+	a, err := s.Q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		a, err = s.Q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p})
+		a, err = s.Q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p, Viewer: pageview.From(ctx).UserID})
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.ErrNotFound
@@ -108,7 +110,7 @@ func (s *Server) GetWikiPage(ctx context.Context, req api.GetWikiPageRequestObje
 func (s *Server) SaveWikiPage(ctx context.Context, req api.SaveWikiPageRequestObject) (api.SaveWikiPageResponseObject, error) {
 	u, _, ws := me(ctx)
 	res, err := s.Wiki.UpdateAsUser(ctx, ws, u.ID, req.Id, wiki.Save{
-		Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, BaseID: req.Body.BaseVersionId, Note: deref(req.Body.Note),
+		Audience: string(deref(req.Body.Audience)), Title: req.Body.Title, Properties: artifacts.Properties(deref(req.Body.Properties)), Tags: req.Body.Tags, Aliases: req.Body.Aliases, BaseID: req.Body.BaseVersionId, Note: deref(req.Body.Note),
 	}, req.Body.Path, req.Body.BodyMd)
 	if err != nil {
 		return nil, err
@@ -122,7 +124,7 @@ func (s *Server) SaveWikiPage(ctx context.Context, req api.SaveWikiPageRequestOb
 
 func (s *Server) ListWikiSuggestions(ctx context.Context, req api.ListWikiSuggestionsRequestObject) (api.ListWikiSuggestionsResponseObject, error) {
 	_, _, ws := me(ctx)
-	rows, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: req.Params.ArtifactId})
+	rows, err := s.Q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: req.Params.ArtifactId, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func (s *Server) ListWikiSuggestions(ctx context.Context, req api.ListWikiSugges
 	for _, r := range rows {
 		cur := ""
 		if r.CurrentVersionID != nil {
-			v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *r.CurrentVersionID, ArtifactID: r.ArtifactID, WorkspaceID: ws})
+			v, err := s.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *r.CurrentVersionID, ArtifactID: r.ArtifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return nil, err
 			}
@@ -232,6 +234,7 @@ func (s *Server) ResolveLinks(ctx context.Context, req api.ResolveLinksRequestOb
 }
 
 func (s *Server) SuggestLinks(ctx context.Context, req api.SuggestLinksRequestObject) (api.SuggestLinksResponseObject, error) {
+	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	_, _, ws := me(ctx)
 	ts, err := wiki.Autocomplete(ctx, s.Q, ws, strings.TrimSpace(deref(req.Params.Q)))
 	if err != nil {
@@ -270,6 +273,7 @@ func (s *Server) LinkMention(ctx context.Context, req api.LinkMentionRequestObje
 }
 
 func (s *Server) GetGraph(ctx context.Context, req api.GetGraphRequestObject) (api.GetGraphResponseObject, error) {
+	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	_, _, ws := me(ctx)
 	depth := 2
 	if req.Params.Depth != nil {
@@ -283,6 +287,7 @@ func (s *Server) GetGraph(ctx context.Context, req api.GetGraphRequestObject) (a
 }
 
 func (s *Server) SearchKnowledge(ctx context.Context, req api.SearchKnowledgeRequestObject) (api.SearchKnowledgeResponseObject, error) {
+	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	_, _, ws := me(ctx)
 	if strings.TrimSpace(req.Params.Q) == "" {
 		return api.SearchKnowledge200JSONResponse{Hits: []api.SearchHit{}}, nil
@@ -349,7 +354,7 @@ func (s *Server) ListWikiADRs(ctx context.Context, _ api.ListWikiADRsRequestObje
 
 func (s *Server) GetWikiCitations(ctx context.Context, req api.GetWikiCitationsRequestObject) (api.GetWikiCitationsResponseObject, error) {
 	u, _, ws := me(ctx)
-	if _, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws}); errors.Is(err, pgx.ErrNoRows) {
+	if _, err := s.Q.GetArtifact(ctx, store.GetArtifactParams{ID: req.Id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.ErrNotFound
 	} else if err != nil {
 		return nil, err

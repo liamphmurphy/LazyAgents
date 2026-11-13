@@ -29,7 +29,7 @@ WHERE r.workspace_id=$1 AND r.state NOT IN ('completed','failed','cancelled')
 ORDER BY CASE r.state WHEN 'blocked' THEN 0 WHEN 'waiting' THEN 1 WHEN 'running' THEN 2 WHEN 'starting' THEN 3 WHEN 'paused' THEN 4 ELSE 5 END,r.started_at;
 
 -- name: OverviewArtifacts :many
-SELECT id,title,type,path,epic_id,updated_at FROM artifacts WHERE workspace_id=$1 AND current_version_id IS NOT NULL
+SELECT id,title,type,path,epic_id,updated_at FROM artifacts WHERE artifact_visible(audience, owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR audience <> 'agent') AND workspace_id=$1 AND current_version_id IS NOT NULL
 ORDER BY updated_at DESC,id;
 
 -- name: WeeklySpend :one

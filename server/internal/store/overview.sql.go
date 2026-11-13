@@ -291,9 +291,15 @@ func (q *Queries) OverviewAgentTickets(ctx context.Context, workspaceID uuid.UUI
 }
 
 const overviewArtifacts = `-- name: OverviewArtifacts :many
-SELECT id,title,type,path,epic_id,updated_at FROM artifacts WHERE workspace_id=$1 AND current_version_id IS NOT NULL
+SELECT id,title,type,path,epic_id,updated_at FROM artifacts WHERE artifact_visible(audience, owner_user_id, $2::uuid) AND ($3::boolean OR audience <> 'agent') AND workspace_id=$1 AND current_version_id IS NOT NULL
 ORDER BY updated_at DESC,id
 `
+
+type OverviewArtifactsParams struct {
+	WorkspaceID  uuid.UUID
+	Viewer       *uuid.UUID
+	IncludeAgent bool
+}
 
 type OverviewArtifactsRow struct {
 	ID        uuid.UUID
@@ -304,8 +310,8 @@ type OverviewArtifactsRow struct {
 	UpdatedAt time.Time
 }
 
-func (q *Queries) OverviewArtifacts(ctx context.Context, workspaceID uuid.UUID) ([]OverviewArtifactsRow, error) {
-	rows, err := q.db.Query(ctx, overviewArtifacts, workspaceID)
+func (q *Queries) OverviewArtifacts(ctx context.Context, arg OverviewArtifactsParams) ([]OverviewArtifactsRow, error) {
+	rows, err := q.db.Query(ctx, overviewArtifacts, arg.WorkspaceID, arg.Viewer, arg.IncludeAgent)
 	if err != nil {
 		return nil, err
 	}

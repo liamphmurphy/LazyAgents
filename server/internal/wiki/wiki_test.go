@@ -13,6 +13,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testdb"
@@ -43,7 +44,7 @@ func setup(t *testing.T) env {
 	me, _ := q.GetLocalUser(ctx)
 	ws := me.WorkspaceID
 	n := int32(12)
-	adr, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &n})
+	adr, err := q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &n, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func invalid(err error) bool {
 
 func (e env) save(t *testing.T, path, body string) wiki.Result {
 	t.Helper()
-	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: path, Body: body})
+	r, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: path, Body: body, Audience: "shared"})
 	if err != nil {
 		t.Fatalf("save %s: %v", path, err)
 	}
@@ -119,7 +120,7 @@ func TestLinksGhostsAndRename(t *testing.T) {
 		t.Fatalf("old-path write: %+v", w)
 	}
 	// A new page can take the old path back.
-	if n, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Payments/Partition gotchas", Body: "A new page", Mode: wiki.ModeCreate}); err != nil || !n.Created {
+	if n, err := e.svc.SaveAsUser(e.ctx, e.ws, e.me.ID, wiki.Save{Path: "Payments/Partition gotchas", Body: "A new page", Mode: wiki.ModeCreate, Audience: "shared"}); err != nil || !n.Created {
 		t.Fatal("old path not reusable")
 	}
 
@@ -186,8 +187,8 @@ func TestUnlinkedMentions(t *testing.T) {
 	if err := e.svc.LinkMention(e.ctx, e.ws, e.me.ID, wiki.Ref{Kind: "artifact", ID: e.adr.ID}, "artifact", other.Note.ID); err != nil {
 		t.Fatal(err)
 	}
-	a, _ := e.q.GetArtifact(e.ctx, store.GetArtifactParams{ID: other.Note.ID, WorkspaceID: e.ws})
-	v, _ := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws})
+	a, _ := e.q.GetArtifact(e.ctx, store.GetArtifactParams{ID: other.Note.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
+	v, _ := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
 	if *v.BodyMd != "Plain mention of [[ADR-012]] here, and ADR-0123 isn't one." {
 		t.Fatalf("rewritten: %q", *v.BodyMd)
 	}
@@ -212,7 +213,7 @@ func TestAgentPermissionsAndSuggestions(t *testing.T) {
 	if err != nil || r.State != artifacts.Published {
 		t.Fatalf("memory write: %+v %v", r, err)
 	}
-	idx, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "agents/atlas/Memory"})
+	idx, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "agents/atlas/Memory", Viewer: pageview.From(e.ctx).UserID})
 	if err != nil {
 		t.Fatal("no memory index")
 	}
@@ -247,18 +248,18 @@ func TestAgentPermissionsAndSuggestions(t *testing.T) {
 	if _, err := e.svc.DecideSuggestion(e.ctx, e.ws, e.me.ID, s1.Version.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Payments/Conventions"}); err == nil {
+	if _, err := e.q.GetNoteByPath(e.ctx, store.GetNoteByPathParams{WorkspaceID: e.ws, Path: "Payments/Conventions", Viewer: pageview.From(e.ctx).UserID}); err == nil {
 		t.Fatal("rejected new page still exists")
 	}
 
-	before, _ := e.q.CountSuggestions(e.ctx, e.ws) // the demo seeds one from Sentry
+	before, _ := e.q.CountSuggestions(e.ctx, store.CountSuggestionsParams{WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID}) // the demo seeds one from Sentry
 	// Existing page: suggestion, then accept → published as v2, links indexed.
 	base := e.save(t, "Payments/Conventions", "Original.")
 	s2, err := e.svc.AgentWrite(e.ctx, e.echo, none, wiki.Save{Path: "Payments/Conventions", Body: "See [[ADR-012]].", Mode: wiki.ModeAppend})
 	if err != nil || s2.State != artifacts.Suggested {
 		t.Fatalf("suggest edit: %+v %v", s2, err)
 	}
-	if n, _ := e.q.CountSuggestions(e.ctx, e.ws); n != before+1 {
+	if n, _ := e.q.CountSuggestions(e.ctx, store.CountSuggestionsParams{WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID}); n != before+1 {
 		t.Fatalf("pending = %d, want %d", n, before+1)
 	}
 	if len(e.linksFrom(t, base.Note.ID)) != 0 {
@@ -268,7 +269,7 @@ func TestAgentPermissionsAndSuggestions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, _ := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws})
+	v, _ := e.q.GetArtifactVersion(e.ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID})
 	if v.Label != "v2" || *v.BodyMd != "Original.\n\nSee [[ADR-012]]." || len(e.linksFrom(t, a.ID)) != 1 {
 		t.Fatalf("accepted: %s %q", v.Label, deref(v.BodyMd))
 	}
@@ -376,7 +377,7 @@ func TestGraphSearchVault(t *testing.T) {
 		t.Fatalf("autocomplete: %+v %v", ac, err)
 	}
 
-	notes, _ := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws})
+	notes, _ := e.q.ListNotes(e.ctx, store.ListNotesParams{WorkspaceID: e.ws, Viewer: pageview.From(e.ctx).UserID, IncludeAgent: pageview.From(e.ctx).IncludeAgent})
 	var buf bytes.Buffer
 	if err := wiki.Export(e.ctx, e.q, e.ws, &buf); err != nil {
 		t.Fatal(err)

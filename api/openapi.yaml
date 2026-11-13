@@ -284,6 +284,7 @@ paths:
       operationId: search
       summary: Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories and Library
       parameters:
+        - $ref: "#/components/parameters/IncludeAgent"
         - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
         - { name: project, in: query, schema: { type: string } }
       responses:
@@ -1564,6 +1565,7 @@ paths:
       summary: Every wiki page (the page tree), with pending suggestion counts
       tags: [wiki]
       parameters:
+        - $ref: "#/components/parameters/IncludeAgent"
         - name: tag
           in: query
           description: Filter by an exact case-insensitive tag (including inline tags)
@@ -1806,6 +1808,7 @@ paths:
       summary: "[[ autocomplete over pages, artifacts, tickets, epics and agents"
       tags: [knowledge]
       parameters:
+        - $ref: "#/components/parameters/IncludeAgent"
         - name: q
           in: query
           schema: { type: string }
@@ -1864,6 +1867,7 @@ paths:
       summary: The local link graph around a node (1–2 hops, both directions)
       tags: [knowledge]
       parameters:
+        - $ref: "#/components/parameters/IncludeAgent"
         - $ref: "#/components/parameters/NodeKind"
         - $ref: "#/components/parameters/NodeId"
         - name: depth
@@ -1883,6 +1887,7 @@ paths:
       summary: Full-text search over pages, artifacts and tickets, boosted by links
       tags: [knowledge]
       parameters:
+        - $ref: "#/components/parameters/IncludeAgent"
         - name: q
           in: query
           required: true
@@ -5594,6 +5599,11 @@ paths:
 
 components:
   parameters:
+    IncludeAgent:
+      name: include_agent
+      in: query
+      description: Include agent memory and proposed patterns in discovery; false by default.
+      schema: { type: boolean, default: false }
     NodeKind:
       name: kind
       in: query
@@ -6937,6 +6947,7 @@ components:
       type: object
       required: [id, type, title, summary, author, current_version, body_md, outline, read_by, versions, tickets, suggestions, created_at, updated_at]
       properties:
+        audience: { type: string, description: "private, shared or agent; only a person can change private/shared" }
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/ArtifactType" }
         title: { type: string }
@@ -7629,6 +7640,7 @@ components:
       type: object
       required: [id, path, title, author, updated_at, published, suggestions]
       properties:
+        audience: { type: string, description: "private, shared or agent; only a person can change private/shared" }
         id: { type: string, format: uuid }
         path: { type: string }
         title: { type: string }
@@ -7647,6 +7659,10 @@ components:
       type: object
       required: [body_md]
       properties:
+        audience:
+          type: string
+          enum: [private, shared]
+          description: Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
         path: { type: string, maxLength: 300, description: Optional explicit unique path; otherwise derived from title with a numeric suffix }
         title: { type: string, minLength: 1, maxLength: 200, description: Free display text; duplicate titles are allowed }
         body_md: { type: string }
@@ -7658,6 +7674,10 @@ components:
     WikiPageSave:
       type: object
       properties:
+        audience:
+          type: string
+          enum: [private, shared]
+          description: Only a person can set this. New pages default to private; agent namespaces follow their path. Sharing a conflicting path returns 409; rename it first.
         title: { type: string, minLength: 1, maxLength: 200, description: Rename the display title and derive a unique last path segment in the current folder; the old path remains an alias }
         body_md: { type: string }
         properties: { $ref: "#/components/schemas/PageProperties" }

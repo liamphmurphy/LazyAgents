@@ -13,12 +13,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/tracker"
 )
@@ -50,6 +52,8 @@ const (
 
 // Save is one write to a note.
 type Save struct {
+	PageID     *uuid.UUID // person REST saves identify an exact page even when paths overlap
+	Audience   string     // person-only: empty preserves existing audience; new pages default to private
 	Title      *string
 	Properties artifacts.Properties
 	Tags       *[]string
@@ -93,7 +97,7 @@ func current(ctx context.Context, q *store.Queries, a store.Artifact) (string, *
 	if a.CurrentVersionID == nil {
 		return "", nil, nil
 	}
-	v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID})
+	v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 	if err != nil || v.BodyMd == nil {
 		return "", nil, err
 	}
@@ -123,11 +127,28 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if err != nil {
 		return Result{}, err
 	}
-	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path})
+	a, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
+	if in.PageID != nil {
+		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: *in.PageID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && a.Type != "note") {
+			return Result{}, apperr.ErrNotFound
+		}
+		if err != nil {
+			return Result{}, err
+		}
+		path = *a.Path
+	}
+	// Creating a private page may shadow a shared path without editing it.
+	if err == nil && mode == ModeCreate {
+		desired, _ := artifacts.NoteAudience(ctx, path, in.Audience)
+		if (a.Audience == "private") != (desired == "private") {
+			err = pgx.ErrNoRows
+		}
+	}
 	// Saving to a renamed page's old path saves the page; creating there
 	// makes a new page that takes the path over.
 	if errors.Is(err, pgx.ErrNoRows) && mode != ModeCreate {
-		a, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: path})
+		a, err = q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
 		if err == nil {
 			path = *a.Path // writing to an old name writes to the renamed page
 		}
@@ -151,11 +172,11 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 		if in.Title != nil {
 			title = *in.Title
 		}
-		a, err := s.Artifacts.CreateNoteTx(ctx, q, ws, by, path, in.ProjectKey, in.Body, state, artifacts.NoteMetadata{Title: title, Properties: raw})
+		a, err := s.Artifacts.CreateNoteTx(ctx, q, ws, by, path, in.ProjectKey, in.Body, state, artifacts.NoteMetadata{Title: title, Properties: raw, Audience: in.Audience})
 		if err != nil {
 			return Result{}, err
 		}
-		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return Result{}, err
 		}
@@ -167,8 +188,25 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if mode == ModeCreate && a.CurrentVersionID != nil {
 		return Result{}, apperr.Invalid("path", "a page called %q already exists; use mode replace or append", *a.Path)
 	}
-	if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: a.ID, WorkspaceID: ws}); err != nil {
+	if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 		return Result{}, err
+	}
+	if in.Audience != "" {
+		if a.Audience == "agent" {
+			return Result{}, apperr.Invalid("audience", "agent knowledge follows its path")
+		}
+		var owner *uuid.UUID
+		if in.Audience == "private" {
+			owner = pageview.From(ctx).UserID
+		}
+		a, err = q.SetPageAudience(ctx, store.SetPageAudienceParams{ID: a.ID, WorkspaceID: ws, Audience: in.Audience, OwnerUserID: owner, Viewer: pageview.From(ctx).UserID})
+		if err != nil {
+			var pe *pgconn.PgError
+			if errors.As(err, &pe) && pe.Code == "23505" {
+				return Result{}, apperr.Conflict("Rename it first: a page at this audience already has that path")
+			}
+			return Result{}, err
+		}
 	}
 	cur, curID, err := current(ctx, q, a)
 	if err != nil {
@@ -179,7 +217,7 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	}
 	oldProps := artifacts.Properties{}
 	if curID != nil {
-		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *curID, ArtifactID: a.ID, WorkspaceID: ws})
+		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *curID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return Result{}, err
 		}
@@ -219,25 +257,29 @@ func (s *Service) write(ctx context.Context, q *store.Queries, ws uuid.UUID, by 
 	if err != nil {
 		return Result{}, err
 	}
-	a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+	a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	return Result{Note: a, Version: v, State: state}, err
 }
 
 func latestVersion(ctx context.Context, q *store.Queries, a store.Artifact) (store.ArtifactVersion, error) {
 	if a.CurrentVersionID != nil {
-		return q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID})
+		return q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 	}
-	sugg, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: a.WorkspaceID, ArtifactID: &a.ID})
+	sugg, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: a.WorkspaceID, ArtifactID: &a.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil || len(sugg) == 0 {
 		return store.ArtifactVersion{}, err
 	}
 	last := sugg[len(sugg)-1]
-	return q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: last.ID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID})
+	return q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: last.ID, ArtifactID: a.ID, WorkspaceID: a.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 }
 
 // SaveAsUser publishes a person's edit directly (the lightweight wiki save:
 // no "New version" ceremony).
 func (s *Service) SaveAsUser(ctx context.Context, ws, userID uuid.UUID, in Save) (Result, error) {
+	ctx = pageview.Person(ctx, userID)
+	if in.Audience != "" && in.Audience != "private" && in.Audience != "shared" {
+		return Result{}, apperr.Invalid("audience", "must be private or shared")
+	}
 	var res Result
 	err := s.tx(ctx, ws, func(q *store.Queries) error {
 		var err error
@@ -290,6 +332,9 @@ func Decide(handle, path string, mode agentdef.Mode, set bool) Decision {
 // AgentWrite saves a note as an agent, honouring wiki:write. The scope
 // comes from the run's frozen definition when there is one.
 func (s *Service) AgentWrite(ctx context.Context, agent store.Agent, scopes map[string]agentdef.Mode, in Save) (Result, error) {
+	if in.Audience != "" || in.PageID != nil {
+		return Result{}, apperr.Invalid("audience", "only a person can change audience")
+	}
 	ws := agent.WorkspaceID
 	path, err := artifacts.ValidNotePath(in.Path)
 	if err != nil {
@@ -297,7 +342,21 @@ func (s *Service) AgentWrite(ctx context.Context, agent store.Agent, scopes map[
 	}
 	in.Path = path
 	mode, set := agentdef.ModeFor(scopes, "wiki:write")
-	switch Decide(agent.Handle, path, mode, set) {
+	decision := Decide(agent.Handle, path, mode, set)
+	if pageview.From(ctx).UserID != nil && !strings.HasPrefix(strings.ToLower(path), "agents/") && !strings.HasPrefix(strings.ToLower(path), "patterns/") {
+		page, err := store.New(s.Pool).GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
+		if errors.Is(err, pgx.ErrNoRows) && in.Mode != ModeCreate {
+			page, err = store.New(s.Pool).FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
+		}
+
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Result{}, err
+		}
+		if errors.Is(err, pgx.ErrNoRows) || page.Audience == "private" {
+			decision = Direct
+		}
+	}
+	switch decision {
 	case Refuse:
 		if strings.HasPrefix(strings.ToLower(path), "agents/") {
 			return Result{}, apperr.Invalid("path", "you can only write under %s (your memory), not another agent's", MemoryRoot(agent.Handle))
@@ -334,10 +393,10 @@ func (s *Service) addToIndex(ctx context.Context, q *store.Queries, agent store.
 	}
 	by := artifacts.Actor{Type: "agent", ID: agent.ID}
 	line := "- [[" + *note.Path + "]]"
-	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: agent.WorkspaceID, Path: index})
+	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: agent.WorkspaceID, Path: index, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		body := fmt.Sprintf("# %s's memory\n\nNotes %s keeps while working: gotchas, decisions and dead ends worth remembering next time.\n\n%s\n", agent.Name, agent.Name, line)
-		_, err = s.Artifacts.CreateNoteTx(ctx, q, agent.WorkspaceID, by, index, "", body, artifacts.Published)
+		_, err = s.Artifacts.CreateNoteTx(ctx, q, agent.WorkspaceID, by, index, "", body, artifacts.Published, artifacts.NoteMetadata{Audience: "agent"})
 		return err
 	} else if err != nil {
 		return err
@@ -355,9 +414,10 @@ func (s *Service) addToIndex(ctx context.Context, q *store.Queries, agent store.
 // Decide accepts or rejects a suggested version. Accepting publishes it as
 // the next version, even if the page moved on since (the UI warns).
 func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uuid.UUID, accept bool) (store.Artifact, error) {
+	ctx = pageview.Person(ctx, userID)
 	var a store.Artifact
 	err := s.tx(ctx, ws, func(q *store.Queries) error {
-		v, err := q.LockSuggestion(ctx, store.LockSuggestionParams{ID: versionID, WorkspaceID: ws})
+		v, err := q.LockSuggestion(ctx, store.LockSuggestionParams{ID: versionID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		} else if err != nil {
@@ -366,7 +426,7 @@ func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uu
 		if v.State != artifacts.Suggested {
 			return apperr.Conflict("this suggestion was already %s", v.State)
 		}
-		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: v.ArtifactID, WorkspaceID: ws}); err != nil {
+		if a, err = q.LockArtifact(ctx, store.LockArtifactParams{ID: v.ArtifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 			return err
 		}
 		if !accept {
@@ -375,7 +435,7 @@ func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uu
 			}
 			// A page that only ever existed as this suggestion goes away.
 			if a.CurrentVersionID == nil {
-				rest, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID})
+				rest, err := q.ListSuggestions(ctx, store.ListSuggestionsParams{WorkspaceID: ws, ArtifactID: &a.ID, Viewer: pageview.From(ctx).UserID})
 				if err != nil {
 					return err
 				}
@@ -398,7 +458,7 @@ func (s *Service) DecideSuggestion(ctx context.Context, ws, userID, versionID uu
 		if err := artifacts.Publish(ctx, q, a, v); err != nil {
 			return err
 		}
-		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+		a, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		return err
 	})
 	return a, err
@@ -420,7 +480,7 @@ func renameNote(ctx context.Context, q *store.Queries, ws, id uuid.UUID, newPath
 	if err != nil {
 		return a, err
 	}
-	cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
+	cur, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.Type != "note") {
 		return a, apperr.ErrNotFound
 	}
@@ -433,19 +493,24 @@ func renameNote(ctx context.Context, q *store.Queries, ws, id uuid.UUID, newPath
 	if err := q.LockNotePaths(ctx, ws); err != nil {
 		return a, err
 	}
-	if other, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: p}); err == nil && other.ID != cur.ID {
-		return a, apperr.Invalid("path", "a page called %q already exists", p)
-	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	audience := cur.Audience
+	if audience == "agent" {
+		audience = "shared"
+	}
+	audience, _ = artifacts.NoteAudience(ctx, p, audience)
+	taken, err := q.NotePathTaken(ctx, store.NotePathTakenParams{WorkspaceID: ws, Path: p, Audience: audience, Viewer: pageview.From(ctx).UserID, ExcludeID: &cur.ID})
+	if err != nil {
 		return a, err
 	}
-	if other, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p}); err == nil && other.ID != cur.ID {
+	if taken {
+		return a, apperr.Invalid("path", "a page called %q already exists", p)
+	}
+	if other, err := q.FindNoteByAlias(ctx, store.FindNoteByAliasParams{WorkspaceID: ws, Path: p, Viewer: pageview.From(ctx).UserID}); err == nil && other.ID != cur.ID && ((other.Audience == "private") == (cur.Audience == "private")) {
 		return a, apperr.Invalid("path", "%q is another page's alias", p)
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return a, err
 	}
-	if err := q.DeleteAlias(ctx, store.DeleteAliasParams{WorkspaceID: ws, Path: p}); err != nil {
-		return a, err
-	}
+
 	if !strings.EqualFold(*cur.Path, p) {
 		if err := q.AddAlias(ctx, store.AddAliasParams{WorkspaceID: ws, ArtifactID: cur.ID, Path: *cur.Path}); err != nil {
 			return a, err
@@ -462,9 +527,13 @@ func renameNote(ctx context.Context, q *store.Queries, ws, id uuid.UUID, newPath
 // the unchanged body under the row lock prevents metadata-only saves from
 // restoring a stale body, and a failed validation rolls the whole edit back.
 func (s *Service) UpdateAsUser(ctx context.Context, ws, userID, id uuid.UUID, in Save, newPath, body *string) (Result, error) {
+	ctx = pageview.Person(ctx, userID)
+	if in.Audience != "" && in.Audience != "private" && in.Audience != "shared" {
+		return Result{}, apperr.Invalid("audience", "must be private or shared")
+	}
 	var res Result
 	err := s.tx(ctx, ws, func(q *store.Queries) error {
-		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws})
+		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && a.Type != "note") {
 			return apperr.ErrNotFound
 		}
@@ -477,6 +546,7 @@ func (s *Service) UpdateAsUser(ctx context.Context, ws, userID, id uuid.UUID, in
 				return err
 			}
 		}
+		in.PageID = &a.ID
 		in.Path = *a.Path
 		if body == nil {
 			in.Body, _, err = current(ctx, q, a)
@@ -491,3 +561,8 @@ func (s *Service) UpdateAsUser(ctx context.Context, ws, userID, id uuid.UUID, in
 	})
 	return res, err
 }
+
+// Viewer is the knowledge audience principal. Request boundaries carry it in
+// pageview.With(ctx, viewer), so artifact services and wiki readers use the
+// same principal inside a transaction; an absent principal is always a run.
+type Viewer = pageview.Viewer

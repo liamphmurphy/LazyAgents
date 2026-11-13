@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -224,7 +225,7 @@ func getTicket(ctx context.Context, d Deps, c agents.Caller, in GetTicketIn) (an
 	for i, cr := range crit {
 		criteria[i] = map[string]any{"n": i + 1, "text": cr.Text, "done": cr.Done}
 	}
-	docs, err := d.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &c.Agent.ID})
+	docs, err := d.Q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &c.Agent.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +299,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	var a store.Artifact
 	ref := strings.TrimSpace(in.Artifact)
 	if id, err := uuid.Parse(ref); err == nil {
-		a, err = d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+		a, err = d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return nil, apperr.Invalid("artifact", "no artifact %s", ref)
 		}
@@ -310,7 +311,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 			}
 			num = num*10 + int32(ch-'0')
 		}
-		a, err = d.Q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num})
+		a, err = d.Q.GetADRByNumber(ctx, store.GetADRByNumberParams{WorkspaceID: ws, Number: &num, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			return nil, apperr.Invalid("artifact", "no %s", ref)
 		}
@@ -320,7 +321,7 @@ func readArtifact(ctx context.Context, d Deps, c agents.Caller, in ReadArtifactI
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("artifact", "has no content")
 	}
-	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -615,14 +616,14 @@ func readPage(ctx context.Context, d Deps, c agents.Caller, in PageIn) (any, err
 	if ref.Kind != "artifact" {
 		return map[string]any{"kind": ref.Kind, "title": t.Title, "message": "Not a page. get_backlinks shows what links to it."}, nil
 	}
-	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws})
+	a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: ref.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
 	if a.CurrentVersionID == nil {
 		return nil, apperr.Invalid("ref", "%q is only a suggestion so far", in.Ref)
 	}
-	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws})
+	v, err := d.Q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +699,7 @@ func findPattern(ctx context.Context, d Deps, c agents.Caller, in FindPatternIn)
 	if strings.TrimSpace(in.Q) != "" && len(ps) > 0 {
 		runID := readRunID(ctx, d, c, in.Ticket)
 		for _, p := range ps {
-			a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: p.ID, WorkspaceID: ws})
+			a, err := d.Q.GetArtifact(ctx, store.GetArtifactParams{ID: p.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return nil, err
 			}

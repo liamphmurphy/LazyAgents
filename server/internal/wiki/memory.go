@@ -15,6 +15,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/links"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -46,6 +47,7 @@ type candidate struct {
 //     artifacts, then notes that link to them, the agent's own first;
 //   - search: the top note hits for the ticket's title.
 func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket store.Ticket, mem agentdef.Memory) ([]ContextPage, error) {
+	ctx = pageview.Run(ctx)
 	if !mem.Enabled {
 		return []ContextPage{}, nil
 	}
@@ -60,11 +62,11 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 		cands = append(cands, candidate{a, reason})
 	}
 	note := func(id uuid.UUID) (store.Artifact, bool) {
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		return a, err == nil
 	}
 
-	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: MemoryIndex(agent.Handle)})
+	idx, err := q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: MemoryIndex(agent.Handle), Viewer: pageview.From(ctx).UserID})
 	if err == nil && mem.Inject != agentdef.InjectSelective {
 		add(idx, "Your memory index")
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -75,7 +77,7 @@ func RunContext(ctx context.Context, q *store.Queries, agent store.Agent, ticket
 		// Patterns are short, curated and the most reusable guidance, so they
 		// come right after the index.
 		if words := ticketWords(ticket); len(words) > 0 {
-			ps, err := q.RelevantPatterns(ctx, store.RelevantPatternsParams{WorkspaceID: ws, Words: words, Lim: maxPatterns})
+			ps, err := q.RelevantPatterns(ctx, store.RelevantPatternsParams{WorkspaceID: ws, Words: words, Lim: maxPatterns, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return nil, err
 			}
@@ -281,7 +283,7 @@ func displayName(a store.Artifact) string {
 func RecordContextReads(ctx context.Context, q *store.Queries, ws, agentID uuid.UUID, runID *uuid.UUID, pages []ContextPage) error {
 	now := time.Now()
 	for _, p := range pages {
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: *p.Target.ID, WorkspaceID: ws})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: *p.Target.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if err != nil {
 			continue
 		}

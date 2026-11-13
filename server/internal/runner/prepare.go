@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -282,6 +283,7 @@ type ContextFile struct {
 // ContextFiles are the ticket's markdown artifacts plus the wiki memory the
 // run starts with (§6.5, §12.3).
 func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t store.Ticket, mem agentdef.Memory) ([]ContextFile, error) {
+	ctx = pageview.Run(ctx)
 	var out []ContextFile
 	seen := map[string]bool{}
 	add := func(path string, body string, id uuid.UUID) {
@@ -293,7 +295,7 @@ func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t st
 		seen[path] = true
 		out = append(out, ContextFile{Path: path, Body: []byte(body), ArtifactID: id})
 	}
-	docs, err := q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &agent.ID})
+	docs, err := q.ListTicketArtifacts(ctx, store.ListTicketArtifactsParams{TicketID: t.ID, AssigneeAgentID: &agent.ID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}
@@ -310,11 +312,11 @@ func ContextFiles(ctx context.Context, q *store.Queries, agent store.Agent, t st
 		}
 	}
 	for _, id := range ids {
-		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: t.WorkspaceID})
+		a, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: id, WorkspaceID: t.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 		if err != nil || a.CurrentVersionID == nil {
 			continue
 		}
-		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: t.WorkspaceID})
+		v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: t.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 		if err != nil || v.BodyMd == nil {
 			continue // files (designs) aren't delivered as text
 		}
@@ -549,6 +551,7 @@ func sensitiveEnv(env map[string]string) map[string]string {
 // PlanningContextFile delivers exactly the source version approved at start,
 // even if a new version is published while the run is queued.
 func PlanningContextFile(ctx context.Context, q *store.Queries, run store.Run) (*ContextFile, error) {
+	ctx = pageview.Run(ctx)
 	p, err := q.PlanningSessionForRun(ctx, run.ID)
 	if err != nil {
 		return nil, err
@@ -556,7 +559,7 @@ func PlanningContextFile(ctx context.Context, q *store.Queries, run store.Run) (
 	if p.ArtifactID == nil || p.SourceVersionID == nil {
 		return nil, nil
 	}
-	v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *p.SourceVersionID, ArtifactID: *p.ArtifactID, WorkspaceID: run.WorkspaceID})
+	v, err := q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *p.SourceVersionID, ArtifactID: *p.ArtifactID, WorkspaceID: run.WorkspaceID, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		return nil, err
 	}

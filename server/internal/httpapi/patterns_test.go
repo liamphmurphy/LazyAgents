@@ -35,7 +35,7 @@ func TestFindPatternsEndpoint(t *testing.T) {
 		"Patterns/Testing/Use throwaway databases":  "Topic: Testing\nTags: testing, database\n\n## When to use\n\nIntegration tests.\n",
 		"Patterns/Proposed/Wrap errors in handlers": "Topic: Go\nTags: errors, handlers\n\nnot published\n",
 	} {
-		if _, err := w.SaveAsUser(ctx, me.WorkspaceID, me.ID, wiki.Save{Path: path, Body: body}); err != nil {
+		if _, err := w.SaveAsUser(ctx, me.WorkspaceID, me.ID, wiki.Save{Path: path, Body: body, Audience: "shared"}); err != nil {
 			t.Fatal(err)
 		}
 	}

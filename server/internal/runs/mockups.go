@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -63,7 +64,7 @@ func (s *Service) CreateMockup(ctx context.Context, c Caller, key, title, svg, n
 			if !ok {
 				return apperr.Invalid("mockup_id", "not a mockup attached to %s or its epic", t.Key)
 			}
-			a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: *mockupID, WorkspaceID: ws})
+			a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: *mockupID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 			if err != nil {
 				return err
 			}
@@ -88,10 +89,10 @@ func (s *Service) CreateMockup(ctx context.Context, c Caller, key, title, svg, n
 			if err := tracker.AttachArtifactInTx(ctx, q, ws, agentActor(c), t.Key, a.ID, "generated"); err != nil {
 				return err
 			}
-			if out.Artifact, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws}); err != nil {
+			if out.Artifact, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 				return err
 			}
-			if out.Version, err = q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *out.Artifact.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws}); err != nil {
+			if out.Version, err = q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *out.Artifact.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 				return err
 			}
 		}
@@ -140,7 +141,7 @@ func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, vers
 	}
 	var out store.Artifact
 	err = s.tx(ctx, func(q *store.Queries) error {
-		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: artifactID, WorkspaceID: ws})
+		a, err := q.LockArtifact(ctx, store.LockArtifactParams{ID: artifactID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		} else if err != nil {
@@ -207,7 +208,7 @@ func (s *Service) ReviewMockup(ctx context.Context, ws, userID, artifactID, vers
 				return err
 			}
 		}
-		out, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws})
+		out, err = q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID})
 		return err
 	})
 	return out, err

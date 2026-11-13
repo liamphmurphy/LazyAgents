@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/api"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
@@ -134,7 +135,7 @@ func (s *Server) PromoteDocToWiki(ctx context.Context, req api.PromoteDocToWikiR
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.Q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path})
+	_, err = s.Q.GetNoteByPath(ctx, store.GetNoteByPathParams{WorkspaceID: ws, Path: path, Viewer: pageview.From(ctx).UserID})
 	exists := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -147,7 +148,7 @@ func (s *Server) PromoteDocToWiki(ctx context.Context, req api.PromoteDocToWikiR
 		mode = wiki.ModeReplace
 	}
 	body := docs.WikiBody(cur.Body, cv.Title, time.Now().UTC().Format("2006-01-02"))
-	res, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, wiki.Save{Path: path, Body: body, Mode: mode, Note: "Promoted from the Doc “" + cv.Title + "”"})
+	res, err := s.Wiki.SaveAsUser(ctx, ws, u.ID, wiki.Save{Path: path, Body: body, Mode: mode, Audience: "shared", Note: "Promoted from the Doc “" + cv.Title + "”"})
 	if err != nil {
 		return nil, err
 	}

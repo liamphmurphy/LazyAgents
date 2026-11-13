@@ -12,6 +12,7 @@ import (
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testdb"
@@ -77,11 +78,11 @@ func md(s string) artifacts.Content { return artifacts.Content{BodyMD: &s} }
 
 func outline(t *testing.T, f fixture, a store.Artifact) []store.ListSectionsWithCitationsRow {
 	t.Helper()
-	a, err := f.q.GetArtifact(context.Background(), store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
+	a, err := f.q.GetArtifact(context.Background(), store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(context.Background()).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := f.q.ListSectionsWithCitations(context.Background(), store.ListSectionsWithCitationsParams{ArtifactID: a.ID, VersionID: *a.CurrentVersionID})
+	rows, err := f.q.ListSectionsWithCitations(context.Background(), store.ListSectionsWithCitationsParams{ArtifactID: a.ID, VersionID: *a.CurrentVersionID, Viewer: pageview.From(context.Background()).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,11 +106,11 @@ func TestCreateMarkdownExtractsOutlineAndDefaults(t *testing.T) {
 	if len(got) != 3 || got[1].Anchor != "scheduling" || got[2].Level != 2 {
 		t.Fatalf("outline = %+v", got)
 	}
-	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
+	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 	if a.Summary != "Batch payouts per merchant via the zephyr scheduler." {
 		t.Errorf("summary = %q", a.Summary)
 	}
-	list, err := f.q.ListArtifacts(ctx, store.ListArtifactsParams{WorkspaceID: f.ws, Q: ptr("zephyr")})
+	list, err := f.q.ListArtifacts(ctx, store.ListArtifactsParams{WorkspaceID: f.ws, Q: ptr("zephyr"), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent})
 	if err != nil || len(list) != 1 || list[0].ID != a.ID {
 		t.Fatalf("full-text search over contents: %v %v", len(list), err)
 	}
@@ -151,7 +152,7 @@ func TestCitationsSurviveNewVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
+	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 	for range 3 {
 		if err := artifacts.RecordRead(ctx, f.q, a, f.atlas.ID, nil, "risks", nil); err != nil {
 			t.Fatal(err)
@@ -167,7 +168,7 @@ func TestCitationsSurviveNewVersions(t *testing.T) {
 	if len(got) != 3 || got[2].Anchor != "risks" || got[2].Citations != 3 || got[0].Citations != 0 {
 		t.Fatalf("citations after new version = %+v", got)
 	}
-	versions, _ := f.q.ListArtifactVersions(ctx, a.ID)
+	versions, _ := f.q.ListArtifactVersions(ctx, store.ListArtifactVersionsParams{ArtifactID: a.ID, Viewer: pageview.From(ctx).UserID})
 	if len(versions) != 2 || versions[0].Label != "v2" {
 		t.Fatalf("versions = %+v", versions)
 	}
@@ -185,8 +186,8 @@ func TestFilesGoToObjectStorage(t *testing.T) {
 	if a.Title != "Checkout flow v2" {
 		t.Errorf("title from filename = %q", a.Title)
 	}
-	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws})
-	v, err := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: f.ws})
+	a, _ = f.q.GetArtifact(ctx, store.GetArtifactParams{ID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
+	v, err := f.q.GetArtifactVersion(ctx, store.GetArtifactVersionParams{ID: *a.CurrentVersionID, ArtifactID: a.ID, WorkspaceID: f.ws, Viewer: pageview.From(ctx).UserID})
 	if err != nil {
 		t.Fatal(err)
 	}
