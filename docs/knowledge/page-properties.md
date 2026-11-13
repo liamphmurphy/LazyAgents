@@ -63,7 +63,7 @@ native property types. Import accepts native YAML properties, keeps unknown
 nested maps as YAML text, and rejects malformed frontmatter transactionally.
 Importing an unchanged export creates no version.
 
-Migration `00114_page_properties.sql` adds version properties, the alias kind,
+Migration `00115_page_properties.sql` adds version properties, the alias kind,
 and the derived tag table. It leaves existing bodies and versions intact;
 legacy aliases are classified as moved paths. It ships as SQL for the normal
 migration rollout; this ticket does not apply it to an application database.
