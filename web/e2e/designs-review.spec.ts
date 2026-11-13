@@ -43,8 +43,6 @@ test.describe("@design-review", () => {
     const kept = texts[0], dropped = texts[1];
     expect(all.length).toBeGreaterThan(3);
 
-    // The chat dock starts collapsed on a first visit; this test talks to the persona from the start.
-    await page.addInitScript(() => localStorage.setItem("lazyagents.editor-dock.designs", JSON.stringify({ open: true, tab: "chat" })));
     await page.goto(`/apps/designs/${id}`);
     await expect(page.getByTestId("design-canvas")).toBeVisible();
     const chatBox = page.locator("[data-design-chat] textarea");

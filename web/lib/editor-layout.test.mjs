@@ -61,14 +61,6 @@ test("persistence: open state and tab per app, survive a reload, never the ⌘. 
   s.setItem(dockKey("docs"), "{");
   assert.deepEqual(loadDock(s, "docs", tabs), open);
   assert.deepEqual(loadDock(undefined, "docs", tabs), open);
-  // An app can start collapsed; a remembered choice still wins, and junk falls back to its default.
-  const closed = { open: false, tab: "chat", hidden: false };
-  assert.deepEqual(loadDock(memory(), "designs", tabs, false), closed);
-  assert.deepEqual(loadDock(undefined, "designs", tabs, false), closed);
-  s.setItem(dockKey("designs"), JSON.stringify({ open: true, tab: "comments" }));
-  assert.deepEqual(loadDock(s, "designs", tabs, false), { open: true, tab: "comments", hidden: false });
-  s.setItem(dockKey("designs"), "{");
-  assert.deepEqual(loadDock(s, "designs", tabs, false), closed);
   const full = { getItem: () => null, setItem: () => { throw new Error("quota"); } };
   assert.doesNotThrow(() => saveDock(full, "docs", open));
 });

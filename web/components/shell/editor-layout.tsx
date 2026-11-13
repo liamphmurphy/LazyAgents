@@ -77,7 +77,6 @@ export function EditorLayout({
   chatTab = "chat",
   show,
   onDockChange,
-  defaultOpen = true,
 }: {
   /** Key for the remembered dock state, e.g. "designs". */
   app: string;
@@ -90,13 +89,11 @@ export function EditorLayout({
   show?: { tab: string; n: number };
   /** The dock's state after every change, e.g. to clear an unread mark while its tab shows. `open` is false while a phone's sheet is closed. */
   onDockChange?: (s: DockState) => void;
-  /** Whether the dock starts open for someone with no remembered choice. Once they collapse or open it, theirs wins. */
-  defaultOpen?: boolean;
 }) {
   const uid = useId();
   const compact = useCompact();
   const tabIds = dock.map((t) => t.id).join("\n");
-  const [state, setState] = useState<DockState>({ open: defaultOpen, tab: dock[0]?.id ?? "", hidden: false });
+  const [state, setState] = useState<DockState>({ open: true, tab: dock[0]?.id ?? "", hidden: false });
   const [loaded, setLoaded] = useState(false);
   // On phones the sheet starts closed whatever was remembered, and isn't remembered itself.
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -111,10 +108,10 @@ export function EditorLayout({
     const tabs = tabIds.split("\n");
     if (loadedApp.current !== app) {
       loadedApp.current = app;
-      setState(loadDock(window.localStorage, app, tabs, defaultOpen));
+      setState(loadDock(window.localStorage, app, tabs));
       setLoaded(true);
     } else setState((s) => (tabs.includes(s.tab) ? s : { ...s, tab: tabs[0] ?? "" }));
-  }, [app, tabIds, defaultOpen]);
+  }, [app, tabIds]);
 
   useEffect(() => {
     if (loaded) saveDock(window.localStorage, app, state);

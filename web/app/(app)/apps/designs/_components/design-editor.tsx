@@ -1086,8 +1086,6 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
     <EditorLayout
       app="designs"
       header={header}
-      // The canvas is the work here; the chat waits on the rail (its ring and dot show the persona working or replying).
-      defaultOpen={false}
       show={{ tab: "review", n: showReview }}
       onDockChange={setDock}
       left={
