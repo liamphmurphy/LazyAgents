@@ -352,12 +352,13 @@ const REPLY_BLOCK_STATUS: Record<string, ChatStatusInfo> = {
 };
 
 /** The running turn's tool calls and the rich blocks written between them, in order, for the chat tab. */
-export function chatCalls(events: RunEventLike[] | undefined, since?: string): ToolCall[] {
+export function chatCalls(events: RunEventLike[] | undefined, since?: string, until?: string): ToolCall[] {
   const t = since ? Date.parse(since) : 0;
+  const hi = until ? Date.parse(until) : Infinity;
   const blocks = (events ?? [])
-    .filter((e) => e.type === "lifecycle" && e.payload.state === REPLY_BLOCK && Date.parse(e.at) >= t)
+    .filter((e) => e.type === "lifecycle" && e.payload.state === REPLY_BLOCK && Date.parse(e.at) >= t && Date.parse(e.at) <= hi)
     .map((e): ToolCall => ({ key: e.seq, tool: REPLY_BLOCK, input: { kind: e.payload.kind }, done: true }));
-  return [...toolCalls(events, since), ...blocks].sort((a, b) => a.key - b.key);
+  return [...toolCalls(events, since, until), ...blocks].sort((a, b) => a.key - b.key);
 }
 
 /**
@@ -645,15 +646,16 @@ export const QUIET_RUNNING_MS = 5 * 60_000;
 /** When the turn began, when anything last happened, and when each call (by seq) started and finished, in ms. */
 export type TurnClock = { started?: number; last?: number; calls: Map<number, { at: number; doneAt?: number }> };
 
-export function turnClock(events: RunEventLike[] | undefined, since?: string): TurnClock {
+export function turnClock(events: RunEventLike[] | undefined, since?: string, until?: string): TurnClock {
   const t = since ? Date.parse(since) : 0;
+  const hi = until ? Date.parse(until) : Infinity;
   const calls: TurnClock["calls"] = new Map();
   const open = new Map<string, number>();
   let first: number | undefined;
   let last: number | undefined;
   for (const e of events ?? []) {
     const at = Date.parse(e.at);
-    if (at < t) continue;
+    if (at < t || at > hi) continue;
     first ??= at;
     last = Math.max(last ?? at, at);
     const p = e.payload;
@@ -1112,6 +1114,56 @@ export function foldSteps(steps: ChatStep[]): { earlier: number; shown: ChatStep
   const upcoming = steps.filter((s) => s.state === "planned");
   for (const s of upcoming.slice(4)) hidden.add(s);
   return { earlier: done.length > 3 ? done.length - 2 : 0, shown: steps.filter((s) => !hidden.has(s)), later: Math.max(0, upcoming.length - 4) };
+}
+
+/** How a finished turn ended: with a reply, an error, or the person stopping (or interrupting) it. */
+export type TurnOutcome = "done" | "failed" | "stopped";
+export type FinishedTurn = { steps: ChatStep[]; duration?: number };
+
+/**
+ * A finished turn's steps for the strip kept above its reply: the live card's steps, none
+ * still under way. The last step was "active" when the turn ended; it finished, or for a
+ * failed turn, it is where the turn failed. No steps when the turn did no work beyond
+ * bookkeeping and blocks written into the reply, so a plain answer gets no strip.
+ * `end` (ms) is when the turn ended, its reply's time when there is one.
+ */
+export function finishedTurn(events: RunEventLike[] | undefined, outcome: TurnOutcome, since?: string, until?: string, end?: number): FinishedTurn {
+  const calls = chatCalls(events, since, until);
+  if (!calls.some((c) => c.tool !== REPLY_BLOCK && !BOOKKEEPING.has(bareTool(c.tool)))) return { steps: [] };
+  const clock = turnClock(events, since, until);
+  const { steps } = chatSteps(calls, turnNotes(events, since, until), { clock });
+  for (const st of steps) {
+    if (st.state !== "active") continue;
+    st.state = outcome === "failed" ? "failed" : "done";
+  }
+  const last = end ?? clock.last;
+  return { steps, duration: clock.started !== undefined && last !== undefined ? Math.max(0, last - clock.started) : undefined };
+}
+
+/** Where a turn that ended without a reply shows its strip, and the events it covers. */
+export type EndedTurn = { outcome: Exclude<TurnOutcome, "done">; since: string; until?: string; end?: number };
+
+/**
+ * The turns that ended without a reply, keyed by the message the strip goes under. A failed
+ * turn leaves a system message with its turn (keyed by that message); a stopped or interrupted
+ * one leaves nothing, so the person's unanswered message holds it until their next one. The
+ * newest unanswered message is the running turn while `running`, which the live card shows.
+ */
+export function endedTurns(list: (MessageLike & { role: string })[] | undefined, running: boolean): Map<string, EndedTurn> {
+  const out = new Map<string, EndedTurn>();
+  let open: MessageLike | undefined;
+  for (const m of list ?? []) {
+    if (m.role === "assistant") open = undefined;
+    else if (m.role === "system" && m.turn_seq !== undefined && open) {
+      out.set(m.id, { outcome: "failed", since: open.created_at, until: m.created_at, end: Date.parse(m.created_at) });
+      open = undefined;
+    } else if (m.role === "user") {
+      if (open) out.set(open.id, { outcome: "stopped", since: open.created_at, until: m.created_at });
+      open = m;
+    }
+  }
+  if (open && !running) out.set(open.id, { outcome: "stopped", since: open.created_at });
+  return out;
 }
 
 // ---- narrated decisions and thinking: on the chat tab's steps, and in full in the Activity tab ----
