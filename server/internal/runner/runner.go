@@ -68,6 +68,9 @@ type Config struct {
 	// this many tokens in a fresh session at a delegation wake (rollover.go).
 	// 0 never rolls over.
 	RolloverContextTokens int64
+	// RepoMap delivers a generated map of a ticket run's repository at its
+	// base commit as a context file (repomap.go, RUNNER_REPO_MAP).
+	RepoMap bool
 }
 
 // DefaultChatIdleTTL is how long an idle chat segment keeps its workspace.
@@ -126,6 +129,8 @@ type Runner struct {
 	// within this runner process. Git locks and the run state machine cover
 	// cross-process operations.
 	wtLocks sync.Map
+	// repoMaps are generated repo maps by repository and commit (repomap.go).
+	repoMaps repoMapCache
 }
 
 const tokenEnv = "LAZYAGENTS_TOKEN"
@@ -925,6 +930,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	}
 	maps.Copy(env, ident)
 	script := SetupScriptWithCheckpoint(repo, base, epic, checkpoint, branch, ident["GIT_AUTHOR_NAME"], ident["GIT_AUTHOR_EMAIL"], c.spec.Setup)
+	if r.wantsRepoMap(c) {
+		script += "\n" + baseCommitScript(base, epic)
+	}
 	if c.run.Purpose == "chat" {
 		if script, err = chatSetupScript(ctx, r.q(), c); err != nil {
 			fail("Couldn't prepare the chat workspace: " + err.Error())
@@ -965,6 +973,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	}
 	r.addTiming(run.ID, time.Since(setupStart), 0, 0)
 	output, testFiles := takeTestFiles(redact(output, env))
+	output, baseCommit, baseRef := takeBaseCommit(output)
 	output = r.recordEnvironment(ctx, c, output, err != nil || code != 0)
 	tail := lastLines(output, 30)
 	if err != nil || code != 0 {
@@ -974,6 +983,9 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	r.inferTestEnv(ctx, c, testRepo, testFiles)
 	if checkpoint != "" && strings.Contains(output, checkpointRecovered) {
 		r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "checkpoint_recovered", "branch": checkpoint})
+	}
+	if baseCommit != "" {
+		r.event(ctx, run.ID, "lifecycle", map[string]any{"state": repoMapEvent, "commit": baseCommit, "ref": baseRef})
 	}
 	r.event(ctx, run.ID, "lifecycle", map[string]any{"state": "workspace_ready", "branch": branch, "log": tail})
 
@@ -1300,6 +1312,11 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			log.Warn("design frames", "err", err)
 		}
 		ctxFiles = append(ctxFiles, frames...)
+		if m, err := r.repoMapFile(ctx, q, c, env); err != nil {
+			log.Warn("repo map", "err", err)
+		} else if m != nil {
+			ctxFiles = append(ctxFiles, *m)
+		}
 	}
 	if c.run.Purpose == "planning" {
 		source, err := PlanningContextFile(ctx, q, c.run)
