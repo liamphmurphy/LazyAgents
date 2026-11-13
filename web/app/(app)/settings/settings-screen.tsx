@@ -19,6 +19,7 @@ import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
 import { SignInSection, useAuthStatus } from "./sign-in-section";
 import { SetupChecklist } from "@/components/domain/setup";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Health = "ok" | "attention" | "idle" | "unknown";
 
@@ -59,21 +60,19 @@ export function SettingsScreen() {
   if (!mounted) {
     return (
       <div aria-busy className="flex flex-col gap-6">
-        <h1 className="type-display">Settings</h1>
+        <PageHeader title="Settings" />
         <Skeleton className="h-40 max-w-[1020px]" />
       </div>
     );
   }
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="type-display">Settings</h1>
-        <p className="mt-2 text-14 text-fg-secondary">Everything runs depend on. Each section says what breaks when something is missing.</p>
-        <span className="mt-2 flex gap-4 text-14">
+      <PageHeader title="Settings" description="Everything runs depend on. Each section says what breaks when something is missing.">
+        <span className="flex gap-4 text-14">
           <Link href="/chat?new&setup" className="text-accent hover:underline">Run setup again →</Link>
           <Link href="/setup" className="text-accent hover:underline">Open setup checklist →</Link>
         </span>
-      </div>
+      </PageHeader>
       <SetupChecklist className="max-w-[1020px]" />
       <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto lg:sticky lg:top-4 lg:flex-col">

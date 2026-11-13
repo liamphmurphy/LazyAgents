@@ -11,6 +11,7 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { ReportsTabNav } from "./reports-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 const ranges = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "custom", label: "Custom" }] as const;
 const field = "rounded-md border border-border-strong bg-surface px-2 py-1 text-14 text-fg";
@@ -87,8 +88,7 @@ export function HighlightsScreen() {
   return <>
     <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Highlights" }]} />
     <Content><div className="flex flex-col gap-5">
-      <div><h1 className="type-display">Reports</h1><p className="mt-1 text-14 text-fg-secondary">Routing decisions across your persona chats.</p></div>
-      <div className="flex flex-wrap items-center gap-3"><ReportsTabNav tab="highlights" /><ProjectPicker /></div>
+      <PageHeader title="Reports" description="Routing decisions across your persona chats."><ReportsTabNav tab="highlights" /><ProjectPicker /></PageHeader>
       <div className="flex flex-wrap items-center gap-3">
         <Segmented label="Date range" options={ranges} value={range} onChange={(value) => set({ range: value, from: undefined, to: undefined })} />
         {range === "custom" && <><label className="text-14">From <input aria-label="From" type="date" className={field} value={dates.from} onChange={(e) => set({ from: e.target.value })} /></label><label className="text-14">To <input aria-label="To" type="date" className={field} value={dates.to} onChange={(e) => set({ to: e.target.value })} /></label></>}

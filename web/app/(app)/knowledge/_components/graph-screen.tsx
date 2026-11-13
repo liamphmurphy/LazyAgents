@@ -7,7 +7,7 @@ import { bounds, layoutGraph } from "@/lib/knowledge-graph";
 import { pageHref } from "@/lib/knowledge";
 import { useNetwork } from "@/lib/api/knowledge-hooks";
 import { Icon } from "@/components/ui/icon";
-import { Skeleton } from "@/components/ui/primitives";
+import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import { StatusBar } from "./kit";
 import { useKnowledge, useKnowledgeTab } from "./shell";
 
@@ -78,7 +78,7 @@ export function GraphScreen() {
             <Skeleton className="h-full min-h-[300px] w-full" />
           </div>
         ) : placed.length === 0 ? (
-          <p className="p-8 text-14 text-fg-tertiary">No pages to draw yet.</p>
+          <EmptyState icon="graph" title="No pages to draw yet">Pages and the links between them appear here as you write.</EmptyState>
         ) : (
           <svg
             ref={svg}

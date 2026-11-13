@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { RunStatePill } from "@/components/domain/workflow-cards";
 import { confirmAction } from "@/components/ui/confirm";
+import { PageHeader } from "@/components/ui/page-header";
 
 export function WorkflowsScreen() {
   const router = useRouter();
@@ -30,10 +31,7 @@ export function WorkflowsScreen() {
       <TopBar crumbs={[{ label: "Workflows" }]} />
       <Content>
         <div className="flex flex-col gap-6">
-          <div className="space-y-1">
-            <h1 className="type-display">Workflows</h1>
-            <p className="text-14 text-fg-secondary">Fixed sequences of steps Vesper runs for you. Start one from a chat with /workflow, or ask a persona and confirm its suggestion.</p>
-          </div>
+          <PageHeader title="Workflows" description="Fixed sequences of steps Vesper runs for you. Start one from a chat with /workflow, or ask a persona and confirm its suggestion." />
           {list.length > 0 && createForm}
           {(create.error || workflows.error) && <Banner tone="blocked" title={(create.error ?? workflows.error)?.message} />}
           {workflows.isPending ? (

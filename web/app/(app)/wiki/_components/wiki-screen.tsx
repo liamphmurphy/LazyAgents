@@ -34,6 +34,7 @@ import { PageTree, type WikiIndex } from "./page-tree";
 import { PatternsFinder } from "./patterns-finder";
 import { VersionDiff } from "./version-diff";
 import { SuggestionCard } from "./suggestions";
+import { PageHeader } from "@/components/ui/page-header";
 
 function crumbsFor(path: string): Crumb[] {
   const segs = path.split("/");
@@ -242,14 +243,14 @@ function WikiHome() {
     >
       <div className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
         <div className="flex w-full max-w-[var(--reading-max)] flex-col gap-7">
-          <div className="flex flex-col gap-1.5">
-            <h1 className="type-display">Wiki</h1>
-            <p className="text-14 text-fg-secondary">
+          <PageHeader
+            title="Wiki"
+            description={<>
               Runbooks, decisions and the context that never fit in a PRD, plus what agents learn while working. Link anything with{" "}
               <code className="inline">[[…]]</code>: pages, documents like <code className="inline">[[ADR-012]]</code>, tickets, epics and{" "}
               <code className="inline">[[@agents]]</code>.
-            </p>
-          </div>
+            </>}
+          />
           <WikiSearch />
           <PatternsFinder />
 

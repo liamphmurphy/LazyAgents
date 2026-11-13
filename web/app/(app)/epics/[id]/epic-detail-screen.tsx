@@ -239,7 +239,7 @@ const CHECKLIST_ORDER: TicketSummary["status"][] = ["in_progress", "in_review", 
 
 /** The epic's tickets as a checklist: done ones ticked, current state on the right. */
 function TicketChecklist({ tickets, needs }: { tickets: TicketSummary[]; needs: ReadonlyMap<string, NeedsYou> }) {
-  if (!tickets.length) return <p className="text-14 text-fg-tertiary">No tickets in this epic yet.</p>;
+  if (!tickets.length) return <EmptyState compact icon="tickets" title="No tickets in this epic yet">Add tickets to the epic and they&apos;re checked off here as they finish.</EmptyState>;
   const sorted = [...tickets].sort((a, b) =>
     Number(needs.has(b.key) && b.status !== "done") - Number(needs.has(a.key) && a.status !== "done") ||
     CHECKLIST_ORDER.indexOf(a.status) - CHECKLIST_ORDER.indexOf(b.status));

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
@@ -83,10 +84,7 @@ export function DecksScreen() {
       <TopBar crumbs={[{ label: "Apps" }, { label: "Slides" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1000px] flex-col gap-5 px-6 py-6 max-sm:px-4">
-          <div>
-            <h1 className="type-display text-fg">Slides</h1>
-            <p className="mt-1 text-13 text-fg-secondary">Decks you build and present with a persona. Each deck keeps its own chat.</p>
-          </div>
+          <PageHeader title="Slides" description="Decks you build and present with a persona. Each deck keeps its own chat." />
           <form onSubmit={start} className="flex flex-wrap gap-2 rounded-xl border border-border-strong bg-surface p-1 pl-3 focus-within:border-accent">
             <input
               aria-label="New deck title or brief"

@@ -75,23 +75,30 @@ export function Skeleton({ className, style }: { className?: string; style?: Rea
   return <span aria-hidden className={cx("block rounded-xs bg-track animate-skeleton", className)} style={style} />;
 }
 
+/**
+ * What a screen or section shows when there's nothing in it yet: an icon, one heading, a line on
+ * how things get here, and the action that adds the first one. `compact` fits a tray, card or
+ * panel section. A one-line hint inside a side panel ("No headings yet.") stays plain text.
+ */
 export function EmptyState({
   icon,
   title,
   children,
   actions,
   className,
+  compact,
 }: {
   icon: IconName;
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   return (
-    <div className={cx("flex flex-col items-center gap-2.5 px-4 py-12 text-center", className)}>
-      <span className="mb-1 grid size-10 place-items-center rounded-lg border border-border-strong bg-selected text-fg-secondary">
-        <Icon name={icon} size={18} />
+    <div className={cx("flex flex-col items-center gap-2.5 px-4 text-center", compact ? "py-6" : "py-12", className)}>
+      <span className={cx("mb-1 grid place-items-center rounded-lg border border-border-strong bg-selected text-fg-secondary", compact ? "size-8" : "size-10")}>
+        <Icon name={icon} size={compact ? 15 : 18} />
       </span>
       <h3 className="type-heading text-fg">{title}</h3>
       {children && <p className="max-w-[360px] text-13 text-fg-secondary">{children}</p>}

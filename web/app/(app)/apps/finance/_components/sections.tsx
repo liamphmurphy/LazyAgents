@@ -7,6 +7,7 @@ import { cx } from "@/lib/cx";
 import { accountLabel, axisMoney, cashBars, cashNote, dayLabel, money, monthLabel, netWorthSeries, niceScale, ordinal, savingsSeries, spendDelta } from "@/lib/finance";
 import { Toggle } from "@/components/ui/controls";
 import { CountUp, Sparkline } from "./motion";
+import { EmptyState } from "@/components/ui/primitives";
 
 const GREEN = "var(--state-done)";
 const RED = "var(--state-blocked)";
@@ -341,7 +342,7 @@ export function Recurring({ items }: { items: Schemas["FinanceRecurring"][] }) {
   return (
     <Panel title="Recurring" aside={items.length ? `${money(total, { cents: true })}/mo` : undefined} delay={390}>
       {items.length === 0 ? (
-        <p className="py-6 text-center text-12 text-fg-tertiary">No monthly charges found yet. They show up after two months of statements.</p>
+        <EmptyState compact icon="clock" title="No monthly charges yet">They show up after two months of statements.</EmptyState>
       ) : (
         <ul>
           {items.map((r, i) => (

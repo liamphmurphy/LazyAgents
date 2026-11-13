@@ -10,7 +10,7 @@ import { cx } from "@/lib/cx";
 import { Button, IconButton } from "@/components/ui/button";
 import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
-import { Banner, Field, Skeleton, TextInput } from "@/components/ui/primitives";
+import { Banner, EmptyState, Field, Skeleton, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar } from "../chat/_components/persona";
 import { confirmAction } from "@/components/ui/confirm";
 
@@ -66,7 +66,7 @@ export function ConnectorsSection({ personas }: { personas: Persona[] }) {
       ) : !list.data ? (
         <Skeleton className="h-40" />
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-6 text-center text-13 text-fg-secondary">No connectors yet. Add an MCP server to give your personas new tools.</p>
+        <EmptyState compact icon="plug" title="No connectors yet" className="rounded-lg border border-border bg-surface">Add an MCP server to give your personas new tools.</EmptyState>
       ) : (
         <div className="flex gap-5 max-lg:flex-col">
           <ul className="flex min-w-0 flex-1 flex-col self-start overflow-hidden rounded-lg border border-border bg-surface max-lg:w-full">

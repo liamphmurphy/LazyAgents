@@ -20,6 +20,7 @@ import { ProjectScopeState, useProjectScope } from "@/components/shell/project-s
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { LibrarySourceSwitch } from "./source-switch";
 import { ArtifactPreview } from "./preview";
+import { PageHeader } from "@/components/ui/page-header";
 
 const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
   { key: "all", label: "All" },
@@ -120,16 +121,10 @@ export function ProjectDocs() {
       />
       <div className="flex flex-1 flex-wrap">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5 px-7 py-8 max-sm:px-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <h1 className="type-display">Library</h1>
-              <p className="text-14 text-fg-secondary">Shared with the workspace: context agents read before they work, and the reports they leave behind.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <LibrarySourceSwitch source="projects" />
-              <ProjectPicker />
-            </div>
-          </div>
+          <PageHeader title="Library" description="Shared with the workspace: context agents read before they work, and the reports they leave behind.">
+            <LibrarySourceSwitch source="projects" />
+            <ProjectPicker />
+          </PageHeader>
 
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex h-[34px] min-w-[220px] flex-1 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-fg-tertiary focus-within:border-accent">

@@ -11,6 +11,7 @@ import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { SmallPill } from "@/components/domain/labels";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { TestEnvironmentsCard } from "./test-environments-card";
+import { PageHeader } from "@/components/ui/page-header";
 
 const resultLabel = { ready: "Ready", failed: "Setup failed", unconfigured: "No manifest" } as const;
 const selectClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-14 text-fg";
@@ -42,10 +43,7 @@ export function RunnerEnvironmentScreen() {
     } />
     <Content>
       <div className="space-y-6">
-        <div>
-          <h1 className="type-display">Runner environment</h1>
-          <p className="mt-2 text-14 text-fg-secondary">Shared tools, project dependencies, and caches reported during workspace setup.</p>
-        </div>
+        <PageHeader title="Runner environment" description="Shared tools, project dependencies, and caches reported during workspace setup." />
         {query.isError && <Banner tone="blocked" title="Couldn’t load the runner environment" actions={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>}>
           {query.error instanceof Error ? query.error.message : "The API is unavailable."}
         </Banner>}

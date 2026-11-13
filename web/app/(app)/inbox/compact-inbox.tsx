@@ -9,7 +9,7 @@ import { useRememberedProject } from "@/components/shell/project-scope";
 import { TopBar } from "@/components/shell/topbar";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Skeleton, TextArea } from "@/components/ui/primitives";
+import { EmptyState, Skeleton, TextArea } from "@/components/ui/primitives";
 import { cx } from "@/lib/cx";
 import { GROUPS, KIND, groupItems, isOpen, longWait, waited } from "@/lib/inbox";
 import { withMention } from "@/lib/run-question";
@@ -343,7 +343,7 @@ export function CompactInbox() {
         ) : open.length === 0 ? (
           <AllClear project={project} done={0} onShowDone={() => {}} />
         ) : shown.length === 0 ? (
-          <p className="px-4 py-10 text-center text-13 text-fg-secondary">Nothing here right now.</p>
+          <EmptyState icon="inbox" title="Nothing here right now">Switch filters to see the rest of your inbox.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-3 px-4 pt-1 pb-4">
             {shown.map((i) => (

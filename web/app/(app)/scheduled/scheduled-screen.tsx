@@ -15,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar, personaLook } from "../chat/_components/persona";
 import { confirmAction } from "@/components/ui/confirm";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none";
@@ -61,13 +62,11 @@ export function ScheduledScreen() {
       <Content>
         <div className="flex gap-6 max-xl:flex-col">
           <div className="flex min-w-0 flex-1 flex-col gap-6">
-            <header className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h1 className="type-display">Scheduled tasks</h1>
-                <p className="text-14 text-fg-secondary">Prompts and workflows that run on their own. Results arrive in your Inbox.</p>
-              </div>
-              <Button variant="primary" icon="plus" onClick={() => setOpen("new")}>New task</Button>
-            </header>
+            <PageHeader
+              title="Scheduled tasks"
+              description="Prompts and workflows that run on their own. Results arrive in your Inbox."
+              actions={<Button variant="primary" icon="plus" onClick={() => setOpen("new")}>New task</Button>}
+            />
             <Segmented label="Show tasks" value={filter} onChange={setFilter} small options={[{ value: "all", label: `All ${all.length}` }, { value: "active", label: `Active ${count(true)}` }, { value: "paused", label: `Paused ${count(false)}` }]} />
             {save.isError && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(save.error)}</p>}
             {tasks.isError ? (

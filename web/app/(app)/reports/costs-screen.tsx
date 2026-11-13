@@ -28,6 +28,7 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { ReportsTabNav } from "./reports-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Report = Schemas["CostReport"];
 type Slice = Schemas["CostSlice"];
@@ -396,20 +397,10 @@ export function CostsScreen() {
       <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Costs" }]} />
       <Content>
         <div className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-col gap-3">
-              <div className="space-y-1">
-                <h1 className="type-display">Reports</h1>
-                <p className="text-14 text-fg-secondary">
-                  Spend recorded on every run: ticket work, sub agents, planning and chat.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <ReportsTabNav tab="costs" />
-                <ProjectPicker />
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2">
+          <PageHeader
+            title="Reports"
+            description="Spend recorded on every run: ticket work, sub agents, planning and chat."
+            actions={<div className="flex flex-col items-end gap-2">
               <Segmented label="Date range" options={RANGE_PRESETS} value={preset} onChange={pickPreset} />
               {preset === "custom" && (
                 <div className="flex items-center gap-2 text-12 text-fg-tertiary">
@@ -418,8 +409,11 @@ export function CostsScreen() {
                 </div>
               )}
               {!invalid && <p className="text-12 text-fg-tertiary">{rangeLabel}</p>}
-            </div>
-          </div>
+            </div>}
+          >
+            <ReportsTabNav tab="costs" />
+            <ProjectPicker />
+          </PageHeader>
           {body}
         </div>
       </Content>

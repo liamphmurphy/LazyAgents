@@ -220,6 +220,10 @@ Tables and the ticket list sit in `overflow-x: auto` containers with a min-width
 
 ---
 
+**Index screen header.** Every index screen (Designs, Slides, Learn, Library, Reports, Scheduled, Workflows, Settings and its sub-screens, Setup, Wiki) opens with `PageHeader` from `components/ui/page-header.tsx`: `type-display` title, a 14px secondary description at most 720px wide, primary actions on the right, and an optional row of tabs, switches and pickers under it. Detail screens (a ticket, run, epic, agent or page) and the dense work toolbars (Runs, Tickets) keep their own headers.
+
+**Empty states.** A screen or section with nothing in it uses `EmptyState` (`compact` in trays, cards and panel sections): icon, heading, one line on how things get here, and the action that adds the first one. A one-line hint inside a side panel ("No headings yet.") stays plain tertiary text.
+
 ## 4. Components
 
 **Buttons (30px, radius 7, 13px)**

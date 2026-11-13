@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { checkRepoURL } from "@/lib/repo-url";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Project = Schemas["Project"];
 const errorText = (e: unknown) =>
@@ -335,14 +336,11 @@ export function ProjectsScreen() {
       />
       <Content>
         <div className="max-w-[900px] space-y-5">
-          <h1 className="type-display">Projects & repositories</h1>
-          <p className="text-14 text-fg-secondary">
-            Manage where your agents work. One project maps to one GitHub
-            repository.
-          </p>
-          <ButtonLink href="/settings#secrets" variant="outline">
-            Provider credentials
-          </ButtonLink>
+          <PageHeader
+            title="Projects & repositories"
+            description="Manage where your agents work. One project maps to one GitHub repository."
+            actions={<ButtonLink href="/settings#secrets" variant="outline">Provider credentials</ButtonLink>}
+          />
           <ProjectsSection />
         </div>
       </Content>

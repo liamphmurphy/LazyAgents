@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
@@ -54,15 +55,11 @@ export function DesignsScreen() {
       <TopBar crumbs={[{ label: "Apps" }, { label: "Designs" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-6 py-6 max-sm:px-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="type-display text-fg">Designs</h1>
-              <p className="mt-1 text-13 text-fg-secondary">App flows, diagrams and wireframes you build with your personas.</p>
-            </div>
-            <Button variant="primary" icon="plus" disabled={create.isPending} onClick={() => startWith("blank")}>
-              New design
-            </Button>
-          </div>
+          <PageHeader
+            title="Designs"
+            description="App flows, diagrams and wireframes you build with your personas."
+            actions={<Button variant="primary" icon="plus" disabled={create.isPending} onClick={() => startWith("blank")}>New design</Button>}
+          />
 
           <form onSubmit={start} className="flex flex-col gap-3 rounded-xl border border-border-strong bg-surface p-3 focus-within:border-accent">
             <div className="flex items-center gap-2.5">

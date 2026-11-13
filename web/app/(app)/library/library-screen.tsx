@@ -32,6 +32,7 @@ import { ProjectDocs } from "./_components/project-docs";
 import { LibrarySourceSwitch } from "./_components/source-switch";
 import { confirmAction } from "@/components/ui/confirm";
 import { Spinner } from "@/components/ui/loading";
+import { PageHeader } from "@/components/ui/page-header";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
@@ -364,19 +365,16 @@ function Keepsakes() {
       <TopBar crumbs={[{ label: "Library" }]} />
       <Content>
         <div className="flex flex-col gap-5">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1 space-y-1">
-              <h1 className="type-display">Library</h1>
-              <p className="text-14 text-fg-secondary">
-                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
-                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
-              </p>
-              <div className="pt-2">
-                <LibrarySourceSwitch source="yours" />
-              </div>
-            </div>
-            <UploadButton />
-          </div>
+          <PageHeader
+            title="Library"
+            description={<>
+              Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos they render, are saved here automatically and stay after their chat is deleted.
+              Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
+            </>}
+            actions={<UploadButton />}
+          >
+            <LibrarySourceSwitch source="yours" />
+          </PageHeader>
           <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
           {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={KINDS[tab] ?? "image"} openItem={openItem} />}
         </div>

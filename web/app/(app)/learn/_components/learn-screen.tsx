@@ -7,6 +7,7 @@ import { cx } from "@/lib/cx";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { NewModuleGuide } from "./new-module-guide";
+import { PageHeader } from "@/components/ui/page-header";
 
 function StatePill({ state }: { state: BuildState }) {
   const human = state === "outline_ready";
@@ -72,10 +73,7 @@ export function LearnScreen() {
       <TopBar crumbs={[{ label: "Learn" }]} actions={<NewModuleGuide />} />
       <Content>
         <div className="flex flex-col gap-6">
-          <div className="space-y-1">
-            <h1 className="type-display">Learn</h1>
-            <p className="text-14 text-fg-secondary">Turn a topic into a sourced, properly ordered module, then work through it with a tutor.</p>
-          </div>
+          <PageHeader title="Learn" description="Turn a topic into a sourced, properly ordered module, then work through it with a tutor." />
           {courses.error && <Banner tone="blocked" title={courses.error.message} />}
           {courses.isPending ? (
             <Skeleton className="h-28 w-full rounded-lg" />

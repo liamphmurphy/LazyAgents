@@ -11,7 +11,7 @@ import { AgentAvatar } from "@/components/domain/avatars";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Kbd, Skeleton, TextArea } from "@/components/ui/primitives";
+import { EmptyState, Kbd, Skeleton, TextArea } from "@/components/ui/primitives";
 import { useEntrances, usePulse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { KIND, approvalId, isOpen, nextSelection, step, trayAction, trayItems, waited, type TrayTab } from "@/lib/inbox";
@@ -267,9 +267,9 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
             Couldn’t load what needs you. <Button onClick={() => inbox.refetch()}>Retry</Button>
           </div>
         ) : list.length === 0 ? (
-          <p className="px-3 py-8 text-center text-13 text-fg-tertiary">
-            {tab === "needs" ? "Nothing needs you right now." : "No updates yet."}
-          </p>
+          tab === "needs"
+            ? <EmptyState compact icon="check" title="Nothing needs you right now">Approvals, questions and reviews from your runs show up here.</EmptyState>
+            : <EmptyState compact icon="inbox" title="No updates yet">Finished runs and replies show up here.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-px">
             {list.map((item) => (
