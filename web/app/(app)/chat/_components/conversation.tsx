@@ -114,6 +114,8 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
 // Actions that stay out of the way until the message is hovered or focused.
 const REVEAL = cx(hoverReveal("msg"), "transition-opacity focus-within:opacity-100");
 const LONG_REPLY = 1500;
+/** What the status card's "Ask what it's doing" sends as an aside when a turn has gone quiet. */
+const QUIET_CHECK_IN = "What are you working on right now, and is anything holding you up?";
 
 function Divider({ children, testId }: { children: string; testId?: string }) {
   return (
@@ -1009,7 +1011,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                 <li className="flex flex-col gap-2" data-testid="thinking">
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
-                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep} />
+                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep}
+                    onAsk={locked || aside.isPending ? undefined : () => aside.mutate(QUIET_CHECK_IN)} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}
                     actions={{
