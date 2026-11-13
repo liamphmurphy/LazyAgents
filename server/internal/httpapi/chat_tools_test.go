@@ -385,7 +385,26 @@ func TestChatRunToolAuthorization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Its efficiency summary comes from the main agent's events; a sub
+	// agent's tool calls don't count.
+	for _, e := range []struct{ typ, payload string }{
+		{"lifecycle", `{"state": "starting"}`},
+		{"lifecycle", `{"state": "workspace_ready"}`},
+		{"tool_call", `{"id": "a", "tool": "Read", "input": {}, "context_tokens": 50000}`},
+		{"tool_call", `{"id": "s", "tool": "Edit", "input": {}, "subagent": true}`},
+		{"tool_call", `{"id": "b", "tool": "Bash", "input": {"command": "go test ./..."}, "context_tokens": 110000}`},
+		{"tool_result", `{"id": "b", "tool": "Bash", "output": "ok"}`},
+		{"tool_call", `{"id": "c", "tool": "Edit", "input": {}, "context_tokens": 120000}`},
+	} {
+		if err := q.AddRunEvent(ctx, store.AddRunEventParams{RunID: payRun.ID, Type: e.typ, Payload: []byte(e.payload)}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	code, got2 := call(token, "get_run", map[string]any{"id": payRun.ID.String()})
+	if eff, _ := got2["efficiency"].(map[string]any); eff == nil || eff["setups"] != float64(1) || eff["tool_calls"] != float64(3) ||
+		eff["calls_before_first_edit"] != float64(2) || eff["test_runs"] != float64(1) || eff["peak_context_tokens"] != float64(120000) {
+		t.Fatalf("get_run efficiency = %v", got2["efficiency"])
+	}
 	if code != 200 || got2["run"].(map[string]any)["ticket"] != "PAY-214" || len(got2["delegated_runs"].([]any)) != 1 {
 		t.Fatalf("get_run = %d %v", code, got2)
 	}
