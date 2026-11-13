@@ -103,15 +103,19 @@ func (s *Service) MovePageAsPersona(ctx context.Context, ws, userID, id uuid.UUI
 // personaMayMove follows the page's persona controls. A move can't wait as a
 // suggestion the way an edit does, so only a page whose persona changes apply
 // at once can be moved; the person moves the rest from the explorer.
-func personaMayMove(a store.Artifact) error {
+func personaMayMove(a store.Artifact) error { return personaMay(a, "move", "moved") }
+
+// personaMay is personaMayMove for any action that can't wait for review
+// (move, delete, file), naming the action in its refusal.
+func personaMay(a store.Artifact, verb, done string) error {
 	if a.Audience == "agent" || personaMovePath("from", *a.Path) != nil {
-		return apperr.Invalid("from", "%q is agent knowledge, which personas don't move", *a.Path)
+		return apperr.Invalid("from", "%q is agent knowledge, which personas don't %s", *a.Path, verb)
 	}
 	if a.PersonaPaused {
-		return apperr.Conflict("persona edits are paused on %q, so it wasn't moved", *a.Path)
+		return apperr.Conflict("persona edits are paused on %q, so it wasn't %s", *a.Path, done)
 	}
 	if !a.PersonaDirect {
-		return apperr.Conflict("persona changes to %q wait for review, so it can't be moved by a persona; ask the person to move it in the Knowledge explorer", *a.Path)
+		return apperr.Conflict("persona changes to %q wait for review, so it can't be %s by a persona; ask the person to %s it in the Knowledge app", *a.Path, done, verb)
 	}
 	return nil
 }

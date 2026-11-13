@@ -141,6 +141,7 @@ func patchPage(ctx context.Context, d Deps, c agents.Caller, in PatchPageIn) (an
 	}
 	return pageWriteSummary(result), nil
 }
+
 // reviewOutsidePersonChat is whether an edit must wait as a suggestion
 // whatever the page says. In a person's chat the page's persona controls
 // decide (wiki.Service.write): a page set to direct edits applies them at once
