@@ -15,11 +15,10 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// chatTools is the whole MCP surface of a chat run: project context, tracker actions and wiki notes
-// (write_note, which a chat's frozen wiki:write turns into suggestions, see runs.ChatSpec).
-// Everything else, including tools added later, is refused for chats.
-var chatTools = []string{"whoami", "search_knowledge", "read_page", "read_artifact", "get_ticket", "get_backlinks", "create_ticket", "update_ticket", "comment_ticket", "update_ticket_blockers", "create_epic", "get_epic", "update_epic", "list_epics", "list_tickets", "list_projects", "list_runs", "get_run", "reply_to_run",
-	"librarian_pass", "daily_note", "import_vault", "list_pages", "page_outline", "patch_page", "set_properties", "move_page", "move_folder", "delete_page", "delete_folder", "list_page_versions", "restore_page_version", "file_capture", "attach_file", "list_page_reviews", "withdraw_suggestion", "set_page_controls", "attach_chat_to_page", "promote_canvas", "knowledge_graph", "list_imports", "confirm_import", "cancel_import", "undo_import", "create_page", "capture_note", "suggest_links", "write_note", "search_memory", "read_memory", "save_memory", "update_memory", "forget_memory", "search_chats", "read_chat", "search_repositories", "use_repository", "set_chat_title", "generate_image", "start_video", "update_video", "finish_video", "fail_video", "start_playground", "playground_status", "stop_playground", "set_playground_openapi", "get_video_transcript", "propose_persona", "list_saved_links", "save_link", "search_library", "read_library_item", "list_inbox", "finance_summary", "finance_query", "finance_recurring", "finance_categorize", "finance_map_csv", "submit_research_report", "canvas_create", "canvas_patch", "canvas_read", "canvas_list", "canvas_comment", "canvas_reply", "design_list", "design_outline", "design_read", "design_render", "design_patch", "design_import", "design_comments", "design_comment", "design_reply", "design_create", "list_workflows", "read_workflow", "propose_workflow_edit", "propose_connector", "propose_secret", "list_connectors", "list_secret_names", "create_space", "create_scheduled_task", "list_scheduled_tasks", "update_scheduled_task", "delete_scheduled_task", "create_learning_module", "list_learning_modules", "get_learning_progress", "design_flows", "design_components", "design_tokens", "design_inspect", "design_link_ticket"}
+// chatTools is the whole MCP surface of a chat run (runs.ChatTools, which a
+// chat segment compares to tell the model when its tools change). Everything
+// else, including tools added later, is refused for chats.
+var chatTools = runs.ChatTools
 
 // asideTools is the MCP surface of an aside (a chat answering a question
 // about another chat's running reply): chatTools that only read.

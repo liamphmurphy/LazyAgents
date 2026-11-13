@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -173,6 +174,125 @@ func chatCaps(ctx context.Context, q *store.Queries, chat store.ChatSession) (Ch
 // and the rest of the assistant's definition are left out on purpose, so
 // editing them never ends a segment, and neither does the persona pushing a
 // new branch.
+// sameWorkspace reports whether two chat specs can share a segment's
+// workspace and CLI session: coding, its sandbox, an aside's read-only mode
+// and image generation (whose outbox the segment's setup makes) shape the
+// workspace the runner prepared, so changing one needs a fresh segment.
+// Everything else in sameCapabilities is refreshed in place.
+func sameWorkspace(a, b agentdef.Resolved) bool {
+	key := func(r agentdef.Resolved) string {
+		modes := map[string]agentdef.Mode{}
+		for _, scope := range codeScopes {
+			modes[scope] = r.Mode(scope)
+		}
+		opts := map[string]string{}
+		for _, k := range []string{"sandbox", "readonly", agentdef.OptionAside, agentdef.OptionImageGeneration} {
+			opts[k] = r.HarnessOptions[k]
+		}
+		raw, _ := json.Marshal(map[string]any{"modes": modes, "options": opts})
+		return string(raw)
+	}
+	return key(a) == key(b)
+}
+
+// refreshedOptions are the harness options a chat's capabilities set that a
+// segment can change between turns: each invocation reads them afresh.
+var refreshedOptions = []string{agentdef.OptionWebSearch}
+
+// refreshChatSpec is the segment's spec with want's capabilities and
+// instructions, keeping what the segment chose itself (model, effort, and
+// any other harness option).
+func refreshChatSpec(have, want agentdef.Resolved) agentdef.Resolved {
+	out := have
+	out.Instructions = want.Instructions
+	out.Scopes = append([]agentdef.ResolvedScope{}, want.Scopes...)
+	out.MCPServers = append([]agentdef.MCPServer{}, want.MCPServers...)
+	out.HarnessOptions = maps.Clone(have.HarnessOptions)
+	if out.HarnessOptions == nil {
+		out.HarnessOptions = map[string]string{}
+	}
+	for _, k := range refreshedOptions {
+		if v, ok := want.HarnessOptions[k]; ok {
+			out.HarnessOptions[k] = v
+		} else {
+			delete(out.HarnessOptions, k)
+		}
+	}
+	return out
+}
+
+// capabilityNotice tells a resumed session what changed in its capabilities,
+// so it doesn't rely on what it concluded earlier in the conversation.
+func capabilityNotice(before, after agentdef.Resolved) string {
+	var changes []string
+	connectors := func(r agentdef.Resolved) []string {
+		out := []string{}
+		for _, m := range r.MCPServers {
+			if m.Connector && m.Name != agentdef.SecretsMCPName {
+				out = append(out, m.Name)
+			}
+		}
+		return out
+	}
+	secrets := func(r agentdef.Resolved) bool {
+		return slices.ContainsFunc(r.MCPServers, func(m agentdef.MCPServer) bool { return m.Name == agentdef.SecretsMCPName })
+	}
+	was, now := connectors(before), connectors(after)
+	if added := missingFrom(now, was); len(added) > 0 {
+		changes = append(changes, "connectors you can now use: "+strings.Join(added, ", "))
+	}
+	if removed := missingFrom(was, now); len(removed) > 0 {
+		changes = append(changes, "connectors you can no longer use: "+strings.Join(removed, ", "))
+	}
+	if s := secrets(after); s != secrets(before) {
+		changes = append(changes, map[bool]string{true: "you may now use the person's API secrets", false: "you may no longer use the person's API secrets"}[s])
+	}
+	if a, b := after.Mode("wiki:write"), before.Mode("wiki:write"); a != b {
+		changes = append(changes, "your wiki:write permission is now "+string(a))
+	}
+	if after.Instructions != before.Instructions {
+		changes = append(changes, "your instructions were updated: read AGENTS.md again")
+	}
+	if len(changes) == 0 {
+		return ""
+	}
+	return "[Vesper: since your last message " + strings.Join(changes, "; ") + ". These replace anything said earlier in this conversation about what you can do.]\n\n"
+}
+
+// toolNotice tells a resumed session which chat tools appeared or went away
+// since it was last told. A segment that never recorded its tools (from
+// before they were recorded) is told nothing: it can't be told what changed.
+func toolNotice(had, have []string) string {
+	if had == nil {
+		return ""
+	}
+	added, removed := missingFrom(have, had), missingFrom(had, have)
+	if len(added) == 0 && len(removed) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("[Vesper: your tools changed since your last message.")
+	if len(added) > 0 {
+		b.WriteString(" New: " + strings.Join(added, ", ") + ".")
+	}
+	if len(removed) > 0 {
+		b.WriteString(" Gone: " + strings.Join(removed, ", ") + ".")
+	}
+	b.WriteString(" Your tool list is current; use it rather than anything said earlier about what you can do.]\n\n")
+	return b.String()
+}
+
+// missingFrom is the values of a that b lacks, in a's order.
+func missingFrom(a, b []string) []string {
+	out := []string{}
+	for _, v := range a {
+		if !slices.Contains(b, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func sameCapabilities(a, b agentdef.Resolved) bool {
 	key := func(r agentdef.Resolved) string {
 		modes := map[string]agentdef.Mode{}
@@ -646,9 +766,10 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 			return chat, run, turn, err
 		}
 		// The segment's frozen spec was built from the speaker's capabilities
-		// then; if they have changed since (an edit, or another persona with
-		// other capabilities answering), a fresh segment gets the current ones.
-		// Turning one off takes effect on the next message.
+		// and instructions then. If they have changed since (an edit, another
+		// persona answering, or a Vesper update), the next message picks them
+		// up: in place, keeping the CLI session, unless the change needs a
+		// different workspace, which only a fresh segment gets.
 		changed := false
 		if chat.Harness == run.Harness {
 			_, base, err := assistantSpec(ctx, q, chat.WorkspaceID, project)
@@ -660,7 +781,34 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 			if err != nil {
 				return chat, run, turn, err
 			}
-			changed = !sameCapabilities(ChatSpec(base, caps), have)
+			want := ChatSpec(base, caps)
+			switch {
+			case !sameWorkspace(want, have):
+				changed = true
+			case !sameCapabilities(want, have) || want.Instructions != have.Instructions:
+				refreshed := refreshChatSpec(have, want)
+				raw, err := json.Marshal(refreshed)
+				if err != nil {
+					return chat, run, turn, err
+				}
+				if err = q.SetRunSpec(ctx, store.SetRunSpecParams{ID: run.ID, ResolvedSpec: raw}); err != nil {
+					return chat, run, turn, err
+				}
+				run.ResolvedSpec = raw
+				if err = event(ctx, q, run.ID, "lifecycle", map[string]any{"state": "chat_capabilities_refreshed"}); err != nil {
+					return chat, run, turn, err
+				}
+				prompt = capabilityNotice(have, refreshed) + prompt
+			}
+			if !changed && !caps.Aside {
+				// Tools Vesper gained or dropped since the segment last heard.
+				prompt = toolNotice(run.ChatToolNames, ChatTools) + prompt
+				if !slices.Equal(run.ChatToolNames, ChatTools) {
+					if err = q.SetRunChatTools(ctx, store.SetRunChatToolsParams{ID: run.ID, Names: ChatTools}); err != nil {
+						return chat, run, turn, err
+					}
+				}
+			}
 		}
 		switch {
 		case changed:
@@ -735,6 +883,12 @@ func startChatTurn(ctx context.Context, q *store.Queries, chat store.ChatSession
 		}
 		if err = q.SetRunDispatcher(ctx, store.SetRunDispatcherParams{ID: run.ID, DispatchedByUserID: &chat.CreatedBy}); err != nil {
 			return chat, run, turn, err
+		}
+		if !caps.Aside {
+			// A fresh session lists its tools itself; later messages compare against these.
+			if err = q.SetRunChatTools(ctx, store.SetRunChatToolsParams{ID: run.ID, Names: ChatTools}); err != nil {
+				return chat, run, turn, err
+			}
 		}
 		// A segment that follows earlier messages gets them as its first prompt.
 		total, err := q.CountChatHistory(ctx, chat.ID)

@@ -1233,6 +1233,7 @@ type Run struct {
 	ContextTokens       int64
 	Report              *string
 	RolloverRequested   bool
+	ChatToolNames       []string
 }
 
 type RunEvent struct {

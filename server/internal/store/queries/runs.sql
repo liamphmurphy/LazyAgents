@@ -285,3 +285,11 @@ FROM run_events
 WHERE run_id = $1 AND type IN ('lifecycle', 'tool_call', 'tool_result')
   AND coalesce((payload->>'subagent')::boolean, false) = false
 ORDER BY seq;
+
+-- name: SetRunSpec :exec
+-- A chat segment's capabilities refreshed in place: the CLI session and
+-- workspace stay, the next invocation reads the new spec.
+UPDATE runs SET resolved_spec = sqlc.arg(resolved_spec) WHERE id = sqlc.arg(id);
+
+-- name: SetRunChatTools :exec
+UPDATE runs SET chat_tool_names = sqlc.arg(names)::text[] WHERE id = sqlc.arg(id);
