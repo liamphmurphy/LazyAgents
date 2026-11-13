@@ -14,6 +14,7 @@ import { isTyping } from "@/components/shell/shortcuts";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
+import { KnowledgeDock } from "./knowledge-dock";
 import { DeleteDialog, ExplorerMenu, MoveDialog, NewFolderDialog, RenameField, type ExplorerTarget, type MenuEntry } from "./explorer-actions";
 
 type View = "yours" | "agent";
@@ -203,12 +204,13 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={shell}>
-      <div className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 bg-bg md:h-dvh">
+      <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-1 bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
           <TabStrip tabs={tabs} active={active} onClose={close} />
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
+        <KnowledgeDock pageId={pageIdOf(pathname)} />
       </div>
       <QuickSwitcher open={switcher} onOpenChange={setSwitcher} includeAgent={view === "agent"} />
       <CaptureDialog open={capture} onOpenChange={setCapture} />

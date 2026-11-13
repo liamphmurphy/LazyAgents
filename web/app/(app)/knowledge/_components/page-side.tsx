@@ -6,26 +6,23 @@ import { useMemo, useState } from "react";
 import { cx } from "@/lib/cx";
 import { ago, isoDay, monthGrid, outline, pageHref } from "@/lib/knowledge";
 import { useDaily, useFileCapture, usePageControls, usePages, useRestore, type Page } from "@/lib/api/knowledge-hooks";
-import { useCreateChat } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { BacklinksPanel } from "@/components/domain/backlinks";
 import { LocalGraph } from "@/components/domain/local-graph";
-import { Conversation } from "@/app/(app)/chat/_components/conversation";
 import { SideHeading, useToday } from "./kit";
 
-export type SideTab = "links" | "outline" | "calendar" | "chat" | "history";
+export type SideTab = "links" | "outline" | "calendar" | "history";
 
 const TABS: [SideTab, IconName, string][] = [
   ["links", "link", "Links"],
   ["outline", "epics", "Outline"],
   ["calendar", "clock", "Calendar and inbox"],
-  ["chat", "msg", "Chat"],
   ["history", "history", "History"],
 ];
 
 /** The page's right sidebar, Obsidian-style: one panel at a time, picked from the icons on top. */
-export function PageSide({ page, tab, onTab, persona, onAttachChat }: { page: Page; tab: SideTab; onTab: (t: SideTab) => void; persona: string; onAttachChat: (chatId: string) => void }) {
+export function PageSide({ page, tab, onTab, persona }: { page: Page; tab: SideTab; onTab: (t: SideTab) => void; persona: string }) {
   return (
     <aside aria-label="Page sidebar" className="hidden w-[340px] flex-none flex-col border-l border-border-subtle bg-panel xl:flex">
       <div role="tablist" className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle px-2.5">
@@ -35,11 +32,10 @@ export function PageSide({ page, tab, onTab, persona, onAttachChat }: { page: Pa
           </button>
         ))}
       </div>
-      <div className={cx("min-h-0 flex-1", tab === "chat" ? "flex flex-col" : "overflow-y-auto p-3")}>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "links" && <LinksPanel page={page} />}
         {tab === "outline" && <OutlinePanel body={page.body_md ?? ""} />}
         {tab === "calendar" && <CalendarPanel />}
-        {tab === "chat" && <ChatPanel page={page} onAttach={onAttachChat} />}
         {tab === "history" && <HistoryPanel page={page} persona={persona} />}
       </div>
     </aside>
@@ -202,31 +198,6 @@ function InboxItem({ id, title, when }: { id: string; title: string; when: strin
         </div>
       )}
     </li>
-  );
-}
-
-function ChatPanel({ page, onAttach }: { page: Page; onAttach: (chatId: string) => void }) {
-  const router = useRouter();
-  const create = useCreateChat();
-  if (page.chat_id) return <Conversation key={page.chat_id} id={page.chat_id} onNew={() => router.push("/chat")} />;
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <Icon name="msg" size={22} className="text-fg-tertiary" />
-      <p className="text-[13px] text-fg-secondary">Talk to a persona about this page. It can read it, link it and edit it with you.</p>
-      <Button
-        variant="primary"
-        disabled={create.isPending}
-        onClick={() =>
-          create.mutate(
-            { title: page.title, message: { body: `I'm working on the Knowledge page [[${page.path ?? page.title}]]. Read it with read_page and help me with it.` } },
-            { onSuccess: (c) => onAttach(c.id) },
-          )
-        }
-      >
-        Start a chat about this page
-      </Button>
-      {create.error && <p className="text-xs text-state-blocked">{create.error.message}</p>}
-    </div>
   );
 }
 
