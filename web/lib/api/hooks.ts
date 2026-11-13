@@ -20,6 +20,7 @@ import {
 } from "./client";
 import { runEach } from "../ticket-list";
 import { runEnded } from "../chat-dispatch";
+import { eventsAfter } from "../run-events";
 import { personaKeys } from "./persona-hooks";
 
 type NewTicket = Schemas["NewTicket"];
@@ -1407,10 +1408,16 @@ export function useStartAside(id: string, prepare?: (body: string) => Promise<st
 
 /** The current turn's tool calls/results, read from the segment run's events. */
 export function useChatRunEvents(runId?: string, enabled = true, poll = true) {
+  const qc = useQueryClient();
+  const queryKey = ["runs", "chat", runId ?? ""] as const;
   return useQuery({
     enabled: !!runId && enabled,
-    queryKey: ["runs", "chat", runId ?? ""] as const,
-    queryFn: () => unwrap(api.GET("/runs/{id}", { params: { path: { id: runId! } } })).then((d) => d.events),
+    queryKey,
+    // Each poll reads only what came after the newest event it has.
+    queryFn: () =>
+      eventsAfter(qc.getQueryData<Schemas["RunEvent"][]>(queryKey) ?? [], (after) =>
+        unwrap(api.GET("/runs/{id}", { params: { path: { id: runId! }, query: { after } } })).then((d) => d.events),
+      ),
     refetchInterval: poll ? 2_000 : false,
   });
 }

@@ -852,6 +852,44 @@ test("the rail shows an interactive app being written", async ({ page }) => {
   await page.getByRole("button", { name: "Stop" }).click();
 });
 
+test("once the newest call has finished, the card works out the next step instead of repeating it", async ({ page }) => {
+  await page.clock.install();
+  await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "between: carry on");
+  const status = page.getByTestId("chat-status");
+  await expect(status).toHaveText(/ is writing code…$/);
+  await expect(page.getByTestId("chat-pulse")).toContainText(/last activity \d+s ago/);
+  await page.clock.fastForward("00:06");
+  await expect(status).toHaveText(/ is working out the next step…$/);
+  await expect(page.locator('[data-scene="next-step"]')).toBeAttached();
+  const rail = page.getByTestId("chat-steps");
+  await expect(rail.locator('[data-step-state="done"]')).toContainText("Editing runner.go");
+  await expect(rail.locator('[data-step-state="active"]')).toContainText("Working out the next step");
+  await expect(rail.locator('[data-step-state="active"]').getByTestId("step-timer")).toHaveText(/^\d+s$/);
+  await page.getByRole("button", { name: "Stop" }).click();
+});
+
+test("a long silence says so and offers to ask what it's doing, once", async ({ page }) => {
+  await page.clock.install();
+  const mock = await installChatApi(page);
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await send(page, "between: carry on");
+  const card = page.getByTestId("chat-status-card");
+  await expect(page.getByTestId("chat-status")).toHaveText(/ is writing code…$/);
+  await expect(card.getByRole("button", { name: "Ask what it's doing" })).toHaveCount(0);
+  await page.clock.fastForward("02:05");
+  await expect(page.getByTestId("chat-status")).toHaveText(/ has been quiet for 2 minutes$/);
+  await expect(page.getByTestId("chat-pulse")).toHaveText(/^Still running · last: writing code · 2m 0\ds in all$/);
+  await card.getByRole("button", { name: "Ask what it's doing" }).click();
+  await expect.poll(() => mock.asides).toEqual(["What are you working on right now, and is anything holding you up?"]);
+  await expect(card.getByRole("button", { name: "Ask what it's doing" })).toHaveCount(0);
+  await card.getByRole("button", { name: "Stop" }).click();
+  await expect(card).toHaveCount(0);
+});
+
 test("switching harness asks first and lists what is lost; same harness doesn't", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/chat?project=WEB");

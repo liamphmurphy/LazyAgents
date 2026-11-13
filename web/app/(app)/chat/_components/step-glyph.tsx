@@ -15,6 +15,15 @@ const dots = (cls: string, xs: number[], cy: number, r: number, step: number) =>
 
 const GLYPHS: Record<ChatStatusKind, ReactNode> = {
   thinking: dots("glyph-bob", [3.5, 8, 12.5], 8.5, 1.6, 0.15),
+  // A fork out of the step just finished: the way on draws, and where it leads lights up.
+  "next-step": (
+    <>
+      <circle cx="3" cy="8" r="1.8" fill="currentColor" />
+      <path className="glyph-s" opacity=".45" strokeWidth="1.1" d="M4.5 7.2C7 5.5 8.5 3.5 12.5 3.5M4.5 8.8C7 10.5 8.5 12.5 12.5 12.5" />
+      <path className="glyph-s glyph-a glyph-draw" pathLength={1} d="M5 8h6.5" />
+      <circle className="glyph-a glyph-tile glyph-live" cx="13.5" cy="8" r="1.6" fill="currentColor" />
+    </>
+  ),
   "reading-code": (
     <>
       <rect className="glyph-s" x="2.5" y="1.5" width="11" height="13" rx="1.5" />

@@ -11,6 +11,8 @@ import type { components } from "../lib/api/schema";
  * A message starting with "building-app:" keeps the turn running while it writes one.
  * A message starting with "steps:" keeps the turn running with a plan in progress.
  * A message starting with "narrated:" keeps the turn running after narrating a decision, with thinking behind it.
+ * A message starting with "between:" keeps the turn running after an edit has finished, before its next call.
+ * POST /chats/{id}/asides records the question in `asides`.
  * A message starting with "slow:" keeps the turn running until it is cancelled
  * or interrupted: a message sent while a turn runs stops it, and the next reply
  * echoes "<new> (interrupting: <previous>)", like the server's merged turn;
@@ -138,6 +140,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const chatSecrets: Record<string, unknown>[] = [];
   const scheduledTasks: Record<string, unknown>[] = [];
   const posted: Posted[] = [];
+  const asides: string[] = [];
   const suggestions = opts.suggestions ?? [];
   const created: Array<Record<string, unknown>> = [];
   const artifactForms: string[] = [];
@@ -473,6 +476,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
     if (/^\/chats\/[^/]+\/followups$/.test(path) && method === "GET") return json({ followups: [] });
     if (/^\/chats\/[^/]+\/asides$/.test(path) && method === "GET") return json({ asides: [] });
+    const asideOn = /^\/chats\/([^/]+)\/asides$/.exec(path);
+    if (asideOn && method === "POST") {
+      const c = chats.find((x) => x.id === asideOn[1]);
+      if (!c) return fail(err(404, "not_found", "chat not found"));
+      asides.push(String(body().body));
+      return json(ref(c), 201);
+    }
     if (path === "/persona-dock") return json({ personas: dock, space_chats: [], harnesses: [] });
     if (path === "/inbox" && method === "GET") return json({ items: inbox });
     if (path === "/workflows" && method === "GET") return json({ workflows: [] });
@@ -871,13 +881,19 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
             { seq: 6, type: "tool_call", at: now(), payload: { id: "test-1", tool: "Bash", input: { command: "go test ./internal/runs -count=10" } } },
           ]);
         }
+        if (text.startsWith("between:")) {
+          runEvents.set(c.current_run_id, [
+            { seq: 1, type: "tool_call", at: now(), payload: { id: "edit-1", tool: "Edit", input: { file_path: "/repo/runner.go" } } },
+            { seq: 2, type: "tool_result", at: now(), payload: { id: "edit-1", tool: "Edit", output: "ok" } },
+          ]);
+        }
         if (text.startsWith("building-app:")) {
           runEvents.set(c.current_run_id, [
             { seq: 1, type: "tool_call", at: now(), payload: { id: "read-1", tool: "Read", input: {} } },
             { seq: 2, type: "lifecycle", at: now(), payload: { state: "reply_block", kind: "app" } },
           ]);
         }
-        if (!/^(slow|steps|narrated|building-app):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
+        if (!/^(slow|steps|narrated|between|building-app):/.test(text)) timers.set(c.id, setTimeout(() => finishTurn(c, prompt), delay));
         void emit(c);
         return json({ chat: ref(c), message: user }, 202);
       }
@@ -1032,7 +1048,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, ticketChanges, ticketChangeDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
+    return { asides, inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, ticketChanges, ticketChangeDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }
 

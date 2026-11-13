@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useChatRunEvents, useResolvedLinks } from "@/lib/api/hooks";
-import { activityOf, chatCalls, chatStatus, chatSteps, foldSteps, interimLine, turnNotes, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep } from "@/lib/chat-ui";
+import { activityOf, chatCalls, chatStatus, chatStatusOf, chatSteps, foldSteps, formatSpan, interimLine, NEXT_STEP_KEY, quietFor, turnClock, turnNotes, turnPulse, turnTrace, type Activity, type ChatStep, type IntentTag, type ToolCall, type TraceStep, type TurnPulse } from "@/lib/chat-ui";
 import { useConnectorApprovals } from "@/lib/api/connector-hooks";
 import { useApiSecretApprovals } from "@/lib/api/secret-hooks";
 import { LinkTargets, WikiLink } from "@/components/domain/wikilink";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { ActivityScene, sceneLabel, useHeldScene } from "./activity-scene";
+import { ActivityScene, useHeldScene } from "./activity-scene";
 import { ConnectorApprovalCards } from "./connector-requests";
 import { SecretApprovalCards } from "./secret-requests";
 import { StepGlyph } from "./step-glyph";
@@ -162,7 +163,20 @@ const STEP_BAR: Record<ChatStep["state"], string> = {
 /** Pulses the step under way, until the person presses Stop. */
 const stepPulse = (s: ChatStep, stopping?: boolean) => (s.state === "active" && !stopping ? "motion-safe:animate-pulse" : "");
 
-function StepRail({ steps, stopping, awaiting, onOpenStep }: { steps: ChatStep[]; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void }) {
+/** How long a step took, or has taken so far while it's under way; nothing under a second. */
+function StepTimer({ step, now }: { step: ChatStep; now: number }) {
+  if (step.startedAt === undefined) return null;
+  const active = step.state === "active";
+  const ms = (active ? now : (step.endedAt ?? step.startedAt)) - step.startedAt;
+  if (ms < 1000) return null;
+  return (
+    <span data-testid="step-timer" className={`flex-none text-[10.5px] tabular-nums ${active ? "rounded-full bg-accent/15 px-1.5 text-fg-secondary" : "text-fg-tertiary"}`}>
+      {formatSpan(ms)}
+    </span>
+  );
+}
+
+function StepRail({ steps, now, stopping, awaiting, onOpenStep }: { steps: ChatStep[]; now: number; stopping?: boolean; awaiting?: boolean; onOpenStep?: (key: string) => void }) {
   const { earlier, shown, later } = foldSteps(steps);
   return (
     <ol data-testid="chat-steps" className="flex flex-col gap-2 border-t border-border px-3.5 py-3 text-[12.5px]">
@@ -182,11 +196,14 @@ function StepRail({ steps, stopping, awaiting, onOpenStep }: { steps: ChatStep[]
               {awaiting && s.state === "active" && <span data-testid="step-awaiting" className="flex-none rounded-full bg-pill-human-bg px-2 text-[10.5px] text-pill-human-fg">Waiting for approval</span>}
               {s.added && <span className="flex-none rounded bg-[var(--state-progress)]/15 px-1.5 text-[10.5px] text-fg-secondary">added</span>}
               {s.tag && <TagPill tag={s.tag} />}
-              {onOpenStep && (s.reasoning || s.intent) && (
-                <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="ml-auto flex-none text-xs text-fg-tertiary hover:text-fg-secondary">
-                  View reasoning ›
-                </button>
-              )}
+              <span className="ml-auto flex flex-none items-center gap-2.5">
+                {onOpenStep && (s.reasoning || s.intent) && (
+                  <button type="button" data-testid="view-reasoning" onClick={() => onOpenStep(s.key)} className="flex-none text-xs text-fg-tertiary hover:text-fg-secondary">
+                    View reasoning ›
+                  </button>
+                )}
+                <StepTimer step={s} now={now} />
+              </span>
             </div>
             {s.detail && <p data-testid="chat-step-detail" className="truncate text-xs text-fg-tertiary">{s.detail}</p>}
             {s.intent && <p data-testid="chat-step-intent" className="line-clamp-2 text-xs italic text-fg-secondary">{s.intent}</p>}
@@ -205,34 +222,60 @@ function StepRail({ steps, stopping, awaiting, onOpenStep }: { steps: ChatStep[]
  * A step the assistant narrated a decision on shows that line, tagged when it changed approach or hit a surprise,
  * and links to its full reasoning in the Activity tab. It
  * collapses to a progress strip, and folds old steps so a long turn stays short.
+ *
+ * Under the headline, a pulse: how long the turn has run and how long since anything happened,
+ * so a quiet stretch and a stuck one look different. Once the newest call has finished for a
+ * few seconds the card says it's working out the next step instead of repeating that call; after
+ * a long silence it says so, and offers to ask what it's doing (an aside) or to stop.
  */
-export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, onOpenStep }: { chatId: string; disabled?: boolean; runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void }) {
+export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, onOpenStep, onAsk, onStop }: { chatId: string; disabled?: boolean; runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void; onAsk?: () => void; onStop?: () => void }) {
   const q = useChatRunEvents(runId);
+  const now = useNow();
   const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
-  const status = useMemo(() => chatStatus(calls), [calls]);
+  const clock = useMemo(() => turnClock(q.data, since), [q.data, since]);
+  const pulse = turnPulse(calls, clock, now);
+  const status = useMemo(() => chatStatus(calls, pulse.between), [calls, pulse.between]);
   const notes = useMemo(() => turnNotes(q.data, since), [q.data, since]);
-  const { steps, planned } = useMemo(() => chatSteps(calls, notes), [calls, notes]);
+  const { steps, planned } = useMemo(() => chatSteps(calls, notes, { between: pulse.between, clock }), [calls, notes, pulse.between, clock]);
   const [collapsed, setCollapsed] = useState(false);
+  // Asking once per quiet stretch: the button comes back only after something happens.
+  const [askedAt, setAskedAt] = useState<number>();
   const scene = useHeldScene(status.kind);
   const hasRail = steps.length > 1 || !!steps[0]?.detail || !!steps[0]?.intent;
   const done = steps.filter((s) => s.state === "done").length;
+  const work = steps.filter((s) => s.key !== NEXT_STEP_KEY).length;
   // A tool call or API request waiting on the person is part of this turn, so it opens in this card.
   const connectorWaiting = useConnectorApprovals(chatId).data?.approvals.length ?? 0;
   const secretWaiting = useApiSecretApprovals(chatId).data?.approvals.length ?? 0;
   const awaiting = !stopping && connectorWaiting + secretWaiting > 0;
+  const quiet = !stopping && !awaiting && pulse.quiet;
+  const asked = askedAt !== undefined && askedAt >= (clock.last ?? 0);
+  const newest = calls.at(-1);
   return (
-    <div data-testid="chat-status-card" data-awaiting={awaiting || undefined}
-      className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-300 ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : "border-border"}`}>
+    <div data-testid="chat-status-card" data-awaiting={awaiting || undefined} data-quiet={quiet || undefined}
+      className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-300 ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : quiet ? "border-[var(--state-progress)]/50" : "border-border"}`}>
       <div className="flex h-[72px] items-center gap-3 px-3.5">
         <span className={`flex-none ${awaiting ? "" : "motion-safe:animate-pulse"}`}>
           <PersonaAvatar persona={persona} size={28} />
         </span>
         <div className="min-w-0 flex-1">
           <p role="status" aria-live="polite" className={`truncate text-[13.5px] ${awaiting ? "text-pill-human-fg" : "text-fg"}`} data-testid="chat-status">
-            {stopping ? "Stopping…" : awaiting ? `${persona.name} needs your approval` : `${persona.name} is ${status.phrase}…`}
+            {stopping
+              ? "Stopping…"
+              : awaiting
+                ? `${persona.name} needs your approval`
+                : quiet
+                  ? `${persona.name} has been quiet for ${quietFor(pulse.idle ?? 0)}`
+                  : `${persona.name} is ${status.phrase}…`}
           </p>
-          <p aria-hidden className="truncate text-xs text-fg-tertiary @max-[300px]:hidden">
-            {awaiting ? "Paused until you decide" : planned ? `Step ${Math.min(done + 1, steps.length)} of ${steps.length}` : sceneLabel(scene.current)}
+          <p aria-hidden data-testid="chat-pulse" className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-tertiary @max-[300px]:hidden">
+            {awaiting ? (
+              "Paused until you decide"
+            ) : quiet ? (
+              ["Still running", `last: ${newest ? chatStatusOf(newest).phrase : "thinking"}`, pulse.elapsed !== undefined && `${formatSpan(pulse.elapsed)} in all`].filter(Boolean).join(" · ")
+            ) : (
+              <PulseLine planned={planned ? `Step ${Math.min(done + 1, steps.length)} of ${steps.length}` : undefined} work={planned ? 0 : work} pulse={pulse} heard={clock.last !== undefined} />
+            )}
           </p>
         </div>
         {awaiting ? (
@@ -252,6 +295,20 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
           </div>
         </div>
       </div>
+      {quiet && (onAsk || onStop) && (
+        <div data-testid="quiet-actions" className="flex flex-wrap gap-2 px-3.5 pb-3 pl-[54px]">
+          {onAsk && !asked && (
+            <Button variant="outline" icon="branch" disabled={disabled} onClick={() => { setAskedAt(Date.now()); onAsk(); }}>
+              Ask what it&apos;s doing
+            </Button>
+          )}
+          {onStop && (
+            <Button variant="outline" icon="pause" onClick={onStop}>
+              Stop
+            </Button>
+          )}
+        </div>
+      )}
       {hasRail && (
         <>
           {collapsed ? (
@@ -261,7 +318,7 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
               ))}
             </div>
           ) : (
-            <StepRail steps={steps} stopping={stopping} awaiting={awaiting} onOpenStep={onOpenStep} />
+            <StepRail steps={steps} now={now} stopping={stopping} awaiting={awaiting} onOpenStep={onOpenStep} />
           )}
           <button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((c) => !c)} className="px-3.5 py-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
             {collapsed ? "Show steps" : "Hide steps"}
@@ -270,6 +327,33 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
       )}
     </div>
   );
+}
+
+/** "4m 12s · 23 steps · ● last activity 3s ago": the turn's time, its work so far, and a heartbeat. */
+function PulseLine({ planned, work, pulse, heard }: { planned?: string; work: number; pulse: TurnPulse; heard: boolean }) {
+  const parts = [planned, pulse.elapsed !== undefined && formatSpan(pulse.elapsed), work > 1 && `${work} steps`].filter(Boolean);
+  return (
+    <>
+      <span className="truncate">{parts.join(" · ")}</span>
+      {heard && pulse.idle !== undefined && (
+        <>
+          {parts.length > 0 && <span>·</span>}
+          <span className="size-1.5 flex-none rounded-full bg-[var(--state-done)]" />
+          <span className="truncate tabular-nums">last activity {formatSpan(pulse.idle)} ago</span>
+        </>
+      )}
+    </>
+  );
+}
+
+/** The time now, ticking every second while mounted: the card's timers count without new events. */
+function useNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 /**

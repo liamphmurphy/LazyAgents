@@ -249,6 +249,7 @@ export function groupByDay<T extends { last_message_at?: string | null; created_
 /** The kind of work under way, which picks the status card's animated scene. */
 export type ChatStatusKind =
   | "thinking"
+  | "next-step"
   | "connector"
   | "secret"
   | "wiki"
@@ -596,9 +597,86 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
   }
 }
 
-/** The chat tab's status for a running turn: the newest call's, or "thinking" before any tool runs. */
-export function chatStatus(calls: { tool: string; input: unknown }[]): ChatStatusInfo {
+const NEXT_STEP = status("next-step", "working out the next step");
+
+/**
+ * The chat tab's status for a running turn: the newest call's, or "thinking" before any tool runs.
+ * `between` (from turnPulse) means that call finished a while ago, so its phrase would be stale.
+ */
+export function chatStatus(calls: { tool: string; input: unknown }[], between = false): ChatStatusInfo {
+  if (between) return NEXT_STEP;
   return calls.length ? chatStatusOf(calls[calls.length - 1]) : status("thinking", "thinking");
+}
+
+// ---- the status card's clock: is the turn alive, and how long has each step taken ----
+
+/** How long after the newest call finishes before the card stops naming it: quick calls in a row shouldn't flicker. */
+export const NEXT_STEP_AFTER_MS = 4_000;
+/** No events for this long reads as quiet: still running, but worth a check-in. */
+export const QUIET_AFTER_MS = 2 * 60_000;
+/** The same while a call is still running, since tests or a build can legitimately take minutes. */
+export const QUIET_RUNNING_MS = 5 * 60_000;
+
+/** When the turn began, when anything last happened, and when each call (by seq) started and finished, in ms. */
+export type TurnClock = { started?: number; last?: number; calls: Map<number, { at: number; doneAt?: number }> };
+
+export function turnClock(events: RunEventLike[] | undefined, since?: string): TurnClock {
+  const t = since ? Date.parse(since) : 0;
+  const calls: TurnClock["calls"] = new Map();
+  const open = new Map<string, number>();
+  let first: number | undefined;
+  let last: number | undefined;
+  for (const e of events ?? []) {
+    const at = Date.parse(e.at);
+    if (at < t) continue;
+    first ??= at;
+    last = Math.max(last ?? at, at);
+    const p = e.payload;
+    if (e.type === "tool_call") {
+      calls.set(e.seq, { at });
+      if (p.id) open.set(str(p.id), e.seq);
+    } else if (e.type === "tool_result" && p.id && open.has(str(p.id))) {
+      calls.get(open.get(str(p.id))!)!.doneAt = at;
+    } else if (e.type === "lifecycle" && p.state === REPLY_BLOCK) {
+      calls.set(e.seq, { at, doneAt: at });
+    }
+  }
+  return { started: since ? t : first, last, calls };
+}
+
+/**
+ * The turn's pulse at `now`: how long it has run, how long since anything happened, whether
+ * it is between steps (the newest call finished NEXT_STEP_AFTER_MS ago), and whether it has
+ * been quiet long enough to offer a check-in.
+ */
+export type TurnPulse = { elapsed?: number; idle?: number; between: boolean; quiet: boolean };
+
+export function turnPulse(calls: ToolCall[], clock: TurnClock, now: number): TurnPulse {
+  const elapsed = clock.started === undefined ? undefined : Math.max(0, now - clock.started);
+  const lastAt = clock.last ?? clock.started;
+  const idle = lastAt === undefined ? undefined : Math.max(0, now - lastAt);
+  const newest = calls.at(-1);
+  // A rich block is written into the reply itself, so its own status stays true after its event.
+  const doneAt = newest?.done && newest.tool !== REPLY_BLOCK ? clock.calls.get(newest.key)?.doneAt : undefined;
+  const between = doneAt !== undefined && now - doneAt >= NEXT_STEP_AFTER_MS;
+  const quiet = idle !== undefined && idle >= (newest && !newest.done ? QUIET_RUNNING_MS : QUIET_AFTER_MS);
+  return { elapsed, idle, between, quiet };
+}
+
+/** A duration for the card: "12s", "4m 05s", "1h 02m". */
+export function formatSpan(ms: number): string {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+/** How long it has been quiet, in words: "2 minutes", "over an hour". */
+export function quietFor(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  if (m >= 60) return "over an hour";
+  return m <= 1 ? "a minute" : `${m} minutes`;
 }
 
 // ---- the chat tab's step rail: the turn's plan, or its work so far ----
@@ -618,7 +696,13 @@ export type ChatStep = {
   tag?: IntentTag;
   /** The step has thinking to read in the Activity tab. */
   reasoning?: true;
+  /** When its first call started and its last finished (ms), given a TurnClock. An active step runs until now. */
+  startedAt?: number;
+  endedAt?: number;
 };
+
+/** The rail's stand-in while the newest call has finished and the next hasn't started. */
+export const NEXT_STEP_KEY = "next-step";
 
 type PlanState = "planned" | "active" | "done";
 type PlanItem = { id: string; title: string; state: PlanState };
@@ -895,8 +979,9 @@ function withDetail(steps: ChatStep[], calls: ToolCall[]): ChatStep[] {
  * work began. Otherwise its consecutive tool calls with the same description as one step, newest active, in the same
  * high-level wording as the status line.
  */
-export function chatSteps(calls: ToolCall[], notes?: TurnNote[]): { steps: ChatStep[]; planned: boolean } {
-  const { steps, planned, owner } = buildSteps(calls);
+export function chatSteps(calls: ToolCall[], notes?: TurnNote[], opts: { between?: boolean; clock?: TurnClock } = {}): { steps: ChatStep[]; planned: boolean } {
+  const { steps, planned, owner } = buildSteps(calls, opts.between);
+  if (opts.clock) stampTimes(steps, calls, owner, opts.clock);
   if (notes?.length) {
     const byKey = new Map(steps.map((st) => [st.key, st]));
     for (const n of notes) {
@@ -913,8 +998,26 @@ export function chatSteps(calls: ToolCall[], notes?: TurnNote[]): { steps: ChatS
   return { steps, planned };
 }
 
-/** The steps, and for each call the key of the step it was part of (none for bookkeeping, or work before the plan started). */
-function buildSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean; owner: (string | undefined)[] } {
+/** Each step's span, from the calls it owns. The stand-in next step starts when the newest call finished. */
+function stampTimes(steps: ChatStep[], calls: ToolCall[], owner: (string | undefined)[], clock: TurnClock) {
+  const byKey = new Map(steps.map((st) => [st.key, st]));
+  for (const [i, call] of calls.entries()) {
+    const st = byKey.get(owner[i] ?? "");
+    const t = clock.calls.get(call.key);
+    if (!st || !t) continue;
+    st.startedAt = Math.min(st.startedAt ?? t.at, t.at);
+    st.endedAt = Math.max(st.endedAt ?? 0, t.doneAt ?? t.at);
+  }
+  const next = byKey.get(NEXT_STEP_KEY);
+  const newest = calls.at(-1);
+  if (next && newest) next.startedAt = clock.calls.get(newest.key)?.doneAt;
+}
+
+/**
+ * The steps, and for each call the key of the step it was part of (none for bookkeeping, or work before the plan started).
+ * `between`: a planless turn's newest step is finished, and a stand-in "Working out the next step" is under way instead.
+ */
+function buildSteps(calls: ToolCall[], between = false): { steps: ChatStep[]; planned: boolean; owner: (string | undefined)[] } {
   const owner: (string | undefined)[] = new Array(calls.length).fill(undefined);
   const versions = planVersions(calls);
   const latest = versions[versions.length - 1]?.items;
@@ -962,8 +1065,16 @@ function buildSteps(calls: ToolCall[]): { steps: ChatStep[]; planned: boolean; o
     steps.push({ key: String(call.key), title: phrase[0].toUpperCase() + phrase.slice(1), state: failed ? "failed" : "done", kind });
     owner[i] = String(call.key);
   }
-  if (steps.length) steps[steps.length - 1].state = "active";
-  return { steps: withDetail(steps, calls), planned: false, owner };
+  if (!steps.length) return { steps, planned: false, owner };
+  const newest = steps[steps.length - 1];
+  const finished = newest.state;
+  newest.state = "active";
+  withDetail(steps, calls);
+  if (between) {
+    newest.state = finished;
+    steps.push({ key: NEXT_STEP_KEY, title: "Working out the next step", state: "active", kind: "next-step" });
+  }
+  return { steps, planned: false, owner };
 }
 
 /**
