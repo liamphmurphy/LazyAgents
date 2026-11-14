@@ -113,6 +113,58 @@ func (q *Queries) CreatePersona(ctx context.Context, arg CreatePersonaParams) (P
 	return i, err
 }
 
+const createPersonaForAgent = `-- name: CreatePersonaForAgent :one
+INSERT INTO personas (id, workspace_id, user_id, name, color) VALUES ($1, $2, $3, $4, $5) RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos, can_create_personas, can_create_svgs, can_create_workflows, can_create_connectors, image_engine, ticket_edits, in_chat_list
+`
+
+type CreatePersonaForAgentParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	Name        string
+	Color       string
+}
+
+// The persona of a work record made outside a persona (the seed, POST /agents): the
+// record's own id, so the two stay one actor.
+func (q *Queries) CreatePersonaForAgent(ctx context.Context, arg CreatePersonaForAgentParams) (Persona, error) {
+	row := q.db.QueryRow(ctx, createPersonaForAgent,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Name,
+		arg.Color,
+	)
+	var i Persona
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+		&i.CustomInstructions,
+		&i.IsDefault,
+		&i.LastUsedAt,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
+		&i.CanCreatePersonas,
+		&i.CanCreateSvgs,
+		&i.CanCreateWorkflows,
+		&i.CanCreateConnectors,
+		&i.ImageEngine,
+		&i.TicketEdits,
+		&i.InChatList,
+	)
+	return i, err
+}
+
 const defaultPersona = `-- name: DefaultPersona :one
 SELECT id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos, can_create_personas, can_create_svgs, can_create_workflows, can_create_connectors, image_engine, ticket_edits, in_chat_list FROM personas WHERE workspace_id = $1 AND user_id = $2 AND is_default
 `
@@ -255,6 +307,54 @@ func (q *Queries) KeySharePersona(ctx context.Context, arg KeySharePersonaParams
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listPersonaWork = `-- name: ListPersonaWork :many
+SELECT a.id, a.workspace_id, a.name, a.handle, a.color_index, a.role, a.specialty, a.model, a.status, a.max_concurrency, a.created_at, a.updated_at, a.current_definition_version_id, a.kind, a.archived_at FROM agents a JOIN personas p ON p.id = a.id
+WHERE p.workspace_id = $1 AND p.user_id = $2 AND a.kind IN ('main', 'sub')
+`
+
+type ListPersonaWorkParams struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+}
+
+// The work records of the person's personas: the agents rows sharing a persona's id, archived
+// ones included (an archived row is work turned off; turning it back on revives it).
+func (q *Queries) ListPersonaWork(ctx context.Context, arg ListPersonaWorkParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listPersonaWork, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Handle,
+			&i.ColorIndex,
+			&i.Role,
+			&i.Specialty,
+			&i.Model,
+			&i.Status,
+			&i.MaxConcurrency,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CurrentDefinitionVersionID,
+			&i.Kind,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPersonas = `-- name: ListPersonas :many
@@ -491,6 +591,49 @@ func (q *Queries) PersonaNameTaken(ctx context.Context, arg PersonaNameTakenPara
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const personaOwnerOf = `-- name: PersonaOwnerOf :one
+SELECT p.id, p.workspace_id, p.user_id, p.name, p.tone, p.color, p.avatar_key, p.avatar_content_type, p.custom_instructions, p.is_default, p.last_used_at, p.revision, p.created_at, p.updated_at, p.can_code, p.can_generate_images, p.repos, p.can_create_personas, p.can_create_svgs, p.can_create_workflows, p.can_create_connectors, p.image_engine, p.ticket_edits, p.in_chat_list FROM personas p WHERE p.id = $1 AND p.workspace_id = $2
+`
+
+type PersonaOwnerOfParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+}
+
+// The person whose persona shares this agent's id; no row for a chat-only agent (the
+// Personal Assistant) or an archived agent that never became a persona.
+func (q *Queries) PersonaOwnerOf(ctx context.Context, arg PersonaOwnerOfParams) (Persona, error) {
+	row := q.db.QueryRow(ctx, personaOwnerOf, arg.ID, arg.WorkspaceID)
+	var i Persona
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Name,
+		&i.Tone,
+		&i.Color,
+		&i.AvatarKey,
+		&i.AvatarContentType,
+		&i.CustomInstructions,
+		&i.IsDefault,
+		&i.LastUsedAt,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CanCode,
+		&i.CanGenerateImages,
+		&i.Repos,
+		&i.CanCreatePersonas,
+		&i.CanCreateSvgs,
+		&i.CanCreateWorkflows,
+		&i.CanCreateConnectors,
+		&i.ImageEngine,
+		&i.TicketEdits,
+		&i.InChatList,
+	)
+	return i, err
 }
 
 const personasByIDs = `-- name: PersonasByIDs :many
@@ -803,8 +946,9 @@ UPDATE personas SET
   can_create_workflows = COALESCE($9::boolean, can_create_workflows),
   can_create_connectors = COALESCE($10::boolean, can_create_connectors),
   repos = COALESCE($11::text[], repos),
+  in_chat_list = COALESCE($12::boolean, in_chat_list),
   revision = revision + 1, updated_at = now()
-WHERE id = $12 AND workspace_id = $13 AND user_id = $14 AND revision = $15
+WHERE id = $13 AND workspace_id = $14 AND user_id = $15 AND revision = $16
 RETURNING id, workspace_id, user_id, name, tone, color, avatar_key, avatar_content_type, custom_instructions, is_default, last_used_at, revision, created_at, updated_at, can_code, can_generate_images, repos, can_create_personas, can_create_svgs, can_create_workflows, can_create_connectors, image_engine, ticket_edits, in_chat_list
 `
 
@@ -820,6 +964,7 @@ type UpdatePersonaParams struct {
 	CanCreateWorkflows  *bool
 	CanCreateConnectors *bool
 	Repos               []string
+	InChatList          *bool
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
 	UserID              uuid.UUID
@@ -840,6 +985,7 @@ func (q *Queries) UpdatePersona(ctx context.Context, arg UpdatePersonaParams) (P
 		arg.CanCreateWorkflows,
 		arg.CanCreateConnectors,
 		arg.Repos,
+		arg.InChatList,
 		arg.ID,
 		arg.WorkspaceID,
 		arg.UserID,

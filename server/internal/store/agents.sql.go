@@ -13,6 +13,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const agentHandleTaken = `-- name: AgentHandleTaken :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL)::bool
+`
+
+type AgentHandleTakenParams struct {
+	WorkspaceID uuid.UUID
+	Handle      string
+}
+
+func (q *Queries) AgentHandleTaken(ctx context.Context, arg AgentHandleTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, agentHandleTaken, arg.WorkspaceID, arg.Handle)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const archiveAgent = `-- name: ArchiveAgent :exec
 UPDATE agents SET archived_at = now() WHERE id = $1
 `
@@ -65,6 +81,53 @@ func (q *Queries) CreateDefinitionVersion(ctx context.Context, arg CreateDefinit
 		&i.Note,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createPersonaAgent = `-- name: CreatePersonaAgent :one
+INSERT INTO agents (id, workspace_id, name, handle, color_index, model, status, kind)
+VALUES ($1, $2, $3, $4, $5, $6, 'idle', $7) RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at
+`
+
+type CreatePersonaAgentParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Handle      string
+	ColorIndex  int32
+	Model       string
+	Kind        string
+}
+
+// A persona's work record: an agents row with the persona's own id.
+func (q *Queries) CreatePersonaAgent(ctx context.Context, arg CreatePersonaAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, createPersonaAgent,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Handle,
+		arg.ColorIndex,
+		arg.Model,
+		arg.Kind,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Handle,
+		&i.ColorIndex,
+		&i.Role,
+		&i.Specialty,
+		&i.Model,
+		&i.Status,
+		&i.MaxConcurrency,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
+		&i.Kind,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -258,6 +321,54 @@ type LockAgentByHandleParams struct {
 
 func (q *Queries) LockAgentByHandle(ctx context.Context, arg LockAgentByHandleParams) (Agent, error) {
 	row := q.db.QueryRow(ctx, lockAgentByHandle, arg.WorkspaceID, arg.Handle)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Handle,
+		&i.ColorIndex,
+		&i.Role,
+		&i.Specialty,
+		&i.Model,
+		&i.Status,
+		&i.MaxConcurrency,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentDefinitionVersionID,
+		&i.Kind,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const renameAgent = `-- name: RenameAgent :exec
+UPDATE agents SET name = $2 WHERE id = $1
+`
+
+type RenameAgentParams struct {
+	ID   uuid.UUID
+	Name string
+}
+
+// Keeps a persona's work record named after the persona.
+func (q *Queries) RenameAgent(ctx context.Context, arg RenameAgentParams) error {
+	_, err := q.db.Exec(ctx, renameAgent, arg.ID, arg.Name)
+	return err
+}
+
+const reviveAgent = `-- name: ReviveAgent :one
+UPDATE agents SET archived_at = NULL, handle = $2 WHERE id = $1 RETURNING id, workspace_id, name, handle, color_index, role, specialty, model, status, max_concurrency, created_at, updated_at, current_definition_version_id, kind, archived_at
+`
+
+type ReviveAgentParams struct {
+	ID     uuid.UUID
+	Handle string
+}
+
+// Turns a persona's archived work record back on, under a handle that is free again.
+func (q *Queries) ReviveAgent(ctx context.Context, arg ReviveAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, reviveAgent, arg.ID, arg.Handle)
 	var i Agent
 	err := row.Scan(
 		&i.ID,

@@ -92,12 +92,25 @@ func (s *Server) toPersonas(ctx context.Context, rows []store.Persona) ([]api.Pe
 	for _, c := range counts {
 		n[c.PersonaID] = int(c.N)
 	}
+	work, err := s.personas().WorkRecords(ctx, personaOwner(ctx))
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range rows {
-		out = append(out, api.Persona{
+		item := api.Persona{
 			Id: p.ID, Name: p.Name, Tone: api.PersonaTone(p.Tone), Color: p.Color, AvatarUrl: personaAvatarURL(p),
 			CustomInstructions: p.CustomInstructions, Capabilities: *toPersonaCapabilities(p), Repos: reposOrEmpty(p.Repos), IsDefault: p.IsDefault, ChatCount: n[p.ID], LastUsedAt: p.LastUsedAt,
+			InChatList: p.InChatList, Work: api.PersonaWork(personas.WorkNone),
 			Revision: int(p.Revision), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
-		})
+		}
+		if a, ok := work[p.ID]; ok {
+			item.Handle = &a.Handle
+			if item.Work = api.PersonaWork(personas.WorkOf(&a)); item.Work != personas.WorkNone {
+				model, status := a.Model, api.PersonaWorkStatus(a.Status)
+				item.WorkModel, item.WorkStatus = &model, &status
+			}
+		}
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -176,10 +189,16 @@ func (s *Server) UpdatePersona(ctx context.Context, req api.UpdatePersonaRequest
 	p, err := s.personas().Update(ctx, personaOwner(ctx), req.Id, personas.Patch{
 		Revision: int32(b.Revision), Name: b.Name, Tone: toneArg(b.Tone), Color: b.Color, Instructions: b.CustomInstructions,
 		Code: code, Images: images, Personas: makers, SVG: svg, Workflows: workflows, Connectors: connectors, Repos: b.Repos,
-		ImageEngine: imageEngineArg(b.Capabilities), TicketEdits: ticketEditsArg(b.Capabilities),
+		ImageEngine: imageEngineArg(b.Capabilities), TicketEdits: ticketEditsArg(b.Capabilities), InChatList: b.InChatList,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if b.Work != nil {
+		u, _, _ := me(ctx)
+		if p, _, err = s.personas().SetWork(ctx, personaOwner(ctx), req.Id, string(*b.Work), u.ID); err != nil {
+			return nil, err
+		}
 	}
 	out, err := s.toPersona(ctx, p)
 	return api.UpdatePersona200JSONResponse(out), err

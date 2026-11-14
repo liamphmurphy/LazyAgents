@@ -9966,10 +9966,15 @@ components:
         Its tone and custom instructions shape the assistant's voice in chats
         only; they never change scopes, tools or memory rules. Only the
         structured capabilities (and repos) widen what its chats may do.
-      required: [id, name, tone, color, custom_instructions, capabilities, repos, is_default, chat_count, revision, created_at, updated_at]
+      required: [id, name, tone, color, custom_instructions, capabilities, repos, is_default, chat_count, in_chat_list, work, revision, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        in_chat_list: { type: boolean, description: "Offered in the chat switcher and the @ menu. A chat opened from its profile works either way." }
+        work: { $ref: "#/components/schemas/PersonaWork" }
+        handle: { type: string, description: "Its @handle for tickets, runs and helpers; absent for a persona that has never worked" }
+        work_model: { type: string, description: "The model its runs use; absent when it doesn't work" }
+        work_status: { type: string, enum: [running, waiting, blocked, idle], description: "Its work record's status; absent when it doesn't work" }
         tone: { $ref: "#/components/schemas/PersonaTone" }
         color: { type: string, pattern: "^#[0-9a-f]{6}$", description: Stored in lower case }
         avatar_url: { type: string, description: "GET /personas/{id}/avatar with a cache-busting ?v=<revision>; absent without an avatar" }
@@ -9982,6 +9987,15 @@ components:
         revision: { type: integer }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    PersonaWork:
+      type: string
+      enum: [none, tickets, helper]
+      description: |
+        What the persona does besides chatting. tickets: it can be assigned tickets and runs
+        them. helper: another persona's run can hand it part of the work. Its harness, model,
+        work brief, permissions and limits are its work definition (/agents/{handle}, by its
+        handle). Turning work off is refused (409) while it holds open tickets or has a run in
+        progress; switching to helper is refused while it holds open tickets.
     PersonaList:
       type: object
       required: [personas]
@@ -10004,6 +10018,8 @@ components:
       required: [revision]
       properties:
         revision: { type: integer }
+        in_chat_list: { type: boolean }
+        work: { $ref: "#/components/schemas/PersonaWork" }
         name: { type: string, minLength: 1, maxLength: 60 }
         tone: { $ref: "#/components/schemas/PersonaTone" }
         color: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }

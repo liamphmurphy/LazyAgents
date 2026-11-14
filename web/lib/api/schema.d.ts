@@ -9368,6 +9368,18 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** @description Offered in the chat switcher and the @ menu. A chat opened from its profile works either way. */
+            in_chat_list: boolean;
+            work: components["schemas"]["PersonaWork"];
+            /** @description Its @handle for tickets, runs and helpers; absent for a persona that has never worked */
+            handle?: string;
+            /** @description The model its runs use; absent when it doesn't work */
+            work_model?: string;
+            /**
+             * @description Its work record's status; absent when it doesn't work
+             * @enum {string}
+             */
+            work_status?: "running" | "waiting" | "blocked" | "idle";
             tone: components["schemas"]["PersonaTone"];
             /** @description Stored in lower case */
             color: string;
@@ -9394,6 +9406,15 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /**
+         * @description What the persona does besides chatting. tickets: it can be assigned tickets and runs
+         *     them. helper: another persona's run can hand it part of the work. Its harness, model,
+         *     work brief, permissions and limits are its work definition (/agents/{handle}, by its
+         *     handle). Turning work off is refused (409) while it holds open tickets or has a run in
+         *     progress; switching to helper is refused while it holds open tickets.
+         * @enum {string}
+         */
+        PersonaWork: "none" | "tickets" | "helper";
         PersonaList: {
             personas: components["schemas"]["Persona"][];
             /**
@@ -9420,6 +9441,8 @@ export interface components {
         };
         PersonaPatch: {
             revision: number;
+            in_chat_list?: boolean;
+            work?: components["schemas"]["PersonaWork"];
             name?: string;
             tone?: components["schemas"]["PersonaTone"];
             color?: string;
