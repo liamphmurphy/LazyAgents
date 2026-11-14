@@ -71,3 +71,18 @@ test("while a reply runs, with Research on, the controls still fit one row; opti
   expect((await controls(page).boundingBox())!.height).toBeLessThanOrEqual(44);
   expect(await overflowing(controls(page))).toEqual([]);
 });
+
+test("while a reply runs, the header says what the persona is doing and opens Activity", async ({ page }) => {
+  await installChatApi(page, { personas: [dev], replyDelayMs: 10_000 });
+  await openEmptyChat(page, { repo_url: REPO });
+  await expect(page.getByTestId("chat-presence")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Message" }).fill("hello");
+  await page.getByRole("combobox", { name: "Message" }).press("Enter");
+  const presence = header(page).getByTestId("chat-presence");
+  await expect(presence).toHaveText(/^Hackerman · .+…$/);
+  expect((await header(page).boundingBox())!.height).toBeLessThanOrEqual(60);
+  expect(await overflowing(header(page))).toEqual([]);
+  await presence.click();
+  await expect(page).toHaveURL(/[?&]panel=activity/);
+  await expect(page.getByRole("tab", { name: /Activity/ })).toHaveAttribute("aria-selected", "true");
+});

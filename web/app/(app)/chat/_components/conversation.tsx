@@ -70,7 +70,7 @@ import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { timelineTime } from "@/lib/format";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
-import { ChatStatus, InterimReply, OpenTurnStep, RunActivity, TurnSteps, TurnToolCalls } from "./activity";
+import { ChatPresence, ChatStatus, InterimReply, OpenTurnStep, RunActivity, TurnSteps, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { useSnippets } from "./snippets";
@@ -529,6 +529,12 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
   // The same for a finished turn's step in the conversation, kept stable so replies don't re-render.
   const openStepRef = useRef<(key: string) => void>(undefined);
   const openTurnStep = useCallback((key: string) => openStepRef.current?.(key), []);
+  // The header's live line opens the turn's Activity: the dock's tab on desktop, the chat's own tab otherwise.
+  const openActivity = () => {
+    if (!dockActivity) return setTab("activity");
+    const q = setDock(new URLSearchParams(window.location.search), { tab: "activity", open: true });
+    router.replace(`${window.location.pathname}?${q.toString()}`, { scroll: false });
+  };
   const openStep = (key: string) => {
     if (dockActivity) {
       focusActivityStep(key);
@@ -955,14 +961,17 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
         <div data-testid="chat-header" className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
-          <ChatTitleMenu
-            chat={c}
-            participants={participants}
-            running={running}
-            commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
-            onCommitEmail={() => setCommitPickerOpen((o) => !o)}
-          />
-          <span className="flex-1" />
+          {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
+          <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
+            <ChatTitleMenu
+              chat={c}
+              participants={participants}
+              running={running}
+              commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
+              onCommitEmail={() => setCommitPickerOpen((o) => !o)}
+            />
+            {running && <ChatPresence runId={c.current_run_id} since={since} persona={speaker} onOpen={openActivity} />}
+          </div>
           {repoPicker && <span className="flex min-w-0 max-w-[40%] flex-shrink">{repoPicker}</span>}
           <ChatRunsPill chatId={c.id} />
           {!dockActivity && (
