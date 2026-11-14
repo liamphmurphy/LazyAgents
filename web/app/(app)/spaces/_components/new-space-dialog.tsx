@@ -4,7 +4,10 @@ import { Dialog } from "radix-ui";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useCreateSpace } from "@/lib/api/space-hooks";
-import type { SpaceColor } from "@/lib/spaces";
+import { suggestWorkKey, WORK_KEY, type SpaceColor } from "@/lib/spaces";
+import { cx } from "@/lib/cx";
+import { checkRepoURL } from "@/lib/repo-url";
+import { Toggle } from "@/components/ui/controls";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ColorPicker, ConnectorSelect, MemoryChoice, PersonaSelect, ProjectSelect } from "./space-parts";
@@ -20,8 +23,8 @@ const Label = ({ children, htmlFor }: { children: ReactNode; htmlFor?: string })
   </label>
 );
 
-/** Mockup 3: name and color, description, instructions, defaults for new chats and memory. Sources come after. */
-export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/** Mockup 3: name and color, description, instructions, defaults for new chats, work (LAZYAGENTS-213 frame C) and memory. Sources come after. */
+export function NewSpaceDialog({ open, onOpenChange, defaultTracking = false }: { open: boolean; onOpenChange: (open: boolean) => void; defaultTracking?: boolean }) {
   const router = useRouter();
   const create = useCreateSpace();
   const [name, setName] = useState("");
@@ -32,6 +35,13 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [project, setProject] = useState("");
   const [connectors, setConnectors] = useState<string[]>([]);
   const [spaceMemory, setSpaceMemory] = useState(true);
+  const [tracking, setTracking] = useState(defaultTracking);
+  // The key follows the name until it's typed into.
+  const [typedKey, setTypedKey] = useState<string | null>(null);
+  const [repo, setRepo] = useState("");
+  const key = (typedKey ?? suggestWorkKey(name)).trim();
+  const repoCheck = checkRepoURL(repo);
+  const workOk = !tracking || (WORK_KEY.test(key) && repoCheck.state !== "invalid");
   const reset = () => {
     setName("");
     setColor("green");
@@ -41,11 +51,14 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     setProject("");
     setConnectors([]);
     setSpaceMemory(true);
+    setTracking(defaultTracking);
+    setTypedKey(null);
+    setRepo("");
     create.reset();
   };
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || create.isPending) return;
+    if (!name.trim() || create.isPending || !workOk) return;
     create.mutate(
       {
         name: name.trim(),
@@ -53,7 +66,7 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         description: description.trim(),
         instructions: instructions.trim(),
         ...(persona ? { persona_id: persona } : {}),
-        ...(project ? { project } : {}),
+        ...(tracking ? { work: { key, ...(repo.trim() ? { repo_url: repo.trim() } : {}) } } : project ? { project } : {}),
         connector_ids: connectors,
         space_memory: spaceMemory,
       },
@@ -127,9 +140,36 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <span className="text-12 text-fg-secondary">Defaults for new chats</span>
               <div className="flex gap-[12px] max-sm:flex-col">
                 <PersonaSelect value={persona} onChange={setPersona} disabled={locked} />
-                <ProjectSelect value={project} onChange={setProject} disabled={locked} />
+                {!tracking && <ProjectSelect value={project} onChange={setProject} disabled={locked} />}
                 <ConnectorSelect value={connectors} onChange={setConnectors} disabled={locked} />
               </div>
+            </div>
+
+            <div className="mt-[24px] flex flex-col gap-[10px]">
+              <Toggle
+                checked={tracking}
+                disabled={locked}
+                onChange={setTracking}
+                label={
+                  <span className="text-13 text-fg">
+                    Track work <span className="text-12 text-fg-tertiary">tickets, epics, runs and a repository</span>
+                  </span>
+                }
+              />
+              {tracking && (
+                <div className="flex gap-[12px] max-sm:flex-col">
+                  <label className="flex w-[150px] flex-col gap-[6px] text-12 text-fg-secondary max-sm:w-full">
+                    Key
+                    <input aria-label="Key" className={cx(input, "font-mono uppercase")} value={key} maxLength={10} placeholder="KEY" disabled={locked} onChange={(e) => setTypedKey(e.target.value.toUpperCase())} />
+                  </label>
+                  <label className="flex flex-1 flex-col gap-[6px] text-12 text-fg-secondary">
+                    Repository (optional)
+                    <input aria-label="Repository" className={input} value={repo} placeholder="https://github.com/owner/repo" disabled={locked} onChange={(e) => setRepo(e.target.value)} />
+                  </label>
+                </div>
+              )}
+              {tracking && key && !WORK_KEY.test(key) && <p className="text-12 text-pill-blocked-fg">Use 2–10 letters or digits, starting with a letter.</p>}
+              {tracking && repoCheck.state === "invalid" && <p className="text-12 text-pill-blocked-fg">{repoCheck.message}</p>}
             </div>
 
             <div className="mt-[24px] flex flex-col gap-[10px]">
@@ -147,7 +187,7 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               <Dialog.Close asChild>
                 <Button variant="secondary" className="!h-[36px] !px-[20px]">Cancel</Button>
               </Dialog.Close>
-              <Button type="submit" variant="primary" className="!h-[36px] !px-[16px]" disabled={locked || !name.trim()}>
+              <Button type="submit" variant="primary" className="!h-[36px] !px-[16px]" disabled={locked || !name.trim() || !workOk}>
                 {locked ? "Creating…" : "Create space"}
               </Button>
             </div>

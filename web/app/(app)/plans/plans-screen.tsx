@@ -114,7 +114,7 @@ function NewPlan({ data, project: scoped }: { data: Bootstrap; project: Project 
     <Card
       title="New plan"
       action={
-        <span className="flex h-6 items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-12" title="Switch projects in the sidebar">
+        <span className="flex h-6 items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-12" title="Switch spaces in the sidebar">
           <span aria-hidden className="size-2 flex-none rounded-[2px]" style={{ background: scoped.color }} />
           <span className="max-w-[140px] truncate">{scoped.name}</span>
           <span className="font-mono text-11 text-fg-tertiary">{scoped.key}</span>
@@ -377,7 +377,7 @@ function Review({ plan, data }: { plan: Plan; data: Bootstrap }) {
         </Banner>
       )}
       {data.projects.find((p) => p.key === plan.project)?.archived && (
-        <Banner tone="human" title="This project is archived">
+        <Banner tone="human" title="This space’s work is archived">
           Restore the project in Settings before accepting these proposals.
         </Banner>
       )}

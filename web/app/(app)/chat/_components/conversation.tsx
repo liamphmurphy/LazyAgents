@@ -95,14 +95,14 @@ import { TicketChangeRequests } from "./ticket-change-requests";
 import { ChatTitleMenu } from "./title-menu";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
-import { ChatProjectPicker } from "./chat-project";
+import { ChatSpacePicker } from "./chat-space";
 import { CompactChatHeader } from "./compact-chat-header";
 import { useCompact } from "@/lib/viewport";
 import { composerOptions } from "@/lib/composer-options";
 import { CommitEmailPicker } from "./commit-email";
 import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
-import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
+import { SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
 import { confirmAction } from "@/components/ui/confirm";
 
@@ -1100,17 +1100,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
           {/* Back and forward lead the page; a dock's chat sits beside a page that has its own. */}
           {!docked && <HistoryNav />}
           {group ? <PersonaStack personas={participants} size={22} /> : <HeaderPersona persona={persona} personaId={c.persona?.id} fresh={fresh} onSwitch={switchPersona} disabled={locked || create.isPending} compact={docked} />}
-          {/* In an app's dock the app is the page around it, so the header doesn't name it again. */}
-          {c.space && !docked && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
-            <ChatTitleMenu
-              chat={c}
-              participants={participants}
-              running={running}
-              commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
-              onCommitEmail={() => setCommitPickerOpen((o) => !o)}
-            />
+            <div className="flex min-w-0 max-w-full items-center gap-1">
+              <ChatTitleMenu
+                chat={c}
+                participants={participants}
+                running={running}
+                commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
+                onCommitEmail={() => setCommitPickerOpen((o) => !o)}
+              />
+              {/* The space the chat is in, beside its title (LAZYAGENTS-213). In an app's dock the app is the page around it, so the header doesn't name it. */}
+              {!docked && !compact && <ChatSpacePicker chat={c} disabled={running} />}
+            </div>
             {running && <ChatPresence runId={c.current_run_id} since={since} persona={speaker} dotOnly={docked || statusInView} onOpen={openActivity} />}
           </div>
           {/* A dock has no room for the picker in its one header row: it moves to the composer's + menu. */}
@@ -1142,7 +1144,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
         </InSlot>
         )}
         {dockActivity && view === "chat" && <LinkedRow items={linked} label={linkedLabel} onOpen={openLinked} />}
-        {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} dense={docked} />}
+        {c.space && view === "chat" && <SpaceContextChips space={c.space} dense={docked} />}
         {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
         {!dockActivity && (
           <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
@@ -1513,7 +1515,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
                   />
                 ),
                 // The desktop composer leaves this to the header; the compact + sheet lists it too.
-                project: compact && !c.space && <ChatProjectPicker chat={c} disabled={running} />,
+                project: compact && <ChatSpacePicker chat={c} disabled={running} />,
               }}
               actions={
                 running && (

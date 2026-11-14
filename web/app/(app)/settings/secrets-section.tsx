@@ -231,7 +231,7 @@ function ConnectionRow({
           {on ? (
             <SmallPill tone="done">Set</SmallPill>
           ) : state.state === "projects" ? (
-            <SmallPill tone="human">Set for {state.projects.length} project{state.projects.length === 1 ? "" : "s"}</SmallPill>
+            <SmallPill tone="human">Set for {state.projects.length} space{state.projects.length === 1 ? "" : "s"}</SmallPill>
           ) : (
             <SmallPill tone={c.required ? "human" : "neutral"}>Not set</SmallPill>
           )}

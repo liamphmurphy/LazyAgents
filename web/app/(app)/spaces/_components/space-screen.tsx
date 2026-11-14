@@ -8,12 +8,17 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, unwrap } from "@/lib/api/client";
 import { useChatModels } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
-import { useDeleteSpace, useSpace, useSpaceChats, useSpaceSources, useUpdateSpace, type Space } from "@/lib/api/space-hooks";
+import { useDeleteSpace, useSpace, useSpaceChats, useSpaceSources, useStopWork, useTrackWork, useUpdateSpace, useUpdateWork, type Space } from "@/lib/api/space-hooks";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatTitle } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { shortAgo } from "@/lib/format";
-import { formatTokens, sortSpaceChats, SOURCE_KIND_LABEL, sourceName, SPACE_PAGE_CHATS, spaceSubtitle, spaceUses, type ChatSort, type SourceKind, type SpaceColor } from "@/lib/spaces";
+import { formatTokens, sortSpaceChats, SOURCE_KIND_LABEL, sourceName, SPACE_PAGE_CHATS, spaceSubtitle, spaceUses, suggestWorkKey, WORK_KEY, type ChatSort, type SourceKind, type SpaceColor } from "@/lib/spaces";
+import { ticketsHref } from "@/lib/tickets-layout";
+import { checkRepoURL, type RepoCheck } from "@/lib/repo-url";
+import { repoShortName } from "@/lib/persona-ui";
+import { CompanionDock } from "@/components/shell/companion";
+import { WorkChat } from "@/components/domain/work-chat";
 import { floatPanel } from "@/components/domain/pickers";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/controls";
@@ -177,14 +182,14 @@ function DefaultsCard({ space }: { space: Space }) {
       {editing ? (
         <div className="flex flex-col gap-[8px]">
           <PersonaSelect value={space.persona_id ?? ""} onChange={(id) => save({ persona_id: id })} disabled={update.isPending} />
-          <ProjectSelect value={space.project ?? ""} onChange={(key) => save({ project: key })} disabled={update.isPending} />
+          {!space.work && <ProjectSelect value={space.project ?? ""} onChange={(key) => save({ project: key })} disabled={update.isPending} />}
           <ConnectorSelect value={space.connector_ids} onChange={(ids) => save({ connector_ids: ids })} disabled={update.isPending} />
           <p className="text-11 text-fg-tertiary">For chats started from now on.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-[12px]">
           <Row label="Persona" value={persona} />
-          <Row label="Project" value={project ?? "None"} muted={!project} />
+          {!space.work && <Row label="New tickets go to" value={project ?? "None"} muted={!project} />}
           <Row label="Connectors" value={connectors} muted={connectors === "None"} />
         </div>
       )}
@@ -219,6 +224,156 @@ function MemoryCard({ space }: { space: Space }) {
       )}
       {update.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(update.error)}</p>}
     </Card>
+  );
+}
+
+/**
+ * The space's work (LAZYAGENTS-213, mockup frames A and B): its key, repository and branch when
+ * it tracks work, with archiving and stopping; otherwise where its tickets go and "Track work…".
+ */
+function WorkCard({ space }: { space: Space }) {
+  const track = useTrackWork();
+  const stop = useStopWork();
+  const edit = useUpdateWork();
+  const [form, setForm] = useState<"track" | "repo" | null>(null);
+  const [key, setKey] = useState("");
+  const [repo, setRepo] = useState("");
+  const [branch, setBranch] = useState("");
+  const filesUnder = useProjectName(space.project ?? "");
+  const w = space.work;
+  const error = track.error ?? stop.error ?? edit.error;
+  const open = (f: "track" | "repo") => {
+    track.reset();
+    stop.reset();
+    edit.reset();
+    setKey(suggestWorkKey(space.name));
+    setRepo(w?.repo_url ?? "");
+    setBranch(w?.default_branch ?? "main");
+    setForm(f);
+  };
+  const busy = track.isPending || stop.isPending || edit.isPending;
+  const repoCheck = checkRepoURL(repo);
+  // An unchanged repository is kept as it is, as the server does (a legacy value stays until changed).
+  const repoOk = repoCheck.state !== "invalid" || (form === "repo" && repo.trim() === (w?.repo_url ?? ""));
+  return (
+    <Card
+      label="Work"
+      title={
+        <span className="flex items-center gap-[8px]">
+          Work
+          <span className={cx("text-11 font-normal", w ? "text-accent" : "text-fg-tertiary")}>{w ? (w.archived ? "Archived" : "Tracked") : "Not tracked"}</span>
+        </span>
+      }
+      action={
+        w && !form && (
+          <button type="button" className={linkBtn} onClick={() => open("repo")}>
+            Edit
+          </button>
+        )
+      }
+    >
+      {form === "track" ? (
+        <form
+          className="flex flex-col gap-[8px]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            track.mutate({ id: space.id, work: { key: key.trim(), repo_url: repo.trim() || undefined } }, { onSuccess: () => setForm(null) });
+          }}
+        >
+          <label className="flex flex-col gap-[4px] text-11 text-fg-tertiary">
+            Key, for ticket numbers like {(key.trim() || "KEY").toUpperCase()}-1
+            <input aria-label="Key" autoFocus value={key} maxLength={10} onChange={(e) => setKey(e.target.value.toUpperCase())} className={fieldClass} />
+          </label>
+          <label className="flex flex-col gap-[4px] text-11 text-fg-tertiary">
+            Repository (optional)
+            <input aria-label="Repository" value={repo} placeholder="https://github.com/owner/repo" onChange={(e) => setRepo(e.target.value)} className={fieldClass} />
+          </label>
+          <RepoNote check={repoCheck} />
+          <div className="flex gap-[8px]">
+            <Button type="submit" variant="primary" disabled={busy || !WORK_KEY.test(key.trim()) || !repoOk}>{track.isPending ? "Starting…" : "Track work"}</Button>
+            <Button variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+          </div>
+        </form>
+      ) : form === "repo" && w ? (
+        <form
+          className="flex flex-col gap-[8px]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            edit.mutate({ space, patch: { repo_url: repo.trim(), default_branch: branch.trim() } }, { onSuccess: () => setForm(null) });
+          }}
+        >
+          <label className="flex flex-col gap-[4px] text-11 text-fg-tertiary">
+            Repository
+            <input aria-label="Repository" autoFocus value={repo} placeholder="https://github.com/owner/repo" onChange={(e) => setRepo(e.target.value)} className={fieldClass} />
+          </label>
+          {repo.trim() !== (w.repo_url ?? "") && <RepoNote check={repoCheck} />}
+          <label className="flex flex-col gap-[4px] text-11 text-fg-tertiary">
+            Default branch
+            <input aria-label="Default branch" value={branch} onChange={(e) => setBranch(e.target.value)} className={fieldClass} />
+          </label>
+          <div className="flex flex-wrap gap-[8px]">
+            <Button type="submit" variant="primary" disabled={busy || !repoOk}>{edit.isPending ? "Saving…" : "Save"}</Button>
+            <Button variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+          </div>
+          <div className="flex flex-wrap gap-x-[12px] gap-y-[4px] border-t border-border-subtle pt-[8px]">
+            <button type="button" className={linkBtn} disabled={busy} onClick={() => edit.mutate({ space, patch: { archived: !w.archived } }, { onSuccess: () => setForm(null) })}>
+              {w.archived ? "Restore work" : "Archive work"}
+            </button>
+            <button type="button" className={cx(linkBtn, "text-pill-blocked-fg")} disabled={busy} onClick={() => stop.mutate(space.id, { onSuccess: () => setForm(null) })}>
+              Stop tracking work
+            </button>
+          </div>
+        </form>
+      ) : w ? (
+        <div className="flex flex-col gap-[12px]">
+          <Row label="Key" value={w.key} />
+          <Row label="Repository" value={w.repo_url ? repoShortName(w.repo_url) : "None"} muted={!w.repo_url} />
+          <Row label="Branch" value={w.default_branch} />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-[8px]">
+          <p className="text-12 leading-[18px] text-fg-secondary">
+            Track work to give {space.name} a key, tickets, epics, runs and a repository.
+            {filesUnder && <> Until then, new tickets from its chats go to {filesUnder}.</>}
+          </p>
+          <Button variant="secondary" className="self-start" onClick={() => open("track")}>Track work…</Button>
+        </div>
+      )}
+      {error && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(error)}</p>}
+    </Card>
+  );
+}
+
+/** Under a repository field: what's wrong with it, or the form it's saved in (lib/repo-url.ts mirrors the server). */
+function RepoNote({ check }: { check: RepoCheck }) {
+  if (check.state === "invalid") return <p className="text-11 text-pill-blocked-fg">{check.message}</p>;
+  if (check.state === "ok" && check.kind === "https") return <p className="text-11 text-fg-tertiary">Saved as {check.saved}</p>;
+  return null;
+}
+
+const fieldClass = "h-[30px] rounded-md border border-border-strong bg-surface-sunken px-[10px] font-mono text-12 text-fg placeholder:font-sans placeholder:text-fg-tertiary focus:border-accent focus:outline-none";
+
+/** The space's own views: its chats here; its tickets, epics and runs (when it tracks work) where they always are, filtered to it. */
+function SpaceTabs({ space }: { space: Space }) {
+  const w = space.work;
+  if (!w) return null;
+  const tab = "flex h-[32px] items-center border-b-2 px-[2px] text-13";
+  const links = [
+    { label: "Tickets", href: ticketsHref("list", { project: w.key }) },
+    { label: "Epics", href: ticketsHref("epics", { project: w.key }) },
+    { label: "Runs", href: `/runs?project=${encodeURIComponent(w.key)}` },
+  ];
+  return (
+    <nav aria-label={`${space.name} views`} className="mt-[20px] flex gap-[24px] border-b border-border-subtle">
+      <span aria-current="page" className={cx(tab, "border-accent font-medium text-fg")}>
+        Chats <span className="ml-[6px] text-fg-tertiary">{space.chat_count}</span>
+      </span>
+      {links.map((l) => (
+        <Link key={l.label} href={l.href} className={cx(tab, "border-transparent text-fg-secondary hover:text-fg")}>
+          {l.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
@@ -500,15 +655,21 @@ function DeleteSpaceDialog({ space, open, onOpenChange }: { space: Space; open: 
         <Dialog.Content className="motion-dialog fixed left-1/2 top-[18vh] z-50 flex w-[min(460px,calc(100%-32px))] -translate-x-1/2 flex-col gap-[12px] rounded-2xl border border-border-float bg-surface-raised p-[24px] shadow-[var(--shadow-float)] outline-none">
           <Dialog.Title className="type-heading">Delete {space.name}?</Dialog.Title>
           <Dialog.Description className="text-13 text-fg-secondary">
-            Its instructions, {space.source_count} {space.source_count === 1 ? "source" : "sources"} and {space.memory_count}{" "}
-            {space.memory_count === 1 ? "memory" : "memories"} are deleted. Its {space.chat_count} {space.chat_count === 1 ? "chat moves" : "chats move"} to Recent.
+            {space.work ? (
+              <>{space.name} tracks work ({space.work.key}), so it stays while it does. Stop tracking work in its Work section first, or archive the work instead.</>
+            ) : (
+              <>
+                Its instructions, {space.source_count} {space.source_count === 1 ? "source" : "sources"} and {space.memory_count}{" "}
+                {space.memory_count === 1 ? "memory" : "memories"} are deleted. Its {space.chat_count} {space.chat_count === 1 ? "chat moves" : "chats move"} to Recent.
+              </>
+            )}
           </Dialog.Description>
           {del.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(del.error)}</p>}
           <div className="flex justify-end gap-[8px]">
             <Dialog.Close asChild>
               <Button variant="outline">Cancel</Button>
             </Dialog.Close>
-            <Button variant="primary" className="bg-state-blocked" disabled={del.isPending} onClick={() => del.mutateAsync(space.id).then(() => router.push("/chat"), () => undefined)}>
+            <Button variant="primary" className="bg-state-blocked" disabled={del.isPending || !!space.work} onClick={() => del.mutateAsync(space.id).then(() => router.push("/chat"), () => undefined)}>
               Delete space
             </Button>
           </div>
@@ -518,7 +679,11 @@ function DeleteSpaceDialog({ space, open, onOpenChange }: { space: Space; open: 
   );
 }
 
-/** Mockup 1: a space's page. Its chats on the left; instructions, sources, defaults and memory as editable cards on the right. */
+/**
+ * A space's page (LAZYAGENTS-213 frame A): its chats, and when it tracks work, tabs to its
+ * tickets, epics and runs. Its instructions, sources, memory, defaults and work are the About
+ * tab of the companion panel, beside the work chat.
+ */
 export function SpaceScreen({ id }: { id: string }) {
   const q = useSpace(id);
   const health = useHarnessHealth();
@@ -556,7 +721,10 @@ export function SpaceScreen({ id }: { id: string }) {
             <>
               <SpaceTile name={space.name} color={space.color} size={36} className="rounded-lg" />
               <div className="flex min-w-[0px] flex-1 flex-col gap-[4px]">
-                <h1 className="truncate text-22 font-semibold leading-7 text-fg">{space.name}</h1>
+                <h1 className="flex min-w-[0px] items-baseline gap-[10px] text-22 font-semibold leading-7 text-fg">
+                  <span className="truncate">{space.name}</span>
+                  {space.work && <span className="flex-none font-mono text-12 font-normal text-fg-tertiary">{space.work.key}</span>}
+                </h1>
                 <p className="truncate text-13 text-fg-tertiary">{spaceSubtitle(space)}</p>
               </div>
               <Button variant="secondary" onClick={() => setEditing(true)}>Settings</Button>
@@ -585,19 +753,32 @@ export function SpaceScreen({ id }: { id: string }) {
             <NoHarnessNote health={health} />
           </div>
         )}
-        <div className="mt-[32px] grid grid-cols-[minmax(0,1fr)_308px] gap-[32px] max-lg:grid-cols-1">
-          <div className="flex min-w-[0px] flex-col gap-[40px]">
-            <Composer space={space} disabled={noHarness} />
-            <ChatList space={space} />
-          </div>
-          <aside aria-label="Space settings" className="flex flex-col gap-[16px]">
-            <InstructionsCard key={`i-${space.updated_at}`} space={space} />
-            <SourcesCard space={space} onAdd={() => setSources(true)} />
-            <DefaultsCard space={space} />
-            <MemoryCard space={space} />
-          </aside>
+        <SpaceTabs space={space} />
+        <div className="mt-[24px] flex min-w-[0px] flex-col gap-[40px]">
+          <Composer space={space} disabled={noHarness} />
+          <ChatList space={space} />
         </div>
       </div>
+      <CompanionDock
+        app="space"
+        tabs={[
+          {
+            id: "about",
+            label: "About",
+            icon: "sidebar",
+            content: (
+              <aside aria-label="Space settings" className="flex min-h-0 flex-1 flex-col gap-[16px] overflow-y-auto p-[16px]">
+                <InstructionsCard key={`i-${space.updated_at}`} space={space} />
+                <SourcesCard space={space} onAdd={() => setSources(true)} />
+                <MemoryCard space={space} />
+                <DefaultsCard space={space} />
+                <WorkCard key={`w-${space.work?.key ?? ""}`} space={space} />
+              </aside>
+            ),
+          },
+          { id: "chat", label: "Chat", icon: "msg", content: <WorkChat /> },
+        ]}
+      />
       <SourcesDialog spaceId={space.id} spaceName={space.name} open={sources} onOpenChange={setSources} />
       <DeleteSpaceDialog space={space} open={deleting} onOpenChange={setDeleting} />
     </div>

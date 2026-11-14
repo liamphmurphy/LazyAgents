@@ -13,7 +13,7 @@ export type LibrarySource = "yours" | "projects";
 export function LibrarySourceSwitch({ source }: { source: LibrarySource }) {
   const items: Array<{ key: LibrarySource; label: string; href: string }> = [
     { key: "yours", label: "Yours", href: "/library" },
-    { key: "projects", label: "From projects", href: "/library?source=projects" },
+    { key: "projects", label: "From spaces", href: "/library?source=projects" },
   ];
   return (
     <nav aria-label="Library source" className="flex w-fit rounded-lg border border-border-strong bg-surface-sunken p-0.5">

@@ -227,7 +227,7 @@ function TopTickets({ tickets, projectNames, agentNames }: { tickets: Schemas["C
             <tr>
               <th scope="col" className="w-8 px-[18px] py-2 font-medium">#</th>
               <th scope="col" className="px-2 py-2 font-medium">Ticket</th>
-              <th scope="col" className="w-44 px-2 py-2 font-medium max-md:hidden">Project</th>
+              <th scope="col" className="w-44 px-2 py-2 font-medium max-md:hidden">Space</th>
               <th scope="col" className="w-16 px-2 py-2 text-right font-medium">Points</th>
               <th scope="col" className="w-24 px-2 py-2 text-right font-medium">Spend</th>
               <th scope="col" className="w-28 px-2 py-2 text-right font-medium">Cost / point</th>
@@ -347,7 +347,7 @@ export function CostsScreen() {
   else if (data.total.runs === 0)
     body = (
       <EmptyState icon="dollar" title="No spend in this range">
-        Runs record their spend as they work. Try a longer range{project ? " or All projects" : ""}.
+        Runs record their spend as they work. Try a longer range{project ? " or All spaces" : ""}.
       </EmptyState>
     );
   else
@@ -377,8 +377,8 @@ export function CostsScreen() {
         <div className="grid grid-cols-2 gap-5 max-lg:grid-cols-1">
           <Breakdown title="By agent" hint="Rows open the agent’s run history" rows={data.agents} total={data.total} metric="runs" href={(s) => `/runs?agent=${encodeURIComponent(s.key)}`} />
           <Breakdown
-            title="By project"
-            hint={project ? undefined : "Rows scope the page to the project"}
+            title="By space"
+            hint={project ? undefined : "Rows scope the page to the space"}
             rows={data.projects}
             total={data.total}
             metric="runs"

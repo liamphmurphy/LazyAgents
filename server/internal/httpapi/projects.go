@@ -21,12 +21,12 @@ func (s *Server) ListProjects(ctx context.Context, _ api.ListProjectsRequestObje
 	return out, nil
 }
 func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequestObject) (api.CreateProjectResponseObject, error) {
-	_, _, ws := me(ctx)
+	u, _, ws := me(ctx)
 	if req.Body == nil {
 		return nil, apperr.Invalid("body", "required")
 	}
 	in := projects.Config{Name: req.Body.Name, Color: req.Body.Color, RepoURL: req.Body.RepoUrl, DefaultBranch: req.Body.DefaultBranch}
-	p, err := (projects.Service{Pool: s.Pool}).Create(ctx, ws, req.Body.Key, in)
+	p, err := (projects.Service{Pool: s.Pool}).Create(ctx, ws, u.ID, req.Body.Key, in)
 	if err != nil {
 		return nil, err
 	}

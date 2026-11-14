@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, postForm, unwrap, type Schemas } from "./client";
 import { chatKeys, memoryKeys } from "./hooks";
+import { spaceHex } from "../spaces";
 
 export type Space = Schemas["ChatSpace"];
 export type SpaceSource = Schemas["ChatSpaceSource"];
@@ -40,12 +41,15 @@ export function useSpaceChats(id?: string, archived = false) {
 
 function useSpaceInvalidate() {
   const qc = useQueryClient();
-  // Chats carry their space's name and counts; memories their space's name.
+  // Chats carry their space's name and counts; memories their space's name; a space's work
+  // (its key, name and color) is in the bootstrap's projects and every ticket view.
   return () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: spaceKeys.all }),
       qc.invalidateQueries({ queryKey: chatKeys.all }),
       qc.invalidateQueries({ queryKey: memoryKeys.all }),
+      qc.invalidateQueries({ queryKey: ["bootstrap"] }),
+      qc.invalidateQueries({ queryKey: ["projects"] }),
     ]);
 }
 
@@ -76,6 +80,50 @@ export function useDeleteSpace() {
     },
     onSuccess: (_, id) => qc.removeQueries({ queryKey: spaceKeys.detail(id) }),
     onSettled: () => void done(),
+  });
+}
+
+/** Makes a space track work: a key, and optionally its repository (LAZYAGENTS-213). */
+export function useTrackWork() {
+  const done = useSpaceInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; work: Schemas["SpaceWorkInput"] }) =>
+      unwrap(api.PUT("/chat-spaces/{spaceId}/work", { params: { path: { spaceId: v.id } }, body: v.work })),
+    onSettled: () => void done(),
+  });
+}
+
+/** Stops tracking work in a space; refused while its work has tickets. */
+export function useStopWork() {
+  const done = useSpaceInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE("/chat-spaces/{spaceId}/work", { params: { path: { spaceId: id } } })),
+    onSettled: () => void done(),
+  });
+}
+
+/** Changes a space's work: its repository, branch, or archiving. Its name and color are the space's. */
+export function useUpdateWork() {
+  const done = useSpaceInvalidate();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { space: Space; patch: { repo_url?: string; default_branch?: string; archived?: boolean } }) => {
+      const w = v.space.work!;
+      return unwrap(
+        api.PUT("/projects/{key}", {
+          params: { path: { key: w.key } },
+          body: {
+            name: v.space.name,
+            color: spaceHex(v.space.color),
+            repo_url: v.patch.repo_url ?? w.repo_url ?? "",
+            default_branch: v.patch.default_branch ?? w.default_branch,
+            archived: v.patch.archived ?? w.archived,
+            revision: w.revision,
+          },
+        }),
+      );
+    },
+    onSettled: () => Promise.all([done(), qc.invalidateQueries({ queryKey: ["tickets"] })]),
   });
 }
 

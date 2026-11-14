@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 import { floatPanel } from "@/components/domain/pickers";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { TextInput } from "@/components/ui/primitives";
-import { ProjectRadioItems, useChatProject } from "./chat-project";
+import { SpaceRadioItems, useChatSpace } from "./chat-space";
 import { PersonaAvatar, PersonaName, type PersonaLook } from "./persona";
 import { SecretsList, useChatSecrets } from "./secrets";
 
@@ -36,7 +36,7 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
   onCommitEmail: () => void;
 }) {
   const update = useUpdateChat();
-  const project = useChatProject(c, running);
+  const space = useChatSpace(c, running);
   const secrets = useChatSecrets(c.id);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(c.title);
@@ -111,22 +111,20 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
               <span className="flex-1">Rename…</span>
             </DropdownMenu.Item>
             <DropdownMenu.Separator className={sep} />
-            {/* In a space the project sits with the space's context chips below the header. */}
-            {!c.space && (
-              <DropdownMenu.Sub>
-                <DropdownMenu.SubTrigger className={item} disabled={project.locked} data-testid="chat-project" aria-label={project.current ? `Default project: ${project.current.name}` : "Set a default project"}>
-                  <Icon name="briefcase" size={14} />
-                  <span className="flex-1">Project</span>
-                  <span className={value}>{project.current?.name ?? "No default"}</span>
-                  <Icon name="chevr" size={12} className="text-fg-tertiary" />
-                </DropdownMenu.SubTrigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent sideOffset={6} className={cx(floatPanel, "w-[240px]")}>
-                    <ProjectRadioItems chat={c} projects={project.projects} onPick={project.pick} />
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Sub>
-            )}
+            {/* Which space the chat is in (LAZYAGENTS-213): its context, and where its tickets go. */}
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className={item} disabled={space.locked} data-testid="chat-space-menu" aria-label={space.current ? `In ${space.current.name}` : "Put this chat in a space"}>
+                <Icon name="briefcase" size={14} />
+                <span className="flex-1">Space</span>
+                <span className={value}>{space.current?.name ?? "None"}</span>
+                <Icon name="chevr" size={12} className="text-fg-tertiary" />
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent sideOffset={6} className={cx(floatPanel, "w-[260px]")}>
+                  <SpaceRadioItems chat={c} spaces={space.spaces} onPick={space.pick} />
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
             {c.workspace_path && (
               <DropdownMenu.Item
                 className={item}

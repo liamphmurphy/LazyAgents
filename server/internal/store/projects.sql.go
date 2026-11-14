@@ -12,7 +12,7 @@ import (
 )
 
 const createConfiguredProject = `-- name: CreateConfiguredProject :one
-INSERT INTO projects(workspace_id,key,name,color,repo_url,default_branch) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision
+INSERT INTO projects(workspace_id,key,name,color,repo_url,default_branch) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision, space_id
 `
 
 type CreateConfiguredProjectParams struct {
@@ -47,8 +47,35 @@ func (q *Queries) CreateConfiguredProject(ctx context.Context, arg CreateConfigu
 		&i.UpdatedAt,
 		&i.Archived,
 		&i.Revision,
+		&i.SpaceID,
 	)
 	return i, err
+}
+
+const createSpaceForProject = `-- name: CreateSpaceForProject :one
+WITH made AS (
+  INSERT INTO chat_spaces (workspace_id, user_id, name, color, project_id, space_memory)
+  SELECT p.workspace_id, $1, left(btrim(p.name), 80), nearest_space_color(p.color), p.id, $2
+    FROM projects p WHERE p.id = $3 AND p.space_id IS NULL
+  RETURNING id, project_id
+)
+UPDATE projects SET space_id = made.id FROM made WHERE projects.id = made.project_id
+RETURNING made.id::uuid AS space_id
+`
+
+type CreateSpaceForProjectParams struct {
+	UserID      uuid.UUID
+	SpaceMemory bool
+	ProjectID   uuid.UUID
+}
+
+// Gives a project with no space its own, owned by user_id: the project's name and nearest
+// space color, and the project as where its new chats file tickets.
+func (q *Queries) CreateSpaceForProject(ctx context.Context, arg CreateSpaceForProjectParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createSpaceForProject, arg.UserID, arg.SpaceMemory, arg.ProjectID)
+	var space_id uuid.UUID
+	err := row.Scan(&space_id)
+	return space_id, err
 }
 
 const freezeLegacyProjectRepositories = `-- name: FreezeLegacyProjectRepositories :exec
@@ -64,8 +91,50 @@ func (q *Queries) FreezeLegacyProjectRepositories(ctx context.Context, id uuid.U
 	return err
 }
 
+const getProjectBySpace = `-- name: GetProjectBySpace :one
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision, space_id FROM projects WHERE space_id = $1
+`
+
+// The work a space tracks (LAZYAGENTS-213): its project, if it has one.
+func (q *Queries) GetProjectBySpace(ctx context.Context, spaceID *uuid.UUID) (Project, error) {
+	row := q.db.QueryRow(ctx, getProjectBySpace, spaceID)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Key,
+		&i.Name,
+		&i.Color,
+		&i.NextTicketSeq,
+		&i.RepoUrl,
+		&i.DefaultBranch,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Archived,
+		&i.Revision,
+		&i.SpaceID,
+	)
+	return i, err
+}
+
+const linkProjectSpace = `-- name: LinkProjectSpace :exec
+WITH linked AS (UPDATE projects SET space_id = $2 WHERE projects.id = $1)
+UPDATE chat_spaces SET project_id = $1, updated_at = now() WHERE chat_spaces.id = $2
+`
+
+type LinkProjectSpaceParams struct {
+	ProjectID *uuid.UUID
+	SpaceID   uuid.UUID
+}
+
+// Makes a space track work: the project is its, and its new chats file tickets there.
+func (q *Queries) LinkProjectSpace(ctx context.Context, arg LinkProjectSpaceParams) error {
+	_, err := q.db.Exec(ctx, linkProjectSpace, arg.ProjectID, arg.SpaceID)
+	return err
+}
+
 const lockProject = `-- name: LockProject :one
-SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision FROM projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision, space_id FROM projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE
 `
 
 type LockProjectParams struct {
@@ -89,12 +158,13 @@ func (q *Queries) LockProject(ctx context.Context, arg LockProjectParams) (Proje
 		&i.UpdatedAt,
 		&i.Archived,
 		&i.Revision,
+		&i.SpaceID,
 	)
 	return i, err
 }
 
 const lockProjectByKey = `-- name: LockProjectByKey :one
-SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision FROM projects WHERE workspace_id=$1 AND key=$2 FOR UPDATE
+SELECT id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision, space_id FROM projects WHERE workspace_id=$1 AND key=$2 FOR UPDATE
 `
 
 type LockProjectByKeyParams struct {
@@ -118,6 +188,7 @@ func (q *Queries) LockProjectByKey(ctx context.Context, arg LockProjectByKeyPara
 		&i.UpdatedAt,
 		&i.Archived,
 		&i.Revision,
+		&i.SpaceID,
 	)
 	return i, err
 }
@@ -134,8 +205,69 @@ func (q *Queries) ProjectHasLiveRuns(ctx context.Context, projectID uuid.UUID) (
 	return column_1, err
 }
 
+const projectHasTickets = `-- name: ProjectHasTickets :one
+SELECT EXISTS(SELECT 1 FROM tickets WHERE project_id = $1)::boolean
+`
+
+func (q *Queries) ProjectHasTickets(ctx context.Context, projectID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, projectHasTickets, projectID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const syncProjectFromSpace = `-- name: SyncProjectFromSpace :exec
+UPDATE projects SET name = $1, color = $2, revision = revision + 1
+ WHERE space_id = $3 AND (name <> $1 OR color <> $2)
+`
+
+type SyncProjectFromSpaceParams struct {
+	Name    string
+	Color   string
+	SpaceID *uuid.UUID
+}
+
+// A space's name and color follow onto the project it tracks; a project's name is up to 100
+// characters, a space's 80, so a space name always fits.
+func (q *Queries) SyncProjectFromSpace(ctx context.Context, arg SyncProjectFromSpaceParams) error {
+	_, err := q.db.Exec(ctx, syncProjectFromSpace, arg.Name, arg.Color, arg.SpaceID)
+	return err
+}
+
+const syncSpaceFromProject = `-- name: SyncSpaceFromProject :exec
+UPDATE chat_spaces SET name = left(btrim($1::text), 80), color = nearest_space_color($2::text), updated_at = now()
+ WHERE id = (SELECT space_id FROM projects WHERE projects.id = $3)
+   AND (name <> left(btrim($1::text), 80) OR color <> nearest_space_color($2::text))
+`
+
+type SyncSpaceFromProjectParams struct {
+	Name      string
+	Color     string
+	ProjectID uuid.UUID
+}
+
+// A project's name and color follow onto its space.
+func (q *Queries) SyncSpaceFromProject(ctx context.Context, arg SyncSpaceFromProjectParams) error {
+	_, err := q.db.Exec(ctx, syncSpaceFromProject, arg.Name, arg.Color, arg.ProjectID)
+	return err
+}
+
+const unlinkProjectSpace = `-- name: UnlinkProjectSpace :exec
+WITH done AS (
+  UPDATE projects SET space_id = NULL, archived = true, revision = revision + 1 WHERE projects.id = $1 RETURNING projects.id
+)
+UPDATE chat_spaces SET project_id = NULL, updated_at = now() WHERE chat_spaces.project_id IN (SELECT id FROM done)
+`
+
+// A space stops tracking work. The project leaves it archived, with nothing to file into; a
+// space that filed its tickets there files none.
+func (q *Queries) UnlinkProjectSpace(ctx context.Context, projectID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, unlinkProjectSpace, projectID)
+	return err
+}
+
 const updateProject = `-- name: UpdateProject :one
-UPDATE projects SET name=$2,color=$3,repo_url=$4,default_branch=$5,archived=$6,revision=revision+1 WHERE id=$1 RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision
+UPDATE projects SET name=$2,color=$3,repo_url=$4,default_branch=$5,archived=$6,revision=revision+1 WHERE id=$1 RETURNING id, workspace_id, key, name, color, next_ticket_seq, repo_url, default_branch, created_at, updated_at, archived, revision, space_id
 `
 
 type UpdateProjectParams struct {
@@ -170,6 +302,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.UpdatedAt,
 		&i.Archived,
 		&i.Revision,
+		&i.SpaceID,
 	)
 	return i, err
 }

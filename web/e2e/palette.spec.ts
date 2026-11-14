@@ -192,8 +192,8 @@ test("actions: new ticket, start planning, new chat and switch project", async (
   expect(chats).toEqual([{ project: "WEB" }]);
 
   await page.goto("/tickets?layout=board&project=WEB");
-  await run("> switch", /Switch project…/);
-  await expect(page.getByRole("combobox", { name: "Switch to project" })).toBeFocused();
+  await run("> switch", /Switch space…/);
+  await expect(page.getByRole("combobox", { name: "Switch to space" })).toBeFocused();
   await page.keyboard.type("oper");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=OPS$/);

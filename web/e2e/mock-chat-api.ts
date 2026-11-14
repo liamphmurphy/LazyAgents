@@ -45,6 +45,8 @@ type Chat = {
   parent_chat_id?: string; anchor_message_id?: string; hidden?: boolean;
   // Personas that joined besides the host (chat_participants); listed by their persona filter too.
   guest_persona_ids?: string[];
+  /** The space the chat is in (PATCH space_id). */
+  space?: components["schemas"]["ChatSpaceRef"];
 };
 type Message = {
   id: string; seq: number; role: "user" | "assistant" | "system"; body_md: string;
@@ -83,6 +85,10 @@ export type MockProposal = {
   avatar_state?: "pending" | "ready" | "failed"; avatar_attachment_id?: string;
 };
 export type MockOptions = { codexAvailable?: boolean; replyDelayMs?: number; personas?: MockPersona[]; suggestions?: Array<{ title: string; prompt: string; icon: string }>; emails?: string[];
+  /** GET /chat-spaces; PATCH /chats/{id} with space_id moves a chat into one (none by default). */
+  spaces?: components["schemas"]["ChatSpace"][];
+  /** Keys of work with tickets: stopping it is refused (409). */
+  workWithTickets?: string[];
   /** false: a fresh install that hasn't finished the Welcome Wizard. */
   onboarded?: boolean };
 
@@ -131,6 +137,8 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
   const prompts = new Map<string, string>();
   const runEvents = new Map<string, Array<{ seq: number; type: string; at: string; payload: Record<string, unknown> }>>();
   const unhandled: string[] = [];
+  const spaces = (opts.spaces ?? []).map((x) => ({ ...x }));
+  const workRequests: string[] = [];
   const connectors: { id: string; name: string; slug: string; url: string; auth_kind: unknown; status: string; last_error: string; revision: number; created_at: string; persona_ids: string[]; tools: { name: string; description: string; write: boolean; policy: string }[] }[] = [];
   const connectorApprovals: Record<string, unknown>[] = [];
   const connectorDecisions: string[] = [];
@@ -853,6 +861,13 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
         if (c.state === "running") return fail(err(409, "conflict", "A turn is running."));
         if (typeof b.title === "string") c.title = b.title;
         if (typeof b.archived === "boolean") c.archived = b.archived;
+        if (typeof b.space_id === "string") {
+          // As the server does: the chat files tickets where its new space does, unless the patch names a project.
+          const sp = spaces.find((x) => x.id === b.space_id);
+          if (b.space_id && !sp) return fail(err(422, "invalid", "unknown space", "space_id"));
+          c.space = sp && { id: sp.id, name: sp.name, color: sp.color, space_memory: sp.space_memory, source_count: sp.source_count, has_instructions: !!sp.instructions };
+          if (sp?.project && typeof b.project !== "string") c.project = sp.project;
+        }
         if (typeof b.project === "string") c.project = b.project || undefined;
         touch(c);
         return json(ref(c));
@@ -955,9 +970,46 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       }
     }
 
-    // The chat sidebar lists spaces on every page; these specs have none.
+    // The chat sidebar lists spaces on every page; most specs have none.
     if (path === "/chat-spaces" && method === "GET") {
-      return json({ spaces: [] });
+      return json({ spaces: spaces });
+    }
+    // A space's page and its work (LAZYAGENTS-213), as the server answers them.
+    const spaceRoute = path.match(/^\/chat-spaces\/([^/]+)(?:\/(work|sources))?$/);
+    if (spaceRoute) {
+      const sp = spaces.find((x) => x.id === spaceRoute[1]);
+      if (!sp) return fail(err(404, "not_found", "Not found"));
+      if (!spaceRoute[2] && method === "GET") return json(sp);
+      if (spaceRoute[2] === "sources" && method === "GET") return json({ sources: [] });
+      if (spaceRoute[2] === "work" && method === "PUT") {
+        const b = body();
+        workRequests.push(`PUT ${path} ${JSON.stringify(b)}`);
+        const key = String(b.key ?? "").toUpperCase();
+        if (!/^[A-Z][A-Z0-9]{1,9}$/.test(key)) return fail(err(422, "invalid", "use 2–10 letters or digits, starting with a letter", "key"));
+        if (sp.work) return fail(err(409, "conflict", "this space already tracks work"));
+        if (spaces.some((x) => x.work?.key === key)) return fail(err(409, "conflict", `the key ${key} is already in use`));
+        sp.work = { key, default_branch: "main", archived: false, revision: 1, ...(b.repo_url ? { repo_url: String(b.repo_url) } : {}) };
+        sp.project = key;
+        return json(sp);
+      }
+      if (spaceRoute[2] === "work" && method === "DELETE") {
+        workRequests.push(`DELETE ${path}`);
+        if (!sp.work) return fail(err(409, "conflict", "this space doesn't track work"));
+        if (opts.workWithTickets?.includes(sp.work.key)) return fail(err(409, "conflict", `${sp.work.key} has tickets, so it keeps tracking work; archive it instead`));
+        sp.work = undefined;
+        sp.project = undefined;
+        return json(sp);
+      }
+    }
+    const workRoute = path.match(/^\/projects\/([^/]+)$/);
+    if (workRoute && method === "PUT") {
+      const b = body();
+      workRequests.push(`PUT ${path} ${JSON.stringify(b)}`);
+      const sp = spaces.find((x) => x.work?.key === workRoute[1]);
+      if (!sp?.work) return fail(err(404, "not_found", "Not found"));
+      if (b.revision !== sp.work.revision) return fail(err(409, "conflict", "the space’s work changed; reload before saving"));
+      sp.work = { ...sp.work, repo_url: (b.repo_url as string) || undefined, default_branch: String(b.default_branch), archived: !!b.archived, revision: sp.work.revision + 1 };
+      return json({ id: `project-${sp.work.key}`, key: sp.work.key, name: sp.name, color: String(b.color), default_branch: sp.work.default_branch, archived: sp.work.archived, revision: sp.work.revision, space_id: sp.id });
     }
 
     if (path === "/personas" && method === "GET") {
@@ -1095,7 +1147,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       (window as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
     });
     await page.route("**/api/v1/**", handle);
-    return { asides, inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, ticketChanges, ticketChangeDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
+    return { spaces, workRequests, asides, inbox, dock, apiSecrets, apiSecretPosts, secretApprovals, secretDecisions, secretProposals, chatSecrets, connectors, connectorApprovals, connectorDecisions, ticketChanges, ticketChangeDecisions, scheduledTasks, proposals, decisions, chats, unhandled, posted, created, wikiPages, artifactForms, memories, memoryRequests, memoryPatches, memoryImports, personas, personaRequests, chatPersonaFilters, updatePersona, profileRequests, commitEmailRequests };
   })();
 }
 

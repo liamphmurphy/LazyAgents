@@ -55,7 +55,7 @@ const GLYPH: Partial<Record<PaletteGroup, string>> = {
   "Jump to": "↵",
   "Start a chat": "☺",
   Apps: "⊞",
-  "Switch project": "⇄",
+  "Switch space": "⇄",
 };
 
 type Item = {
@@ -80,7 +80,7 @@ type Item = {
 
 const MARK = "rounded-[3px] bg-accent-soft text-fg underline decoration-accent decoration-2 underline-offset-4";
 
-const ROOT_KEYS = [["↑↓", "navigate"], ["↵", "open"], ["⌘↵", "new tab"], ["Tab", "project scope"], [">", "commands"], ["is: status:", "filters"]] as const;
+const ROOT_KEYS = [["↑↓", "navigate"], ["↵", "open"], ["⌘↵", "new tab"], ["Tab", "space scope"], [">", "commands"], ["is: status:", "filters"]] as const;
 const PROJECT_KEYS = [["↑↓", "navigate"], ["↵", "switch"], ["⌫", "back"], ["Esc", "close"]] as const;
 
 /** A single-key shortcut ("C", "?") reads as a key; anything longer is context. */
@@ -214,10 +214,10 @@ export function CommandMenu() {
       id: `project-${p.key}`,
       title: `${p.key} · ${p.name}`,
       meta: p.key === actionProject ? "current" : undefined,
-      group: "Switch project" as const,
+      group: "Switch space" as const,
       perform: () => switchTo(p.key),
     }))
-    .filter((i) => matchesWords(i.title, mode === "projects" ? query : title.replace(/^(switch|project)\b\s*/i, "")));
+    .filter((i) => matchesWords(i.title, mode === "projects" ? query : title.replace(/^(switch|project|space)\b\s*/i, "")));
 
   const key = mode === "root" && !commands ? ticketKeyFrom(query, actionProject) : undefined;
   const jump: Item[] = key
@@ -349,7 +349,7 @@ export function CommandMenu() {
     },
     {
       id: "switch",
-      title: "Switch project…",
+      title: "Switch space…",
       glyph: "⇄",
       group: "Actions",
       perform: () => {
@@ -519,7 +519,7 @@ export function CommandMenu() {
         >
           {/* A hairline of the theme's accent along the top edge: the palette's only ornament. */}
           <div aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent opacity-70" />
-          <Dialog.Title className="sr-only">{mode === "projects" ? "Switch project" : "Search and commands"}</Dialog.Title>
+          <Dialog.Title className="sr-only">{mode === "projects" ? "Switch space" : "Search and commands"}</Dialog.Title>
           <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5 max-md:pr-1.5 max-md:py-1.5">
             <Icon name="search" size={16} className="flex-none text-fg-tertiary" />
             {mode === "projects" ? (
@@ -538,14 +538,14 @@ export function CommandMenu() {
                 <button
                   type="button"
                   aria-pressed={scope}
-                  aria-label={scope ? `Searching ${project} only; search all projects` : `Searching all projects; search ${project} only`}
+                  aria-label={scope ? `Searching ${project} only; search all spaces` : `Searching all spaces; search ${project} only`}
                   className={cx(
                     "rounded-full border px-2.5 py-0.5 text-12 font-medium transition-colors",
                     scope ? "border-transparent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover",
                   )}
                   onClick={() => setScope(!scope)}
                 >
-                  {scope ? project : "All projects"}
+                  {scope ? project : "All spaces"}
                 </button>
               )
             )}
@@ -554,7 +554,7 @@ export function CommandMenu() {
               autoComplete="off"
               spellCheck={false}
               role="combobox"
-              aria-label={mode === "projects" ? "Switch to project" : "Search everything"}
+              aria-label={mode === "projects" ? "Switch to space" : "Search everything"}
               aria-expanded={items.length > 0}
               aria-autocomplete="list"
               aria-controls="command-results"
@@ -564,7 +564,7 @@ export function CommandMenu() {
                 setQuery(e.target.value);
                 setActive(0);
               }}
-              placeholder={mode === "projects" ? "Switch to project…" : "Search, or try is:ticket status:done…"}
+              placeholder={mode === "projects" ? "Switch to space…" : "Search, or try is:ticket status:done…"}
               className="min-w-0 flex-1 bg-transparent text-15 outline-none placeholder:text-fg-tertiary max-md:text-16"
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" && items.length) {

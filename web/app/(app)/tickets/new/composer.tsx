@@ -1,6 +1,7 @@
 "use client";
 
 import { DropdownMenu, Dialog } from "radix-ui";
+import { workSettingsHref } from "@/lib/spaces";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import type { Priority, TicketStatus } from "@/lib/api/client";
@@ -107,9 +108,9 @@ export function Composer() {
           <div className="flex items-center gap-2 px-[18px] pt-3.5">
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
-                <Chip aria-label="Project">
+                <Chip aria-label="Space">
                   {project && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: project.color }} />}
-                  {project?.name ?? "Project"}
+                  {project?.name ?? "Space"}
                   <Icon name="chev" size={12} className="text-fg-tertiary" />
                 </Chip>
               </DropdownMenu.Trigger>
@@ -139,7 +140,7 @@ export function Composer() {
           </div>
 
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
-            {boot.data && !project && <div className="space-y-2 text-14 text-fg-secondary"><p>Choose an active project before creating a ticket.</p><ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink></div>}
+            {boot.data && !project && <div className="space-y-2 text-14 text-fg-secondary"><p>Choose a space that tracks work before creating a ticket.</p><ButtonLink href={workSettingsHref()} variant="outline">New space</ButtonLink></div>}
             <label htmlFor="nt-title" className="sr-only">
               Title
             </label>

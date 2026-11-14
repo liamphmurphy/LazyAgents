@@ -5,7 +5,7 @@ const screen = (page: Page) => page.locator('[data-testid="board-screen"]:visibl
 const card = (page: Page, key = "WEB-1") => screen(page).getByRole("article", { name: `Ticket ${key}`, exact: true });
 const column = (page: Page, status: string) => screen(page).getByTestId(`column-${status}`);
 async function switchProject(page: Page, name: string) {
-  await page.getByRole("button", { name: /^Switch project/ }).click();
+  await page.getByRole("button", { name: /^Switch space/ }).click();
   await page.getByRole("menuitemradio", { name: new RegExp(`^${name}`) }).click();
 }
 async function move(page: Page, key: string, to: string) {

@@ -14,7 +14,6 @@ import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { AppearanceSection } from "./appearance-section";
 import { BackupSection } from "./backup-section";
 import { ImageEngineSection } from "./image-engine-section";
-import { ProjectsSection } from "./projects/projects-screen";
 import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
 import { SignInSection, useAuthStatus } from "./sign-in-section";
@@ -31,7 +30,6 @@ const noSubscribe = () => () => {};
  * leaves the others usable, and each says what breaks when something is missing.
  */
 export function SettingsScreen() {
-  const boot = useBootstrap();
   const secrets = useSecrets();
   const runner = useRunnerStatus();
   const auth = useAuthStatus();
@@ -43,15 +41,13 @@ export function SettingsScreen() {
     if (mounted && window.location.hash) document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
   }, [mounted]);
   const missing = secrets.data ? missingConnections(secrets.data.secrets).length : 0;
-  const activeProjects = boot.data?.projects.filter((p) => !p.archived).length ?? 0;
   const nav: { id: string; label: string; health: Health; badge?: string }[] = [
     { id: "workspace", label: "Workspace", health: !secrets.data ? "unknown" : secrets.data.key_configured ? "ok" : "attention" },
     { id: "secrets", label: "Provider credentials", health: !secrets.data ? "unknown" : missing || !secrets.data.key_configured ? "attention" : "ok", badge: missing ? `${missing} off` : undefined },
     { id: "images", label: "Image engine", health: "idle" },
     { id: "repositories", label: "Repository discovery", health: "idle" },
-    { id: "projects", label: "Projects", health: !boot.data ? "unknown" : activeProjects ? "ok" : "attention" },
     { id: "runners", label: "Runner backends", health: !runner.data ? "unknown" : runner.data.online ? "ok" : "attention" },
-    { id: "overrides", label: "Project overrides", health: "idle" },
+    { id: "overrides", label: "Space overrides", health: "idle" },
     { id: "sign-in", label: "Sign-in", health: !auth.data ? "unknown" : auth.data.password_set ? "ok" : "attention" },
     { id: "backup", label: "Backup & move", health: "idle" },
     { id: "appearance", label: "Appearance", health: "idle" },
@@ -85,7 +81,7 @@ export function SettingsScreen() {
           ))}
         </nav>
         <div className="flex min-w-0 max-w-[820px] flex-col gap-10">
-          <Section id="workspace" title="Workspace" lead="Shared by every project. Secret encryption is configured on the API server.">
+          <Section id="workspace" title="Workspace" lead="Shared by every space. Secret encryption is configured on the API server.">
             <WorkspaceSection />
           </Section>
           <Section
@@ -99,9 +95,6 @@ export function SettingsScreen() {
             <ImageEngineSection />
           </Section>
           <Section id="repositories" title="Repositories & GitHub owners"><RepositorySourcesSection /></Section>
-          <Section id="projects" title="Projects" lead="One project maps to one GitHub repository. Without one, runs start in an empty workspace and can’t push.">
-            <ProjectsSection />
-          </Section>
           <Section
             id="runners"
             title="Runner backends"
@@ -109,7 +102,7 @@ export function SettingsScreen() {
           >
             <RunnerSection />
           </Section>
-          <Section id="overrides" title="Project overrides" lead="Customize an agent for one project while keeping future agent definition updates.">
+          <Section id="overrides" title="Space overrides" lead="Customize an agent for one space while keeping future agent definition updates.">
             <ProjectOverridesSection />
           </Section>
           <Section id="sign-in" title="Sign-in" lead="How you get into Vesper from a browser that isn’t signed in.">
@@ -346,10 +339,10 @@ function Stat({ label, value, of }: { label: string; value: number; of?: number 
 function ProjectOverridesSection() {
   const boot = useBootstrap();
   return <Card>
-    <p className="text-14 text-fg-secondary">Add skills to extend an agent’s defaults, or remove skills to stop injecting them for a project. With no override, the project uses the agent definition as is. Changes apply to new runs; active runs keep their saved snapshot.</p>
-    <p className="mt-2 text-14 text-fg-secondary">Open an agent’s Skills tab to inspect its skills. In Project overrides, choose Add or an existing project to edit skill additions and removals.</p>
-    {boot.isPending && <div aria-label="Loading project override editors" className="mt-4"><Skeleton className="h-16" /></div>}
-    {boot.isError && <Banner tone="blocked" title="Couldn’t load project override editors" actions={<Button variant="outline" onClick={() => void boot.refetch()}>Retry</Button>}>Agent and project details are unavailable.</Banner>}
-    {boot.data && (!boot.data.projects.length || !boot.data.agents.length ? <p className="mt-4 text-14 text-fg-tertiary">No project overrides available yet. Create a project and an agent first; until then agents use their default skills.</p> : <ul className="mt-4 flex flex-col gap-2">{boot.data.agents.map((agent) => <li key={agent.id}><Link href={`/agents/${agent.handle}?tab=skills#overrides`} className="text-14 text-accent">Manage {agent.name} project skills →</Link></li>)}</ul>)}
+    <p className="text-14 text-fg-secondary">Add skills to extend an agent’s defaults, or remove skills to stop injecting them for a space. With no override, the space uses the agent definition as is. Changes apply to new runs; active runs keep their saved snapshot.</p>
+    <p className="mt-2 text-14 text-fg-secondary">Open an agent’s Skills tab to inspect its skills. In Space overrides, choose Add or an existing space to edit skill additions and removals.</p>
+    {boot.isPending && <div aria-label="Loading space override editors" className="mt-4"><Skeleton className="h-16" /></div>}
+    {boot.isError && <Banner tone="blocked" title="Couldn’t load space override editors" actions={<Button variant="outline" onClick={() => void boot.refetch()}>Retry</Button>}>Agent and space details are unavailable.</Banner>}
+    {boot.data && (!boot.data.projects.length || !boot.data.agents.length ? <p className="mt-4 text-14 text-fg-tertiary">No space overrides available yet. Create a space that tracks work and an agent first; until then agents use their default skills.</p> : <ul className="mt-4 flex flex-col gap-2">{boot.data.agents.map((agent) => <li key={agent.id}><Link href={`/agents/${agent.handle}?tab=skills#overrides`} className="text-14 text-accent">Manage {agent.name} project skills →</Link></li>)}</ul>)}
   </Card>;
 }

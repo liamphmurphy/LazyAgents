@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,6 +71,8 @@ func TestChatCreatesSpacesTasksAndModules(t *testing.T) {
 		t.Fatalf("create_space = %d %v", code, out)
 	}
 	spaces, err := q.ListChatSpaces(ctx, store.ListChatSpacesParams{WorkspaceID: ws, UserID: me.ID})
+	// The seeded projects' spaces file under their own work; Health is the only other.
+	spaces = slices.DeleteFunc(spaces, func(sp store.ChatSpace) bool { return sp.ProjectID != nil })
 	if err != nil || len(spaces) != 1 || spaces[0].Name != "Health" || spaces[0].Color != "teal" || spaces[0].PersonaID == nil || *spaces[0].PersonaID != coach.ID {
 		t.Fatalf("spaces = %+v, %v", spaces, err)
 	}

@@ -42,8 +42,10 @@ export type SetupKey = "repo" | "secret" | "runner" | "agents" | "plan";
 export type SetupStep = { key: SetupKey; label: string; href: string; link: string; done: boolean; detail: string };
 
 export type SetupState = {
-  /** Active projects with a repository URL. */
+  /** Spaces whose (active) work has a repository URL. */
   repos: number;
+  /** Where to set a repository: the first space that tracks work, or a new one (LAZYAGENTS-213). */
+  repoHref?: string;
   /** A workspace-wide harness:* secret is stored. */
   harnessSecret: boolean;
   harness: HarnessHealth;
@@ -63,11 +65,11 @@ export function setupChecklist(s: SetupState): SetupStep[] {
   return [
     {
       key: "repo",
-      label: "Connect a project repository",
-      href: "/settings#projects",
-      link: "Projects",
+      label: "Connect a repository to a space",
+      href: s.repoHref ?? "/spaces/new?work=1",
+      link: "Spaces",
       done: s.repos > 0,
-      detail: s.repos > 0 ? `${s.repos} ${s.repos === 1 ? "project has" : "projects have"} a repository` : "Without one, runs start in an empty workspace and can’t push.",
+      detail: s.repos > 0 ? `${s.repos} ${s.repos === 1 ? "space has" : "spaces have"} a repository` : "Without one, runs start in an empty workspace and can’t push.",
     },
     {
       key: "secret",

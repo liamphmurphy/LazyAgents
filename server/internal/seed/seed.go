@@ -217,6 +217,10 @@ func demo(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service) (Res
 			}); err != nil {
 				return err
 			}
+			// Every project is the work of a space (LAZYAGENTS-213), here Maya's.
+			if _, err = q.CreateSpaceForProject(ctx, store.CreateSpaceForProjectParams{UserID: ids.users["maya"].ID, SpaceMemory: true, ProjectID: ids.projects[p.key].ID}); err != nil {
+				return err
+			}
 		}
 
 		maya := ids.users["maya"].ID

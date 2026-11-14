@@ -30,7 +30,7 @@ func toAgentRef(a store.Agent) *api.AgentRef {
 }
 
 func toProject(p store.Project) api.Project {
-	return api.Project{Id: p.ID, Key: p.Key, Name: p.Name, Color: p.Color, RepoUrl: p.RepoUrl, DefaultBranch: p.DefaultBranch, Archived: p.Archived, Revision: int(p.Revision)}
+	return api.Project{Id: p.ID, Key: p.Key, Name: p.Name, Color: p.Color, RepoUrl: p.RepoUrl, DefaultBranch: p.DefaultBranch, Archived: p.Archived, Revision: int(p.Revision), SpaceId: p.SpaceID}
 }
 
 func toLabel(l store.Label) api.Label {

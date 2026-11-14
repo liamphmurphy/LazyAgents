@@ -114,7 +114,8 @@ test("a new workspace sees the checklist and a health banner naming missing secr
   const setup = page.getByRole("region", { name: "Get set up" });
   await expect(setup).toContainText("0 of 5 done");
   await expect(setup).toContainText("Claude Code: no harness:anthropic secret · Codex: no harness:openai secret");
-  await expect(setup.getByRole("link", { name: "Projects →" })).toHaveAttribute("href", "/settings#projects");
+  // The fixture's project has no space, so the repository step offers a new space that tracks work.
+  await expect(setup.getByRole("link", { name: "Spaces →" })).toHaveAttribute("href", "/spaces/new?work=1");
   await expect(setup.getByRole("link", { name: "Provider credentials →" })).toHaveAttribute("href", "/settings#secrets");
   await expect(setup.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
   await expect(setup.getByRole("link", { name: "Agents →" })).toHaveAttribute("href", "/customization?who=agents");

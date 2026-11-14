@@ -61,7 +61,7 @@ export const CONNECTIONS: Connection[] = [
     label: "GitHub SSH key",
     icon: "key",
     unlocks: ["Clone & push over SSH"],
-    without: "Runs can’t clone or push project repositories.",
+    without: "Runs can’t clone or push space repositories.",
     required: false,
   },
   {

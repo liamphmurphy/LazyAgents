@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { workSettingsHref } from "@/lib/spaces";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { cx } from "@/lib/cx";
@@ -179,7 +180,7 @@ export function TicketsScreen() {
   const bootReady = !!boot.data;
   const resolved = useMemo(() => resolveFilter(search, lookups), [search, lookups]);
   const each = useBulkEach();
-  // No ?project= resolves to the remembered project; "All projects" leaves it empty.
+  // No ?project= resolves to the remembered project; "All spaces" leaves it empty.
   const scope = useProjectScope("optional");
   const list = useTickets({ ready, project, view, status, assignee, epic, q: q || undefined });
   const savedViews = useSavedViews();
@@ -413,11 +414,11 @@ export function TicketsScreen() {
         // The project crumb is the bar's project pill.
         crumbs={proj ? crumbs.slice(1) : crumbs}
         action={
-          proj?.archived ? <ButtonLink href="/settings/projects" variant="outline">Manage project</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
+          proj?.archived ? <ButtonLink href={workSettingsHref(proj)} variant="outline">Open the space</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
         }
       />}
       <TicketsLayoutBar layout="list" />
-      {proj?.archived && <div className="px-6 py-3 max-md:px-4"><Banner tone="human" title="Archived project">Tickets and history remain available. Restore the project in Settings to start new work.</Banner></div>}
+      {proj?.archived && <div className="px-6 py-3 max-md:px-4"><Banner tone="human" title="Archived work">Tickets and history remain available. Restore the work on the space’s page to start new work.</Banner></div>}
       {compact ? (
         <ChipScroller label="Filters">
           {filterBox}

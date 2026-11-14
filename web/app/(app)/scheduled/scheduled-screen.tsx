@@ -152,7 +152,7 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
             {personas.data?.personas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
-        <Field label="Default project" htmlFor="task-project">
+        <Field label="Default space" htmlFor="task-project">
           <select id="task-project" className={selectClass} value={draft.project ?? ""} onChange={(e) => set({ project: e.target.value || undefined })}>
             <option value="">No default</option>
             {boot.data?.projects.filter((p) => !p.archived).map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}

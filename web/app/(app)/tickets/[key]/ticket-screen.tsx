@@ -1,6 +1,7 @@
 "use client";
 
 import { useRecordVisit } from "@/components/shell/use-record-visit";
+import { workSettingsHref } from "@/lib/spaces";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, ViewTransition } from "react";
@@ -226,7 +227,7 @@ function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Tic
   return (
     <>
       <div className="flex flex-col gap-6 px-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] pt-4">
-        {t.project.archived && <Banner tone="human" title="This project is archived">History is preserved. Restore the project before starting new work.</Banner>}
+        {t.project.archived && <Banner tone="human" title="This space’s work is archived">History is preserved. Restore the work on the space’s page before starting new work.</Banner>}
         <header className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-13">
             <span className="font-mono text-fg-tertiary">{t.key}</span>
@@ -418,7 +419,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
         <div className="flex flex-1 flex-wrap">
           <article className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
             <div className="flex w-full max-w-[700px] flex-col gap-7">
-              {t.project.archived && <Banner tone="human" title="This project is archived" actions={<ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink>}>History is preserved. Restore the project before starting new work.</Banner>}
+              {t.project.archived && <Banner tone="human" title="This space’s work is archived" actions={<ButtonLink href={workSettingsHref(t.project)} variant="outline">Open the space</ButtonLink>}>History is preserved. Restore the work on the space’s page before starting new work.</Banner>}
               <Header t={t} save={saver.save} onEdit={() => setEditing(true)} />
               <GateStrip t={t} />
               {t.approvals.map((ap) => (

@@ -43,7 +43,7 @@ export function listQuery(params: URLSearchParams): string {
 export function useRunList(search = "") {
   const params = useSearchParams();
   const scope = useProjectScope("optional");
-  // A bare /runs starts in the shell's project; an explicit ?project= (or "All projects") wins.
+  // A bare /runs starts in the shell's project; an explicit ?project= (or "All spaces") wins.
   const scoped = scope.status === "ready" ? scope.project?.key : undefined;
   const project = params.has("project") ? params.get("project") || undefined : scoped;
   const agent = params.get("agent") || undefined;
@@ -206,9 +206,9 @@ function Chips({ project, agent, hideDone }: { project?: string; agent?: string;
   };
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-1">
-      {/* "All projects" stays explicit (?project=), so the shell's project doesn't come back. */}
-      <FilterMenu label="Project" value={project ?? ""} onChange={(v) => set("project", v)}
-        options={[{ value: "", label: "All projects" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />
+      {/* "All spaces" stays explicit (?project=), so the shell's project doesn't come back. */}
+      <FilterMenu label="Space" value={project ?? ""} onChange={(v) => set("project", v)}
+        options={[{ value: "", label: "All spaces" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />
       <FilterMenu label="Agent" value={agent ?? ""} onChange={(v) => set("agent", v || undefined)}
         options={[{ value: "", label: "All agents" }, ...agents.map((a) => ({ value: a.handle, label: a.name }))]} />
       <button

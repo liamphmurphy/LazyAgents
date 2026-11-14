@@ -19,6 +19,7 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/blob"
 	"github.com/liamphmurphy/vesper/server/internal/canvas"
 	"github.com/liamphmurphy/vesper/server/internal/linkpreview"
+	"github.com/liamphmurphy/vesper/server/internal/projects"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
@@ -85,6 +86,10 @@ func (s *Server) toSpaces(ctx context.Context, spaces []store.ChatSpace) ([]api.
 				item.Project = &projects[i].Key
 			}
 		}
+		if i := slices.IndexFunc(projects, func(p store.Project) bool { return p.SpaceID != nil && *p.SpaceID == sp.ID }); i >= 0 {
+			p := projects[i]
+			item.Work = &api.SpaceWork{Key: p.Key, RepoUrl: p.RepoUrl, DefaultBranch: p.DefaultBranch, Archived: p.Archived, Revision: int(p.Revision)}
+		}
 		out = append(out, item)
 	}
 	return out, nil
@@ -119,12 +124,27 @@ func (s *Server) CreateChatSpace(ctx context.Context, req api.CreateChatSpaceReq
 	b := req.Body
 	in := runs.SpaceInput{Name: &b.Name, Description: b.Description, Instructions: b.Instructions, PersonaID: b.PersonaId, Project: b.Project,
 		ConnectorIDs: b.ConnectorIds, SpaceMemory: b.SpaceMemory}
+	if w := b.Work; w != nil {
+		if b.Project != nil {
+			return nil, apperr.Invalid("project", "a space that tracks work files tickets under its own key")
+		}
+		in.Then = func(q *store.Queries, sp store.ChatSpace) error {
+			_, err := projects.TrackWorkTx(ctx, q, ws, u.ID, sp.ID, spaceWork(*w))
+			return err
+		}
+	}
 	if b.Color != nil {
 		in.Color = (*string)(b.Color)
 	}
 	sp, err := s.Runs.CreateSpace(ctx, ws, u.ID, in)
 	if err != nil {
 		return nil, err
+	}
+	if in.Then != nil {
+		// Tracking work set where the space files tickets.
+		if sp, err = s.ownSpace(ctx, sp.ID); err != nil {
+			return nil, err
+		}
 	}
 	out, err := s.toSpace(ctx, sp)
 	return api.CreateChatSpace201JSONResponse(out), err
@@ -170,7 +190,13 @@ func (s *Server) UpdateChatSpace(ctx context.Context, req api.UpdateChatSpaceReq
 
 func (s *Server) DeleteChatSpace(ctx context.Context, req api.DeleteChatSpaceRequestObject) (api.DeleteChatSpaceResponseObject, error) {
 	u, _, ws := me(ctx)
-	if _, err := s.ownSpace(ctx, req.SpaceId); err != nil {
+	sp, err := s.ownSpace(ctx, req.SpaceId)
+	if err != nil {
+		return nil, err
+	}
+	if p, err := s.Q.GetProjectBySpace(ctx, &sp.ID); err == nil {
+		return nil, apperr.Conflict("this space tracks work (%s); stop tracking it first, or archive it", p.Key)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
 	keys, err := s.Q.DeleteChatSpace(ctx, store.DeleteChatSpaceParams{ID: req.SpaceId, WorkspaceID: ws, UserID: u.ID})
@@ -181,6 +207,48 @@ func (s *Server) DeleteChatSpace(ctx context.Context, req api.DeleteChatSpaceReq
 		s.dropSourceBlob(ctx, k)
 	}
 	return api.DeleteChatSpace204Response{}, nil
+}
+
+func spaceWork(w api.SpaceWorkInput) projects.Work {
+	out := projects.Work{Key: w.Key}
+	if w.RepoUrl != nil {
+		out.RepoURL = *w.RepoUrl
+	}
+	if w.DefaultBranch != nil {
+		out.DefaultBranch = *w.DefaultBranch
+	}
+	return out
+}
+
+// TrackSpaceWork makes one of the person's spaces track work (LAZYAGENTS-213).
+func (s *Server) TrackSpaceWork(ctx context.Context, req api.TrackSpaceWorkRequestObject) (api.TrackSpaceWorkResponseObject, error) {
+	u, _, ws := me(ctx)
+	if req.Body == nil {
+		return nil, apperr.Invalid("body", "required")
+	}
+	if _, err := (projects.Service{Pool: s.Pool}).TrackWork(ctx, ws, u.ID, req.SpaceId, spaceWork(*req.Body)); err != nil {
+		return nil, err
+	}
+	sp, err := s.ownSpace(ctx, req.SpaceId)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toSpace(ctx, sp)
+	return api.TrackSpaceWork200JSONResponse(out), err
+}
+
+// StopSpaceWork takes a space's work away while it has no tickets.
+func (s *Server) StopSpaceWork(ctx context.Context, req api.StopSpaceWorkRequestObject) (api.StopSpaceWorkResponseObject, error) {
+	u, _, ws := me(ctx)
+	if err := (projects.Service{Pool: s.Pool}).StopTrackingWork(ctx, ws, u.ID, req.SpaceId); err != nil {
+		return nil, err
+	}
+	sp, err := s.ownSpace(ctx, req.SpaceId)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.toSpace(ctx, sp)
+	return api.StopSpaceWork200JSONResponse(out), err
 }
 
 // dropSourceBlob removes a deleted source's file; a failure only leaves an

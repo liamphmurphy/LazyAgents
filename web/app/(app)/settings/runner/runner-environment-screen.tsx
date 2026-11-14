@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -63,7 +62,7 @@ export function RunnerEnvironmentScreen() {
           </EmptyState></Card>}
           {snapshot && report && <>
             <Card title="Recorded environment" action={<SmallPill tone={liveRunner ? "done" : "neutral"}>{liveRunner ? "Runner online" : "Runner offline"}</SmallPill>}>
-              {!runId && <div className="mb-4"><label htmlFor="environment-snapshot" className="mb-1.5 block text-12 font-medium text-fg-secondary">Project and runner</label>
+              {!runId && <div className="mb-4"><label htmlFor="environment-snapshot" className="mb-1.5 block text-12 font-medium text-fg-secondary">Space and runner</label>
                 <select id="environment-snapshot" className={selectClass} value={snapshot.run_id} onChange={(e) => setSelectedRun(e.target.value)}>
                   {data.snapshots.map((s) => <option key={s.run_id} value={s.run_id}>{s.project_name} · {s.runner_id || "Unknown runner"} · {resultLabel[s.report.status]}</option>)}
                 </select>
@@ -101,7 +100,7 @@ export function RunnerEnvironmentScreen() {
                 {report.packages.map((p) => <tr key={`${p.ecosystem}:${p.project}:${p.name}`}><th scope="row" className={`${cell} break-all font-mono text-12 font-medium`}>{p.name}</th><td className={`${cell} font-mono text-12 text-fg-secondary`}>{p.version}</td><td className={`${cell} text-12 text-fg-secondary`}>{p.ecosystem} · {p.project}</td></tr>)}
               </tbody></table></div> : <p className="text-14 text-fg-tertiary">No direct package versions were reported for this setup.</p>}
             </Card>
-            <p className="text-12 text-fg-tertiary">Update shared tools in the runner image or local installation, and project libraries in their lockfiles. <Link href="/settings/projects" className="underline underline-offset-2">Manage project repositories</Link>.</p>
+            <p className="text-12 text-fg-tertiary">Update shared tools in the runner image or local installation, and project libraries in their lockfiles. A space’s repository is set in the Work section of its page.</p>
           </>}
           <TestEnvironmentsCard />
         </>}

@@ -22,7 +22,7 @@ export type PaletteGroup =
   | "Memories"
   | "Library"
   | "Actions"
-  | "Switch project"
+  | "Switch space"
   | "Go to";
 
 /** Display order of groups; search hits are re-sorted into it. */
@@ -47,7 +47,7 @@ export const GROUP_ORDER: PaletteGroup[] = [
   "Memories",
   "Library",
   "Actions",
-  "Switch project",
+  "Switch space",
   "Go to",
 ];
 
@@ -363,7 +363,7 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     section: "Palette",
     items: [
       { label: "Move / open / close", keys: ["↑", "↓", "↵", "Esc"] },
-      { label: "Toggle project scope · commands only", keys: ["Tab", ">"] },
+      { label: "Toggle space scope · commands only", keys: ["Tab", ">"] },
       { label: "Open in a new tab", keys: ["⌘/Ctrl", "↵"] },
     ],
   },

@@ -132,7 +132,7 @@ export function EpicMenu({
       <DropdownMenu.Trigger asChild aria-label={pickerName(label, current)}>{children}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-56")}>
-          {epics.length === 0 && <div className="px-2 py-1.5 text-fg-tertiary">No epics in this project</div>}
+          {epics.length === 0 && <div className="px-2 py-1.5 text-fg-tertiary">No epics in this space</div>}
           {epics.map((e) => (
             <DropdownMenu.Item key={e.id} className={item} onSelect={() => onChange(e.id)}>
               <Icon name="epics" size={14} className="text-fg-tertiary" />

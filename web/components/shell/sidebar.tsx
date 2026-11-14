@@ -146,7 +146,7 @@ function FootLinks({ collapsed, settingsNeedYou }: { collapsed: boolean; setting
         <Icon name="sliders" size={15} />
         {!collapsed && <span aria-hidden>Customization</span>}
       </Link>
-      <Link href="/settings" title="Settings: credentials, projects and runners" aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={link("/settings")}>
+      <Link href="/settings" title="Settings: credentials and runners" aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={link("/settings")}>
         {collapsed ? <Icon name="gear" size={15} /> : <span aria-hidden>Settings</span>}
         <span className="sr-only">Settings{settingsNeedYou && ": a setting runs need is missing"}</span>
         {settingsNeedYou && <span aria-hidden className={cx("size-1.5 rounded-full bg-state-human", collapsed && "absolute right-1 top-1")} />}

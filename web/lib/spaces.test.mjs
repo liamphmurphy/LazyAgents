@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bareUrl, formatBytes, formatTokens, sortSpaceChats, sourceDetail, sourceName, spaceHex, spaceInitial, spaceSubtitle, spaceUses } from "./spaces.ts";
+import { bareUrl, formatBytes, formatTokens, listedSpaces, sortSpaceChats, sourceDetail, sourceName, spaceHex, spaceInitial, spaceSubtitle, spaceUses, suggestWorkKey, WORK_KEY, workSettingsHref, workSpaces } from "./spaces.ts";
 
 test("tile letters and colors", () => {
   assert.equal(spaceInitial("health"), "H");
@@ -49,4 +49,26 @@ test("chat order", () => {
   ];
   assert.deepEqual(sortSpaceChats(chats, "newest").map((c) => c.id), ["c", "a", "b"]);
   assert.deepEqual(sortSpaceChats(chats, "oldest").map((c) => c.id), ["b", "a", "c"]);
+});
+
+test("work keys suggested from a space's name", () => {
+  assert.equal(suggestWorkKey("Waterdeep campaign"), "WC");
+  assert.equal(suggestWorkKey("Homelab"), "HOME");
+  assert.equal(suggestWorkKey("D&D: Waterdeep"), "DDW");
+  assert.equal(suggestWorkKey("2026 trip plans"), "TP");
+  assert.equal(suggestWorkKey("Q"), "QX");
+  assert.equal(suggestWorkKey("!!"), "");
+  for (const name of ["Waterdeep campaign", "Homelab", "D&D: Waterdeep", "2026 trip plans", "Q"]) assert.match(suggestWorkKey(name), WORK_KEY);
+});
+
+test("listed spaces leave out archived work; work spaces are the tracked ones", () => {
+  const spaces = [{ name: "Health" }, { name: "Vesper", work: { archived: false } }, { name: "Old", work: { archived: true } }];
+  assert.deepEqual(listedSpaces(spaces).map((s) => s.name), ["Health", "Vesper"]);
+  assert.deepEqual(workSpaces(spaces).map((s) => s.name), ["Vesper"]);
+});
+
+test("a space's work is managed on its page", () => {
+  assert.equal(workSettingsHref({ space_id: "s1" }), "/spaces/s1");
+  assert.equal(workSettingsHref({}), "/spaces/new?work=1");
+  assert.equal(workSettingsHref(undefined), "/spaces/new?work=1");
 });

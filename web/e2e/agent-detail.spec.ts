@@ -53,7 +53,7 @@ test("scopes matrix: every catalog scope, project overrides marked, edits need r
   }
   await expect(page.getByRole("button", { name: /Effective in: Web app/ })).toBeVisible();
   // The override tightens db:migrate and names a wildcard the agent never had.
-  await expect(row("db:migrate").getByText("project", { exact: true })).toBeVisible();
+  await expect(row("db:migrate").getByText("space", { exact: true })).toBeVisible();
   await expect(row("db:migrate").getByText("Web app tightens Approval")).toBeVisible();
   await expect(row("db:migrate").getByRole("radio", { name: "Approval" })).toHaveAttribute("aria-checked", "true");
   await expect(row("prod:*").getByText("not in the definition")).toBeVisible();
@@ -160,7 +160,7 @@ test("project overrides save skill additions and removals without replacing defa
   await dialog.getByLabel("When to use this skill").fill("When releasing this project");
   await dialog.getByLabel("Skill instructions").fill("Read the project release guide.");
   await expect(dialog.getByRole("button", { name: "Save override" })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Add project skill" }).click();
+  await dialog.getByRole("button", { name: "Add space skill" }).click();
   await dialog.getByRole("button", { name: "Save override" }).click();
   await expect(dialog).toHaveCount(0);
   expect(mock.saved.overrides[0].body).toMatchObject({

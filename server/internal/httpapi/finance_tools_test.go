@@ -82,7 +82,10 @@ func TestFinanceSpaceStaysOutOfSpacesList(t *testing.T) {
 
 	var listed []string
 	for _, sp := range e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any) {
-		listed = append(listed, sp.(map[string]any)["id"].(string))
+		// The seeded projects' spaces (they track work) aren't what this is about.
+		if sp.(map[string]any)["work"] == nil {
+			listed = append(listed, sp.(map[string]any)["id"].(string))
+		}
 	}
 	if len(listed) != 1 || listed[0] != mine {
 		t.Fatalf("listed %v, want only %s (not the Finance space %s)", listed, mine, finance)

@@ -33,7 +33,7 @@ test("environment shows measured tools, project libraries, caches and setup fail
   await expect(page.getByText("Not created yet", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "WEB-1 run log" })).toHaveAttribute("href", `/runs/${runId}`);
   await page.screenshot({ path: "test-results/runner-environment-desktop.png", fullPage: true });
-  await page.getByLabel("Project and runner").selectOption(otherId);
+  await page.getByLabel("Space and runner").selectOption(otherId);
   await expect(page.getByRole("alert").filter({ hasText: "Dependency setup failed" })).toContainText("missing required tool: sqlc");
   await expect(page.getByText("Runner offline", { exact: true })).toBeVisible();
   await expect(page.getByRole("rowheader", { name: "sqlc" })).toBeVisible();

@@ -4426,11 +4426,53 @@ paths:
     delete:
       operationId: deleteChatSpace
       summary: Delete a space
-      description: Its sources and its memories go with it. Its chats stay, outside any space.
+      description: Its sources and its memories go with it. Its chats stay, outside any space. 409 while it tracks work.
       tags: [spaces]
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chat-spaces/{spaceId}/work:
+    parameters:
+      - { name: spaceId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: trackSpaceWork
+      summary: Make a space track work
+      description: |
+        Gives the space a key, tickets, epics, runs and a repository, named and colored as the
+        space is. New chats in the space file tickets there. 409 if it already tracks work or the
+        key is taken; 422 for an invalid key, repository or branch, or an app's space.
+      tags: [spaces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpaceWorkInput" }
+      responses:
+        "200":
+          description: The space
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSpace" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: stopSpaceWork
+      summary: Stop tracking work in a space
+      description: Only while the work has no tickets or live runs (409 otherwise). The work is archived and its key stays taken.
+      tags: [spaces]
+      responses:
+        "200":
+          description: The space
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatSpace" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /chat-spaces/{spaceId}/sources:
@@ -5992,6 +6034,7 @@ components:
         default_branch: { type: string }
         archived: { type: boolean }
         revision: { type: integer }
+        space_id: { type: string, format: uuid, description: "The space whose work this is (LAZYAGENTS-213); absent only for work a space stopped tracking (then archived)" }
     AgentKind:
       type: string
       enum: [main, sub, assistant]
@@ -6424,7 +6467,8 @@ components:
         color: { $ref: "#/components/schemas/ChatSpaceColor" }
         instructions: { type: string, description: "Added to every chat in the space, below the persona" }
         persona_id: { type: string, format: uuid, description: "Persona new chats start with; absent: the default persona" }
-        project: { type: string, description: "Key of the project new chats get; absent: none" }
+        project: { type: string, description: "Key new chats here file tickets under: the space's own work, or another space's when this one doesn't track work; absent: none" }
+        work: { $ref: "#/components/schemas/SpaceWork" }
         connector_ids: { type: array, items: { type: string, format: uuid }, description: "Connectors chats here may use; empty is none" }
         space_memory: { type: boolean, description: "What the assistant saves about the person in this space stays here" }
         chat_count: { type: integer, description: Active chats }
@@ -6433,6 +6477,23 @@ components:
         inline_tokens: { type: integer, description: "Estimated tokens of the sources every turn may read" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    SpaceWork:
+      type: object
+      description: The work a space tracks (its tickets, epics, runs and repository); absent when the space doesn't track work
+      required: [key, default_branch, archived, revision]
+      properties:
+        key: { type: string, description: "Ticket key prefix, e.g. LAZYAGENTS" }
+        repo_url: { type: string }
+        default_branch: { type: string }
+        archived: { type: boolean }
+        revision: { type: integer, description: "For PUT /projects/{key}, which edits the repository, branch and archiving" }
+    SpaceWorkInput:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string, pattern: "^[A-Za-z][A-Za-z0-9]{1,9}$", description: "2–10 letters or digits, starting with a letter; upper-cased" }
+        repo_url: { type: string }
+        default_branch: { type: string }
     ChatSpaceRef:
       type: object
       description: The space a chat is in, as the chat shows it
@@ -6454,6 +6515,7 @@ components:
         instructions: { type: string, maxLength: 4000 }
         persona_id: { type: string, format: uuid }
         project: { type: string }
+        work: { $ref: "#/components/schemas/SpaceWorkInput" }
         connector_ids: { type: array, maxItems: 50, items: { type: string, format: uuid } }
         space_memory: { type: boolean, default: true }
     ChatSpacePatch:
@@ -8562,6 +8624,7 @@ components:
         title: { type: string, minLength: 1, maxLength: 200 }
         archived: { type: boolean }
         project: { type: string, description: "Key of the project to attach; empty detaches. The next message starts a fresh session with the conversation handed off." }
+        space_id: { type: string, description: "Move the chat into one of your spaces (not an app's), or empty for none. Its instructions, sources and memory reach the chat from the next message, and the chat files tickets where the space does unless project is given too." }
     NewChatMessage:
       type: object
       required: [body]

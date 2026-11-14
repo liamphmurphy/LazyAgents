@@ -291,7 +291,7 @@ export function UploadDialog({
         <Field label="Type" htmlFor="art-type">
           <SelectMenu id="art-type" value={type} options={TYPES} onChange={setType} render={(v) => <><DocTypeTag type={v} />{TYPES.find((t) => t.value === v)?.label}</>} />
         </Field>
-        <Field label="Project" htmlFor="art-project">
+        <Field label="Space" htmlFor="art-project">
           <SelectMenu
             id="art-project"
             value={project?.key ?? ""}
@@ -523,7 +523,7 @@ export function NewMockupDialog({
         />
       )}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-        <Field label="Project" htmlFor="mockup-project">
+        <Field label="Space" htmlFor="mockup-project">
           <SelectMenu
             id="mockup-project"
             value={project?.key ?? ""}

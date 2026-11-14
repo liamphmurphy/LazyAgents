@@ -26,7 +26,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 function ProjectMark() {
   return (
-    <span className="rounded-[4px] border border-border-strong px-1.5 font-mono text-11 text-fg-tertiary" title="Set by the project override">
+    <span className="rounded-[4px] border border-border-strong px-1.5 font-mono text-11 text-fg-tertiary" title="Set by the space override">
       project
     </span>
   );
@@ -66,7 +66,7 @@ function SinglePreview({ p }: { p: Preview }) {
         <Row label="Definition">
           <span>{p.agent.name}</span>
           {p.definition_version && <span className="font-mono text-12 text-fg-tertiary">v{p.definition_version}</span>}
-          {p.has_override && <span className="text-fg-secondary">+ project override</span>}
+          {p.has_override && <span className="text-fg-secondary">+ space override</span>}
           <Link href={`/agents/${p.agent.handle}`} className="ml-auto text-12 text-accent hover:underline">
             View definition
           </Link>
@@ -85,7 +85,7 @@ function SinglePreview({ p }: { p: Preview }) {
               {p.repo_url.replace(/^(?:ssh:\/\/)?git@github\.com[:/]/, "").replace(/\.git$/, "")}
             </span>
           ) : (
-            <span className="text-fg-tertiary">None set for this project: the run starts from an empty repository</span>
+            <span className="text-fg-tertiary">None set for this space: the run starts from an empty repository</span>
           )}
         </Row>
         {p.repo_url && p.base_branch && <Row label="Base branch"><MonoChip>{p.base_branch}</MonoChip></Row>}

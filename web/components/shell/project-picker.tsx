@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { workSettingsHref } from "@/lib/spaces";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
 import { useBootstrap } from "@/lib/api/hooks";
@@ -16,7 +17,7 @@ const menuItem =
 /**
  * The project a page shows, in its header: projects are context, not a
  * place, so each page that lists one project's work picks it here.
- * allowAll: offer "All projects" (pages that list every project's work).
+ * allowAll: offer "All spaces" (pages that list every project's work).
  * crumb: drawn as a pill inside a top bar's breadcrumb, where it stands for the project crumb.
  */
 export function ProjectPicker({ allowAll = true, crumb }: { allowAll?: boolean; crumb?: boolean }) {
@@ -32,7 +33,7 @@ export function ProjectPicker({ allowAll = true, crumb }: { allowAll?: boolean; 
     const href = pickerHref(pathname, new URLSearchParams(search.toString()), key);
     // A chosen project is remembered when its route opens (useProjectScope);
     // remembering first would also fire the chooser page's own redirect.
-    // "All projects" must be forgotten before navigating, or the bare route
+    // "All spaces" must be forgotten before navigating, or the bare route
     // would redirect back to the old project.
     if (!href || !key) rememberProject(key);
     if (href) router.push(href);
@@ -42,7 +43,7 @@ export function ProjectPicker({ allowAll = true, crumb }: { allowAll?: boolean; 
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          aria-label={`Switch project, current: ${current?.name ?? "All projects"}`}
+          aria-label={`Switch space, current: ${current?.name ?? "All spaces"}`}
           className={cx(
             "flex max-w-[240px] items-center gap-2 border text-left hover:bg-hover data-[state=open]:border-accent",
             crumb ? "h-[26px] rounded-full border-border-subtle px-2.5 text-fg-2" : "h-[30px] rounded-md border-border-strong bg-surface px-2.5",
@@ -53,7 +54,7 @@ export function ProjectPicker({ allowAll = true, crumb }: { allowAll?: boolean; 
           ) : (
             <Icon name="folder" size={12} className="flex-none text-fg-tertiary" />
           )}
-          <span className="truncate text-13 font-medium">{current?.name ?? "All projects"}</span>
+          <span className="truncate text-13 font-medium">{current?.name ?? "All spaces"}</span>
           <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-none text-fg-tertiary">
             <path d="m3 4.5 3-3 3 3M3 7.5l3 3 3-3" />
           </svg>
@@ -85,9 +86,9 @@ export function ProjectPicker({ allowAll = true, crumb }: { allowAll?: boolean; 
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
           <DropdownMenu.Item asChild className={menuItem}>
-            <Link href="/settings/projects">
-              <Icon name="gear" size={12} className="text-fg-secondary" />
-              Manage projects
+            <Link href={workSettingsHref(current)}>
+              <Icon name={current ? "gear" : "plus"} size={12} className="text-fg-secondary" />
+              {current ? `Open ${current.name}` : "New space"}
             </Link>
           </DropdownMenu.Item>
         </DropdownMenu.Content>

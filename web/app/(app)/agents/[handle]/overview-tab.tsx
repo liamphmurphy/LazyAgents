@@ -134,7 +134,7 @@ export function OverviewTab({
         )}
         <p className="text-12 text-fg-tertiary">
           Written to <code className="inline">AGENTS.md</code> in each run&apos;s workspace; a repo&apos;s own AGENTS.md is kept.
-          {project && appendLines > 0 && ` In ${project.name}, the project override appends ${appendLines} line${appendLines === 1 ? "" : "s"}.`}
+          {project && appendLines > 0 && ` In ${project.name}, the space override appends ${appendLines} line${appendLines === 1 ? "" : "s"}.`}
         </p>
         <p className="text-12 text-fg-tertiary">Edits join the unsaved changes in the top bar; nothing is saved until you review the diff.</p>
       </Card>

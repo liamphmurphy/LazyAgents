@@ -138,7 +138,7 @@ export function ProjectSelect({ value, onChange, disabled }: { value: string; on
   const projects = (boot.data?.projects ?? []).filter((p) => !p.archived || p.key === value);
   const name = useProjectName(value);
   return (
-    <SelectBox label="Project" value={name ?? "None"} muted={!name} disabled={disabled}>
+    <SelectBox label="New tickets go to" value={name ?? "None"} muted={!name} disabled={disabled}>
       <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
         <DropdownMenu.RadioItem value="" className={menuItem}>
           <span className="flex-1 text-fg-secondary">None</span>

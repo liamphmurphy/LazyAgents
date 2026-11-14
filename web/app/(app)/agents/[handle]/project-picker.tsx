@@ -28,11 +28,11 @@ export function ProjectPicker({
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          aria-label={`${label}: ${p?.name ?? "no project"}`}
+          aria-label={`${label}: ${p?.name ?? "no space"}`}
           className={cx("flex h-7 items-center gap-2 rounded-md border border-border-strong px-2 text-13 hover:bg-hover", className)}
         >
           {p && <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />}
-          <span className="flex-1 truncate text-left">{p?.name ?? "Pick a project"}</span>
+          <span className="flex-1 truncate text-left">{p?.name ?? "Pick a space"}</span>
           <Icon name="chev" size={12} className="text-fg-tertiary" />
         </button>
       </DropdownMenu.Trigger>

@@ -4,7 +4,7 @@ import { installChatApi } from "./mock-chat-api";
 
 // LAZYAGENTS-42: project pickers, the one menu and project states.
 const nav = (page: Page) => page.getByRole("navigation", { name: "Primary" });
-const switcher = (page: Page) => page.getByRole("button", { name: /^Switch project/ });
+const switcher = (page: Page) => page.getByRole("button", { name: /^Switch space/ });
 const board = (page: Page) => page.locator('[data-testid="board-screen"]:visible');
 
 async function installWithArchived(page: Page) {
@@ -19,10 +19,10 @@ test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("laz
 test("switching projects from the board layout rescopes it, and is remembered", async ({ page }) => {
   const api = await installWithArchived(page);
   await page.goto("/tickets?layout=board&project=WEB");
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Web app");
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   // The project is the breadcrumb's pill (the switcher itself), not a link.
-  await expect(crumbs.getByRole("button", { name: "Switch project, current: Web app" })).toBeVisible();
+  await expect(crumbs.getByRole("button", { name: "Switch space, current: Web app" })).toBeVisible();
   await expect(crumbs.locator('[aria-current="page"]')).toHaveText("Tickets");
   const layouts = page.getByRole("navigation", { name: "Tickets layout" });
   await expect(layouts.getByRole("link")).toHaveText(["List", "Board", "Epics"]);
@@ -31,7 +31,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
 
   await switcher(page).click();
   // Radix names the menu after its trigger.
-  const menu = page.getByRole("menu", { name: /^Switch project/ });
+  const menu = page.getByRole("menu", { name: /^Switch space/ });
   // Archived projects are never offered, and the board shows one project at a time.
   await expect(menu.getByRole("menuitemradio")).toHaveText([/Web app/, /Operations/]);
   await expect(menu.getByRole("menuitemradio", { name: /^Web app/ })).toHaveAttribute("aria-checked", "true");
@@ -40,7 +40,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=OPS$/);
   await expect(board(page).getByText("No tickets", { exact: true })).toHaveCount(5);
   expect(api.boardRequests.at(-1)).toContain("/projects/OPS/board");
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Operations");
   // The project carries across layouts.
   await expect(layouts.getByRole("link", { name: "List" })).toHaveAttribute("href", "/tickets?project=OPS");
   await expect(layouts.getByRole("link", { name: "Epics" })).toHaveAttribute("href", "/tickets?layout=epics&project=OPS");
@@ -48,7 +48,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   // No project in the URL resolves to the remembered one; the old /board URL lands here.
   await page.goto("/board");
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=OPS$/);
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Operations");
 
   // With nothing remembered, the board asks for a project.
   await page.evaluate(() => localStorage.removeItem("lazyagents.project"));
@@ -57,7 +57,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   await expect(chooser.getByRole("link")).toHaveText([/Web app/, /Operations/]);
   await chooser.getByRole("link", { name: /^Web app/ }).click();
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Web app");
   expect(api.unhandled).toEqual([]);
 });
 
@@ -180,18 +180,19 @@ test("back and forward keep your place across Tickets layouts", async ({ page })
 test("an archived or unknown project shows an explicit empty state with a way back", async ({ page }) => {
   const api = await installWithArchived(page);
   await page.goto("/tickets?layout=board&project=OPS");
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Operations");
 
   await page.goto("/tickets?layout=board&project=OLD");
-  await expect(page.getByRole("heading", { name: "Project unavailable" })).toBeVisible();
-  await expect(page.getByText("OLD is archived. Restore it in Settings to work on it here.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Manage projects" })).toHaveAttribute("href", "/settings/projects");
+  await expect(page.getByRole("heading", { name: "Space unavailable" })).toBeVisible();
+  await expect(page.getByText("OLD’s work is archived. Restore it on its space’s page to work on it here.")).toBeVisible();
+  // Settings › Projects is gone: the archived work is managed on its space’s page (a new space when it has none).
+  await expect(page.getByRole("link", { name: "Open the space" })).toHaveAttribute("href", /^\/spaces\//);
   // Back keeps the layout.
   await page.getByRole("link", { name: "Back to Operations" }).click();
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=OPS$/);
 
   await page.goto("/tickets?layout=board&project=NOPE");
-  await expect(page.getByText("No project with the key NOPE.")).toBeVisible();
+  await expect(page.getByText("No space with the key NOPE.")).toBeVisible();
   // Unavailable projects are never remembered.
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.project"))).toBe("OPS");
   expect(api.boardRequests.some((u) => /OLD|NOPE/.test(u))).toBe(false);
@@ -243,18 +244,18 @@ test("Runs lists live work and marks the nav item current", async ({ page }) => 
 test("cross-project links keep all projects while bare routes use the remembered one", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.goto("/tickets?layout=board&project=OPS");
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Operations");
 
   // e.g. an agent's "Review assigned tickets" link: not narrowed to OPS.
   await page.goto("/tickets?view=all&assignee=builder");
   await expect(page.getByRole("link", { name: "Build ticket modal" })).toBeVisible();
   await expect(page).toHaveURL(/\/tickets\?view=all&assignee=builder$/);
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: All projects");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: All spaces");
 
   // Opening the route itself resolves to the remembered project.
   await page.goto("/tickets");
   await expect(page).toHaveURL(/\/tickets\?project=OPS$/);
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Operations");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Operations");
   expect(api.unhandled).toEqual([]);
 });
 
@@ -267,7 +268,7 @@ test("a stale remembered project is replaced by the valid project in the URL", a
     }
   });
   await page.goto("/tickets?layout=board&project=WEB");
-  await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
+  await expect(switcher(page)).toHaveAccessibleName("Switch space, current: Web app");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("lazyagents.project"))).toBe("WEB");
   // And the bare route now resolves to it.
   await page.goto("/tickets?layout=board");

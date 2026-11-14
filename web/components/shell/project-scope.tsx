@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { workSettingsHref } from "@/lib/spaces";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import type { Schemas } from "@/lib/api/client";
@@ -37,7 +38,7 @@ export function useRememberedProject(): string | null | undefined {
   return useSyncExternalStore(subscribe, read, () => undefined);
 }
 
-/** null means "All projects". */
+/** null means "All spaces". */
 export function rememberProject(key: string | null) {
   try {
     if (key) window.localStorage.setItem(STORAGE_KEY, key);
@@ -122,8 +123,8 @@ export function projectCrumbs(project: Project | undefined, label: string): Crum
 }
 
 const WHY: Record<string, string> = {
-  "/tickets": "The board shows one project at a time.",
-  "/plans": "A plan proposes tickets for one project.",
+  "/tickets": "The board shows one space’s work at a time.",
+  "/plans": "A plan proposes tickets for one space.",
 };
 
 export function ProjectChooser({ base, projects }: { base: string; projects: Project[] }) {
@@ -138,10 +139,10 @@ export function ProjectChooser({ base, projects }: { base: string; projects: Pro
     return (
       <EmptyState
         icon="folder"
-        title="Create a project first"
-        actions={<ButtonLink href="/settings/projects" variant="primary">Create a project</ButtonLink>}
+        title="Create a space that tracks work first"
+        actions={<ButtonLink href={workSettingsHref()} variant="primary">New space</ButtonLink>}
       >
-        There are no active projects yet.
+        No space tracks work yet.
       </EmptyState>
     );
   }
@@ -189,19 +190,19 @@ export function ProjectUnavailable({
   return (
     <EmptyState
       icon="alert"
-      title="Project unavailable"
+      title="Space unavailable"
       actions={
         <>
           <ButtonLink variant="primary" href={href(back?.key ?? null)}>
-            {back ? `Back to ${back.name}` : needsOneProject(base, params) ? "Choose a project" : "All projects"}
+            {back ? `Back to ${back.name}` : needsOneProject(base, params) ? "Choose a space" : "All spaces"}
           </ButtonLink>
-          <ButtonLink variant="outline" href="/settings/projects">Manage projects</ButtonLink>
+          <ButtonLink variant="outline" href={workSettingsHref(scope.archived)}>Open the space</ButtonLink>
         </>
       }
     >
       {scope.archived
-        ? `${scope.key} is archived. Restore it in Settings to work on it here.`
-        : `No project with the key ${scope.key}.`}
+        ? `${scope.key}’s work is archived. Restore it on its space’s page to work on it here.`
+        : `No space with the key ${scope.key}.`}
     </EmptyState>
   );
 }
