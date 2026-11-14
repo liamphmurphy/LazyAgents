@@ -822,10 +822,25 @@ func agentsSection(ctx context.Context, q *store.Queries, c runCtx, paths []stri
 	case "planning":
 		return []byte(c.spec.Instructions + "\nRead these context files first:\n" + strings.Join(paths, "\n")), "", nil
 	}
-	if c.run.ParentRunID != nil {
-		return harness.SubagentAgentsMD("", c.spec, paths, c.ticket.Key), "", nil
+	voice, err := runVoice(ctx, q, c.run)
+	if err != nil {
+		return nil, "Could not load the persona doing this work.", fmt.Errorf("run voice: %w", err)
 	}
-	return harness.AgentsMD("", c.spec, paths, c.ticket.Key), "", nil
+	return harness.PersonaAgentsMD("", c.spec, paths, c.ticket.Key, c.run.ParentRunID != nil, voice), "", nil
+}
+
+// runVoice is the voice of the persona whose work record runs this ticket: its name, tone
+// and style preferences, never its memory (a run searches the slice it may read). Nil for
+// a work record without a persona.
+func runVoice(ctx context.Context, q *store.Queries, run store.Run) (*harness.Persona, error) {
+	p, err := q.PersonaOwnerOf(ctx, store.PersonaOwnerOfParams{ID: run.AgentID, WorkspaceID: run.WorkspaceID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &harness.Persona{Name: p.Name, Tone: p.Tone, Instructions: p.CustomInstructions}, nil
 }
 
 // chatGroup is the turn's "Other personas" section (runs.GroupNote).
