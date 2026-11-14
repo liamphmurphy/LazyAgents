@@ -27,7 +27,7 @@ export type Connection = {
   signIn?: SignInProvider;
 };
 
-export type SignInProvider = "claude" | "codex" | "github";
+export type SignInProvider = "claude" | "codex" | "github" | "antigravity";
 
 export const CONNECTIONS: Connection[] = [
   {
@@ -50,11 +50,12 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     name: "harness:google",
-    label: "Google (Gemini API key)",
+    label: "Google (Antigravity)",
     icon: "key",
     unlocks: ["Antigravity"],
     without: "Optional. Antigravity runs and its image generation stay off.",
     required: false,
+    signIn: "antigravity",
   },
   {
     name: "git:ssh",
@@ -142,5 +143,6 @@ export function signInView(s: { status: string; url: string; user_code: string; 
 export const SIGN_IN_STEPS: Record<SignInProvider, string> = {
   claude: "Sign in to Claude, then paste the code it shows below.",
   codex: "Sign in to ChatGPT and enter this code.",
+  antigravity: "Sign in with Google, then paste the authorization code or callback URL below.",
   github: "Sign in to GitHub and enter this code. Vesper stores the token as git:pat.",
 };

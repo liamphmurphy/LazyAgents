@@ -23,9 +23,8 @@ import (
 var KeySecret = map[string]string{
 	agentdef.HarnessClaudeCode: "harness:anthropic",
 	agentdef.HarnessCodex:      "harness:openai",
-	// Antigravity authenticates with a Gemini API key only. Google's terms
-	// bar a tool from extracting or storing the OAuth login `agy` keeps, so
-	// there is no plan login for it, unlike Claude Code and Codex.
+	// Antigravity authenticates through `agy acp --login` inside a runner
+	// container, stored as a native login bundle in harness:google.
 	agentdef.HarnessAntigravity: "harness:google",
 }
 

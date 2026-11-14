@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liamphmurphy/vesper/server/internal/chatmodels"
 	"github.com/liamphmurphy/vesper/server/internal/seed"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/testdb"
@@ -332,6 +333,54 @@ func TestSignInURLAllowed(t *testing.T) {
 	}
 	if !signInURLAllowed("codex", "https://auth.openai.com/codex/device") || signInURLAllowed("codex", "https://openai.com.evil/") {
 		t.Error("codex")
+	}
+	if !signInURLAllowed("antigravity", "https://accounts.google.com/o/oauth2/auth?client_id=1") ||
+		signInURLAllowed("antigravity", "https://accounts.google.com/evil") ||
+		signInURLAllowed("antigravity", "https://accounts.google.com.evil/o/oauth2/auth") {
+		t.Error("antigravity")
+	}
+}
+
+type fakeSignInProc struct {
+	files map[string][]byte
+}
+
+func (f *fakeSignInProc) Output() io.Reader { return strings.NewReader("") }
+func (f *fakeSignInProc) Input() io.Writer  { return nil }
+func (f *fakeSignInProc) ReadFile(_ context.Context, path string) ([]byte, error) {
+	b, ok := f.files[path]
+	if !ok {
+		return nil, context.DeadlineExceeded
+	}
+	return b, nil
+}
+func (f *fakeSignInProc) Wait() (int, error) { return 0, nil }
+func (f *fakeSignInProc) Kill() error        { return nil }
+func (f *fakeSignInProc) Close()             {}
+
+func TestAntigravitySignInProvider(t *testing.T) {
+	prov, ok := signInProviders["antigravity"]
+	if !ok || !prov.pastes || !prov.tty {
+		t.Fatalf("unexpected antigravity provider config: %+v %v", prov, ok)
+	}
+	link, code, ready := prov.prompt("Open this link:\n\n  https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=123\n\nThen paste")
+	if !ready || code != "" || link != "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=123" {
+		t.Fatalf("prompt = (%q, %q, %v)", link, code, ready)
+	}
+	proc := &fakeSignInProc{files: map[string][]byte{
+		homePath + "/.config/antigravity/plugin-secrets.json": []byte(`{"token":"secret"}`),
+		homePath + "/.gemini/config/config.json":              []byte(`{"ok":true}`),
+	}}
+	val, err := prov.login(context.Background(), proc, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, ok := chatmodels.ParseAntigravityAuth(val)
+	if !ok || parsed.Files[".gemini/config/config.json"] != `{"ok":true}` {
+		t.Fatalf("parsed bundle = %+v %v", parsed, ok)
+	}
+	if _, err := prov.login(context.Background(), &fakeSignInProc{}, "", 0); err == nil {
+		t.Fatal("missing plugin-secrets.json must fail")
 	}
 }
 

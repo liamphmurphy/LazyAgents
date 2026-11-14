@@ -50,11 +50,51 @@ func (f fakeRevealer) Reveal(_ context.Context, _ uuid.UUID, _ *uuid.UUID, name 
 	return f[name], nil
 }
 
+func TestAntigravityAuthTarIsOwnedByTheAgentUser(t *testing.T) {
+	raw := `{"v":1,"files":{".config/antigravity/plugin-secrets.json":"{\"token\":\"ok\"}"}}`
+	r, err := antigravityAuthTar(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(r)
+	var files []string
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.Uid != 1000 {
+			t.Fatalf("entry %s uid = %d, want 1000", h.Name, h.Uid)
+		}
+		if h.Typeflag == tar.TypeReg {
+			if h.Mode != 0o600 {
+				t.Fatalf("file %s mode = %o, want 0600", h.Name, h.Mode)
+			}
+			b, _ := io.ReadAll(tr)
+			if string(b) != `{"token":"ok"}` {
+				t.Fatalf("body = %s", b)
+			}
+			files = append(files, h.Name)
+		}
+	}
+	if !slices.Equal(files, []string{".config/antigravity/plugin-secrets.json"}) {
+		t.Fatalf("files = %v", files)
+	}
+}
+
 func TestSecretEnvDeliversPlanLogins(t *testing.T) {
 	const login = `{"auth_mode":"chatgpt","tokens":{"access_token":"tok-access","refresh_token":"tok-refresh","id_token":"tok-id","account_id":"a"}}`
-	plan := []SecretDecision{{Name: "harness:anthropic", Injected: true, Env: []string{"ANTHROPIC_API_KEY"}}, {Name: "harness:openai", Injected: true, Env: []string{"CODEX_API_KEY", "OPENAI_API_KEY"}}}
+	const agyLogin = `{"v":1,"files":{".config/antigravity/plugin-secrets.json":"{\"token\":\"agy-secret-token-value\"}"}}`
+	plan := []SecretDecision{
+		{Name: "harness:anthropic", Injected: true, Env: []string{"ANTHROPIC_API_KEY"}},
+		{Name: "harness:openai", Injected: true, Env: []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
+		{Name: "harness:google", Injected: true},
+	}
 	ws, project := uuid.New(), uuid.New()
-	env, err := SecretEnv(context.Background(), fakeRevealer{"harness:anthropic": "sk-ant-oat01-x", "harness:openai": login}, ws, &project, plan)
+	env, err := SecretEnv(context.Background(), fakeRevealer{"harness:anthropic": "sk-ant-oat01-x", "harness:openai": login, "harness:google": agyLogin}, ws, &project, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +103,12 @@ func TestSecretEnvDeliversPlanLogins(t *testing.T) {
 	}
 	if env[CodexAuthEnv] != login || env["OPENAI_API_KEY"] != "" || env["CODEX_API_KEY"] != "" {
 		t.Fatalf("codex env %v", env)
+	}
+	if env[AntigravityAuthEnv] != agyLogin || env["GEMINI_API_KEY"] != "" {
+		t.Fatalf("antigravity env %v", env)
+	}
+	if got := redact(`leaked {"token":"agy-secret-token-value"}`, sensitiveEnv(env)); got != "leaked [redacted]" {
+		t.Fatalf("agy redact = %q", got)
 	}
 	gotWS, gotProject, err := ParseCodexAuthScope(env[CodexAuthScopeEnv])
 	if err != nil || gotWS != ws || *gotProject != project {

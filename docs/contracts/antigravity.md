@@ -25,22 +25,20 @@ decision record is [ADR-antigravity.md](ADR-antigravity.md).
 > model. That covers which tools it picks, image generation, and real quota
 > wording beyond the 429 body Google documents.
 
-## Credentials: an API key, never the sign-in
+## Credentials: native `agy acp --login` bundle
 
-Google's terms allow calling `agy -p` from a tool, but not extracting, storing or
-intercepting the user's OAuth credentials, so Vesper never touches agy's Google
-login. A turn authenticates with `settings.json` `modelProvider: "gemini"` and
-`GEMINI_API_KEY`. **Verified:** agy then calls
-`POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse` with the key in
-`X-Goog-Api-Key` (google-genai-sdk). Its default model is `gemini-3.1-pro-preview`.
+Vesper signs Antigravity in natively via `agy acp --login` (inside a throwaway
+sign-in container, or using the host's `agy` login in local/no-key mode).
 
-- The key is the workspace secret `harness:google` (`chatmodels.KeySecret`),
-  injected as `GEMINI_API_KEY` (`runner.HarnessKeys`).
-- There is no `subscription` kind and no sign-in flow; onboarding refuses one
-  (`httpapi.checkHarnessCredential`).
-- Models are listed from the Gemini API (`chatmodels.discoverGemini`).
-  **`agy models` does not work with a key alone:** it exits 1 with "Please sign in
-  to view available models". Only the fake backend uses it.
+- The saved login bundle is stored encrypted as `harness:google`
+  (`chatmodels.KeySecret`) containing `.config/antigravity/plugin-secrets.json`
+  and small `.gemini` state files (`chatmodels.ParseAntigravityAuth`), never
+  passed in environment variables (`runner.AntigravityAuthEnv` unpacks into
+  `$HOME` in Docker containers).
+- `agy_launch.py` strips any stale `modelProvider` key so `agy` runs with its
+  native Antigravity provider rather than AI Studio.
+- Only `kind: "subscription"` is accepted (`httpapi.checkHarnessCredential`),
+  and models are listed directly via `agy models` (`chatmodels.ParseAgyModels`).
 
 ## Invocation
 

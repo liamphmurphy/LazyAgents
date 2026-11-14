@@ -54,11 +54,9 @@ skips when `AGY_PROBE`/`AGY_BIN` aren't set.
    and agy has none). The policy keeps one rule set for all three harnesses.
 5. **Quota:** Google's 429 text ("exceeded your current quota", `RESOURCE_EXHAUSTED`)
    is a usage limit, so fallbacks apply, and `retryDelay` is the reset time.
-6. **Credentials:** a Gemini API key (`harness:google` → `GEMINI_API_KEY`,
-   `modelProvider: "gemini"`), on a host install and in Docker alike. Vesper never
-   reads, copies or stores agy's Google OAuth login (Google's terms). There is no
-   sign-in flow and no host-login path. Signing in to agy yourself doesn't change
-   what Vesper does.
+6. **Credentials:** native Antigravity login (`agy acp --login` -> `harness:google`
+   delivered as container files in `$HOME`, or host CLI login in local mode).
+   Model discovery uses `agy models` natively rather than AI Studio's API.
 7. **Skills** are written to `.agents/skills/` (git-excluded), which agy
    discovers natively. Before this, they went to `.lazyagents/skills/`, listed in
    chat AGENTS.md only, so ticket runs never learned about them.

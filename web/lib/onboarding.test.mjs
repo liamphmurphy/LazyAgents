@@ -39,8 +39,9 @@ test("harness hint and placeholders", () => {
   assert.equal(harnessHint(["claude-code", "antigravity"]), "");
   assert.equal(credentialPlaceholder("codex", "subscription"), "Paste auth.json");
   assert.equal(credentialPlaceholder("claude-code", "api_key"), "ANTHROPIC_API_KEY");
-  // Antigravity takes a Gemini key whichever kind is asked for: it has no subscription login.
-  assert.equal(credentialPlaceholder("antigravity", "subscription"), "GEMINI_API_KEY");
+  // Antigravity uses a native sign-in login bundle only.
+  assert.equal(credentialPlaceholder("antigravity", "subscription"), "Paste Antigravity login");
+  assert.equal(credentialPlaceholder("antigravity", "api_key"), "Paste Antigravity login");
 });
 
 test("setup prompts carry the marker and the person's words", () => {

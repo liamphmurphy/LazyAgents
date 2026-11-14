@@ -19,9 +19,9 @@ var orbLabels = map[string]string{agentdef.HarnessClaudeCode: "Claude", agentdef
 // buildHarnessActivity is the activity orb's view of each harness: what it's
 // running, whether it's out of allowance, the windows last read, and whether
 // a newer reading is on its way. Antigravity is listed with the others but has
-// no allowance to read (it runs on a Gemini API key, whose quota agy doesn't
-// report), so its usage stays unavailable. Every harness is listed; connected
-// says which ones can run, so the sidebar can leave out the rest.
+// no allowance to read (agy exposes no headless usage endpoint), so its usage
+// stays unavailable. Every harness is listed; connected says which ones can run,
+// so the sidebar can leave out the rest.
 func buildHarnessActivity(connected map[string]bool, running []store.ActiveHarnessRunsRow, limits []store.ActiveProviderLimitsRow, readings map[string]usage.Snapshot, checking map[string]bool) []api.HarnessActivity {
 	out := make([]api.HarnessActivity, 0, len(agentdef.Harnesses))
 	for _, h := range agentdef.Harnesses {

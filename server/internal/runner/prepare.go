@@ -353,17 +353,21 @@ var HarnessKeys = map[string]struct {
 }{
 	agentdef.HarnessClaudeCode:  {chatmodels.KeySecret[agentdef.HarnessClaudeCode], []string{"ANTHROPIC_API_KEY"}},
 	agentdef.HarnessCodex:       {chatmodels.KeySecret[agentdef.HarnessCodex], []string{"CODEX_API_KEY", "OPENAI_API_KEY"}},
-	agentdef.HarnessAntigravity: {chatmodels.KeySecret[agentdef.HarnessAntigravity], []string{"GEMINI_API_KEY"}},
+	agentdef.HarnessAntigravity: {chatmodels.KeySecret[agentdef.HarnessAntigravity], nil},
 }
 
 // Subscription logins. A stored harness key can be a plan login rather than an
-// API key, recognized by its shape (chatmodels.ClaudeOAuthToken, ParseCodexAuth).
+// API key, recognized by its shape (ClaudeOAuthToken, ParseCodexAuth,
+// ParseAntigravityAuth).
 const (
 	ClaudeOAuthEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 	// CodexAuthEnv and CodexAuthScopeEnv only travel from SecretEnv to the
 	// backend: Docker turns them into ~/.codex/auth.json.
 	CodexAuthEnv      = "LAZYAGENTS_CODEX_AUTH"
 	CodexAuthScopeEnv = "LAZYAGENTS_CODEX_AUTH_SCOPE"
+	// AntigravityAuthEnv only travels from SecretEnv to the Docker backend,
+	// which unpacks its credential files into $HOME.
+	AntigravityAuthEnv = "LAZYAGENTS_ANTIGRAVITY_AUTH"
 )
 
 // HarnessKey is the API-key secret and env vars a resolved spec authenticates
@@ -509,6 +513,11 @@ func SecretEnv(ctx context.Context, rv Revealer, ws uuid.UUID, project *uuid.UUI
 				env[CodexAuthScopeEnv] = CodexAuthScope(ws, project)
 				continue
 			}
+		case d.Name == chatmodels.KeySecret[agentdef.HarnessAntigravity]:
+			if _, ok := chatmodels.ParseAntigravityAuth(v); ok {
+				env[AntigravityAuthEnv] = v
+			}
+			continue
 		}
 		for _, e := range d.Env {
 			env[e] = v
@@ -545,6 +554,13 @@ func sensitiveEnv(env map[string]string) map[string]string {
 	}
 	if auth, ok := chatmodels.ParseCodexAuth(env[CodexAuthEnv]); ok {
 		out["codex_access"], out["codex_refresh"], out["codex_id"] = auth.Tokens.AccessToken, auth.Tokens.RefreshToken, auth.Tokens.IDToken
+	}
+	if auth, ok := chatmodels.ParseAntigravityAuth(env[AntigravityAuthEnv]); ok {
+		for rel, content := range auth.Files {
+			if len(content) >= 16 {
+				out["agy:"+rel] = content
+			}
+		}
 	}
 	return out
 }

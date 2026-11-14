@@ -104,13 +104,20 @@ func (d *Docker) converseCLI(ctx context.Context, kind, claim, harness, login, c
 		_, _ = d.do(cctx, "POST", "/containers/"+created.ID+"/kill?signal=SIGKILL", nil, "", nil)
 		_, _ = d.do(cctx, "DELETE", "/containers/"+created.ID+"?force=1", nil, "", nil)
 	}()
-	if harness == agentdef.HarnessCodex {
+	var authTar io.Reader
+	var tarErr error
+	switch harness {
+	case agentdef.HarnessCodex:
+		authTar, tarErr = codexAuthTar(login)
+	case agentdef.HarnessAntigravity:
+		authTar, tarErr = antigravityAuthTar(login)
+	}
+	if tarErr != nil {
+		return tarErr
+	}
+	if authTar != nil {
 		// A login never travels in the environment: it is a file, as in turns.
-		tb, err := codexAuthTar(login)
-		if err != nil {
-			return err
-		}
-		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(homePath), tb, "application/x-tar", nil); err != nil {
+		if _, err := d.do(ctx, "PUT", "/containers/"+created.ID+"/archive?path="+url.QueryEscape(homePath), authTar, "application/x-tar", nil); err != nil {
 			return err
 		}
 	}
@@ -188,20 +195,24 @@ func (r *Runner) runModelListing(parent context.Context, ml ModelLister, l store
 			r.Log.Warn("fail model listing", "workspace", l.WorkspaceID, "harness", l.Harness, "err", err)
 		}
 	}
-	label := "Claude"
-	if l.Harness == agentdef.HarnessCodex {
-		label = "ChatGPT"
-	}
 	login, err := r.Secrets.Reveal(parent, l.WorkspaceID, nil, chatmodels.KeySecret[l.Harness])
 	if parent.Err() != nil {
 		return // shutting down: the claim times out and another runner retries
 	}
+	label := "Claude"
 	planLogin := chatmodels.ClaudeOAuthToken(login)
-	if l.Harness == agentdef.HarnessCodex {
+	badMsg := "The saved login isn't a Claude or ChatGPT plan login."
+	switch l.Harness {
+	case agentdef.HarnessCodex:
+		label = "ChatGPT"
 		_, planLogin = chatmodels.ParseCodexAuth(login)
+	case agentdef.HarnessAntigravity:
+		label = "Antigravity"
+		_, planLogin = chatmodels.ParseAntigravityAuth(login)
+		badMsg = "The saved login isn't a valid Antigravity login."
 	}
 	if err != nil || !planLogin {
-		fail("The saved login isn't a Claude or ChatGPT plan login.")
+		fail(badMsg)
 		return
 	}
 	models, err := ml.ListModels(parent, l.ClaimID.String(), l.Harness, login, CodexAuthScope(l.WorkspaceID, nil))

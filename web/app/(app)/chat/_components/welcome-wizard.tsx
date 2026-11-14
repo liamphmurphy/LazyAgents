@@ -228,7 +228,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
 
 type Verified = Partial<Record<HarnessId, number>>;
 
-function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, stored, verified, onVerified }: HarnessCardInfo & {
+function HarnessCard({ id, label, by, images, subscriptionOnly, paste, hostLogins, stored, verified, onVerified }: HarnessCardInfo & {
   /** Whether a credential can be pasted here: runs use stored keys, and secrets are on. */
   paste: boolean;
   /** Runs use the server host's own CLI sign-in: nothing to paste, only to check. */
@@ -237,9 +237,8 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
   stored: boolean;
   verified?: number; onVerified: (models: number) => void;
 }) {
-  // Antigravity has no subscription login to store (Google's terms bar it), so its card is a key field alone.
   const [pickedKind, setKind] = useState<CredentialKind>("subscription");
-  const kind: CredentialKind = apiKeyOnly ? "api_key" : pickedKind;
+  const kind: CredentialKind = subscriptionOnly ? "subscription" : pickedKind;
   const [value, setValue] = useState("");
   const [error, setError] = useState<string>();
   const [checking, setChecking] = useState(false);
@@ -286,15 +285,15 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
       </h3>
       <p className="mt-0.5 text-12 text-fg-tertiary">{by}</p>
       <p className="mb-2.5 mt-1 min-h-[52px] text-12 text-fg-tertiary">
-        {apiKeyOnly
+        {subscriptionOnly
           ? hostLogins
             ? "Runs use the agy sign-in on this host. Sign it in there, then Verify checks it. Nothing to paste."
-            : "Chat, coding and agent runs on a Gemini API key. Vesper never reads, copies or stores the Google sign-in agy keeps: Google’s terms don’t allow it."
+            : "Chat, coding and agent runs via Google Antigravity sign-in (Settings → Connections), or paste an Antigravity login bundle."
           : "Chat, coding and agent runs."}
       </p>
       {paste && (
         <>
-          {!apiKeyOnly && <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
+          {!subscriptionOnly && <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
             {(["subscription", "api_key"] as const).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
                 className={cx("h-[22px] flex-1 rounded-[5px] text-12 transition-colors", kind === k ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg")}>

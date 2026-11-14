@@ -526,7 +526,10 @@ function SignInPanel({
                 submit.mutate({ id, code: c }, { onSuccess: () => setCode("") });
               }}
             >
-              <Field label="Code from the Claude page" htmlFor={`signin-${id}-code`}>
+              <Field
+                label={provider === "antigravity" ? "Code or callback URL from the sign-in page" : "Code from the Claude page"}
+                htmlFor={`signin-${id}-code`}
+              >
                 <TextInput
                   id={`signin-${id}-code`}
                   mono
@@ -534,7 +537,7 @@ function SignInPanel({
                   spellCheck={false}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="Paste the code"
+                  placeholder={provider === "antigravity" ? "Paste the code or callback URL" : "Paste the code"}
                 />
               </Field>
               <Button variant="primary" type="submit" disabled={!code.trim() || submit.isPending}>

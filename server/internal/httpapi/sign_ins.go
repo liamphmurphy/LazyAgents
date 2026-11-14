@@ -21,15 +21,15 @@ func toSignIn(s store.SignIn) api.SignIn {
 	return api.SignIn{
 		Id: s.ID, Provider: api.SignInProvider(s.Provider), Status: api.SignInStatus(s.Status),
 		Url: s.Url, UserCode: s.UserCode, Error: s.Error, ExpiresAt: s.ExpiresAt,
-		NeedsCode: s.Provider == "claude" && s.Status == "running" && s.Url != "" && s.PastedCode == nil,
+		NeedsCode: (s.Provider == "claude" || s.Provider == "antigravity") && s.Status == "running" && s.Url != "" && s.PastedCode == nil,
 	}
 }
 
 func (s *Server) StartSignIn(ctx context.Context, req api.StartSignInRequestObject) (api.StartSignInResponseObject, error) {
 	u, _, ws := me(ctx)
 	p := req.Body.Provider
-	if p != api.SignInProviderClaude && p != api.SignInProviderCodex && p != api.SignInProviderGithub {
-		return nil, apperr.Invalid("provider", "must be claude, codex or github")
+	if p != api.SignInProviderClaude && p != api.SignInProviderCodex && p != api.SignInProviderGithub && p != api.SignInProviderAntigravity {
+		return nil, apperr.Invalid("provider", "must be claude, codex, github or antigravity")
 	}
 	if s.Secrets.Box == nil {
 		return nil, apperr.Conflict("Secrets can't be stored until SECRETS_KEY is set.")

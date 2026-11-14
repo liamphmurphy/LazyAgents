@@ -29,9 +29,9 @@ const (
 // (docs/contracts/antigravity.md) was recorded from agy 1.5.8 against a
 // scripted Gemini endpoint; TestAgyProbe re-checks it against a real binary.
 //
-// Headless it authenticates with GEMINI_API_KEY and settings.modelProvider
-// "gemini" (agy's own account login is a Google OAuth token, which Vesper must
-// not handle), reads MCP servers from ~/.gemini/config/mcp_config.json, and
+// Headless it authenticates with the saved native Antigravity login inside $HOME,
+// reads MCP servers from ~/.gemini/config/mcp_config.json, and receives turn
+// overrides via ~/.gemini/antigravity-cli/settings.json.
 // asks the PreToolUse hook about every tool call. Two layers keep a turn
 // inside its scopes, so a hook that fails to load still fails closed:
 //   - settings.permissions.deny holds what the spec rules out whatever the hook
@@ -91,7 +91,6 @@ func (Antigravity) Invocation(ws Workspace, t Turn) (Invocation, error) {
 	cfg := agyConfig{
 		Install: ws.ContainerSandbox, TokenEnv: ws.TokenEnv, HookCommand: env["LAZYAGENTS_POLICY_HOOK_COMMAND"], MCPServers: servers,
 		Settings: map[string]any{
-			"modelProvider":         "gemini",
 			"toolPermission":        "request-review",
 			"enableTerminalSandbox": false, // the container is the boundary, as for Codex
 			"trustedWorkspaces":     []string{ws.Dir},

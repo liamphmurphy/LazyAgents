@@ -47,17 +47,16 @@ test("harness step: paste a key, Verify, and continue only once one verifies", a
   await expect(next).toBeEnabled();
 });
 
-// Antigravity has no subscription login to paste (Google's terms bar storing
-// it), so its card is a Gemini key field alone, and a verified key also
-// switches image generation on.
-test("harness step: Antigravity takes only a Gemini API key", async ({ page }) => {
+// Antigravity uses a native Google Antigravity login rather than an API key,
+// and verifying it also switches image generation on.
+test("harness step: Antigravity uses a native sign-in login", async ({ page }) => {
   await installChatApi(page, { onboarded: false });
   const verifies: { harness: string; body: unknown }[] = [];
   await page.route("**/api/v1/secrets", (route) =>
     route.fulfill({ json: { key_configured: true, harness_keys_required: true, sign_in_available: false, known: [], secrets: [] } }));
   await page.route("**/api/v1/harness/*/verify", (route) => {
     verifies.push({ harness: route.request().url().split("/").at(-2)!, body: route.request().postDataJSON() });
-    return route.fulfill({ json: { ok: true, models: [{ id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" }, { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" }] } });
+    return route.fulfill({ json: { ok: true, models: [{ id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash Medium" }, { id: "gemini-4-hydrogen-high", label: "Gemini 4 Hydrogen High" }] } });
   });
   await page.goto("/chat?new");
   const wizard = page.getByTestId("welcome-wizard");
@@ -67,12 +66,13 @@ test("harness step: Antigravity takes only a Gemini API key", async ({ page }) =
   const agy = wizard.getByRole("region", { name: "Antigravity" });
   await expect(agy.getByTestId("antigravity-images")).toHaveText("Images");
   await expect(agy.getByRole("radio")).toHaveCount(0);
-  await expect(agy.getByLabel("Antigravity credential")).toHaveAttribute("placeholder", "GEMINI_API_KEY");
-  await expect(agy).toContainText("never reads, copies or stores the Google sign-in");
-  await agy.getByLabel("Antigravity credential").fill("AIzaSyGood");
+  await expect(agy.getByLabel("Antigravity credential")).toHaveAttribute("placeholder", "Paste Antigravity login");
+  await expect(agy).toContainText("Google Antigravity sign-in");
+  const bundle = `{"v":1,"files":{".config/antigravity/plugin-secrets.json":"{\\"token\\":\\"ok\\"}"}}`;
+  await agy.getByLabel("Antigravity credential").fill(bundle);
   await agy.getByRole("button", { name: "Verify Antigravity" }).click();
   await expect(agy.getByTestId("antigravity-models")).toHaveText("2 models");
-  expect(verifies.at(-1)).toEqual({ harness: "antigravity", body: { kind: "api_key", credential: "AIzaSyGood" } });
+  expect(verifies.at(-1)).toEqual({ harness: "antigravity", body: { kind: "subscription", credential: bundle } });
   await expect(wizard.getByTestId("wizard-hint")).toHaveText("");
   await expect(wizard.getByRole("button", { name: "Continue" })).toBeEnabled();
 });

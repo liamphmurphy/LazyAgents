@@ -74,6 +74,9 @@ func DiscoveryArgv(name string) ([]string, error) {
 
 // ListOverStdio asks a running DiscoveryArgv process for its models.
 func ListOverStdio(name string, input io.Writer, output io.Reader) ([]Model, error) {
+	if name == agentdef.HarnessAntigravity {
+		return ParseAgyModels(io.LimitReader(output, 1<<20))
+	}
 	send := json.NewEncoder(input)
 	if name == agentdef.HarnessClaudeCode {
 		if err := send.Encode(map[string]any{"type": "control_request", "request_id": "models", "request": map[string]any{"subtype": "initialize"}}); err != nil {
