@@ -40,6 +40,7 @@ type Chat = {
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string; temporary?: boolean;
   effort?: Effort; auto_model?: boolean;
+  unread?: number;
   /** A thread: an aside anchored to a message of parent_chat_id. Hidden from the chat list. */
   parent_chat_id?: string; anchor_message_id?: string; hidden?: boolean;
   // Personas that joined besides the host (chat_participants); listed by their persona filter too.

@@ -188,3 +188,48 @@ test("a thread on a reply opens beside the chat, answers there, and the reply li
   await reply.getByTestId("thread-link").click();
   await expect(page.getByTestId("thread-panel").getByTestId("thread-reply")).toHaveCount(2);
 });
+
+test("selected reply text offers Shorter, Longer and Rewrite, which ask about the passage in one press", async ({ page }) => {
+  const mock = await open(page);
+  await page.getByTestId("assistant-message").first().locator("p").first().selectText();
+  const bar = page.getByTestId("selection-actions");
+  await expect(bar.getByRole("button")).toHaveText(["Shorter", "Longer", "Rewrite", "Ask about this"]);
+  await bar.getByRole("button", { name: "Shorter" }).click();
+  await expect.poll(() => mock.posted.length).toBe(2);
+  expect(String(mock.posted[1].body.body)).toMatch(/^> .+\n\nSay this more briefly\.$/s);
+});
+
+test("J and K move between messages, R replies to the one in focus, Esc goes back to the box", async ({ page }) => {
+  await open(page);
+  await say(page, "second");
+  await expect(page.getByTestId("assistant-message")).toHaveCount(2);
+  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  await page.keyboard.press("k");
+  await expect(page.getByTestId("assistant-message").last()).toBeFocused();
+  await expect(page.getByTestId("assistant-message").last().getByRole("toolbar")).toHaveCSS("opacity", "1");
+  await page.keyboard.press("k");
+  await expect(page.getByTestId("user-message").last()).toBeFocused();
+  await page.keyboard.press("j");
+  await expect(page.getByTestId("assistant-message").last()).toBeFocused();
+  await page.keyboard.press("r");
+  await expect(box(page)).toBeFocused();
+  await expect(box(page)).toHaveValue(/^> Echo: second/);
+  await page.keyboard.press("Escape");
+  // The ? reference lists them.
+  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog").getByText("Start a thread on the message")).toBeVisible();
+});
+
+test("replies that came while you were away sit under a New divider", async ({ page }) => {
+  const mock = await open(page);
+  await say(page, "second");
+  await expect(page.getByTestId("assistant-message")).toHaveCount(2);
+  await expect(page.getByTestId("new-divider")).toHaveCount(0);
+  mock.chats[0].unread = 1;
+  await page.reload();
+  const divider = page.getByTestId("new-divider");
+  await expect(divider).toHaveCount(1);
+  // Right above the newest reply.
+  await expect(page.locator('[data-testid="new-divider"] + li')).toContainText("Echo: second");
+});

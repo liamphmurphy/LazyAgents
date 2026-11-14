@@ -81,7 +81,7 @@ export function MessageToolbar({
         className={cx(
           "absolute -top-4 right-0 z-10 flex items-center gap-0.5 rounded-lg border border-border-float bg-surface-raised p-0.5 shadow-[var(--shadow-float)]",
           // Out of sight until the message is hovered or a control in it has focus; kept open while its menu is.
-          "opacity-0 transition-opacity duration-(--motion-fast) group-hover/msg:opacity-100 focus-within:opacity-100 data-[open]:opacity-100",
+          "opacity-0 transition-opacity duration-(--motion-fast) group-hover/msg:opacity-100 group-focus-visible/msg:opacity-100 focus-within:opacity-100 data-[open]:opacity-100",
           "pointer-coarse:static pointer-coarse:self-end pointer-coarse:opacity-100 pointer-coarse:shadow-none",
         )}
       >
