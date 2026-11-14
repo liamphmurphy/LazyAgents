@@ -12,20 +12,20 @@ export type Tab = { key: "chat" | "needs" | "runs" | "tickets" | "more"; href: s
 export const TABS: Tab[] = [
   { key: "chat", href: "/chat", label: "Chat", icon: "msg" },
   { key: "needs", href: "/inbox", label: "Needs you", icon: "inbox", badge: "inbox", tray: true },
-  { key: "runs", href: "/runs", label: "Runs", icon: "play", badge: "runs" },
-  { key: "tickets", href: "/tickets", label: "Tickets", icon: "tickets" },
+  { key: "runs", href: "/work", label: "Work", icon: "tickets", badge: "runs" },
   { key: "more", href: "/more", label: "More", icon: "dots" },
 ];
 
 /** The tab a path is under. Pages reached from More (apps, tools, settings) keep More current. */
 export function currentTab(pathname: string): Tab["key"] {
   if (pathname === "/") return "chat";
+  if (/^\/(runs|tickets|epics)(\/|$)/.test(pathname)) return "runs";
   return TABS.find((t) => t.key !== "more" && isActive(pathname, t.href))?.key ?? "more";
 }
 
 /** Detail screens (a run, a ticket, the ticket composer) take the whole screen and have their own way back. */
 export function hidesTabBar(pathname: string): boolean {
-  return /^\/(runs|tickets)\/[^/]+/.test(pathname);
+  return pathname === "/work" || /^\/(runs|tickets)\/[^/]+/.test(pathname);
 }
 
 const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "waiting", runs: "running" };

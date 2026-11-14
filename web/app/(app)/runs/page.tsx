@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { RunsIndex } from "./runs-index";
+import { LegacyWork } from "../work/legacy-work";
 
 export default function RunsPage() {
   return (
     <Suspense>
-      <RunsIndex />
+      <LegacyWork view="activity" />
     </Suspense>
   );
 }

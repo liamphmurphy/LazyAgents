@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import { TicketScreen } from "./ticket-screen";
+import { TicketEntry } from "../../work/ticket-entry";
 
 async function Loader({ params }: { params: PageProps<"/tickets/[key]">["params"] }) {
   const { key } = await params;
-  return <TicketScreen ticketKey={decodeURIComponent(key).toUpperCase()} />;
+  return <TicketEntry ticketKey={decodeURIComponent(key).toUpperCase()} />;
 }
 
 export default function TicketPage({ params }: PageProps<"/tickets/[key]">) {

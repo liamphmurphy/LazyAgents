@@ -6,9 +6,9 @@ test("a path selects its area on the icon row", () => {
   assert.equal(currentArea("/"), "chat");
   assert.equal(currentArea("/chat/abc"), "chat");
   assert.equal(currentArea("/spaces/s1"), "chat");
-  assert.equal(currentArea("/runs/r1"), "runs");
-  assert.equal(currentArea("/tickets/WEB-1"), "tickets");
-  assert.equal(currentArea("/epics/e1"), "tickets");
+  assert.equal(currentArea("/runs/r1"), "work");
+  assert.equal(currentArea("/tickets/WEB-1"), "work");
+  assert.equal(currentArea("/epics/e1"), "work");
   assert.equal(currentArea("/knowledge/p1/notes"), "knowledge");
   // Decks and designs are Knowledge pages (LAZYAGENTS-212).
   assert.equal(currentArea("/apps/designs/d1"), "knowledge");

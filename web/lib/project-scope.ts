@@ -23,8 +23,7 @@ export type NavGroup = { label: "Work" | "Apps" | "Tools" | "You"; items: NavIte
  */
 export const WORK_ITEMS: NavItem[] = [
   // No Inbox row: the Needs you pill above the menu opens the tray, and /inbox is its "Open all" page.
-  { href: "/runs", label: "Runs", icon: "play", badge: "runs" },
-  { href: "/tickets", label: "Tickets", icon: "tickets" },
+  { href: "/work", label: "Work", icon: "tickets", badge: "runs" },
 ];
 
 /** Apps: a full page of their own. Knowledge holds documents, decks and designs and the wiki in one store (LAZYAGENTS-212); Finance has an Ask drawer backed by one of the person's spaces. */

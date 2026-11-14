@@ -109,7 +109,7 @@ function EpicHeader({ summary }: { summary: NonNullable<Board["epic"]> }) {
   );
 }
 
-function BoardView({ project, filters, blockedOnly, onOpen }: { project: string; filters: BoardFilters; blockedOnly: boolean; onOpen: (key: string) => void }) {
+export function BoardView({ project, filters, blockedOnly, onOpen }: { project: string; filters: BoardFilters; blockedOnly: boolean; onOpen: (key: string) => void }) {
   const query = useBoard(project, filters);
   // Cards whose run waits on the person show it the way the list does.
   const inbox = useInbox(project);
