@@ -928,6 +928,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const saveBad = saveState.s === "error" || saveState.s === "conflict";
   const header: EditorHeader = {
     back: { href: "/apps/designs", label: "Designs" },
+    name: title,
     title: renaming ? (
       <input
         autoFocus

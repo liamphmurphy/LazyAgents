@@ -70,11 +70,13 @@ test("⌘\\ toggles the dock, ⌘J opens Chat and focuses it, ⌘. hides and res
   await expect(structure(page)).toBeVisible();
 });
 
-test("the dock's state persists per app across a reload, and the menu shows its rail without losing the preference", async ({ page }) => {
+test("the dock's state persists per app across a reload, and the structure is the left column's list", async ({ page }) => {
   await page.goto("/dev/editor-layout");
   const menu = page.getByRole("complementary", { name: "Main menu" });
-  await expect(menu).not.toHaveAttribute("data-expanded");
-  await expect(menu.getByRole("button", { name: "Show chats" })).toHaveCount(0);
+  // One column: the editor's structure is its list, in place of Chats, not a second column.
+  await expect(menu).toHaveAttribute("data-expanded");
+  await expect(menu.getByRole("complementary", { name: "Structure" })).toBeVisible();
+  await expect(menu.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
 
   await dock(page).getByRole("tab", { name: "Comments" }).click();
   await dock(page).getByRole("tab", { name: "Comments" }).click();
@@ -86,11 +88,10 @@ test("the dock's state persists per app across a reload, and the menu shows its 
   await rail(page).getByRole("button", { name: "Expand panel" }).click();
   await expect(dock(page).getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "true");
 
-  expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBe("1");
-  // Leaving the editor for a chat restores the remembered Chats navigator.
+  // Leaving the editor gives the column back to Chats.
   await page.goto("/chat");
-  await expect(page.getByRole("complementary", { name: "Main menu" })).toHaveAttribute("data-expanded");
-  await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
+  await expect(menu.getByRole("complementary", { name: "Chat history" })).toBeVisible();
+  await expect(menu.getByRole("complementary", { name: "Structure" })).toHaveCount(0);
 });
 
 test("the busy and unread marks show on the Chat tab", async ({ page }) => {

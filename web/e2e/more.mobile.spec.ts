@@ -16,7 +16,7 @@ test("More lists the apps, tools and your pages with the nav badges", async ({ p
   await expect(apps.getByRole("link")).toHaveText(["Knowledge2", "Slides", "Designs", "Finance", "Library"]);
   await expect(apps.getByRole("link", { name: "Knowledge, 2 suggested edits to review" })).toBeVisible();
   const tools = main(page).getByRole("region", { name: "Tools" });
-  await expect(tools.getByRole("link")).toHaveText(["Workflows", "Scheduled", "Learn"]);
+  await expect(tools.getByRole("link")).toHaveText(["Workflows", "Scheduled", "Learn", "Reports"]);
   const you = main(page).getByRole("region", { name: "You" });
   await expect(you.getByRole("link", { name: "Customization" })).toBeVisible();
   await expect(you.getByRole("link", { name: "Settings: a setting runs need is missing" }).getByTestId("more-dot")).toBeVisible();

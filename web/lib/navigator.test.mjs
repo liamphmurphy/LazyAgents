@@ -1,19 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inChats, navigatorArea } from "./navigator.ts";
+import { claimNavigator, currentArea, navigatorClaimed, navigatorSlot, setNavigatorSlot, subscribeNavigator } from "./navigator.ts";
 
-test("chat, spaces and the landing page show the Chats navigator", () => {
-  assert.equal(navigatorArea("/"), "chats");
-  assert.equal(navigatorArea("/chat"), "chats");
-  assert.equal(navigatorArea("/chat/abc"), "chats");
-  assert.equal(navigatorArea("/spaces/xyz"), "chats");
-  assert.equal(inChats("/chat/abc"), true);
+test("a path selects its area on the icon row", () => {
+  assert.equal(currentArea("/"), "chat");
+  assert.equal(currentArea("/chat/abc"), "chat");
+  assert.equal(currentArea("/spaces/s1"), "chat");
+  assert.equal(currentArea("/runs/r1"), "runs");
+  assert.equal(currentArea("/tickets/WEB-1"), "tickets");
+  assert.equal(currentArea("/epics/e1"), "tickets");
+  assert.equal(currentArea("/knowledge/p1/notes"), "knowledge");
+  assert.equal(currentArea("/apps/designs/d1"), "designs");
+  // Apps and tools without an entry of their own are the Apps flyout's.
+  for (const p of ["/apps/slides/s1", "/apps/finance", "/library", "/workflows", "/reports"]) assert.equal(currentArea(p), "apps", p);
+  for (const p of ["/settings", "/customization", "/chatter"]) assert.equal(currentArea(p), null, p);
 });
 
-test("areas with their own list, or none, get no shell navigator, so two lists never stack", () => {
-  for (const path of ["/runs", "/runs/123", "/knowledge", "/knowledge/p1", "/apps/designs/d1", "/tickets", "/settings", "/reports"]) {
-    assert.equal(navigatorArea(path), null, path);
-  }
-  assert.equal(navigatorArea("/chatter"), null);
-  assert.equal(inChats("/runs"), false);
+test("the column's middle is claimed while any screen holds it, and tells its listeners", () => {
+  let calls = 0;
+  const off = subscribeNavigator(() => calls++);
+  assert.equal(navigatorClaimed(), false);
+  const a = claimNavigator();
+  const b = claimNavigator();
+  a();
+  a(); // releasing twice is harmless
+  assert.equal(navigatorClaimed(), true);
+  b();
+  assert.equal(navigatorClaimed(), false);
+  const el = {};
+  setNavigatorSlot(el);
+  setNavigatorSlot(el); // the same element again is no change
+  assert.equal(navigatorSlot(), el);
+  setNavigatorSlot(null);
+  assert.equal(calls, 6); // two claims, two releases, the slot set and cleared
+  off();
 });

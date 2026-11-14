@@ -5,22 +5,20 @@ import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, 
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { cx } from "@/lib/cx";
-import { NAVIGATOR_WIDTH } from "@/lib/navigator";
 import {
-  claimEditorRail,
   dockReducer,
   readingFocusActive,
   subscribeReadingFocus,
   dockShortcut,
-  editorRailActive,
   loadDock,
   saveDock,
-  subscribeEditorRail,
   type DockAction,
   type DockState,
 } from "@/lib/editor-layout";
 import { useCompact } from "@/lib/viewport";
 import { isTyping } from "./shortcuts";
+import { HistoryNav } from "./history-nav";
+import { NavigatorPortal } from "./navigator-slot";
 
 /** A tab in the right dock. `busy` pulses its ring, `unread` adds a dot (Chat uses both for the persona). */
 export type DockTab = {
@@ -40,6 +38,8 @@ export type DockTab = {
 export type EditorHeader = {
   back: { href: string; label: string };
   title: ReactNode;
+  /** The document's name as text, shown over its structure in the left column (the title may be a rename field). */
+  name?: string;
   /** The ▾ menu beside the title (rename, duplicate, …). */
   titleMenu?: ReactNode;
   saveState?: ReactNode;
@@ -49,11 +49,6 @@ export type EditorHeader = {
   /** The ⋯ menu. */
   overflow?: ReactNode;
 };
-
-/** True while an EditorLayout is mounted: the Vesper sidebar then shows as its icon rail. */
-export function useEditorRail(): boolean {
-  return useSyncExternalStore(subscribeEditorRail, editorRailActive, () => false);
-}
 
 /** True while the chat's ⌘. reading focus is on: the Vesper sidebar then hides. */
 export function useReadingFocus(): boolean {
@@ -103,7 +98,6 @@ export function EditorLayout({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focusChat, setFocusChat] = useState(0);
 
-  useEffect(() => claimEditorRail(), []);
 
   // Read after mount so the server render matches the first client render. Later tab changes (a
   // tab that comes and goes, like Review) keep the state and only move off a tab that left.
@@ -185,12 +179,19 @@ export function EditorLayout({
 
   return (
     <div data-editor-layout={app} className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none flex-col bg-bg md:h-dvh">
-      <Header {...header} />
+      <Header {...header} backInColumn={!!left} />
       <div className="relative flex min-h-0 flex-1">
+        {/* The structure is the left column's list, under the way back to the app and the document's name. */}
         {showLeft && (
-          <aside aria-label="Structure" className={cx(NAVIGATOR_WIDTH, "flex flex-none flex-col overflow-y-auto border-r border-border-subtle bg-sidebar max-md:hidden")}>
-            {left}
-          </aside>
+          <NavigatorPortal>
+            <aside aria-label="Structure" className="flex min-h-0 flex-1 flex-col">
+              <div className="flex flex-none flex-col gap-0.5 px-4 pb-2">
+                <Link href={header.back.href} className="text-11 text-fg-tertiary hover:text-fg-secondary">‹ {header.back.label}</Link>
+                {header.name && <span className="truncate text-13 font-semibold text-fg">{header.name}</span>}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto">{left}</div>
+            </aside>
+          </NavigatorPortal>
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
         {/* An app's panels unmount while the dock is collapsed, as they always have. */}
@@ -344,10 +345,13 @@ function TabIcon({ tab, size = 14 }: { tab: DockTab; size?: number }) {
   );
 }
 
-function Header({ back, title, titleMenu, saveState, presence, actions, overflow }: EditorHeader) {
+/** The editor's bar: back and forward first, as on every page, then the title; the way up to the app is in the left column when the structure is. */
+function Header({ back, title, titleMenu, saveState, presence, actions, overflow, backInColumn }: EditorHeader & { backInColumn: boolean }) {
   return (
     <header className="flex h-12 flex-none items-center gap-3 border-b border-border-subtle bg-surface px-4">
-      <Link href={back.href} className="flex flex-none items-center gap-1 text-13 text-fg-secondary hover:text-fg">
+      <HistoryNav className="-ml-1.5 max-md:hidden" />
+      {/* Phones have no left column, so the way up stays here for them. */}
+      <Link href={back.href} className={cx("flex flex-none items-center gap-1 text-13 text-fg-secondary hover:text-fg", backInColumn && "md:hidden")}>
         <span aria-hidden>←</span>
         {back.label}
       </Link>

@@ -10,9 +10,9 @@ const projects = [web, ops, old];
 test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with unique hrefs", () => {
   const labels = NAV_GROUPS.map((g) => [g.label, g.items.map((i) => i.label)]);
   assert.deepEqual(labels, [
-    ["Work", ["Runs", "Tickets", "Reports"]],
+    ["Work", ["Runs", "Tickets"]],
     ["Apps", ["Knowledge", "Slides", "Designs", "Finance", "Library"]],
-    ["Tools", ["Workflows", "Scheduled", "Learn"]],
+    ["Tools", ["Workflows", "Scheduled", "Learn", "Reports"]],
     ["You", ["Customization", "Settings"]],
   ]);
   const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));

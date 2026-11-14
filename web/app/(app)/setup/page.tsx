@@ -6,12 +6,16 @@ import { setStoredFlag, setupIntroKey, SetupChecklist } from "@/components/domai
 import { ButtonLink } from "@/components/ui/button";
 import { ProfileSection } from "../customization/profile-section";
 import { PageHeader } from "@/components/ui/page-header";
+import { TopBar } from "@/components/shell/topbar";
 
 /** Reuses the profile editor and live checklist rather than maintaining a second set of settings. */
 export default function Setup() {
   const boot = useBootstrap();
   const ready = boot.data && !needsProfileSetup(boot.data.me);
   return (
+    <>
+    {/* A TopBar like every index screen's, so back and forward lead this page too. */}
+    <TopBar crumbs={[{ label: "Get started" }]} />
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <PageHeader title="Get started with Vesper" description="Set your display name and primary email first. Agents author commits with your primary email; coding chats can use any address in your profile." />
       <ProfileSection />
@@ -19,5 +23,6 @@ export default function Setup() {
       <SetupChecklist />
       {ready ? <ButtonLink href="/chat?new" variant="primary" className="self-start" onClick={() => setStoredFlag("local", setupIntroKey(boot.data.workspace.id))}>Continue to chat</ButtonLink> : <p role="status" className="text-14 text-fg-secondary">Replace the placeholder name and primary email, then save your profile to continue.</p>}
     </div>
+    </>
   );
 }

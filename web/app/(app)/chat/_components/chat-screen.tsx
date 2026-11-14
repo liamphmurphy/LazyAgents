@@ -1,5 +1,6 @@
 "use client";
 
+import { HistoryNav } from "@/components/shell/history-nav";
 import { ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -233,6 +234,10 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto" {...drop.props}>
       <DropOverlay over={drop.over} />
+      {/* No chat header yet, but back and forward still lead the page, where the header's would be. */}
+      <div className="flex h-[44px] flex-none items-center pl-3">
+        <HistoryNav />
+      </div>
       <div className="mx-auto flex w-full max-w-[768px] flex-1 flex-col items-center justify-center px-6 py-10">
         {/* Fresh from the Welcome Wizard, the new persona slides into the centre and the Assistant moves aside. */}
         <PersonaCarousel ordered={ordered} current={persona} left={around.left} right={around.right} onPick={setPicked} disabled={locked} enterFrom={arrived ? 1 : 0} />

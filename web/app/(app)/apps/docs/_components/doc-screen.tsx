@@ -173,6 +173,7 @@ export function DocScreen({ id }: { id: string }) {
 
   const header: EditorHeader = {
     back: { href: "/apps/docs", label: "Docs" },
+    name: title,
     title,
     saveState: c && (
       <span data-testid="doc-save-state" title={saveState.message} className={cx(saveBad && "text-pill-blocked-fg")}>

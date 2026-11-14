@@ -1,5 +1,7 @@
 "use client";
 
+import { NavigatorPortal } from "@/components/shell/navigator-slot";
+import { useCompact } from "@/lib/viewport";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -60,13 +62,20 @@ function WikiLayout({
   children: ReactNode;
 }) {
   const tree = useWikiTree();
+  const compact = useCompact();
+  const pages = <PageTree pages={tree.data?.pages} current={current} index={index} />;
   return (
     <>
       <TopBar crumbs={crumbs} actions={actions} />
       <div className="flex flex-1 flex-wrap">
-        <aside className="flex-[1_1_220px] border-r border-border-subtle bg-sidebar px-2 py-4 lg:max-w-[260px]">
-          <PageTree pages={tree.data?.pages} current={current} index={index} />
-        </aside>
+        {/* The tree is the left column's list, not a second sidebar; phones have no column, so it sits in the page. */}
+        {compact ? (
+          <aside className="flex-[1_1_220px] border-r border-border-subtle bg-sidebar px-2 py-4">{pages}</aside>
+        ) : (
+          <NavigatorPortal>
+            <aside aria-label="Wiki pages" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">{pages}</aside>
+          </NavigatorPortal>
+        )}
         {children}
       </div>
     </>

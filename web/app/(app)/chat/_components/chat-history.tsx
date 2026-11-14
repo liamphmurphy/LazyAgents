@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextInput } from "@/components/ui/primitives";
 import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
-import { PersonaAvatar, PersonaAvatarButton, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
+import { PersonaAvatar, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
 import { hoverReveal } from "@/lib/reveal";
 import { useEntrances } from "@/components/ui/motion";
 
@@ -65,10 +65,10 @@ export function NewConversationButton({ id, rail }: { id?: string; rail?: boolea
 
 /**
  * The persona filter plus "follow the pick": choosing a persona opens its newest
- * conversation, unless the open one is already with it. The rail has no list to
- * offer "Start one", so there (startWhenEmpty) a persona with no chats gets one.
+ * conversation, unless the open one is already with it. A persona with no chats
+ * shows "Start one" in the list instead.
  */
-function usePersonaNav(id: string | undefined, startWhenEmpty: boolean) {
+function usePersonaNav(id: string | undefined) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -84,7 +84,6 @@ function usePersonaNav(id: string | undefined, startWhenEmpty: boolean) {
     const qs = q.toString();
     router.push(qs ? `/chat/${chatId}?${qs}` : `/chat/${chatId}`);
   };
-  const personaOf = (v: string) => (v === "default" ? filter.defaultId : v);
   // Set by a pick; the effect below runs once that persona's list arrives (a new query, so new data).
   const following = useRef(false);
   const follow = useRef(() => {});
@@ -95,7 +94,6 @@ function usePersonaNav(id: string | undefined, startWhenEmpty: boolean) {
       if (chats.some((c) => c.id === id)) return;
       const target = newestChat(chats);
       if (target) open(target.id);
-      else if (startWhenEmpty) startWith(personaOf(filter.value));
     };
   });
   const loaded = active.data;
@@ -103,34 +101,11 @@ function usePersonaNav(id: string | undefined, startWhenEmpty: boolean) {
     if (following.current && loaded) follow.current();
   }, [loaded]);
   const pick = (v: string) => {
-    if (v === filter.value) {
-      // The rail's way back to a persona's chat from another page.
-      if (startWhenEmpty && v !== "all" && loaded) follow.current();
-      return;
-    }
+    if (v === filter.value) return;
     following.current = v !== "all";
     filter.set(v);
   };
   return { filter, active, pick, create, startWith };
-}
-
-/** Chat mode's collapsed menu: no room for titles, so one avatar per persona opens its newest conversation. */
-export function PersonaRail({ id, viewed }: { id?: string; viewed: string | null }) {
-  const { filter, pick } = usePersonaNav(id, true);
-  const activity = usePersonaActivity(viewed);
-  const others = filter.personas.filter((p) => p.id !== filter.defaultId);
-  return (
-    <div role="group" aria-label="Open a persona’s conversations" className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto border-t border-border-subtle py-2.5 [scrollbar-width:none]">
-      <PersonaAvatarButton label={`${filter.defaultLook.name} (default)`} on={filter.value === "default"} state={filter.defaultId ? activity.get(filter.defaultId) : undefined} disabled={filter.loading} onClick={() => pick("default")}>
-        <PersonaAvatar persona={filter.defaultLook} size={26} />
-      </PersonaAvatarButton>
-      {others.map((p) => (
-        <PersonaAvatarButton key={p.id} label={p.name} on={filter.value === p.id} state={activity.get(p.id)} onClick={() => pick(p.id)}>
-          <PersonaAvatar persona={p} size={26} />
-        </PersonaAvatarButton>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -330,7 +305,7 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
     if (onChat) router.replace(`${pathname}?${q.toString()}`);
     else router.push(`/chat?${q.toString()}`);
   };
-  const { filter, active, pick, create, startWith } = usePersonaNav(id, false);
+  const { filter, active, pick, create, startWith } = usePersonaNav(id);
   const activity = usePersonaActivity(viewed);
   const all = filter.query === "all";
   // Archived chats from spaces are listed too: the archive is one place.
@@ -375,7 +350,7 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       {between}
       <nav ref={nav} aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
-        {onTop && headingRow(view === "archived" ? "Archived" : "Chats")}
+        {onTop && headingRow(view === "archived" ? "Archived" : "Recent")}
         {query ? (
           <ChatSearchResults query={deferredQuery} onPick={() => undefined} />
         ) : chats.isError ? (

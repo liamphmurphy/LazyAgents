@@ -592,8 +592,10 @@ test("a design opens in the shared layout: slim header, Pages and layers, and a 
   const tab = (name: string) => dock.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: new RegExp(name) });
   const mod = process.platform === "darwin" ? "Meta" : "Control";
 
-  // Header: back, title, save state, Present and Share; no Hide chat or Export of its own.
-  await expect(header.getByRole("link", { name: "Designs" })).toHaveAttribute("href", "/apps/designs");
+  // Header: back and forward, title, save state, Present and Share; no Hide chat or Export of its own.
+  // The way back to all designs heads the left column's Structure, above the pages and layers.
+  await expect(header.getByRole("group", { name: "History" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Structure" }).getByRole("link", { name: /Designs/ })).toHaveAttribute("href", "/apps/designs");
   await expect(header.getByRole("heading", { name: "Checkout flow" })).toBeVisible();
   await expect(header.getByRole("button", { name: "▶ Present" })).toBeVisible();
   await expect(header.getByRole("button", { name: "Share" })).toBeVisible();

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
+import { HistoryNav } from "./history-nav";
 
 export type Crumb = { label: ReactNode; href?: string; swatch?: string; mono?: boolean };
 
@@ -38,11 +39,14 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
   );
 }
 
-/** A pane's 44px bar: the breadcrumb left; actions right (secondary first, primary last). Back and forward live on the rail. */
+/** A pane's 44px bar: back and forward, then the breadcrumb, left; actions right (secondary first, primary last). */
 export function TopBar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNode }) {
   return (
-    <header className="flex min-h-[44px] flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-1.5">
-      <Breadcrumb items={crumbs} />
+    <header className="flex min-h-[44px] flex-wrap items-center justify-between gap-3 border-b border-border-subtle py-1.5 pl-3 pr-6 max-md:pl-6">
+      <div className="flex min-w-0 items-center gap-2">
+        <HistoryNav />
+        <Breadcrumb items={crumbs} />
+      </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );

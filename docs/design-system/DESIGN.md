@@ -190,32 +190,44 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 ## 3. App shell
 
 ```
-┌──────┬────────────┬────────────────────────────────────┬──────────────┐
-│ Rail │ Navigator  │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
-│ 52px │ 264px      ├────────────────────────────────────┤ (dock)       │
-│      │ (the area's│ [optional view/filter bar]         │ facts | Chat │
-│      │ own list)  │ Content (max 1180, padding 32/28)  │ ~320–360px   │
-└──────┴────────────┴────────────────────────────────────┴──────────────┘
+┌──────────────────┬────────────────────────────────────┬──────────────┐
+│ Column (264px)   │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
+│ fixed top        ├────────────────────────────────────┤ (dock)       │
+│ the area's list  │ [optional view/filter bar]         │ facts | Chat │
+│ fixed foot       │ Content (max 1180, padding 32/28)  │ ~320–360px   │
+└──────────────────┴────────────────────────────────────┴──────────────┘
 ```
 
-The shell is a workbench: one rail switches areas, the navigator beside it lists what the current
-area holds, the main pane shows the open item, and the side panel holds its facts and a chat with
-your persona.
+The shell is one left column, the same on every screen, then the main pane with the open item, then
+the side panel with its facts and a chat with your persona.
 
-**Rail** (`components/shell/sidebar.tsx`, 52px, `--bg-sidebar`, always shown at `COMPACT` and wider):
-the mark; Go back and Go forward (`HistoryNav`, the shell's only back and forward, so every screen
-has them whatever header it draws; disabled at either end where the browser has the Navigation
-API); the Chats toggle (chat screens only); New chat, Search (⌘K) and Needs you (count badge);
-the areas as 30px icon links (Chat, Runs with a live dot, Tickets, Reports, Knowledge, Designs) and
-the Apps flyout, which reads as current only on apps without a rail entry of their own;
-the persona and space shortcuts while the Chats navigator is hidden; Customization and Settings at
-the foot; and the harness characters under them, each opening its usage bubble to the right.
+**Column** (`components/shell/sidebar.tsx`, 264px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`,
+`--bg-sidebar`, shown at `COMPACT` and wider). Its top never changes: the mark and "Vesper", the
+Search field (⌘K), the Needs you pill (`--pill-human` while anything waits, with its count), and the
+areas as an icon row (Chat, Runs with a live dot, Tickets, Knowledge with a suggestions dot, Designs)
+ending in the Apps flyout, which holds the other apps and the tools (Reports among them) and reads as
+current on any of them. Its foot never changes either: the harness characters in a row, each opening
+its usage bubble above it, then Customization and Settings.
 
-**Navigator** (264px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`): one width whoever draws it, so the
-content edge doesn't move between areas. On chat screens the shell draws the Chats navigator (New
-chat, spaces, history, setup progress), shown or hidden from the rail and remembered per browser.
-Runs draws its run list, Knowledge its explorer and an app editor its structure panel in the same
-place; Tickets and the index screens have none. Two lists never stack.
+**The area's list.** Between top and foot sits one list. By default it is Chats (title, an accent +
+for New chat, the persona filter, the history, spaces, setup progress); personas and spaces appear
+here and nowhere else in navigation. A screen with a list of its own puts it there instead with
+`NavigatorPortal` (`components/shell/navigator-slot.tsx`): Runs its run list, Knowledge its explorer,
+an app editor its structure (the way back to the app's index, the item's name, then pages and
+layers), Learn its lessons, the wiki its tree. Each list's title row ends with its own +. Two lists
+never stack, and nothing draws a second column.
+
+**Collapsed strip.** Clicking the mark folds the column to a 52px strip of the same fixed items
+(mark, Search, Needs you, the areas stacked, the harness characters stacked with bubbles to the
+right, Customization, Settings) and no list. It is one preference for the whole app
+(`lazyagents.column-collapsed`), not per screen; the column starts expanded. ⌘\ stays the dock's
+toggle. Reading focus (⌘.) hides the column without touching the preference.
+
+**Back and forward** (`HistoryNav`, Go back and Go forward, disabled at either end where the browser
+has the Navigation API) lead the page content: they are the first thing in the content's top bar,
+whatever that bar is (a `TopBar` breadcrumb, the chat header, an editor header, Knowledge's tabs, the
+welcome screen's bar). Never in the column, and exactly once per screen
+(`e2e/history-everywhere.spec.ts` sweeps every route for it).
 
 **Side panel and who you're talking to.** The main pane's composer talks to what the pane shows
 (a run's composer to its agent: "To Builder · WEB-9"); the side panel's Chat always talks to your
@@ -250,9 +262,9 @@ Harnesses section on More; each opens its usage bubble above it.
 status, progress segments and the step under way ("Fix the snapshot · 2 of 3"); Show steps opens the
 full list. The main chat starts it open.
 
-**Pane bar** (`TopBar`, 44px): the breadcrumb (tertiary separators, current item in `--text` 500), with actions on the right, secondary buttons first and the primary button last. Back and forward are on the rail, not in pane bars.
+**Pane bar** (`TopBar`, 44px): back and forward, then the breadcrumb (tertiary separators, current item in `--text` 500), with actions on the right, secondary buttons first and the primary button last. A screen with a `PageHeader` keeps its `TopBar` above it, so its back and forward come from there.
 
-**Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the rail (and any navigator) beside the content.
+**Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the column beside the content.
 
 *Compact shell (below 768px).* The content runs full width, with no sidebar or icon rail. A bottom tab bar (`components/shell/tab-bar.tsx`, rules in `lib/tab-bar.ts`) is fixed to the bottom edge on `--sidebar`, above a `--border-subtle` top rule. Its tabs are Chat, Inbox, Runs, Tickets and More. Each tab is at least 44px tall: an 18px icon in a 48×28 pill, with an 11px label under it. The current tab's pill fills with `--selected` and its label turns `--text`. Inactive tabs are `--text-tertiary`. Inbox shows the unread count as an amber (`--state-human`) badge, and Runs shows a green (`--state-done`) dot while runs are live. Both read `useNavCounts()`, as the sidebar does, and the counts reach screen readers through the link name ("Inbox 3 unread"). The bar is 56px tall plus the bottom safe-area inset (`pb-safe`), and it publishes that height as `--tab-bar-h`, which is 0 when there is no bar. The shell pads its content by `--tab-bar-h`. Screens sized to the viewport use `h-app` (100dvh less the bar) instead of `h-dvh`, and the activity orb stays above the bar. Detail screens (a run, a ticket, the ticket composer) hide the bar and take the whole screen. Pages the bar has no tab for (apps, tools, Customization, Settings) are listed under More (`/more`), and More stays current while one of them is open. More is built from `NAV_GROUPS` (`moreSections()` in `lib/tab-bar.ts`) and `useNavCounts()`, so it can't drift from the sidebar. From the top it has a search field, your profile row with Customization and Settings buttons (Settings gets an amber dot when a setting runs need is missing), the Apps as a three-column grid of tiles, the Tools as a list that keeps the sidebar's badges, and Spaces. Every row is at least 44px tall. The search field opens the command menu, which fills the screen below `COMPACT`: it has no radius or border and is padded for the safe areas. Its input is 16px, its results are at least 44px tall, the close button is 44px, and the keyboard hints are hidden.
 

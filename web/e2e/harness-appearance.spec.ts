@@ -8,7 +8,6 @@ const toggle = (page: Page) => page.getByRole("switch", { name: "Show harness ac
 
 async function install(page: Page) {
   await installChatApi(page);
-  await page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1"));
   await page.route("**/api/v1/persona-dock", (route) => route.fulfill({ json: { personas: [], harnesses: [
     { harness: "claude-code", label: "Claude", connected: true, running: 2, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 42 }] },
     { harness: "codex", label: "Codex", connected: true, running: 1, usage_available: true, usage_checking: false, windows: [{ id: "s", kind: "session", label: "Session", used_percent: 86 }] },
@@ -20,8 +19,8 @@ test("the Appearance switch hides the rail's characters, persists and survives p
   await install(page);
   await page.goto("/settings#appearance");
   await expect(toggle(page)).toBeChecked();
-  // The characters live at the foot of the rail on every screen.
-  await expect(footer(page)).toHaveAttribute("data-rail", "true");
+  // The characters live at the foot of the column on every screen, in a row while it's expanded.
+  await expect(footer(page)).toHaveAttribute("data-rail", "false");
   await toggle(page).click();
   await expect(footer(page)).toHaveCount(0);
   await page.getByRole("radio", { name: "Nord", exact: true }).check();
@@ -38,7 +37,7 @@ test("the Appearance switch hides the rail's characters, persists and survives p
   await expect(footer(page)).toHaveCount(0);
   await page.goto("/settings#appearance");
   await toggle(page).click();
-  await expect(footer(page)).toHaveAttribute("data-rail", "true");
+  await expect(footer(page)).toHaveAttribute("data-rail", "false");
   await toggle(page).click();
   await expect(footer(page)).toHaveCount(0);
 });

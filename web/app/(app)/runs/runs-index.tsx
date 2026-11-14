@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { useCompact } from "@/lib/viewport";
 import { EmptyState, Skeleton } from "@/components/ui/primitives";
+import { TopBar } from "@/components/shell/topbar";
 import { listQuery, useRunList } from "./run-list";
 
 /**
@@ -22,17 +23,25 @@ export function RunsIndex() {
     router.replace(`/runs/${first}${query ? `?${query}` : ""}${window.location.hash}`, { scroll: false });
   }, [compact, first, query, router]);
   if (compact) return null;
+  // The same bar as a run's, so back and forward lead this page too.
+  const bar = <TopBar crumbs={[{ label: "Runs" }]} />;
   if (loading || first) {
     return (
-      <div aria-busy="true" className="flex flex-col gap-3 p-6">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-3 w-2/3" />
-      </div>
+      <>
+        {bar}
+        <div aria-busy="true" className="flex flex-col gap-3 p-6">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+      </>
     );
   }
   return (
-    <div className="grid flex-1 place-items-center p-6">
-      <EmptyState icon="play" title="No runs here">Start a run from a ticket or a chat, or change the filters.</EmptyState>
-    </div>
+    <>
+      {bar}
+      <div className="grid flex-1 place-items-center p-6">
+        <EmptyState icon="play" title="No runs here">Start a run from a ticket or a chat, or change the filters.</EmptyState>
+      </div>
+    </>
   );
 }
