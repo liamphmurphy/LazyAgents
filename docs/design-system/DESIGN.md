@@ -313,6 +313,24 @@ tickets where the space does. A space that doesn't track work keeps "New tickets
 space's work. Renaming or recoloring a space renames its work and the other way round; a space
 can't be deleted while it tracks work, and stops tracking only while its work has no tickets.
 
+**One actor: personas.** Agents and personas are one thing, a persona (migration 00133). Any
+persona chats; what else it does is one choice on its profile's Work section: *Chat only*, *Takes
+tickets* (it can be assigned tickets and runs them) or *Helps on runs* (another persona's run can
+hand it part of the work; it can't hold tickets). A persona that works has a work record, the
+`agents` row with the persona's own id, whose kind (main, sub) says which work and whose versioned
+definition holds its harness, model, work brief, permissions, helpers and limits; runs, tickets,
+approvals and tokens point at that row, so a migrated agent kept its history untouched. Its work
+settings are the old agent page, retitled Customization › Personas › Name › Work; the persona owns
+the name. A persona has two instruction fields: its **voice** (tone and custom instructions)
+reaches its chats and its runs; its **work brief** reaches runs only. Runs never load a persona's
+memory: they may search and read only the person's project and work memories and the persona's own
+(`memory.ScopeRun`), never life, preferences or anything else private. *Show in chat list* decides
+whether the chat switcher and @ menu offer it; a chat that already uses it keeps it. Customization's
+"All personas" list (`?who=personas`, and the old `?who=agents`) shows each persona's work, model
+and live ticket; ticket, board and run pickers say Persona and list those that take tickets. The
+Personal Assistant agent is the brief every chat runs with, not a persona. Turning work off is
+refused while the persona holds open tickets or live runs, and a working persona can't be deleted.
+
 **Recent.** ⌘K's Recent list holds what you opened as well as what you picked there: chats with
 messages, runs, tickets, Knowledge pages and designs (`useRecordVisit`), six at most.
 
