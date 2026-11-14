@@ -21,7 +21,9 @@ async function install(page: BrowserPage, body: string, embeds: Embed[] = []) {
   await page.route(/\/api\/v1\/knowledge\//, (route) => {
     const path = new URL(route.request().url()).pathname.replace("/api/v1/knowledge", "");
     let data: unknown = {};
-    if (path === "/query") data = { rows: [note, { ...note, id: "other", title: "Session 27", path: "Campaign/Sessions/Session 27" }], has_more: false };
+    // Full-text search can find the source's link text without finding the
+    // destination: its folder path isn't part of its title or body.
+    if (path === "/query") data = { rows: route.request().postDataJSON()?.text ? [note] : [note, { ...note, id: "other", title: "Session 27", path: "Campaign/Sessions/Session 27" }], has_more: false };
     if (path === `/pages/${ID}`) {
       if (route.request().method() === "PUT") {
         const input = route.request().postDataJSON();
@@ -32,13 +34,38 @@ async function install(page: BrowserPage, body: string, embeds: Embed[] = []) {
       data = note;
     }
     if (path === "/backlinks") data = { linked: [], unlinked: [] };
-    if (path === "/resolve") data = { links: [] };
+    if (path === "/resolve") data = { links: new URL(route.request().url()).searchParams.getAll("ref").map((ref) => ({ ref,
+      target: { kind: "artifact", artifact_type: "note", id: "other", title: "Session 27", path: "Campaign/Sessions/Session 27", href: "/wiki/Campaign/Sessions/Session%2027" } })) };
     return route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
   });
   await page.goto(`/knowledge/${ID}`);
   await expect(page.getByTestId("doc-editor")).toBeVisible();
   return { saved };
 }
+
+for (const modifier of ["Meta", "Control"] as const) {
+  for (const label of ["Session 27", "Recap"]) {
+    test(`${modifier}-click resolves a note path displayed as a ${label === "Recap" ? "alias" : "title"}`, async ({ page }) => {
+      const link = label === "Recap" ? "[[Campaign/Sessions/Session 27|Recap]]" : "[[Campaign/Sessions/Session 27]]";
+      const { saved } = await install(page, `${link} After.`);
+      await page.getByTestId("doc-editor").getByText(label, { exact: true }).click({ modifiers: [modifier], delay: 150 });
+      await expect(page).toHaveURL(/\/knowledge\/other\/session-27$/);
+      expect(saved).toEqual([]);
+    });
+  }
+}
+
+test("unresolved links and resolver failures stay on the page and show an error", async ({ page }) => {
+  await install(page, "Before [[Campaign/Sessions/Session 27]].");
+  await page.route("**/knowledge/resolve?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ links: [{ ref: "Campaign/Sessions/Session 27", target: { kind: "unresolved", title: "Session 27" } }] }) }));
+  await page.getByTestId("doc-editor").getByText("Session 27", { exact: true }).click({ modifiers: [mod] });
+  await expect(page.getByText("This linked page isn’t available", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/knowledge/${ID}$`));
+  await page.route("**/knowledge/resolve?**", (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { message: "Unavailable" } }) }));
+  await page.getByTestId("doc-editor").locator("[data-target]:visible").click({ modifiers: [mod] });
+  await expect(page.getByText("Couldn’t open the linked page", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/knowledge/${ID}$`));
+});
 
 test("links show note titles and aliases while preserving their source when edited", async ({ page }) => {
   const body = "Before [[Campaign/Sessions/Session 27]] and [[Campaign/Sessions/Session 27#Summary|Recap]]. After.";

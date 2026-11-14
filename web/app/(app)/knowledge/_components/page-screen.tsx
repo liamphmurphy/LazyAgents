@@ -9,16 +9,17 @@ import { createPortal } from "react-dom";
 import { cx } from "@/lib/cx";
 import { defaultLabel, parseWikiLinks } from "@/lib/wikilinks";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
-import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
+import { KnowledgeSyntax } from "@/lib/knowledge-editor";
 import { KnowledgeCompletion } from "@/lib/knowledge-completion";
 import { api, unwrap } from "@/lib/api/client";
-import { fetchKnowledgeImages, fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
+import { fetchKnowledgeImages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { floatPanel } from "@/components/domain/pickers";
 import { Markdown } from "@/components/domain/markdown";
 import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton } from "@/components/ui/primitives";
+import { toast } from "@/lib/toast";
 import { DocEditor, type DocEditorHandle, type SaveState } from "@/app/(app)/apps/docs/_components/doc-editor";
 import { DeckScreen } from "@/app/(app)/apps/slides/_components/deck-screen";
 import { DesignEditor } from "@/app/(app)/apps/designs/_components/design-editor";
@@ -126,11 +127,19 @@ function Loaded({ page: p }: { page: Page }) {
           };
         },
         onOpen: (raw) => {
-          const { target } = linkTarget(raw);
-          void fetchPages({ text: target, limit: 5, include_agent: true }).then((t) => {
-            const hit = t.rows.find((r) => r.title.toLowerCase() === target.toLowerCase() || r.path.toLowerCase() === target.toLowerCase()) ?? t.rows[0];
-            if (hit) router.push(pageHref(hit.id, hit.title));
-          });
+          const ref = parseWikiLinks(raw)[0]?.ref;
+          if (!ref) return;
+          void unwrap(api.GET("/knowledge/resolve", { params: { query: { ref: [ref] } } })).then(({ links }) => {
+            const target = links[0]?.target;
+            if (!target?.href || target.kind === "unresolved") {
+              toast({ title: "This linked page isn’t available", tone: "error" });
+              return;
+            }
+            const href = target.artifact_type === "note" && target.id
+              ? pageHref(target.id, target.title) + (target.anchor ? `#${encodeURIComponent(target.anchor)}` : "")
+              : target.href;
+            router.push(href);
+          }).catch((error: Error) => toast({ title: "Couldn’t open the linked page", description: error.message, tone: "error" }));
         },
       }),
       KnowledgeCompletion.configure({
