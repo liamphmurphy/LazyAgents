@@ -25,7 +25,9 @@ export function ThreadPanel({ chatId, messageId, onClose }: { chatId: string; me
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => box.current?.focus(), [messageId]);
 
-  const author = parent?.persona ? personaLook(parent.persona) : undefined;
+  const host = useChat(chatId).data;
+  // A reply without its own persona is the chat's host's (or speaker's).
+  const author = parent?.persona ? personaLook(parent.persona) : parent?.role === "assistant" ? personaLook(host?.speaker ?? host?.persona) : undefined;
   const submit = (body: string) => {
     if (!body.trim()) return;
     setText("");
@@ -78,7 +80,7 @@ function ThreadMessages({ threadId }: { threadId: string }) {
     <ol className="mt-4 flex flex-col gap-4" aria-label="Thread" role="log" aria-live="polite">
       <li className="flex items-center gap-2 text-12 text-fg-tertiary">
         <span aria-hidden className="h-px flex-1 bg-border-subtle" />
-        {messages.length} {messages.length === 1 ? "reply" : "replies"}
+        {messages.length} {messages.length === 1 ? "message" : "messages"}
         <span aria-hidden className="h-px flex-1 bg-border-subtle" />
       </li>
       {messages.filter((m) => m.role !== "system").map((m) =>

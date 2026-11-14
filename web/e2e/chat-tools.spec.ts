@@ -196,7 +196,7 @@ test("selected reply text offers Shorter, Longer and Rewrite, which ask about th
   await expect(bar.getByRole("button")).toHaveText(["Shorter", "Longer", "Rewrite", "Ask about this"]);
   await bar.getByRole("button", { name: "Shorter" }).click();
   await expect.poll(() => mock.posted.length).toBe(2);
-  expect(String(mock.posted[1].body.body)).toMatch(/^> .+\n\nSay this more briefly\.$/s);
+  expect(String(mock.posted[1].body.body)).toMatch(/^> [\s\S]+\n\nSay this more briefly\.$/);
 });
 
 test("J and K move between messages, R replies to the one in focus, Esc goes back to the box", async ({ page }) => {
@@ -232,4 +232,19 @@ test("replies that came while you were away sit under a New divider", async ({ p
   await expect(divider).toHaveCount(1);
   // Right above the newest reply.
   await expect(page.locator('[data-testid="new-divider"] + li')).toContainText("Echo: second");
+});
+
+test("a thread shows once, under its message, with who wrote that message", async ({ page }) => {
+  await open(page);
+  const reply = page.getByTestId("assistant-message").first();
+  await reply.hover();
+  await reply.getByRole("toolbar").getByRole("button", { name: "Start a thread" }).click();
+  const panel = page.getByTestId("thread-panel");
+  await expect(panel.getByTestId("thread-anchor")).toContainText("Assistant");
+  await panel.getByRole("textbox", { name: "Reply in thread" }).fill("why?");
+  await panel.getByRole("textbox", { name: "Reply in thread" }).press("Enter");
+  await expect(panel.getByTestId("thread-reply")).toHaveCount(1);
+  await expect(reply.getByTestId("thread-link")).toBeVisible();
+  // Not also listed as one of the turn's asides.
+  await expect(reply.getByText(/aside · not in/)).toHaveCount(0);
 });
