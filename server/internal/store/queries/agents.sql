@@ -51,3 +51,19 @@ UPDATE agent_tokens SET revoked_at = now() WHERE agent_id = $1 AND revoked_at IS
 
 -- name: CountActiveRunsForAgent :one
 SELECT count(*) FROM runs WHERE agent_id = $1 AND state NOT IN ('completed', 'failed', 'cancelled');
+
+-- name: CreatePersonaAgent :one
+-- A persona's work record: an agents row with the persona's own id.
+INSERT INTO agents (id, workspace_id, name, handle, color_index, model, status, kind)
+VALUES ($1, $2, $3, $4, $5, $6, 'idle', $7) RETURNING *;
+
+-- name: ReviveAgent :one
+-- Turns a persona's archived work record back on, under a handle that is free again.
+UPDATE agents SET archived_at = NULL, handle = $2 WHERE id = $1 RETURNING *;
+
+-- name: RenameAgent :exec
+-- Keeps a persona's work record named after the persona.
+UPDATE agents SET name = $2 WHERE id = $1;
+
+-- name: AgentHandleTaken :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL)::bool;

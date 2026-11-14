@@ -58,6 +58,7 @@ UPDATE memories m SET superseded_by = sqlc.narg(superseded_by),
   updated_at = now()
 WHERE m.id = @id AND m.workspace_id = @workspace_id AND m.user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'run' THEN (m.persona_id IS NULL AND m.type IN ('project', 'work')) OR m.persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = sqlc.narg(persona_id) ELSE m.persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR m.space_id IS NULL OR m.space_id = sqlc.narg(space_id))
   AND (sqlc.narg(superseded_by)::uuid IS NULL OR EXISTS (
@@ -99,6 +100,7 @@ LIMIT @lim;
 -- name: GetMemory :one
 SELECT * FROM memories WHERE id = @id AND workspace_id = @workspace_id AND user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = sqlc.narg(persona_id) ELSE persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR space_id IS NULL OR space_id = sqlc.narg(space_id));
 
@@ -108,6 +110,7 @@ SELECT * FROM memories WHERE id = @id AND workspace_id = @workspace_id AND user_
 SELECT * FROM memories
 WHERE workspace_id = @workspace_id AND user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = sqlc.narg(persona_id) ELSE persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR space_id IS NULL OR space_id = sqlc.narg(space_id))
   AND (@include_retired::bool OR superseded_by IS NULL)
@@ -120,6 +123,7 @@ LIMIT @lim OFFSET @off;
 SELECT count(*) FROM memories
 WHERE workspace_id = @workspace_id AND user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = sqlc.narg(persona_id) ELSE persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR space_id IS NULL OR space_id = sqlc.narg(space_id))
   AND (@include_retired::bool OR superseded_by IS NULL)
@@ -135,6 +139,7 @@ SELECT sqlc.embed(m),
 FROM memories m
 WHERE m.workspace_id = @workspace_id AND m.user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'run' THEN (m.persona_id IS NULL AND m.type IN ('project', 'work')) OR m.persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = sqlc.narg(persona_id) ELSE m.persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR m.space_id IS NULL OR m.space_id = sqlc.narg(space_id))
   AND (@include_retired::bool OR m.superseded_by IS NULL)
@@ -173,12 +178,14 @@ LIMIT @lim;
 -- name: DeleteMemory :execrows
 DELETE FROM memories WHERE id = @id AND workspace_id = @workspace_id AND user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = sqlc.narg(persona_id) ELSE persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR space_id IS NULL OR space_id = sqlc.narg(space_id));
 
 -- name: DeleteAllMemories :execrows
 DELETE FROM memories WHERE workspace_id = @workspace_id AND user_id = @user_id
   AND CASE @scope::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = sqlc.narg(persona_id)
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = sqlc.narg(persona_id) ELSE persona_id IS NOT DISTINCT FROM sqlc.narg(persona_id) END
   AND (@scope::text = 'all' OR space_id IS NULL OR space_id = sqlc.narg(space_id));
 

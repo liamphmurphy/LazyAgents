@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/artifacts"
 	"github.com/liamphmurphy/vesper/server/internal/auth"
 	"github.com/liamphmurphy/vesper/server/internal/personas"
@@ -202,6 +203,10 @@ func demo(ctx context.Context, pool *pgxpool.Pool, arts *artifacts.Service) (Res
 				WorkspaceID: ws, Name: a.name, Handle: handle, ColorIndex: int32(i),
 				Role: a.role, Specialty: a.specialty, Model: a.model, Status: a.status,
 			}); err != nil {
+				return err
+			}
+			// Agents and personas are one actor: each agent is one of Maya's personas.
+			if err = agents.GivePersona(ctx, q, ids.agents[handle], ids.users["maya"].ID); err != nil {
 				return err
 			}
 		}

@@ -1,39 +1,45 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installAgentApi } from "./mock-agent-api";
 
-const tab = (page: Page, name: string) => page.getByRole("navigation", { name: "Agent sections" }).getByRole("link", { name });
+const tab = (page: Page, name: string) => page.getByRole("navigation", { name: "Work sections" }).getByRole("link", { name });
 
 const SCOPES = { "repo:read": "allowed", "tests:run": "denied", "db:migrate": "requires_approval" };
 
-test("directory lists every agent with role, model, live runs and open tickets", async ({ page }) => {
+test("one Personas list: who chats and who works, and a persona's work from its profile", async ({ page }) => {
   const mock = await installAgentApi(page, { spec: { scopes: SCOPES } });
-  // Agents are in Customization now, beside Personas; the old URL lands there.
+  // The old Agents URL lands on the Personas list, showing those that take tickets.
   await page.goto("/agents");
   await expect(page).toHaveURL(/\/customization\?who=agents$/);
-  await expect(page.getByRole("button", { name: "All agents" })).toHaveAttribute("aria-pressed", "true");
-  const atlas = page.getByRole("article", { name: "Atlas" });
-  await expect(atlas.getByText("Main · Backend")).toBeVisible();
-  await expect(atlas.getByText("opus-5.5")).toBeVisible();
-  // One live run; three queued tickets plus the one being worked on.
-  await expect(atlas.getByRole("term").filter({ hasText: "Live runs" }).locator("+ dd")).toHaveText("1");
-  await expect(atlas.getByRole("term").filter({ hasText: "Open tickets" }).locator("+ dd")).toHaveText("4");
-  await expect(atlas.getByText("WEB-7")).toBeVisible();
-  await expect(atlas.getByText("1 allowed")).toBeVisible();
-  await expect(atlas.getByText("1 approval")).toBeVisible();
-  await expect(atlas.getByText("1 denied")).toBeVisible();
+  await expect(page.getByTestId("all-personas")).toHaveAttribute("aria-pressed", "true");
+  const rows = page.getByTestId("persona-list-row");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Atlas");
+  await expect(rows.first()).toContainText("Takes tickets");
+  await expect(rows.first()).toContainText("opus-5.5");
+  // Atlas is working on a ticket right now.
+  await expect(rows.first().getByRole("link", { name: /WEB-7/ })).toBeVisible();
 
-  const scout = page.getByRole("article", { name: "Scout" });
-  await expect(scout.getByText("Sub agent · Read-only fact gathering")).toBeVisible();
-  await expect(scout.getByText("haiku-5.5")).toBeVisible();
-  await expect(scout.getByRole("term").filter({ hasText: "Open tickets" }).locator("+ dd")).toHaveText("—");
+  await page.getByRole("radiogroup", { name: "Show personas" }).getByRole("radio", { name: /^All/ }).click();
+  await expect(rows).toHaveCount(3);
+  const scout = rows.filter({ hasText: "Scout" });
+  await expect(scout).toContainText("Helps on runs");
+  await expect(scout).toContainText("not in chat list");
+  await expect(rows.filter({ hasText: "Hackerman" })).toContainText("Chat · Codes");
 
-  await page.getByRole("radiogroup", { name: "Filter agents by kind" }).getByRole("radio", { name: "Sub" }).click();
-  await expect(page.getByRole("article", { name: "Atlas" })).toHaveCount(0);
-  await expect(scout).toBeVisible();
+  // A persona's Work section switches what it does; its work settings are a link away.
+  await rows.filter({ hasText: "Atlas" }).getByRole("button").first().click();
+  const work = page.getByTestId("persona-work");
+  await expect(work.getByRole("radio", { name: "Takes tickets" })).toHaveAttribute("aria-checked", "true");
+  await expect(work.getByRole("link", { name: "Work settings" })).toHaveAttribute("href", "/agents/atlas?tab=settings");
 
-  await page.getByRole("radiogroup", { name: "Filter agents by kind" }).getByRole("radio", { name: "All kinds" }).click();
-  await atlas.getByRole("link", { name: "Scopes →" }).click();
-  await expect(page).toHaveURL(/\/agents\/atlas\?tab=scopes/);
+  await page.getByTestId("all-personas").click();
+  await page.getByRole("radiogroup", { name: "Show personas" }).getByRole("radio", { name: /^All/ }).click();
+  await rows.filter({ hasText: "Hackerman" }).getByRole("button").first().click();
+  await work.getByRole("radio", { name: "Takes tickets" }).click();
+  await expect.poll(() => mock.saved.personas.map((p) => p.body.work)).toEqual(["tickets"]);
+  await expect(work.getByText("@hackerman")).toBeVisible();
+  await work.getByRole("switch", { name: "Show in chat list" }).click();
+  await expect.poll(() => mock.saved.personas.at(-1)?.body.in_chat_list).toBe(false);
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -116,7 +122,7 @@ test("skills tab marks project additions and removals", async ({ page }) => {
     skillsRemove: ["release-notes"],
   });
   await page.goto("/agents/atlas?tab=skills");
-  await expect(page.getByText("2 from the agent · 1 added · 1 removed")).toBeVisible();
+  await expect(page.getByText("2 from the definition · 1 added · 1 removed")).toBeVisible();
   await expect(page.getByText("removed in Web app")).toBeVisible();
   await expect(page.getByText("added by Web app")).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove skill git-workflow" })).toBeVisible();

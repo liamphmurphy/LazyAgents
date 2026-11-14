@@ -158,8 +158,13 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, by uuid.UUID, handle
 		if err != nil {
 			return err
 		}
-		a, err = WriteVersion(ctx, q, a, id, sp, "Created", &by, nil)
-		return err
+		if a, err = WriteVersion(ctx, q, a, id, sp, "Created", &by, nil); err != nil {
+			return err
+		}
+		if a.Kind == KindMain || a.Kind == KindSub {
+			return GivePersona(ctx, q, a, by)
+		}
+		return nil
 	})
 	return a, err
 }
@@ -182,6 +187,12 @@ func (s *Service) SaveDefinition(ctx context.Context, ws uuid.UUID, by uuid.UUID
 		}
 		if cur.Kind == KindAssistant {
 			return apperr.Conflict("the Personal Assistant's definition is managed by Vesper")
+		}
+		// The persona owns the name: its profile renames both.
+		if p, err := q.PersonaOwnerOf(ctx, store.PersonaOwnerOfParams{ID: cur.ID, WorkspaceID: ws}); err == nil {
+			id.Name = p.Name
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
 		}
 		if id.Kind == KindSub && cur.Kind != KindSub {
 			// Sub agents can't hold tickets: hand the open ones to someone else first.

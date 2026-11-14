@@ -16,6 +16,7 @@ const countMemories = `-- name: CountMemories :one
 SELECT count(*) FROM memories
 WHERE workspace_id = $1 AND user_id = $2
   AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = $4
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
   AND ($3::text = 'all' OR space_id IS NULL OR space_id = $5)
   AND ($6::bool OR superseded_by IS NULL)
@@ -128,6 +129,7 @@ func (q *Queries) CreateMemory(ctx context.Context, arg CreateMemoryParams) (Mem
 const deleteAllMemories = `-- name: DeleteAllMemories :execrows
 DELETE FROM memories WHERE workspace_id = $1 AND user_id = $2
   AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = $4
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
   AND ($3::text = 'all' OR space_id IS NULL OR space_id = $5)
 `
@@ -157,6 +159,7 @@ func (q *Queries) DeleteAllMemories(ctx context.Context, arg DeleteAllMemoriesPa
 const deleteMemory = `-- name: DeleteMemory :execrows
 DELETE FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
   AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = $5
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = $5 ELSE persona_id IS NOT DISTINCT FROM $5 END
   AND ($4::text = 'all' OR space_id IS NULL OR space_id = $6)
 `
@@ -308,6 +311,7 @@ func (q *Queries) ExportMemories(ctx context.Context, arg ExportMemoriesParams) 
 const getMemory = `-- name: GetMemory :one
 SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id, space_id FROM memories WHERE id = $1 AND workspace_id = $2 AND user_id = $3
   AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = $5
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = $5 ELSE persona_id IS NOT DISTINCT FROM $5 END
   AND ($4::text = 'all' OR space_id IS NULL OR space_id = $6)
 `
@@ -359,6 +363,7 @@ const listMemories = `-- name: ListMemories :many
 SELECT id, workspace_id, user_id, title, summary, body, tags, type, source, source_chat_id, source_run_id, superseded_by, created_at, updated_at, retired_reason, retired_at, consolidation_exempt, persona_id, space_id FROM memories
 WHERE workspace_id = $1 AND user_id = $2
   AND CASE $3::text WHEN 'all' THEN true WHEN 'personas' THEN persona_id IS NOT NULL
+        WHEN 'run' THEN (persona_id IS NULL AND type IN ('project', 'work')) OR persona_id = $4
         WHEN 'chat' THEN persona_id IS NULL OR persona_id = $4 ELSE persona_id IS NOT DISTINCT FROM $4 END
   AND ($3::text = 'all' OR space_id IS NULL OR space_id = $5)
   AND ($6::bool OR superseded_by IS NULL)
@@ -632,6 +637,7 @@ SELECT m.id, m.workspace_id, m.user_id, m.title, m.summary, m.body, m.tags, m.ty
 FROM memories m
 WHERE m.workspace_id = $2 AND m.user_id = $3
   AND CASE $4::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'run' THEN (m.persona_id IS NULL AND m.type IN ('project', 'work')) OR m.persona_id = $5
         WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = $5 ELSE m.persona_id IS NOT DISTINCT FROM $5 END
   AND ($4::text = 'all' OR m.space_id IS NULL OR m.space_id = $6)
   AND ($7::bool OR m.superseded_by IS NULL)
@@ -723,6 +729,7 @@ UPDATE memories m SET superseded_by = $1,
   updated_at = now()
 WHERE m.id = $4 AND m.workspace_id = $5 AND m.user_id = $6
   AND CASE $7::text WHEN 'all' THEN true WHEN 'personas' THEN m.persona_id IS NOT NULL
+        WHEN 'run' THEN (m.persona_id IS NULL AND m.type IN ('project', 'work')) OR m.persona_id = $8
         WHEN 'chat' THEN m.persona_id IS NULL OR m.persona_id = $8 ELSE m.persona_id IS NOT DISTINCT FROM $8 END
   AND ($7::text = 'all' OR m.space_id IS NULL OR m.space_id = $9)
   AND ($1::uuid IS NULL OR EXISTS (

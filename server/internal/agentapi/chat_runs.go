@@ -27,7 +27,7 @@ var (
 type ListRunsIn struct {
 	State   string `json:"state,omitempty" jsonschema:"live (default: queued, running, waiting, paused or blocked), finished (completed, failed or cancelled), all, or one exact state"`
 	Ticket  string `json:"ticket,omitempty" jsonschema:"Only runs of this ticket, e.g. PAY-214 (includes delegated sub agent runs)"`
-	Agent   string `json:"agent,omitempty" jsonschema:"Only runs of this agent handle, e.g. implementer"`
+	Agent   string `json:"agent,omitempty" jsonschema:"Only runs of this persona, by its @handle, e.g. implementer"`
 	Project string `json:"project,omitempty" jsonschema:"Only runs of tickets in this project key, e.g. PAY; default every project"`
 	Offset  int    `json:"offset,omitempty" jsonschema:"Skip this many runs (pages of 50, newest first)"`
 }

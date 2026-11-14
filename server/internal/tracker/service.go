@@ -124,23 +124,24 @@ type refs struct {
 func (r refs) agent(ctx context.Context, id *uuid.UUID) (store.Agent, error) {
 	a, err := r.q.GetAgent(ctx, store.GetAgentParams{ID: *id, WorkspaceID: r.ws})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return a, invalid("assignee_agent_id", "unknown agent")
+		return a, invalid("assignee_agent_id", "unknown persona")
 	}
 	if err == nil && a.ArchivedAt != nil {
-		return a, invalid("assignee_agent_id", "@%s is deleted", a.Handle)
+		return a, invalid("assignee_agent_id", "@%s no longer works on tickets", a.Handle)
 	}
 	return a, err
 }
 
-// assignee is agent for a ticket's assignee: sub agents only run when a main
-// agent delegates to them, so they can't hold tickets.
+// assignee is agent for a ticket's assignee: the work record of a persona that takes
+// tickets. Helpers only run when another persona's run hands them work, so they can't hold
+// tickets.
 func (r refs) assignee(ctx context.Context, id *uuid.UUID) (store.Agent, error) {
 	a, err := r.agent(ctx, id)
 	if err == nil && a.Kind == "sub" {
-		return a, invalid("assignee_agent_id", "@%s is a sub agent and can't be assigned tickets; assign a main agent, which can delegate to it", a.Handle)
+		return a, invalid("assignee_agent_id", "@%s helps on runs and can't be assigned tickets; assign a persona that takes tickets, which can hand it work", a.Handle)
 	}
 	if err == nil && a.Kind == "assistant" {
-		return a, invalid("assignee_agent_id", "@%s is the Personal Assistant and can't be assigned tickets; assign a main agent", a.Handle)
+		return a, invalid("assignee_agent_id", "@%s is the Personal Assistant and can't be assigned tickets; assign a persona that takes tickets", a.Handle)
 	}
 	return a, err
 }

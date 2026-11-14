@@ -27,7 +27,7 @@ const HARNESSES = [
 const PROJECT = { id: "00000000-0000-4000-8000-0000000000a1", key: "WEB", name: "Web app", color: "#6e56cf", default_branch: "main", archived: false, revision: 1 };
 const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-export type Saved = { definition: Array<Record<string, unknown>>; overrides: Array<{ project: string; body: Override }> };
+export type Saved = { definition: Array<Record<string, unknown>>; overrides: Array<{ project: string; body: Override }>; personas: Array<{ id: string; body: Record<string, unknown> }> };
 
 const CATALOG = [
   { scope: "repo:read", description: "Clone and read the project repo", brokered: false, secret: "repo-token" },
@@ -56,7 +56,7 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
   let version = 1;
   let override: Override | undefined = opts.override;
   const unhandled: string[] = [];
-  const saved: Saved = { definition: [], overrides: [] };
+  const saved: Saved = { definition: [], overrides: [], personas: [] };
 
   const detail = () => ({
     agent: { ...agent, model: spec.model },
@@ -104,6 +104,16 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
     stats: { completed: 0, median_cycle_seconds: null, merged_prs: 0, closed_prs: 0, spend_usd: 0.4 },
     scopes: [{ scope: "repo:read", mode: "allowed", enforcement: "credential", how: "" }],
   };
+
+  const persona = (id: string, name: string, color: string, extra: Record<string, unknown>) => ({
+    id, name, tone: "neutral", color, custom_instructions: "", capabilities: { code: false, images: false }, repos: [], is_default: false,
+    chat_count: 0, in_chat_list: true, work: "none", revision: 1, created_at: now(), updated_at: now(), ...extra,
+  });
+  const personas: Array<ReturnType<typeof persona> & { handle?: string; work_model?: string; work: string; in_chat_list: boolean; revision: number }> = [
+    persona(UUID(1), "Atlas", "#4547c9", { work: "tickets", handle: "atlas", work_model: "opus-5.5", work_status: "idle" }),
+    persona(UUID(9), "Scout", "#b42f48", { work: "helper", handle: "scout", work_model: "haiku-5.5", work_status: "idle", in_chat_list: false }),
+    persona(UUID(10), "Hackerman", "#9b8cff", { capabilities: { code: true, images: false }, is_default: true }),
+  ];
 
   async function handle(route: Route) {
     const req = route.request();
@@ -172,6 +182,19 @@ export async function installAgentApi(page: Page, opts: AgentApiOptions = {}) {
         provenance: { ...(override?.harness ? { harness: "project" } : {}), ...(override?.model ? { model: "project" } : {}) },
       });
     }
+    // Agents and personas are one actor: each work record is a persona with its id.
+    if (path === "/personas" && method === "GET") return json({ personas, default_persona_id: personas[2].id });
+    const personaPatch = path.match(/^\/personas\/([^/]+)$/);
+    if (personaPatch && method === "PATCH") {
+      const p = personas.find((x) => x.id === personaPatch[1]);
+      if (!p) return json({ code: "not_found", message: "no persona" }, 404);
+      const b = body();
+      saved.personas.push({ id: p.id, body: b });
+      Object.assign(p, b.work ? { work: b.work, handle: p.handle ?? p.name.toLowerCase(), work_model: p.work_model ?? "opus-5.5", work_status: "idle" } : {}, "in_chat_list" in b ? { in_chat_list: b.in_chat_list } : {});
+      p.revision++;
+      return json(p);
+    }
+    if (path === "/connectors" && method === "GET") return json({ connectors: [] });
     const menu = menuResponse(method, path);
     if (menu) return json(menu);
     // The agent list is in Customization, which counts memories in its header.

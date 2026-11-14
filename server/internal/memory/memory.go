@@ -23,6 +23,9 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
+// RunTypes are the person's memory types a ticket run may read (ScopeRun).
+var RunTypes = []string{"project", "work"}
+
 // Types are the kinds of memory an entry can be. A moment (something the
 // persona and the person shared) belongs in a persona's own memory only.
 var Types = []string{"preference", "project", "person", "life", "work", "fact", "other", TypeMoment}
@@ -67,8 +70,13 @@ type Owner struct {
 type Scope string
 
 const (
-	ScopeOwn      Scope = ""         // exactly PersonaID's memory (the person's own when nil)
-	ScopeChat     Scope = "chat"     // the person's own plus PersonaID's: a persona chat
+	ScopeOwn  Scope = ""     // exactly PersonaID's memory (the person's own when nil)
+	ScopeChat Scope = "chat" // the person's own plus PersonaID's: a persona chat
+	// ScopeRun is what a ticket run may read: the person's project and work entries (never
+	// life, preferences or anything else private) plus its persona's own memory. Runs read
+	// untrusted text and write to the outside world, so the rest of a person's memory stays
+	// out of them.
+	ScopeRun      Scope = "run"
 	ScopePersonas Scope = "personas" // every persona's, none of the person's own
 	ScopeAll      Scope = "all"      // everything: the person's memory manager
 )

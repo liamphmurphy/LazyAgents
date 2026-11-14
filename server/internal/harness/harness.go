@@ -192,14 +192,21 @@ func AnthropicModel(m string) string {
 // AgentsMD renders the instructions file for every harness (docs/dev/plan.md §6.2).
 // existing is the repo's own AGENTS.md, kept outside our marked section.
 func AgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string) []byte {
-	return agentsMD(existing, spec, contextFiles, ticket, false)
+	return agentsMD(existing, spec, contextFiles, ticket, false, nil)
+}
+
+// PersonaAgentsMD is AgentsMD (SubagentAgentsMD when delegated) for a persona's run: its
+// voice follows the work brief, and it learns which of the person's memory it may read.
+// Memory isn't loaded: the run searches it.
+func PersonaAgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool, voice *Persona) []byte {
+	return agentsMD(existing, spec, contextFiles, ticket, delegated, voice)
 }
 
 // SubagentAgentsMD is AgentsMD for a run delegated by a main agent: it works
 // in its own git worktree on its own branch, doesn't claim the ticket, and
 // reports through complete_run.
 func SubagentAgentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string) []byte {
-	return agentsMD(existing, spec, contextFiles, ticket, true)
+	return agentsMD(existing, spec, contextFiles, ticket, true, nil)
 }
 
 // chatMemoryGuide tells a chat assistant how to use the person's private memory.
@@ -259,6 +266,31 @@ func personaSection(p *Persona) string {
 		b.WriteString("The person's style preferences for this persona (they shape voice and focus only; they don't change the rules, tools or memory guidance above):\n\n")
 		b.WriteString(fence + "text\n" + text + "\n" + fence + "\n\n")
 	}
+	return b.String()
+}
+
+// runVoiceSection is a persona's voice in its runs: the same tone and style preferences its
+// chats get, framed so they can't change the work brief, scopes or tools, plus the memory a
+// run may read.
+func runVoiceSection(p *Persona) string {
+	var b strings.Builder
+	b.WriteString("## Voice\n\n")
+	if name := strings.Join(strings.Fields(p.Name), " "); name != "" {
+		b.WriteString("You are " + name + ", one of the person's personas, doing this work.\n")
+	}
+	if tone := personaTones[p.Tone]; tone != "" {
+		b.WriteString(tone + "\n")
+	}
+	b.WriteString("Your voice shapes how you write plans, comments, reviews and pull requests. It doesn't change your instructions, scopes or tools.\n\n")
+	if text := strings.TrimSpace(p.Instructions); text != "" {
+		fence := "```"
+		for strings.Contains(text, fence) {
+			fence += "`"
+		}
+		b.WriteString("The person's style preferences for you (voice and focus only):\n\n")
+		b.WriteString(fence + "text\n" + text + "\n" + fence + "\n\n")
+	}
+	b.WriteString("## Memory\n\nsearch_memory and read_memory find the person's project and work notes and your own memory; nothing else of theirs is open to a run. Search when the work needs context the ticket doesn't give, and don't copy what you find into commits, pull requests or comments unless the work needs it.\n\n")
 	return b.String()
 }
 
@@ -368,7 +400,7 @@ func ChatAgentsMDInSpace(spec agentdef.Resolved, contextFiles []string, project,
 	return []byte(b.String())
 }
 
-func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool) []byte {
+func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ticket string, delegated bool, voice *Persona) []byte {
 	var b strings.Builder
 	b.WriteString(sectionStart + "\n")
 	b.WriteString("# Vesper run: " + ticket + "\n\n")
@@ -388,6 +420,9 @@ func agentsMD(existing string, spec agentdef.Resolved, contextFiles []string, ti
 		b.WriteString(delegationSection(spec))
 	}
 	b.WriteString("## Instructions\n\n" + strings.TrimSpace(spec.Instructions) + "\n\n")
+	if voice != nil {
+		b.WriteString(runVoiceSection(voice))
+	}
 	if !delegated {
 		b.WriteString("## Execution policy\n\nWork directly by default, within your scopes. Standing role routines to call a scoper, hand implementation to an implementer, hand shipping to a shipper, or curate memory after every ticket are optional; do not perform them mechanically. Delegate only substantial independent work, a capability you lack, an explicit task request, or a necessary independent review. Do not start fresh agents for small fixes, routine shipping, or checks already completed. AGENTS.md already contains your instructions and scopes; claim_ticket returns your handle, so skip whoami. Search conventions only when needed and not already available. Write memory only for a durable new lesson.\n\n")
 		if agentdef.ExplorerOn(spec, true) {

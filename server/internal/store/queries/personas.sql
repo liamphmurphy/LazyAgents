@@ -60,6 +60,7 @@ UPDATE personas SET
   can_create_workflows = COALESCE(sqlc.narg(can_create_workflows)::boolean, can_create_workflows),
   can_create_connectors = COALESCE(sqlc.narg(can_create_connectors)::boolean, can_create_connectors),
   repos = COALESCE(sqlc.narg(repos)::text[], repos),
+  in_chat_list = COALESCE(sqlc.narg(in_chat_list)::boolean, in_chat_list),
   revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id) AND revision = sqlc.arg(revision)
 RETURNING *;
@@ -150,3 +151,19 @@ RETURNING *;
 UPDATE personas SET ticket_edits = sqlc.arg(ticket_edits), revision = revision + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
+
+-- name: ListPersonaWork :many
+-- The work records of the person's personas: the agents rows sharing a persona's id, archived
+-- ones included (an archived row is work turned off; turning it back on revives it).
+SELECT a.* FROM agents a JOIN personas p ON p.id = a.id
+WHERE p.workspace_id = $1 AND p.user_id = $2 AND a.kind IN ('main', 'sub');
+
+-- name: PersonaOwnerOf :one
+-- The person whose persona shares this agent's id; no row for a chat-only agent (the
+-- Personal Assistant) or an archived agent that never became a persona.
+SELECT p.* FROM personas p WHERE p.id = $1 AND p.workspace_id = $2;
+
+-- name: CreatePersonaForAgent :one
+-- The persona of a work record made outside a persona (the seed, POST /agents): the
+-- record's own id, so the two stay one actor.
+INSERT INTO personas (id, workspace_id, user_id, name, color) VALUES ($1, $2, $3, $4, $5) RETURNING *;

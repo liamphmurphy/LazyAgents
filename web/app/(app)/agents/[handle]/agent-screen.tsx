@@ -31,9 +31,11 @@ type Tab = (typeof TABS)[number];
 /** Links from before the tabs were split keep working. */
 const LEGACY: Record<string, Tab> = { definition: "settings", runs: "activity" };
 
-/** Agents live in Customization, beside Personas. */
-const AGENTS_HREF = "/customization?who=agents";
-const AGENTS_CRUMBS = [{ label: "Customization", href: "/customization" }, { label: "Agents", href: AGENTS_HREF }];
+/** A persona's work settings: its work record, opened from the persona in Customization. */
+const AGENTS_HREF = "/customization?who=personas";
+const AGENTS_CRUMBS = [{ label: "Customization", href: "/customization" }, { label: "Personas", href: AGENTS_HREF }];
+/** The persona a work record belongs to has the record's id. */
+const personaHref = (id: string) => `/customization?who=${encodeURIComponent(id)}`;
 
 export function tabFrom(param: string | null): Tab {
   if (param && (TABS as readonly string[]).includes(param)) return param as Tab;
@@ -68,7 +70,7 @@ function ResolvedPanel({ detail, projects, project, onProject }: { detail: Agent
           <dd className="flex items-center gap-1.5"><MonoChip>{r.data.model}</MonoChip>{fromProject("model")}</dd>
           <dt className="text-fg-tertiary">Instructions</dt>
           <dd className="flex items-center gap-1.5">
-            {r.data.provenance.instructions ? `Agent + ${extraLines} line${extraLines === 1 ? "" : "s"}` : "Agent's"}
+            {r.data.provenance.instructions ? `Brief + ${extraLines} line${extraLines === 1 ? "" : "s"}` : "Work brief"}
             {fromProject("instructions")}
           </dd>
           <dt className="text-fg-tertiary">MCP</dt>
@@ -144,7 +146,7 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
             {p.name}
             <span className="ml-auto text-fg-tertiary">–</span>
           </span>
-          <span className="pl-[18px] text-12 text-fg-tertiary">Uses the agent definition as is</span>
+          <span className="pl-[18px] text-12 text-fg-tertiary">Uses the work definition as is</span>
         </div>
       ))}
     </section>
@@ -209,9 +211,9 @@ export function AgentScreen({ handle }: { handle: string }) {
       <>
         <TopBar crumbs={[...AGENTS_CRUMBS, { label: `@${handle}` }]} />
         {missing ? (
-          <EmptyState icon="agents" title={`No agent @${handle}`} actions={<ButtonLink href={AGENTS_HREF} variant="outline">All agents</ButtonLink>} />
+          <EmptyState icon="agents" title={`No persona @${handle} works on tickets or runs`} actions={<ButtonLink href={AGENTS_HREF} variant="outline">All personas</ButtonLink>} />
         ) : (
-          <div className="p-6"><Banner tone="blocked" title="Couldn't load this agent">{error.message}</Banner></div>
+          <div className="p-6"><Banner tone="blocked" title="Couldn't load this persona's work">{error.message}</Banner></div>
         )}
       </>
     );
@@ -223,7 +225,7 @@ export function AgentScreen({ handle }: { handle: string }) {
   return (
     <>
       <TopBar
-        crumbs={[...AGENTS_CRUMBS, { label: detail?.agent.name ?? `@${handle}` }]}
+        crumbs={[...AGENTS_CRUMBS, detail ? { label: detail.agent.name, href: personaHref(detail.agent.id) } : { label: `@${handle}` }, { label: "Work" }]}
         actions={
           detail && (
             <>
@@ -256,14 +258,14 @@ export function AgentScreen({ handle }: { handle: string }) {
                   <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
                 <span className="text-13 text-fg-secondary">
-                  {detail.agent.kind === "sub" ? "Sub agent" : detail.agent.kind === "assistant" ? "Personal Assistant (managed by Vesper)" : "Main"}
+                  {detail.agent.kind === "sub" ? "Helps on runs" : detail.agent.kind === "assistant" ? "Personal Assistant (managed by Vesper)" : "Takes tickets"}
                   {detail.agent.role && ` · ${detail.agent.role}`} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
                   {detail.definition.created_by && ` saved by ${detail.definition.created_by.name}`} {ago(detail.definition.created_at)}
                 </span>
               </div>
             </div>
             <Tabs
-              label="Agent sections"
+              label="Work sections"
               value={tab}
               items={[
                 { key: "overview", label: "Overview", href: `/agents/${handle}?tab=overview` },

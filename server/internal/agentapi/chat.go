@@ -119,13 +119,13 @@ func mainAgent(ctx context.Context, d Deps, ws uuid.UUID, handle string) (*uuid.
 	}
 	a, err := d.Q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: handle})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apperr.Invalid("agent", "no agent @%s", handle)
+		return nil, apperr.Invalid("agent", "no persona @%s works on tickets", handle)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if a.Kind != agents.KindMain {
-		return nil, apperr.Invalid("agent", "@%s can't take tickets; assign a main agent, which can delegate to sub agents", a.Handle)
+		return nil, apperr.Invalid("agent", "@%s helps on runs and can't take tickets; assign a persona that takes tickets, which can hand it work", a.Handle)
 	}
 	return &a.ID, nil
 }

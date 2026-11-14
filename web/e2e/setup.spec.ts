@@ -118,11 +118,11 @@ test("a new workspace sees the checklist and a health banner naming missing secr
   await expect(setup.getByRole("link", { name: "Spaces →" })).toHaveAttribute("href", "/spaces/new?work=1");
   await expect(setup.getByRole("link", { name: "Provider credentials →" })).toHaveAttribute("href", "/settings#secrets");
   await expect(setup.getByRole("link", { name: "Runner backends →" })).toHaveAttribute("href", "/settings#runners");
-  await expect(setup.getByRole("link", { name: "Agents →" })).toHaveAttribute("href", "/customization?who=agents");
+  await expect(setup.getByRole("link", { name: "Personas →" })).toHaveAttribute("href", "/customization?who=agents");
   await expect(setup.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 
-  // The URL changes before the Agents screen mounts and records the visit.
-  await setup.getByRole("link", { name: "Agents →" }).click();
+  // The URL changes before the Personas list mounts and records the visit.
+  await setup.getByRole("link", { name: "Personas →" }).click();
   await expect(page).toHaveURL(/\/customization\?who=agents$/);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("la:setup:workspace:agents-reviewed"))).toBe("1");
   await page.goBack();

@@ -75,7 +75,7 @@ export function BulkBar({
   const busy = saving || bulk.isPending;
 
   const apply = onApply;
-  const agentName = (id: string | null) => (id ? agents.find((a) => a.id === id)?.name ?? "agent" : "Unassigned");
+  const agentName = (id: string | null) => (id ? agents.find((a) => a.id === id)?.name ?? "persona" : "Unassigned");
   const epicName = (id: string | null) => (id ? epics.find((e) => e.id === id)?.name ?? "epic" : "No epic");
 
   return (

@@ -54,7 +54,7 @@ func TestDeleteAgentArchivesAndKeepsHistory(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `SELECT id FROM agents WHERE handle='gone'`).Scan(&agentID); err != nil {
 		t.Fatal(err)
 	}
-	e.invalid("PATCH", "/tickets/"+e.otherTk, map[string]any{"assignee_agent_id": agentID}, "assignee_agent_id", "deleted")
+	e.invalid("PATCH", "/tickets/"+e.otherTk, map[string]any{"assignee_agent_id": agentID}, "assignee_agent_id", "no longer works on tickets")
 	var n int
 	if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM runs WHERE id=$1`, runID).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("run history lost: %d %v", n, err)

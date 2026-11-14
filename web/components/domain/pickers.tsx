@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DropdownMenu, Popover } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Priority, Schemas, TicketStatus } from "@/lib/api/client";
@@ -158,8 +159,8 @@ const availability: Record<Schemas["Agent"]["status"], { label: string; cls: str
 };
 
 /**
- * Agent picker popover (DESIGN.md §4): search row, 40px options with
- * "model · specialty" and availability. Assigning never starts a run (§6.6).
+ * Assignee picker popover (DESIGN.md §4): personas that take tickets, with a search row, 40px
+ * options with "model · specialty" and availability. Assigning never starts a run (§6.6).
  */
 export function AgentPicker({
   agents,
@@ -168,7 +169,7 @@ export function AgentPicker({
   children,
   open,
   onOpenChange,
-  label = "Agent",
+  label = "Persona",
 }: {
   agents: Schemas["Agent"][];
   value?: string | null;
@@ -217,8 +218,8 @@ export function AgentPicker({
               aria-expanded="true"
               aria-controls="agent-options"
               aria-activedescendant={options.length ? `agent-opt-${active}` : undefined}
-              aria-label="Assign to agent"
-              placeholder="Assign to agent…"
+              aria-label="Assign to persona"
+              placeholder="Assign to persona…"
               value={q}
               onChange={(e) => { setQ(e.target.value); setActive(0); }}
               onKeyDown={(e) => {
@@ -229,8 +230,8 @@ export function AgentPicker({
               className="h-10 flex-1 bg-transparent text-13 outline-none placeholder:text-fg-tertiary"
             />
           </div>
-          <div id="agent-options" role="listbox" aria-label="Agents" className="max-h-[320px] overflow-y-auto p-1">
-            {options.length === 0 && <div className="px-2 py-2 text-fg-tertiary">No agents match “{q}”</div>}
+          <div id="agent-options" role="listbox" aria-label="Personas" className="max-h-[320px] overflow-y-auto p-1">
+            {options.length === 0 && <div className="px-2 py-2 text-fg-tertiary">No personas that take tickets match “{q}”</div>}
             {options.map((a, i) =>
               a ? (
                 <div
@@ -271,7 +272,10 @@ export function AgentPicker({
               ),
             )}
           </div>
-          <p className="border-t border-border-subtle px-3 py-2 text-12 text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
+          <p className="border-t border-border-subtle px-3 py-2 text-12 text-fg-tertiary">
+            Personas that take tickets. Assigning queues the ticket; a person starts the run.{" "}
+            <Link href="/customization?who=personas" className="text-accent hover:underline">Turn it on for another…</Link>
+          </p>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

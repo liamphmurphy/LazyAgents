@@ -938,7 +938,7 @@ func (e *WorkflowEngine) startAgent(ctx context.Context, q *store.Queries, chat 
 	if n.Type == NodeAgent && n.Config.AgentHandle != "" {
 		agent, err = q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: run.WorkspaceID, Handle: n.Config.AgentHandle})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, fmt.Sprintf("There's no agent @%s.", n.Config.AgentHandle), nil
+			return uuid.Nil, fmt.Sprintf("No persona @%s works on tickets or runs.", n.Config.AgentHandle), nil
 		} else if err != nil {
 			return uuid.Nil, "", err
 		}

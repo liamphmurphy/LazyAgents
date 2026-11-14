@@ -37,6 +37,15 @@ func (e *chatEnv) strangerPersona() string {
 	return id.String()
 }
 
+// onlyChatPersonas drops the personas the seed made from its agents, for tests about a
+// person's chat personas alone (working personas can't be deleted while they hold tickets).
+func (e *chatEnv) onlyChatPersonas() {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(), `DELETE FROM personas WHERE id IN (SELECT id FROM agents)`); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 func (e *chatEnv) defaultCount() int {
 	e.t.Helper()
 	var n int
@@ -48,6 +57,7 @@ func (e *chatEnv) defaultCount() int {
 
 func TestPersonaCRUDAndValidation(t *testing.T) {
 	e := newChatEnv(t)
+	e.onlyChatPersonas()
 	def := e.myDefaultPersona()
 	if def["name"] != "Assistant" || def["tone"] != "neutral" || def["color"] != "#64748b" {
 		t.Fatalf("seeded default %v", def)
@@ -94,13 +104,13 @@ func TestPersonaCRUDAndValidation(t *testing.T) {
 	// Renaming to its own name in another case is fine.
 	e.want("PATCH", "/personas/"+id, map[string]any{"revision": 2, "name": "WORK MODE"}, 200)
 
-	// The 20-persona cap (3 exist).
-	for i := range 17 {
+	// The 40-persona cap (3 exist).
+	for i := range 37 {
 		e.want("POST", "/personas", map[string]any{"name": fmt.Sprintf("P%d", i)}, http.StatusCreated)
 	}
-	e.invalid("POST", "/personas", map[string]any{"name": "One too many"}, "personas", "at most 20")
-	if n := len(e.want("GET", "/personas", nil, 200)["personas"].([]any)); n != 20 {
-		t.Fatalf("%d personas, want 20", n)
+	e.invalid("POST", "/personas", map[string]any{"name": "One too many"}, "personas", "at most 40")
+	if n := len(e.want("GET", "/personas", nil, 200)["personas"].([]any)); n != 40 {
+		t.Fatalf("%d personas, want 40", n)
 	}
 
 	// Delete.
@@ -127,6 +137,7 @@ func TestPersonaCRUDAndValidation(t *testing.T) {
 
 func TestPersonaDefaultSwapAndDeleteOfDefault(t *testing.T) {
 	e := newChatEnv(t)
+	e.onlyChatPersonas()
 	assistant := e.myDefaultPersona()["id"].(string)
 
 	// Creating with is_default replaces the default.
@@ -227,6 +238,7 @@ func TestPersonaConcurrentSetDefault(t *testing.T) {
 
 func TestChatPersonaGroupingAndOwnership(t *testing.T) {
 	e := newChatEnv(t)
+	e.onlyChatPersonas()
 	assistant := e.myDefaultPersona()["id"].(string)
 	work := e.want("POST", "/personas", map[string]any{"name": "Work", "color": "#112233"}, http.StatusCreated)
 	workID := work["id"].(string)
@@ -429,4 +441,53 @@ func TestChatRepoSelection(t *testing.T) {
 	if c := e.newChat(nil); c["repo_url"] != "https://github.com/acme/app" || c["persona"].(map[string]any)["id"] != coder {
 		t.Fatalf("default persona chat: %v", c)
 	}
+}
+
+// A persona's work is its agents row with the persona's id: turning it on makes that row (and
+// a handle), switching changes its kind, and turning it off archives it, refused while the
+// persona holds open tickets. Renaming the persona renames its work.
+func TestPersonaWork(t *testing.T) {
+	e := newChatEnv(t)
+	ctx := context.Background()
+	p := e.want("POST", "/personas", map[string]any{"name": "Dr. Mara"}, http.StatusCreated)
+	id := p["id"].(string)
+	if p["work"] != "none" || p["in_chat_list"] != true || p["handle"] != nil {
+		t.Fatalf("new persona %v, want work none, in the chat list, no handle", p)
+	}
+
+	p = e.want("PATCH", "/personas/"+id, map[string]any{"revision": 1, "work": "tickets"}, 200)
+	if p["work"] != "tickets" || p["handle"] != "dr-mara" || p["work_status"] != "idle" || p["work_model"] == nil {
+		t.Fatalf("after tickets %v", p)
+	}
+	var kind, handle string
+	if err := e.pool.QueryRow(ctx, `SELECT kind, handle FROM agents WHERE id=$1 AND archived_at IS NULL`, id).Scan(&kind, &handle); err != nil || kind != "main" || handle != "dr-mara" {
+		t.Fatalf("work record kind=%q handle=%q err=%v", kind, handle, err)
+	}
+	// It can be assigned a ticket now, by handle, like any agent.
+	ticket := e.want("POST", "/tickets", map[string]any{"project_key": "PAY", "title": "Check the ledger", "assignee_agent_id": id}, http.StatusCreated)
+
+	// Helpers can't hold tickets, and work can't stop while it holds one.
+	rev := int(p["revision"].(float64))
+	e.want("PATCH", "/personas/"+id, map[string]any{"revision": rev, "work": "helper"}, http.StatusConflict)
+	rev++
+	e.want("PATCH", "/personas/"+id, map[string]any{"revision": rev, "work": "none"}, http.StatusConflict)
+	rev++
+	e.want("DELETE", "/personas/"+id, nil, http.StatusConflict)
+	e.want("PATCH", "/tickets/"+ticket["key"].(string), map[string]any{"revision": int(ticket["revision"].(float64)), "status": "done"}, 200)
+
+	p = e.want("PATCH", "/personas/"+id, map[string]any{"revision": rev, "name": "Mara", "in_chat_list": false, "work": "none"}, 200)
+	if p["work"] != "none" || p["in_chat_list"] != false || p["handle"] != "dr-mara" {
+		t.Fatalf("after none %v: the handle stays, the work stops", p)
+	}
+	var name string
+	var archived bool
+	if err := e.pool.QueryRow(ctx, `SELECT name, archived_at IS NOT NULL FROM agents WHERE id=$1`, id).Scan(&name, &archived); err != nil || name != "Mara" || !archived {
+		t.Fatalf("work record name=%q archived=%v err=%v", name, archived, err)
+	}
+	// Back on, as a helper: the same record, revived.
+	p = e.want("PATCH", "/personas/"+id, map[string]any{"revision": int(p["revision"].(float64)), "work": "helper"}, 200)
+	if p["work"] != "helper" || p["handle"] != "dr-mara" {
+		t.Fatalf("revived %v", p)
+	}
+	e.invalid("PATCH", "/personas/"+id, map[string]any{"revision": int(p["revision"].(float64)), "work": "everything"}, "work", "")
 }

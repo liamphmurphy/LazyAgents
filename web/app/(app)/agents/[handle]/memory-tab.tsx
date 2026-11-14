@@ -60,7 +60,7 @@ export function MemoryTab({ handle, memory }: { handle: string; memory: AgentSpe
         <Skeleton className="h-48" />
       ) : pages.length === 0 ? (
         <EmptyState icon="wiki" title="No memory pages yet">
-          Pages the agent writes under <code className="inline">{prefix}</code> appear here.
+          Pages its runs write under <code className="inline">{prefix}</code> appear here.
         </EmptyState>
       ) : (
         <Card bodyClassName="p-0">

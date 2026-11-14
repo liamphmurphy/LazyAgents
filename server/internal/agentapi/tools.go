@@ -420,7 +420,7 @@ type CommentIn struct {
 type NewTicketIn struct {
 	TicketArg
 	Project           string     `json:"project,omitempty" jsonschema:"Chats only: project key, e.g. PAY; default the chat's default project"`
-	Agent             string     `json:"agent,omitempty" jsonschema:"Chats only: assign a main agent by handle, e.g. pike, so the ticket can be started"`
+	Agent             string     `json:"agent,omitempty" jsonschema:"Chats only: assign a persona that takes tickets, by its @handle, e.g. pike, so the ticket can be started"`
 	EpicID            *uuid.UUID `json:"epic_id,omitempty"`
 	Title             string     `json:"title"`
 	Description       string     `json:"description,omitempty"`
@@ -504,7 +504,7 @@ type RecheckReviewIn struct {
 
 type DelegateIn struct {
 	TicketArg
-	Agent              string   `json:"agent" jsonschema:"Handle of a sub agent from list_subagents, e.g. docs-writer"`
+	Agent              string   `json:"agent" jsonschema:"Handle of a persona that helps on runs, from list_subagents, e.g. docs-writer"`
 	Task               string   `json:"task" jsonschema:"What it should do, with the context it needs: it can't see your conversation. Name files, constraints and the done condition."`
 	AcceptanceCriteria []string `json:"acceptance_criteria,omitempty" jsonschema:"Checkable conditions that make the task done. Shown to the sub agent; you verify them against the automated check results."`
 	AllowedPaths       []string `json:"allowed_paths,omitempty" jsonschema:"Repo-relative files, directories (trailing slash) or globs the sub agent may change. Changes outside them fail the automated checks."`

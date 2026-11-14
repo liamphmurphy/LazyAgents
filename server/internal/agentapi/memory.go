@@ -2,9 +2,11 @@ package agentapi
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/agents"
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
@@ -12,10 +14,14 @@ import (
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
-// Memory tools: the personal assistant's per-person memory. They only work in
-// a chat, and only on the memory of the person the chat belongs to: the
-// person's own memory, plus (in a persona chat) that one persona's own memory.
-// No chat reaches another persona's memory.
+// Memory tools: the personal assistant's per-person memory. In a chat they work on the
+// memory of the person the chat belongs to: the person's own memory, plus (in a persona
+// chat) that one persona's own memory. No chat reaches another persona's memory.
+//
+// A ticket run of a persona (or a run it handed work to) may only search and read, and only
+// the person's project and work entries plus that persona's own memory (memory.ScopeRun):
+// runs read untrusted text and write to the outside world, so the rest of a person's
+// memory, their life and preferences, never reaches one.
 
 // temporaryChatRefusal is what memory and chat history tools answer in a
 // temporary chat.
@@ -109,7 +115,7 @@ func memoryOwner(ctx context.Context, d Deps, c agents.Caller) (chatMemory, erro
 		return chatMemory{}, err
 	}
 	if s == nil {
-		return chatMemory{}, apperr.Conflict("memory tools only work in a chat with a person")
+		return chatMemory{}, apperr.Conflict("memory tools only work in a chat with a person (a persona's ticket run may search and read its project and work memories)")
 	}
 	if s.Temporary {
 		return chatMemory{}, apperr.Conflict(temporaryChatRefusal)
@@ -141,7 +147,57 @@ func (m chatMemory) reach() memory.Owner {
 	return o
 }
 
+// runMemory is what a persona's ticket run may read (ScopeRun): nil when the caller isn't
+// a ticket run, or its work record has no persona.
+func runMemory(ctx context.Context, d Deps, c agents.Caller) (*memory.Owner, error) {
+	if c.RunID == nil {
+		return nil, nil
+	}
+	run, err := d.Q.GetRun(ctx, store.GetRunParams{ID: *c.RunID, WorkspaceID: c.Agent.WorkspaceID})
+	if err != nil || run.TicketID == nil || run.Purpose == "chat" {
+		return nil, err
+	}
+	p, err := d.Q.PersonaOwnerOf(ctx, store.PersonaOwnerOfParams{ID: run.AgentID, WorkspaceID: run.WorkspaceID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	o := memory.Owner{WorkspaceID: p.WorkspaceID, UserID: p.UserID, PersonaID: &p.ID, Scope: memory.ScopeRun}
+	// Entries saved in the ticket's space (when it keeps its own memory) are part of it too.
+	t, err := d.Q.GetTicketByID(ctx, *run.TicketID)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := d.Q.GetProject(ctx, store.GetProjectParams{ID: t.ProjectID, WorkspaceID: run.WorkspaceID})
+	if err != nil {
+		return nil, err
+	}
+	if proj.SpaceID != nil {
+		sp, err := d.Q.GetChatSpace(ctx, store.GetChatSpaceParams{ID: *proj.SpaceID, WorkspaceID: run.WorkspaceID, UserID: p.UserID})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil && sp.SpaceMemory {
+			o.SpaceID = &sp.ID
+		}
+	}
+	return &o, nil
+}
+
 func searchMemory(ctx context.Context, d Deps, c agents.Caller, in SearchMemoryIn) (any, error) {
+	if ro, err := runMemory(ctx, d, c); err != nil {
+		return nil, err
+	} else if ro != nil {
+		o := *ro
+		if strings.EqualFold(strings.TrimSpace(in.About), aboutPersona) {
+			o = o.Persona(*ro.PersonaID)
+		} else if in.Type != "" && in.Type != "project" && in.Type != "work" {
+			return nil, apperr.Invalid("type", "a run reads only project and work memories")
+		}
+		return findMemory(ctx, d, o, in)
+	}
 	cm, err := memoryOwner(ctx, d, c)
 	if err != nil {
 		return nil, err
@@ -150,6 +206,10 @@ func searchMemory(ctx context.Context, d Deps, c agents.Caller, in SearchMemoryI
 	if err != nil {
 		return nil, err
 	}
+	return findMemory(ctx, d, o, in)
+}
+
+func findMemory(ctx context.Context, d Deps, o memory.Owner, in SearchMemoryIn) (any, error) {
 	if in.Limit <= 0 || in.Limit > 50 {
 		in.Limit = 10
 	}
@@ -165,15 +225,23 @@ func searchMemory(ctx context.Context, d Deps, c agents.Caller, in SearchMemoryI
 }
 
 func readMemory(ctx context.Context, d Deps, c agents.Caller, in MemoryIDIn) (any, error) {
-	cm, err := memoryOwner(ctx, d, c)
-	if err != nil {
-		return nil, err
-	}
 	id, err := parseUUID("id", in.ID)
 	if err != nil {
 		return nil, err
 	}
-	m, err := memory.New(d.Q).Get(ctx, cm.reach(), id)
+	reach := memory.Owner{}
+	if ro, err := runMemory(ctx, d, c); err != nil {
+		return nil, err
+	} else if ro != nil {
+		reach = *ro
+	} else {
+		cm, err := memoryOwner(ctx, d, c)
+		if err != nil {
+			return nil, err
+		}
+		reach = cm.reach()
+	}
+	m, err := memory.New(d.Q).Get(ctx, reach, id)
 	if err != nil {
 		return nil, err
 	}

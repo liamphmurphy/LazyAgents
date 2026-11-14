@@ -1050,7 +1050,7 @@ export function PlansScreen() {
                     </ButtonLink>
                   }
                 >
-                  Planning needs an active project and at least one main agent.
+                  Planning needs an active project and at least one persona that takes tickets.
                 </EmptyState>
               ))}
           </main>

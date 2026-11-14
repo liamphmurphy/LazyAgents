@@ -124,7 +124,7 @@ func TestChatSpecCapabilities(t *testing.T) {
 				if tc.coding == strings.Contains(ins, "Never claim tickets, run or execute project work, change code") {
 					t.Errorf("the no-code bullet must go exactly when coding")
 				}
-				if !strings.Contains(ins, "Never claim tickets, delegate to other agents, or write the shared wiki") && tc.coding {
+				if !strings.Contains(ins, "Never claim tickets, hand work to other personas, or write the shared wiki") && tc.coding {
 					t.Errorf("the coder bullet lost the ticket, delegation and wiki limits")
 				}
 				images := strings.Contains(ins, "## Images")

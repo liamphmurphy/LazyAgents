@@ -253,7 +253,7 @@ export function linkFromTarget(t: TargetLike): PaletteLink | undefined {
   return {
     id: t.id ?? t.href,
     title: page && t.path ? t.path : t.title,
-    meta: page ? "page" : (t.display_id ?? t.artifact_type ?? (t.kind === "agent" || t.kind === "persona" ? t.kind : TYPE[type].label.toLowerCase())),
+    meta: page ? "page" : (t.display_id ?? t.artifact_type ?? (t.kind === "agent" || t.kind === "persona" ? "persona" : TYPE[type].label.toLowerCase())),
     href: t.href,
     kind: TYPE[type].label,
     ...(t.status ? { status: t.status } : {}),

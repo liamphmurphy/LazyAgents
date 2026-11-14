@@ -91,12 +91,12 @@ export function setupChecklist(s: SetupState): SetupStep[] {
     },
     {
       key: "agents",
-      label: s.agents > 0 ? "Review your agents" : "Create your first agent",
+      label: s.agents > 0 ? "Review who does the work" : "Give a persona work",
       href: "/customization?who=agents",
-      link: "Agents",
-      // Someone who already ran a plan has used the agents.
+      link: "Personas",
+      // Someone who already ran a plan has used the personas that work.
       done: s.agents > 0 && (s.agentsReviewed || s.plans > 0),
-      detail: s.agents > 0 ? `${s.agents} ${s.agents === 1 ? "agent" : "agents"} ready · ticked once you open Agents` : "No agents yet.",
+      detail: s.agents > 0 ? `${s.agents} ${s.agents === 1 ? "persona works" : "personas work"} on tickets or runs · ticked once you open Personas` : "No persona takes tickets yet.",
     },
     {
       key: "plan",

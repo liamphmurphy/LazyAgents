@@ -52,7 +52,7 @@ export function SkillsTab({
         <span className="text-13 text-fg-tertiary">Showing for</span>
         <ProjectPicker label="Showing skills for" projects={projects} value={project} onChange={onProject} className="w-48" />
         <span className="text-12 text-fg-tertiary">
-          {skills.length} from the agent{p && ` · ${added} added · ${removed} removed`}
+          {skills.length} from the definition{p && ` · ${added} added · ${removed} removed`}
         </span>
       </div>
       <Card bodyClassName="p-0">
@@ -84,7 +84,7 @@ export function SkillsTab({
                 </div>
                 {isOpen && (
                   <div className="flex flex-col gap-3 px-[18px] pb-4">
-                    <Field label="Use when…" htmlFor={`sk-desc-${i}`} hint="One line the agent matches tasks against.">
+                    <Field label="Use when…" htmlFor={`sk-desc-${i}`} hint="One line the persona matches tasks against.">
                       <TextInput id={`sk-desc-${i}`} value={k.description} maxLength={1024} onChange={(e) => set(skills.map((s, j) => (j === i ? { ...s, description: e.target.value } : s)))} />
                     </Field>
                     <Field label="Instructions" htmlFor={`sk-body-${i}`} hint="Markdown. Up to 64 KB.">

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	MaxPerPerson    = 20
+	MaxPerPerson    = 40
 	MaxNameRunes    = 60
 	MaxInstructions = 2000
 	DefaultColor    = "#64748b"
@@ -76,6 +76,8 @@ type Patch struct {
 	ImageEngine *string
 	// TicketEdits changes whether its ticket edits wait for the person.
 	TicketEdits *string
+	// InChatList changes whether it's offered in the chat switcher and the @ menu.
+	InChatList *bool
 }
 
 // checkTicketEdits accepts "ask" or "allow".
@@ -370,6 +372,7 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 			ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, Revision: p.Revision,
 			Name: p.Name, Tone: p.Tone, Color: p.Color, CustomInstructions: p.Instructions,
 			CanCode: p.Code, CanGenerateImages: p.Images, CanCreatePersonas: p.Personas, CanCreateSvgs: p.SVG, CanCreateWorkflows: p.Workflows, CanCreateConnectors: p.Connectors, Repos: repos,
+			InChatList: p.InChatList,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.Conflict("the persona changed since you loaded it")
@@ -384,6 +387,12 @@ func (s *Service) Update(ctx context.Context, o Owner, id uuid.UUID, p Patch) (s
 		}
 		if p.TicketEdits != nil && *p.TicketEdits != out.TicketEdits {
 			if out, err = q.SetPersonaTicketEdits(ctx, store.SetPersonaTicketEditsParams{ID: id, WorkspaceID: o.WorkspaceID, UserID: o.UserID, TicketEdits: *p.TicketEdits}); err != nil {
+				return err
+			}
+		}
+		if out.Name != cur.Name {
+			// Its work record (if any) is named after it.
+			if err := q.RenameAgent(ctx, store.RenameAgentParams{ID: id, Name: out.Name}); err != nil {
 				return err
 			}
 		}
@@ -432,6 +441,13 @@ func (s *Service) Delete(ctx context.Context, o Owner, id uuid.UUID, revision *i
 		}
 		if revision != nil && *revision != cur.Revision {
 			return apperr.Conflict("the persona changed since you loaded it")
+		}
+		// A working persona's runs and tickets name it: turn its work off first, which keeps
+		// that history and refuses while it holds open tickets or live runs.
+		if rec, err := WorkRecord(ctx, q, o.WorkspaceID, id); err != nil {
+			return err
+		} else if WorkOf(rec) != WorkNone {
+			return apperr.Conflict("%s still works on tickets or runs; turn its work off before deleting it", cur.Name)
 		}
 		if err := q.LockPersonaChats(ctx, id); err != nil {
 			return err

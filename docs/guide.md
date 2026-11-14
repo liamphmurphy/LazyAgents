@@ -74,6 +74,16 @@ compose, with Claude Code, Codex and Antigravity installed). Before dispatching:
 > the host. v1 is meant for a single developer laptop. Works with Docker Desktop
 > and OrbStack.
 
+### Personas that do the work
+
+Agents are personas. Open **Customization › All personas** to see who chats and who works. On a
+persona's profile, **What it does** picks *Chat only*, *Takes tickets* or *Helps on runs*, and
+**Show in chat list** keeps a worker out of the chat switcher. **Work settings** opens its harness,
+model, work brief, permissions, helpers and limits. Its tone and style reach its runs too; its
+work brief reaches runs only. A run can search your project and work memories and the persona's
+own, nothing else you've told your personas. Turning work off waits until it has no open tickets
+or runs.
+
 ### Runner tools and project libraries
 
 Keep the running dependency list in Git:

@@ -11,7 +11,7 @@ import { pickerName } from "@/components/domain/pickers";
 import type { SaveTicket } from "./ticket-save";
 
 type Field = "status" | "agent" | "priority" | "epic";
-const TITLE: Record<Field, string> = { status: "Status", agent: "Agent", priority: "Priority", epic: "Epic" };
+const TITLE: Record<Field, string> = { status: "Status", agent: "Persona", priority: "Priority", epic: "Epic" };
 
 function Chip({ label, value, onOpen, children }: { label: string; value: string | null; onOpen: () => void; children: ReactNode }) {
   return (
@@ -46,7 +46,7 @@ export function MetaStrip({ t, boot, save }: { t: Ticket; boot: Bootstrap; save:
           <StatusGlyph state={t.status} size={12} label={false} />
           {STATUS_NAME[t.status]}
         </Chip>
-        <Chip label="Agent" value={t.assignee?.name ?? null} onOpen={() => setOpen("agent")}>
+        <Chip label="Persona" value={t.assignee?.name ?? null} onOpen={() => setOpen("agent")}>
           {t.assignee ? <AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} label={false} /> : <UnassignedAvatar size={16} />}
           <span className="truncate">{t.assignee?.name ?? "Unassigned"}</span>
         </Chip>
@@ -74,7 +74,7 @@ export function MetaStrip({ t, boot, save }: { t: Ticket; boot: Bootstrap; save:
         {field === "agent" && (
           <>
             <SheetOptions
-              label="Agents"
+              label="Personas"
               value={t.assignee?.id ?? ""}
               options={[
                 ...agents.map((a) => ({ value: a.id, label: a.name, detail: `${a.model} · ${a.specialty}`, icon: <AgentAvatar name={a.name} colorIndex={a.color_index} size="md" label={false} /> })),
@@ -82,10 +82,10 @@ export function MetaStrip({ t, boot, save }: { t: Ticket; boot: Bootstrap; save:
               ]}
               onPick={(id) => {
                 close();
-                if (id !== (t.assignee?.id ?? "")) save({ assignee_agent_id: id || null }, `Agent → ${agents.find((a) => a.id === id)?.name ?? "Unassigned"}`);
+                if (id !== (t.assignee?.id ?? "")) save({ assignee_agent_id: id || null }, `Persona → ${agents.find((a) => a.id === id)?.name ?? "Unassigned"}`);
               }}
             />
-            <p className="px-3 pt-2 text-12 text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
+            <p className="px-3 pt-2 text-12 text-fg-tertiary">Personas that take tickets. Assigning queues the ticket; a person starts the run.</p>
           </>
         )}
         {field === "priority" && (

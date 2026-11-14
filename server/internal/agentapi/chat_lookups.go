@@ -35,7 +35,7 @@ type ListTicketsIn struct {
 	Project string     `json:"project,omitempty" jsonschema:"Only tickets in this project key, e.g. PAY; default every active project"`
 	Status  []string   `json:"status,omitempty" jsonschema:"Only these statuses: backlog, todo, in_progress, in_review, done or canceled; default every open one (all but done and canceled). Pass [\"all\"] for every status"`
 	EpicID  *uuid.UUID `json:"epic_id,omitempty" jsonschema:"Only tickets in this epic, id from list_epics"`
-	Agent   string     `json:"agent,omitempty" jsonschema:"Only tickets assigned to this agent handle, e.g. pike"`
+	Agent   string     `json:"agent,omitempty" jsonschema:"Only tickets assigned to this persona, by its @handle, e.g. pike"`
 	Query   string     `json:"q,omitempty" jsonschema:"Words in the title or description, or the start of a key"`
 	Limit   int        `json:"limit,omitempty" jsonschema:"Up to 200, default 50"`
 	Offset  int        `json:"offset,omitempty" jsonschema:"Skip this many tickets, to page through more"`
@@ -94,7 +94,7 @@ func listChatTickets(ctx context.Context, d Deps, c agents.Caller, in ListTicket
 	if h := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(in.Agent), "@")); h != "" {
 		a, err := d.Q.GetAgentByHandle(ctx, store.GetAgentByHandleParams{WorkspaceID: ws, Handle: h})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperr.Invalid("agent", "no agent @%s", h)
+			return nil, apperr.Invalid("agent", "no persona @%s works on tickets or runs", h)
 		} else if err != nil {
 			return nil, err
 		}

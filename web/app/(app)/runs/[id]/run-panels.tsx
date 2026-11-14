@@ -204,7 +204,7 @@ export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Ru
             ref={noteRef}
             rows={2}
             aria-label={`Reason for denying, sent to ${run.agent.name} (optional)`}
-            placeholder="Why not? (optional, sent to the agent)"
+            placeholder={`Why not? (optional, sent to ${run.agent.name})`}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
