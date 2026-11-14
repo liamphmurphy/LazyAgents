@@ -22,7 +22,7 @@ SELECT * FROM sign_ins WHERE id = $1 AND workspace_id = $2;
 -- name: SubmitSignInCode :one
 -- Only while the CLI is waiting for it: after it printed its link.
 UPDATE sign_ins SET pasted_code = $3, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND provider = 'claude' AND status = 'running' AND url <> ''
+WHERE id = $1 AND workspace_id = $2 AND provider IN ('claude', 'antigravity') AND status = 'running' AND url <> ''
 RETURNING *;
 
 -- name: CancelSignIn :execrows

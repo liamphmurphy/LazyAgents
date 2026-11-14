@@ -8,7 +8,8 @@ help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
 
 up: ## Full stack in Docker → http://localhost:8080
-	docker compose up --build
+	docker compose build --no-cache api web
+	docker compose up --build --force-recreate
 
 down: ## Stop the full stack
 	docker compose down

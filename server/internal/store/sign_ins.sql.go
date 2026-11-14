@@ -213,7 +213,7 @@ func (q *Queries) SignInStatus(ctx context.Context, id uuid.UUID) (string, error
 
 const submitSignInCode = `-- name: SubmitSignInCode :one
 UPDATE sign_ins SET pasted_code = $3, updated_at = now()
-WHERE id = $1 AND workspace_id = $2 AND provider = 'claude' AND status = 'running' AND url <> ''
+WHERE id = $1 AND workspace_id = $2 AND provider IN ('claude', 'antigravity') AND status = 'running' AND url <> ''
 RETURNING id, workspace_id, provider, status, url, user_code, pasted_code, error, runner_id, requested_by, created_at, updated_at, expires_at
 `
 

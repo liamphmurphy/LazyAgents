@@ -96,4 +96,23 @@ func TestSignInLifecycle(t *testing.T) {
 		t.Fatalf("cancelled = %v", got)
 	}
 	do("GET", "/sign-ins/00000000-0000-0000-0000-000000000000", "", 404)
+
+	// Antigravity also uses the paste-back code flow.
+	agy := do("POST", "/sign-ins", `{"provider":"antigravity"}`, 201)
+	agyRow, err := q.ClaimSignIn(ctx, ptr("r2"))
+	if err != nil || agyRow.ID.String() != agy["id"].(string) {
+		t.Fatalf("claim antigravity %v %v", agyRow.ID, err)
+	}
+	if err := q.SetSignInPrompt(ctx, store.SetSignInPromptParams{ID: agyRow.ID, Url: "https://accounts.google.com/o/oauth2/auth?x=1"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := do("GET", "/sign-ins/"+agyRow.ID.String(), "", 200); got["needs_code"] != true {
+		t.Fatalf("antigravity waiting = %v", got)
+	}
+	if got := do("POST", "/sign-ins/"+agyRow.ID.String()+"/code", `{"code":"4/0A-code"}`, 200); got["needs_code"] != false {
+		t.Fatalf("antigravity after code = %v", got)
+	}
+	if code, err := q.TakeSignInCode(ctx, agyRow.ID); err != nil || code != "4/0A-code" {
+		t.Fatalf("antigravity take = %q %v", code, err)
+	}
 }
