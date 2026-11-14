@@ -111,10 +111,19 @@ func (Antigravity) Invocation(ws Workspace, t Turn) (Invocation, error) {
 		}
 	}
 	argv := []string{"python3", agyLaunchPath, "agy", "-p", prompt, "--output-format", "stream-json"}
-	if spec.Model != "" {
-		argv = append(argv, "--model", spec.Model)
+	model := spec.Model
+	effort := spec.HarnessOptions["effort"]
+	if effort != "" {
+		// Legacy chats or definitions may carry an effort suffix like
+		// "gemini-4-carbon-medium", which conflicts with `--effort` in agy.
+		if base, _, ok := agentdef.CutEffortSuffix(model); ok {
+			model = base
+		}
 	}
-	if effort := spec.HarnessOptions["effort"]; effort != "" {
+	if model != "" {
+		argv = append(argv, "--model", model)
+	}
+	if effort != "" {
 		argv = append(argv, "--effort", effort)
 	}
 	if t.SessionID != "" {

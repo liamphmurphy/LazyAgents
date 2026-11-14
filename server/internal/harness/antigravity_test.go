@@ -122,7 +122,7 @@ type agyConfigFile struct {
 
 func agyInvocation(t *testing.T, s agentdef.Resolved, turn Turn) (Invocation, agyConfigFile) {
 	t.Helper()
-	s.Harness, s.Model = agentdef.HarnessAntigravity, "gemini-3.8-flash-medium"
+	s.Harness, s.Model = agentdef.HarnessAntigravity, "gemini-3.8-flash"
 	turn.Spec = s
 	inv, err := (Antigravity{}).Invocation(ws, turn)
 	if err != nil {
@@ -148,8 +148,15 @@ func TestAntigravityInvocation(t *testing.T) {
 	s.HarnessOptions["effort"] = "high"
 	inv, cfg := agyInvocation(t, s, Turn{Prompt: "go", SessionID: "conv-9"})
 	if !slices.Equal(inv.Argv[:3], []string{"python3", agyLaunchPath, "agy"}) || flag(inv.Argv, "--output-format") != "stream-json" ||
-		flag(inv.Argv, "--model") != "gemini-3.8-flash-medium" || flag(inv.Argv, "--effort") != "high" || flag(inv.Argv, "--conversation") != "conv-9" {
+		flag(inv.Argv, "--model") != "gemini-3.8-flash" || flag(inv.Argv, "--effort") != "high" || flag(inv.Argv, "--conversation") != "conv-9" {
 		t.Fatalf("argv = %q", inv.Argv)
+	}
+	// A legacy model slug carrying its own effort suffix is stripped when
+	// --effort is also passed, because agy rejects conflicting combinations.
+	sLegacy := s
+	sLegacy.Harness, sLegacy.Model = agentdef.HarnessAntigravity, "gemini-3.8-flash-medium"
+	if invLegacy, err := (Antigravity{}).Invocation(ws, Turn{Spec: sLegacy, Prompt: "go"}); err != nil || flag(invLegacy.Argv, "--model") != "gemini-3.8-flash" || flag(invLegacy.Argv, "--effort") != "high" {
+		t.Fatalf("legacy model+effort = %v (%q)", err, invLegacy.Argv)
 	}
 	if i := slices.Index(inv.Argv, "-p"); i < 0 || !strings.HasSuffix(inv.Argv[i+1], "go") || !strings.Contains(inv.Argv[i+1], "AGENTS.md") {
 		t.Fatalf("prompt = %q", inv.Argv)

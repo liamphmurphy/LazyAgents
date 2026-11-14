@@ -44,8 +44,7 @@ const EffortDefault = "default"
 
 // fallbackEfforts are what Claude Code and Codex models offer when discovery
 // can't say (provider APIs don't report effort levels; the local CLIs do).
-// Antigravity has none: `agy --effort` depends on the model and the Gemini
-// API doesn't say which, so its models show no effort control.
+// Antigravity models get their supported efforts directly from ParseAgyModels.
 var fallbackEfforts = map[string][]string{
 	agentdef.HarnessClaudeCode: agentdef.Efforts,
 	agentdef.HarnessCodex:      agentdef.Efforts,

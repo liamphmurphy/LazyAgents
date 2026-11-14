@@ -151,7 +151,7 @@ psql_run() {
 psql_run -c "INSERT INTO epics (workspace_id, project_id, name, objective, health)
   SELECT workspace_id, id, 'Board e2e epic', 'Verify the Kanban flow end to end', 'on_track' FROM projects WHERE key = 'E2E'" >/dev/null
 CATALOG="$(curl -fsS "${SIGNED_IN[@]}" "$API_URL/api/v1/chat-models")"
-for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)' 'gemini-3.8-flash-medium'; do
+for want in 'Claude Sonnet (fake)' 'GPT-5 Codex (fake)' 'gemini-3.8-flash'; do
   grep -q "$want" <<<"$CATALOG" || { echo "chat-models catalog lacks '$want': $CATALOG" >&2; exit 1; }
 done
 

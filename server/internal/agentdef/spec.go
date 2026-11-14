@@ -231,6 +231,17 @@ func ExplorerOn(spec Resolved, lead bool) bool {
 // Efforts are the allowed values of the "effort" harness option.
 var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 
+// CutEffortSuffix splits a trailing "-<effort>" suffix (such as
+// "gemini-4-carbon-medium") into its base model slug and effort level.
+func CutEffortSuffix(model string) (base, effort string, ok bool) {
+	for _, e := range Efforts {
+		if b, found := strings.CutSuffix(model, "-"+e); found && b != "" {
+			return b, e, true
+		}
+	}
+	return model, "", false
+}
+
 func validOptions(field string, opts map[string]string) error {
 	if _, ok := opts[OptionWebSearch]; ok {
 		return invalid(field, "%s is set by Vesper for the Personal Assistant only", OptionWebSearch)
