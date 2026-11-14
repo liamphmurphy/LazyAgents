@@ -1,12 +1,15 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -133,10 +136,50 @@ func (d *Docker) converseCLI(ctx context.Context, kind, claim, harness, login, c
 	started = true
 	// Closing the stream is what unblocks a read when the time runs out.
 	go func() { <-ctx.Done(); st.Close() }()
+	var stderr cappedBuffer
+	stderr.limit = 4 << 10
 	r, w := io.Pipe()
-	go func() { w.CloseWithError(demux(st, w, io.Discard)) }()
+	demuxDone := make(chan struct{})
+	go func() {
+		defer close(demuxDone)
+		w.CloseWithError(demux(st, w, &stderr))
+	}()
 	defer r.Close()
-	return converse(st, r)
+	err = converse(st, r)
+	if err != nil {
+		// Wait for demux to stop before reading stderr (st.Close unblocks it).
+		st.Close()
+		<-demuxDone
+		if msg := cleanCLIStderr(stderr.buf.String()); msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+	}
+	return err
+}
+
+type cappedBuffer struct {
+	limit int
+	buf   bytes.Buffer
+}
+
+func (w *cappedBuffer) Write(p []byte) (int, error) {
+	if rem := w.limit - w.buf.Len(); rem > 0 {
+		w.buf.Write(p[:min(len(p), rem)])
+	}
+	return len(p), nil
+}
+
+func cleanCLIStderr(raw string) string {
+	var lines []string
+	for _, line := range strings.Split(raw, "\n") {
+		if i := strings.LastIndexByte(line, '\r'); i >= 0 {
+			line = line[i+1:]
+		}
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return strings.Join(lines, "; ")
 }
 
 // expireModelListings marks every saved model listing as due, so the next
