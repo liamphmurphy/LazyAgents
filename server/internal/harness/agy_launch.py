@@ -39,6 +39,7 @@ def install(cfg):
     # stale allow rule can't outlive the policy this turn was given.
     settings_path = os.path.join(home, ".gemini", "antigravity-cli", "settings.json")
     settings = load(settings_path)
+    settings.pop("modelProvider", None)
     settings.update(cfg["settings"])
     write(settings_path, settings)
     servers = json.loads(json.dumps(cfg["mcp_servers"]).replace("{{token}}", token))

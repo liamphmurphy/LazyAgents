@@ -42,10 +42,10 @@ test("sidebar attention: missing key or missing harness secret", () => {
   assert.equal(needsAttention({ key_configured: true, secrets: both.slice(1) }), true);
 });
 
-test("Claude, Codex and the GitHub token can be signed in; the Gemini key (Google bars storing a login) and the SSH key can't", () => {
+test("Claude, Codex, Antigravity and the GitHub token can be signed in; the SSH key can't", () => {
   assert.deepEqual(
     CONNECTIONS.map((c) => [c.name, c.signIn ?? null]),
-    [["harness:anthropic", "claude"], ["harness:openai", "codex"], ["harness:google", null], ["git:ssh", null], ["git:pat", "github"]],
+    [["harness:anthropic", "claude"], ["harness:openai", "codex"], ["harness:google", "antigravity"], ["git:ssh", null], ["git:pat", "github"]],
   );
 });
 
@@ -65,7 +65,7 @@ test("signInView follows the sign-in through its steps", () => {
   assert.equal(signInView(s({ status: "cancelled" })).step, "failed");
 });
 
-test("the Gemini key is optional: not having one never raises the attention dot", () => {
+test("harness:google is optional: not having one never raises the attention dot", () => {
   const both = [ws("harness:anthropic"), ws("harness:openai")];
   assert.deepEqual(missingConnections(both), []);
   assert.equal(needsAttention({ key_configured: true, secrets: both }), false);

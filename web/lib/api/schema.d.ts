@@ -336,7 +336,8 @@ export interface paths {
         /**
          * Store a harness credential and check that chats can list its models
          * @description With a credential, checks it and stores it as the harness's key secret
-         *     (harness:anthropic for claude-code, harness:openai for codex), replacing
+         *     (harness:anthropic for claude-code, harness:openai for codex,
+         *     harness:google for antigravity), replacing
          *     any earlier one only when it works: an API key is checked before it is
          *     stored; a plan login is stored, listed through a runner, and the earlier
          *     value put back when the listing fails, or is still pending (a first
@@ -347,7 +348,8 @@ export interface paths {
          *     it). A credential is refused (422) when runs use the host's CLI
          *     sign-ins (SecretList.harness_keys_required false), since it would
          *     never be checked there. A subscription
-         *     is a Claude setup-token (sk-ant-oat…) or a Codex auth.json; an api_key
+         *     is a Claude setup-token (sk-ant-oat…), a Codex auth.json, or an
+         *     Antigravity login; an api_key
          *     is an Anthropic (sk-ant-…) or OpenAI (sk-…) API key. The credential is
          *     never echoed back. 409 when secrets are off (SECRETS_KEY unset) and a
          *     credential was sent; 422 when it doesn't have the expected shape.
@@ -900,7 +902,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a Claude, Codex or GitHub sign-in. The Docker runner runs the provider's CLI in a throwaway container and stores the login as harness:anthropic, harness:openai or git:pat. Replaces a sign-in already in progress for that provider. 409 without a Docker runner or SECRETS_KEY. */
+        /** Start a Claude, Codex, Antigravity or GitHub sign-in. The Docker runner runs the provider's CLI in a throwaway container and stores the login as harness:anthropic, harness:openai, harness:google or git:pat. Replaces a sign-in already in progress for that provider. 409 without a Docker runner or SECRETS_KEY. */
         post: operations["startSignIn"];
         delete?: never;
         options?: never;
@@ -6690,7 +6692,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        SignInProvider: "claude" | "codex" | "github";
+        SignInProvider: "claude" | "codex" | "github" | "antigravity";
         SignIn: {
             /** Format: uuid */
             id: string;
@@ -6704,7 +6706,7 @@ export interface components {
             url: string;
             /** @description The one-time code to enter on that page (Codex and GitHub) */
             user_code: string;
-            /** @description Claude is waiting for the code its sign-in page shows */
+            /** @description Provider is waiting for the authorization code or callback URL from its sign-in page (Claude */
             needs_code: boolean;
             error: string;
             /** Format: date-time */
@@ -8980,7 +8982,7 @@ export interface components {
         HarnessVerifyRequest: {
             /** @enum {string} */
             kind: "subscription" | "api_key";
-            /** @description The setup-token, auth.json or API key; stored encrypted, never returned */
+            /** @description The setup-token, auth.json, Antigravity login, or API key; stored encrypted, never returned */
             credential: string;
         };
         HarnessVerifyResult: {

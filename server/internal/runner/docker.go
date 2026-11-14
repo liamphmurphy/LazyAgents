@@ -467,6 +467,20 @@ func codexAuthTar(auth string) (io.Reader, error) {
 	return &buf, tw.Close()
 }
 
+// antigravityAuthTar builds a tar archive unpacking an Antigravity login bundle
+// under $HOME in a container.
+func antigravityAuthTar(raw string) (io.Reader, error) {
+	auth, ok := chatmodels.ParseAntigravityAuth(raw)
+	if !ok {
+		return nil, fmt.Errorf("runner: invalid Antigravity login")
+	}
+	files := make(map[string][]byte, len(auth.Files))
+	for rel, content := range auth.Files {
+		files[rel] = []byte(content)
+	}
+	return tarFiles(files)
+}
+
 func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Process, error) {
 	if spec.Env == nil {
 		spec.Env = map[string]string{}
@@ -499,7 +513,7 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 	}
 	env := make([]string, 0, len(spec.Env))
 	for k, v := range spec.Env {
-		if k == CodexAuthEnv || k == CodexAuthScopeEnv {
+		if k == CodexAuthEnv || k == CodexAuthScopeEnv || k == AntigravityAuthEnv {
 			continue // delivered as a file below, never through the environment
 		}
 		env = append(env, k+"="+v)
@@ -529,8 +543,17 @@ func (d *Docker) Start(ctx context.Context, runID string, spec ExecSpec) (Proces
 		}
 	}
 	p := &dockerProc{d: d, id: created.ID, parent: ctx, codexAuth: spec.Env[CodexAuthEnv], codexScope: spec.Env[CodexAuthScopeEnv]}
-	if p.codexAuth != "" {
-		tb, err := codexAuthTar(p.codexAuth)
+	for _, item := range []struct {
+		raw   string
+		build func(string) (io.Reader, error)
+	}{
+		{p.codexAuth, codexAuthTar},
+		{spec.Env[AntigravityAuthEnv], antigravityAuthTar},
+	} {
+		if item.raw == "" {
+			continue
+		}
+		tb, err := item.build(item.raw)
 		if err != nil {
 			p.remove()
 			return nil, err

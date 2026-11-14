@@ -63,10 +63,9 @@ service runs each turn in a container from `vesper/agent-base` (built by
 compose, with Claude Code, Codex and Antigravity installed). Before dispatching:
 
 - set `SECRETS_KEY` in `.env` (`openssl rand -base64 32`);
-- add the harness key in **Settings → Connections & secrets**: `harness:anthropic`
-  for Claude Code, `harness:openai` for Codex, `harness:google` (a Gemini API key from Google
-  AI Studio) for Antigravity. Runs bill that key. To use a
-  Claude or ChatGPT plan instead, use `make start` from a checkout;
+- add or sign in to the harness credentials in **Settings → Connections & secrets**: `harness:anthropic`
+  for Claude Code, `harness:openai` for Codex, and `harness:google` (via Google Antigravity sign-in)
+  for Antigravity. Use **Sign in** in Settings or `make start` from a checkout to sign in directly;
 - add `git:pat` (a GitHub token) and a repo URL for the project, if agents should
   clone, push and open PRs. Open PRs are polled every 60s: merged → Done.
 

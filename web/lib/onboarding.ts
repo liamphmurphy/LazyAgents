@@ -73,14 +73,14 @@ export type HarnessCard = {
   by: string;
   /** Makes images (a badge on the card). */
   images?: boolean;
-  /** Takes no subscription login: Google's terms bar Vesper from storing Antigravity's. */
-  apiKeyOnly?: boolean;
+  /** Native sign-in only (no API key). */
+  subscriptionOnly?: boolean;
 };
 
 export const HARNESS_CARDS: HarnessCard[] = [
   { id: "claude-code", label: "Claude Code", by: "Anthropic · subscription or API key" },
   { id: "codex", label: "Codex", by: "OpenAI · subscription or API key", images: true },
-  { id: "antigravity", label: "Antigravity", by: "Google · Gemini API key", images: true, apiKeyOnly: true },
+  { id: "antigravity", label: "Antigravity", by: "Google · Antigravity sign-in", images: true, subscriptionOnly: true },
 ];
 
 /** The secret each harness's credential is stored under (chatmodels.KeySecret). */
@@ -89,15 +89,15 @@ export const HARNESS_SECRETS: Record<HarnessId, string> = { "claude-code": "harn
 /** Harnesses that can make images. */
 export const IMAGE_HARNESSES: readonly HarnessId[] = ["codex", "antigravity"];
 
-/** The shapes runner/prepare.go recognises: a setup-token or auth.json login, else an API key. */
+/** The shapes runner/prepare.go recognises: a setup-token, auth.json, or Antigravity login, else an API key. */
 export function credentialPlaceholder(h: HarnessId, kind: CredentialKind): string {
-  if (h === "antigravity") return "GEMINI_API_KEY";
+  if (h === "antigravity") return "Paste Antigravity login";
   if (h === "codex") return kind === "subscription" ? "Paste auth.json" : "OPENAI_API_KEY";
   return kind === "subscription" ? "Paste setup-token" : "ANTHROPIC_API_KEY";
 }
 
 export function credentialHelp(h: HarnessId, kind: CredentialKind): string {
-  if (h === "antigravity") return "A Gemini API key (AIza…) from Google AI Studio.";
+  if (h === "antigravity") return "Sign in to Google (Antigravity) in Settings → Connections, or paste a saved Antigravity login.";
   if (h === "codex") return kind === "subscription" ? "The contents of ~/.codex/auth.json after `codex login`." : "An OpenAI API key (sk-…).";
   return kind === "subscription" ? "Run `claude setup-token` and paste the token (sk-ant-oat…)." : "An Anthropic API key (sk-ant-…).";
 }

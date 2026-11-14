@@ -594,7 +594,7 @@ export function useSignIn(id: string | null) {
 
 export function useStartSignIn() {
   return useMutation({
-    mutationFn: (provider: "claude" | "codex" | "github") => unwrap(api.POST("/sign-ins", { body: { provider } })),
+    mutationFn: (provider: Schemas["SignInProvider"]) => unwrap(api.POST("/sign-ins", { body: { provider } })),
   });
 }
 

@@ -49,3 +49,25 @@ func TestClaudeOAuthToken(t *testing.T) {
 		t.Fatal("token shapes misread")
 	}
 }
+
+func TestParseAntigravityAuth(t *testing.T) {
+	valid := `{"v":1,"files":{".config/antigravity/plugin-secrets.json":"{\"token\":\"secret\"}",".gemini/antigravity-cli/installation_id":"id-1"}}`
+	for name, tc := range map[string]struct {
+		v    string
+		want bool
+	}{
+		"valid bundle":      {valid, true},
+		"legacy gemini key": {"AIzaSyTestKey", false},
+		"wrong version":     {`{"v":2,"files":{".config/antigravity/plugin-secrets.json":"x"}}`, false},
+		"missing secrets":   {`{"v":1,"files":{".gemini/config/config.json":"{}"}}`, false},
+		"empty secret file": {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":""}}`, false},
+		"path traversal":    {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x",".gemini/../.ssh/id_rsa":"k"}}`, false},
+		"absolute path":     {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x","/etc/passwd":"k"}}`, false},
+		"disallowed dotdir": {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x",".ssh/authorized_keys":"k"}}`, false},
+		"invalid json":      {`{not json`, false},
+	} {
+		if _, ok := ParseAntigravityAuth(tc.v); ok != tc.want {
+			t.Errorf("%s: ParseAntigravityAuth = %v, want %v", name, ok, tc.want)
+		}
+	}
+}

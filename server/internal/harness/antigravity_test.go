@@ -160,7 +160,7 @@ func TestAntigravityInvocation(t *testing.T) {
 	if inv.Env["LAZYAGENTS_TOKEN"] != "la_tok" || inv.Env["LAZYAGENTS_POLICY_TOKEN"] != "la_tok" || !strings.HasSuffix(inv.Env["LAZYAGENTS_POLICY_HOOK_COMMAND"], "agy-policy.py'") {
 		t.Fatalf("env = %v", inv.Env)
 	}
-	if cfg.Settings["modelProvider"] != "gemini" || cfg.Settings["toolPermission"] != "request-review" || cfg.Install {
+	if _, hasProvider := cfg.Settings["modelProvider"]; hasProvider || cfg.Settings["toolPermission"] != "request-review" || cfg.Install {
 		t.Fatalf("settings = %v install=%v", cfg.Settings, cfg.Install)
 	}
 	// The token reaches agy only through the launcher, never a workspace file.

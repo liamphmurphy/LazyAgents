@@ -47,13 +47,14 @@ func (s *Server) CompleteOnboarding(ctx context.Context, _ api.CompleteOnboardin
 
 // checkHarnessCredential checks a pasted credential has the shape the runner
 // recognises for its kind (runner.PlanSecrets): a plan login is a Claude
-// setup-token or a Codex auth.json, anything else is used as an API key.
-// Messages never quote the value.
+// setup-token, a Codex auth.json, or an Antigravity login bundle; anything
+// else is used as an API key. Messages never quote the value.
 func checkHarnessCredential(harness string, kind api.HarnessVerifyRequestKind, v string) error {
 	if v == "" {
 		return apperr.Invalid("credential", "paste a credential first")
 	}
 	_, codexLogin := chatmodels.ParseCodexAuth(v)
+	_, agyLogin := chatmodels.ParseAntigravityAuth(v)
 	switch {
 	case harness == agentdef.HarnessClaudeCode && kind == api.Subscription && !chatmodels.ClaudeOAuthToken(v):
 		return apperr.Invalid("credential", "a Claude subscription token starts with sk-ant-oat; run `claude setup-token` to get one")
@@ -63,11 +64,10 @@ func checkHarnessCredential(harness string, kind api.HarnessVerifyRequestKind, v
 		return apperr.Invalid("credential", "paste the whole ~/.codex/auth.json from `codex login` (a ChatGPT sign-in)")
 	case harness == agentdef.HarnessCodex && kind == api.ApiKey && (codexLogin || !strings.HasPrefix(v, "sk-")):
 		return apperr.Invalid("credential", "an OpenAI API key starts with sk-")
-	case harness == agentdef.HarnessAntigravity && kind == api.Subscription:
-		// Google's terms bar a tool from extracting or storing the OAuth login agy keeps.
-		return apperr.Invalid("credential", "Antigravity runs on a Gemini API key: Google's terms don't let Vesper store an Antigravity sign-in")
-	case harness == agentdef.HarnessAntigravity && kind == api.ApiKey && !strings.HasPrefix(v, "AIza"):
-		return apperr.Invalid("credential", "a Gemini API key starts with AIza")
+	case harness == agentdef.HarnessAntigravity && kind == api.Subscription && !agyLogin:
+		return apperr.Invalid("credential", "sign in to Antigravity in Settings to capture a native Antigravity login")
+	case harness == agentdef.HarnessAntigravity && kind == api.ApiKey:
+		return apperr.Invalid("credential", "Antigravity uses a native Google Antigravity sign-in rather than an API key")
 	case kind != api.Subscription && kind != api.ApiKey:
 		return apperr.Invalid("kind", "must be subscription or api_key")
 	}

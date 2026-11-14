@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -82,7 +84,16 @@ var (
 	githubURLRe      = regexp.MustCompile(`https://github\.com/login/device[^\s"'<>]*`)
 	githubCodeRe     = regexp.MustCompile(`one-time code: ([A-Z0-9]{4}-[A-Z0-9]{4})\b`)
 	githubTokenRe    = regexp.MustCompile(`(?m)^VESPER_GH_TOKEN=((?:gh[opsu]_|github_pat_)[A-Za-z0-9_]+)\s*$`)
+	antigravityURLRe = regexp.MustCompile(`https://accounts\.google\.com/o/oauth2/[^\s"'<>]+`)
 )
+
+// antigravityOptionalFiles are small non-secret state/config files included
+// alongside plugin-secrets.json when capturing an Antigravity login.
+var antigravityOptionalFiles = []string{
+	".gemini/antigravity-cli/jetski_state.pbtxt",
+	".gemini/antigravity-cli/installation_id",
+	".gemini/config/config.json",
+}
 
 // codexAuthFile is where `codex login` writes its login in the container.
 const codexAuthFile = homePath + "/" + codexAuthPath
@@ -153,6 +164,54 @@ var signInProviders = map[string]signInProvider{
 			return m[1], nil
 		},
 	},
+	"antigravity": {
+		secret: chatmodels.KeySecret[agentdef.HarnessAntigravity],
+		// A wide terminal keeps the long OAuth URL on one line.
+		argv: []string{"sh", "-c", "stty cols 2000; exec agy acp --login"},
+		tty:  true,
+		prompt: func(out string) (string, string, bool) {
+			link := antigravityURLRe.FindString(out)
+			return link, "", link != ""
+		},
+		pastes: true,
+		login: func(ctx context.Context, p LoginProcess, _ string, exit int) (string, error) {
+			if exit != 0 {
+				return "", fmt.Errorf("antigravity login exited with %d", exit)
+			}
+			sec, err := p.ReadFile(ctx, homePath+"/"+chatmodels.AntigravitySecretsRelPath)
+			if err != nil {
+				return "", fmt.Errorf("read the Antigravity login: %w", err)
+			}
+			if len(sec) == 0 || !utf8.Valid(sec) {
+				return "", errors.New("Antigravity didn't save a valid login")
+			}
+			bundle := chatmodels.AntigravityAuth{
+				Version: 1,
+				Files:   map[string]string{chatmodels.AntigravitySecretsRelPath: string(sec)},
+			}
+			raw, err := json.Marshal(bundle)
+			if err != nil {
+				return "", err
+			}
+			if len(raw) > 16<<10 {
+				return "", errors.New("Antigravity login exceeds 16 KB secret limit")
+			}
+			for _, rel := range antigravityOptionalFiles {
+				b, err := p.ReadFile(ctx, homePath+"/"+rel)
+				if err != nil || len(b) == 0 || !utf8.Valid(b) {
+					continue
+				}
+				bundle.Files[rel] = string(b)
+				next, err := json.Marshal(bundle)
+				if err != nil || len(next) > 16<<10 {
+					delete(bundle.Files, rel)
+					continue
+				}
+				raw = next
+			}
+			return string(raw), nil
+		},
+	},
 }
 
 // tickSignIns starts every sign-in waiting for a runner. They don't take a
@@ -219,7 +278,7 @@ func terminalText(s string) string {
 	return strings.ReplaceAll(s, "\r", "")
 }
 
-var secretLikeRe = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+|gh[opsu]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|VESPER_GH_TOKEN=\S*`)
+var secretLikeRe = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+|gh[opsu]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|VESPER_GH_TOKEN=\S*|4/0[A-Za-z0-9_-]{20,}|1//[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9._-]+`)
 
 // outputTail is the end of the CLI's output for an error message, with
 // anything that looks like a login removed.
@@ -271,6 +330,8 @@ func signInURLAllowed(provider, link string) bool {
 		return u.Host == "auth.openai.com"
 	case "github":
 		return u.Host == "github.com" && strings.HasPrefix(u.Path, "/login/device")
+	case "antigravity":
+		return u.Host == "accounts.google.com" && strings.HasPrefix(u.Path, "/o/oauth2/")
 	}
 	return false
 }
