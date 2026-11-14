@@ -42,7 +42,7 @@ type WorkflowConfig struct {
 	// output's body. An empty output body uses what the node's parents produced.
 	Prompt      string `json:"prompt,omitempty" jsonschema:"Instructions for enrich and agent; message for gate; body template for outputs (empty uses the parents' output). Supports {{input}} and {{node_id.output}}"`
 	PersonaID   string `json:"persona_id,omitempty" jsonschema:"agent: a persona's id to run as; empty uses the chat's persona"`
-	AgentHandle string `json:"agent_handle,omitempty" jsonschema:"agent: a workspace agent's handle to run as, instead of a persona"`
+	AgentHandle string `json:"agent_handle,omitempty" jsonschema:"agent: the @handle of a persona that works (takes tickets or helps on runs), to run with its work definition (harness, model, work brief, scopes) instead of as a chat persona"`
 	Web         bool   `json:"web,omitempty" jsonschema:"agent: read the web. A web step can't read the workspace"`
 	Images      bool   `json:"images,omitempty" jsonschema:"agent: generate images. The step runs as a persona allowed to make images, on image_engine; not available with agent_handle"`
 	// ImageEngine picks the harness an images step runs on.

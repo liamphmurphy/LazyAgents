@@ -29,7 +29,7 @@ type UpdateTicketIn struct {
 	EstimateRationale string             `json:"estimate_rationale,omitempty" jsonschema:"Why that estimate, in a sentence"`
 	EpicID            *uuid.UUID         `json:"epic_id,omitempty" jsonschema:"Move the ticket into this epic of its project"`
 	RemoveFromEpic    bool               `json:"remove_from_epic,omitempty" jsonschema:"Take the ticket out of its epic"`
-	Agent             *string            `json:"agent,omitempty" jsonschema:"Assign a main agent by handle, e.g. pike; empty string unassigns"`
+	Agent             *string            `json:"agent,omitempty" jsonschema:"Assign a persona that takes tickets, by its @handle, e.g. pike; empty string unassigns"`
 	RequiresMockup    *bool              `json:"requires_mockup,omitempty"`
 	Labels            *[]string          `json:"labels,omitempty" jsonschema:"Replaces the ticket's labels with these label names (existing labels only); an empty list removes them all"`
 	DueDate           *string            `json:"due_date,omitempty" jsonschema:"YYYY-MM-DD; an empty string clears it"`
