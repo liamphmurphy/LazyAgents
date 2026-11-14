@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installBoardApi } from "./mock-board-api";
-import { installChatApi, openEmptyChat } from "./mock-chat-api";
+import { installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 import { deckWith, installDeck } from "./mock-deck-api";
 
 // Visual regression for the shell: the key screens in Vesper's default (Dusk light) and a dark
@@ -27,6 +27,11 @@ const chat = (path: string): Screen["open"] => async (page) => {
 const SCREENS: Screen[] = [
   { name: "chat-new", open: chat("/chat?new") },
   { name: "chat-empty", open: async (page) => { await installChatApi(page); await openEmptyChat(page); } },
+  // Personas of your own: the Chats list's one persona filter chip.
+  { name: "chat-personas", open: async (page) => {
+    await installChatApi(page, { personas: [persona(1, { name: "Atlas", is_default: true }), persona(2, { name: "Nova" })] });
+    await openEmptyChat(page);
+  } },
   { name: "runs", open: board("/runs") },
   { name: "tickets-list", open: board("/tickets?project=WEB") },
   { name: "tickets-board", open: board("/tickets?layout=board&project=WEB") },

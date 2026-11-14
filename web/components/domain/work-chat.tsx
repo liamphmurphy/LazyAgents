@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Conversation, type ConversationContext, type DockWelcome } from "@/app/(app)/chat/_components/conversation";
-import { personaLook } from "@/app/(app)/chat/_components/persona";
+import { personaLook, useDockPersona } from "@/app/(app)/chat/_components/persona";
 import { DockChatSwitcher } from "@/components/domain/dock-chat-switcher";
 import { DockContext, dockContextChip } from "@/components/domain/dock-context";
 import { Button } from "@/components/ui/button";
@@ -119,7 +119,12 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
     remember(next);
     add.mutate({ scope: SCOPE, chatId: next });
   };
-  const start = () => create.mutate({ title: "Work", hidden: true }, { onSuccess: (c) => select(c.id) });
+  // A new work chat starts with the persona last used here, named in the empty state's To chip.
+  const starting = useDockPersona(SCOPE);
+  const openPersonaId = (chat?.speaker ?? chat?.persona)?.id;
+  const rememberPersona = starting.remember;
+  useEffect(() => rememberPersona(openPersonaId), [rememberPersona, openPersonaId]);
+  const start = () => create.mutate({ title: "Work", hidden: true, ...(starting.id ? { persona_id: starting.id } : {}) }, { onSuccess: (c) => select(c.id) });
   const chats = list.data?.chats ?? [];
   const switcher = (
     <DockChatSwitcher
@@ -134,7 +139,7 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
   );
 
   // Named as the conversation names it: a chat with no persona of its own is the built-in Assistant.
-  const persona = chat ? personaLook(chat.speaker ?? chat.persona).name : undefined;
+  const persona = chat ? personaLook(chat.speaker ?? chat.persona).name : starting.look.name;
   const context: ConversationContext = {
     hidden: true,
     composer: <Chips persona={persona} subject={subject} pinned={pinned} onPin={pin} />,

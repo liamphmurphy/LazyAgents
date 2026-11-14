@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Conversation, type ConversationContext, type DockStarter, type DockWelcome } from "@/app/(app)/chat/_components/conversation";
-import { PersonaAvatar, personaLook } from "@/app/(app)/chat/_components/persona";
+import { PersonaAvatar, personaLook, useDockPersona } from "@/app/(app)/chat/_components/persona";
 import { Dock, type DockTab } from "@/components/shell/editor-layout";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -169,7 +169,12 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   const [created, setCreated] = useState<string>();
   const id = created ?? chatId;
   const open = useChat(id).data;
-  const persona = open ? personaLook(open.speaker ?? open.persona).name : undefined;
+  // A new chat starts with the persona last used here; the empty dock names it rather than "your persona".
+  const starting = useDockPersona(APP_SCOPE);
+  const openPersonaId = (open?.speaker ?? open?.persona)?.id;
+  const rememberPersona = starting.remember;
+  useEffect(() => rememberPersona(openPersonaId), [rememberPersona, openPersonaId]);
+  const persona = open ? personaLook(open.speaker ?? open.persona).name : starting.look.name;
   const host = useRef<HTMLDivElement>(null);
   const pageScope: DockScope | undefined = page ? `page:${page.id}` : undefined;
   const pageChats = useDockChats(pageScope);
@@ -190,7 +195,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   };
   const start = () => {
     create.mutate(
-      { title: page?.title ?? "Knowledge", hidden: true },
+      { title: page?.title ?? "Knowledge", hidden: true, ...(starting.id ? { persona_id: starting.id } : {}) },
       { onSuccess: (c) => { void selectChat(c.id).catch(() => { /* attach.error keeps the chat available with Retry. */ }); } },
     );
   };  const sections: DockChatSection[] = page

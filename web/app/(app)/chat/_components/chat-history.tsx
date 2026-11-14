@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Banner, Skeleton, TextInput } from "@/components/ui/primitives";
 import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
-import { PersonaAvatar, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
+import { PersonaAvatar, PersonaStack, PersonaFilter, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
 import { hoverReveal } from "@/lib/reveal";
 import { useEntrances } from "@/components/ui/motion";
 
@@ -72,7 +72,7 @@ function usePersonaNav(id: string | undefined) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
-  // The persona strip starts on the default persona; GET /chats does the filtering.
+  // The persona filter starts on every persona; GET /chats does the filtering.
   const filter = usePersonaFilter();
   const active = useChats(false, filter.query);
   const create = useCreateChat();
@@ -314,6 +314,8 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
   const list = chats.data?.chats;
   // An empty filter on a persona other than the default offers to start a conversation with it.
   const picked = filter.value !== "default" && !all ? filter.personas.find((p) => p.id === filter.value) : undefined;
+  // Filtered to one persona, the list ends with a way to start another chat with it (mockup frame B).
+  const filteredTo = filter.value === "default" ? filter.personas.find((p) => p.id === filter.defaultId) : picked;
   // Archiving or deleting the open conversation goes back to /chat, which resumes the newest one.
   const leave = (chatId: string) => chatId === id && router.push("/chat");
   const [query, setQuery] = useState("");
@@ -347,7 +349,7 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
       {fill && (
         <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-[44px] w-full !text-16" value={query} onChange={(e) => setQuery(e.target.value)} />
       )}
-      <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
+      <PersonaFilter filter={{ ...filter, set: pick }} activity={activity} />
       {between}
       <nav ref={nav} aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
         {onTop && headingRow(view === "archived" ? "Archived" : "Recent")}
@@ -386,6 +388,13 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
           </>
         ) : (
           <div className="flex flex-col gap-3">
+            {filteredTo && view === "active" && (
+              <button type="button" disabled={create.isPending} onClick={() => startWith(filteredTo.id)}
+                className="order-last flex h-7 items-center gap-1.5 rounded-md px-2 text-left text-13 font-medium text-accent hover:bg-hover disabled:opacity-50">
+                <Icon name="plus" size={13} />
+                New chat with {filteredTo.name}
+              </button>
+            )}
             {groups.map((g, i) => (
               <section key={g.label} aria-label={g.label} className="flex flex-col gap-px">
                 {i === 0 && !onTop ? headingRow(g.label) : <h3 className="px-2 pb-1 text-12 font-medium text-fg-tertiary">{g.label}</h3>}
