@@ -1039,7 +1039,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
           <Button variant="approve" className="mt-1 self-start" onClick={startReview}>Review</Button>
         </div>
       )}
-      {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/designs")} />}
+      {chatId && <Conversation key={chatId} id={chatId} docked onNew={() => router.push("/apps/designs")} />}
     </div>
   );
   const dockTabs: DockTab[] = [

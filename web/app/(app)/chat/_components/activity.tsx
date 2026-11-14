@@ -233,7 +233,7 @@ function StepRail({ steps, now, stopping, awaiting, onOpenStep, fold = foldSteps
  * few seconds the card says it's working out the next step instead of repeating that call; after
  * a long silence it says so, and offers to ask what it's doing (an aside) or to stop.
  */
-export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, onOpenStep, onAsk, onStop }: { chatId: string; disabled?: boolean; runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; onOpenStep?: (key: string) => void; onAsk?: () => void; onStop?: () => void }) {
+export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, folded = false, onOpenStep, onAsk, onStop }: { chatId: string; disabled?: boolean; runId?: string; since?: string; persona: PersonaLook; stopping?: boolean; folded?: boolean; onOpenStep?: (key: string) => void; onAsk?: () => void; onStop?: () => void }) {
   const q = useChatRunEvents(runId);
   const now = useNow();
   const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
@@ -242,7 +242,8 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
   const status = useMemo(() => chatStatus(calls, pulse.between), [calls, pulse.between]);
   const notes = useMemo(() => turnNotes(q.data, since), [q.data, since]);
   const { steps, planned } = useMemo(() => chatSteps(calls, notes, { between: pulse.between, clock }), [calls, notes, pulse.between, clock]);
-  const [collapsed, setCollapsed] = useState(false);
+  // A dock is narrow: its card starts as a strip (scene, status, progress and the step under way) so the conversation stays in view.
+  const [collapsed, setCollapsed] = useState(folded);
   // Asking once per quiet stretch: the button comes back only after something happens.
   const [askedAt, setAskedAt] = useState<number>();
   const scene = useHeldScene(status.kind);
@@ -256,8 +257,10 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
   const quiet = !stopping && !awaiting && pulse.quiet;
   const asked = askedAt !== undefined && askedAt >= (clock.last ?? 0);
   const newest = calls.at(-1);
+  // What the folded strip names: the step under way, else the last one that ran.
+  const current = steps.find((s) => s.state === "active") ?? steps.findLast((s) => s.state !== "planned");
   return (
-    <div data-testid="chat-status-card" data-awaiting={awaiting || undefined} data-quiet={quiet || undefined}
+    <div data-testid="chat-status-card" data-folded={collapsed || undefined} data-awaiting={awaiting || undefined} data-quiet={quiet || undefined}
       className={`@container w-full max-w-[min(720px,100%)] rounded-xl border bg-surface transition-[border-color,box-shadow] duration-(--motion-slow) ${awaiting ? "border-pill-human-fg/60 shadow-[0_0_0_3px_var(--pill-human-bg)]" : quiet ? "border-[var(--state-progress)]/50" : "border-border"}`}>
       <div className="flex h-[72px] items-center gap-3 px-3.5">
         <span data-testid="persona-aura" className={`flex-none ${awaiting || stopping || quiet ? "" : "dusk-aura"}`}>
@@ -317,11 +320,20 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
       {hasRail && (
         <>
           {collapsed ? (
-            <div aria-hidden className="flex gap-[3px] px-3.5">
-              {steps.map((s) => (
-                <i key={s.key} className={`h-1 flex-1 rounded-sm ${STEP_BAR[s.state]} ${stepPulse(s, stopping)}`} />
-              ))}
-            </div>
+            <>
+              <div aria-hidden className="flex gap-[3px] px-3.5">
+                {steps.map((s) => (
+                  <i key={s.key} className={`h-1 flex-1 rounded-sm ${STEP_BAR[s.state]} ${stepPulse(s, stopping)}`} />
+                ))}
+              </div>
+              {current && (
+                <p data-testid="chat-step-now" className="flex min-w-0 items-center gap-2 px-3.5 pt-2 text-12">
+                  <StepGlyph step={current} stopping={stopping} />
+                  <span className="min-w-0 truncate font-medium text-fg">{current.title}</span>
+                  <span className="flex-none text-fg-tertiary">{steps.indexOf(current) + 1} of {steps.length}</span>
+                </p>
+              )}
+            </>
           ) : (
             <StepRail steps={steps} now={now} stopping={stopping} awaiting={awaiting} onOpenStep={onOpenStep} />
           )}

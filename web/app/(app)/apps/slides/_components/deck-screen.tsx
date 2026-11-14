@@ -976,7 +976,7 @@ export function DeckScreen({ id }: { id: string }) {
       avatar: <PersonaAvatar persona={look} size={16} />,
       busy: live,
       unread,
-      content: <div data-deck-chat className="flex min-h-0 flex-1 flex-col">{chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/slides")} />}</div>,
+      content: <div data-deck-chat className="flex min-h-0 flex-1 flex-col">{chatId && <Conversation key={chatId} id={chatId} docked onNew={() => router.push("/apps/slides")} />}</div>,
     },
   ];
   if (reviewing && c)

@@ -248,6 +248,24 @@ for (const [command, endpoint] of [["queue", "followups"], ["aside", "asides"]])
   });
 }
 
+test("in the dock a running turn starts as a strip naming the step under way, and opens to every step", async ({ page }) => {
+  await install(page);
+  await page.goto(`/knowledge/${P}`);
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const input = dock(page).getByRole("combobox", { name: "Message" });
+  await input.fill("steps: work through it");
+  await input.press("Enter");
+  const card = dock(page).getByTestId("chat-status-card");
+  await expect(card).toHaveAttribute("data-folded", "true");
+  await expect(card.getByTestId("chat-step-now")).toHaveText(/^Fix the snapshot\s*2 of 3$/);
+  await expect(card.getByTestId("chat-steps")).toHaveCount(0);
+  await card.getByRole("button", { name: "Show steps" }).click();
+  await expect(card.getByTestId("chat-steps").locator("li")).toHaveCount(3);
+  await expect(card.getByTestId("chat-step-now")).toHaveCount(0);
+  await dock(page).getByRole("button", { name: "Stop", exact: true }).click();
+});
+
 test("switching persona keeps the draft and page context inside Knowledge", async ({ page }) => {
   const first = persona(1, { name: "Atlas", is_default: true });
   const second = persona(2, { name: "Nova" });

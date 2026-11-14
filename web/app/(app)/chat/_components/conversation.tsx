@@ -506,7 +506,8 @@ export type ConversationContext = {
 export type DockStarter = { icon: IconName; title: string; prompt: string };
 export type DockWelcome = { where: string; intro: string; label: string; starters: DockStarter[] };
 
-export function Conversation({ id, onNew, actions, activityInDock = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
+/** `docked`: the conversation sits in an app's or a side panel's dock, narrow beside the work, so a live reply's steps start folded. */
+export function Conversation({ id, onNew, actions, activityInDock = false, docked = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; docked?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -1175,7 +1176,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <AudioCards chatId={c.id} audio={liveAudio} onStop={stopping ? undefined : () => cancel.mutate()} />
-                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep}
+                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} folded={docked} onOpenStep={openStep}
                     onAsk={locked || aside.isPending ? undefined : () => aside.mutate(QUIET_CHECK_IN)} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}

@@ -106,6 +106,7 @@ export function AskPanel({ ask }: { ask: ReturnType<typeof useFinanceAsk> }) {
           <Conversation
             key={ask.chatId}
             id={ask.chatId}
+            docked
             onNew={ask.startFresh}
             actions={switcher(true)}
           />
