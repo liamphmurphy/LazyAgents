@@ -121,11 +121,14 @@ func TestKnownEffortsDropsUltra(t *testing.T) {
 }
 
 func TestParseAgyModels(t *testing.T) {
-	got, err := ParseAgyModels(strings.NewReader("Available models:\n\n* gemini-3.8-flash-medium  Fast\n  gemini-4-hydrogen-high\n- gemini-4-hydrogen-high duplicate\nnote: these change\n"))
+	got, err := ParseAgyModels(strings.NewReader("Available models:\n\ngemini-4-carbon-medium\tGemini 4 Carbon (Medium)\n* gemini-3.8-flash-medium  Fast\n  gemini-4-hydrogen-high\n- gemini-4-hydrogen-high duplicate\nnote: these change\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].ID != "gemini-3.8-flash-medium" || !got[0].Default || got[0].Label != "Fast" || got[1].ID != "gemini-4-hydrogen-high" || got[1].Default {
+	if len(got) != 3 ||
+		got[0].ID != "gemini-4-carbon-medium" || got[0].Label != "Gemini 4 Carbon (Medium)" || got[0].Default ||
+		got[1].ID != "gemini-3.8-flash-medium" || !got[1].Default || got[1].Label != "Fast" ||
+		got[2].ID != "gemini-4-hydrogen-high" || got[2].Default {
 		t.Fatalf("models = %+v", got)
 	}
 	if _, err := ParseAgyModels(strings.NewReader("ERROR: authentication required\n")); err == nil {

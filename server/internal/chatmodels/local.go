@@ -249,7 +249,10 @@ func ParseAgyModels(r io.Reader) ([]Model, error) {
 		line := strings.TrimSpace(sc.Text())
 		isDefault := strings.HasPrefix(line, "*") || strings.Contains(strings.ToLower(line), "(default)")
 		line = strings.TrimSpace(strings.TrimLeft(line, "*-• "))
-		slug, rest, _ := strings.Cut(line, " ")
+		slug, rest := line, ""
+		if i := strings.IndexAny(line, " \t"); i >= 0 {
+			slug, rest = line[:i], strings.TrimSpace(line[i+1:])
+		}
 		if !agyModelSlug.MatchString(slug) || !strings.ContainsAny(slug, "-0123456789") || seen[slug] {
 			continue
 		}

@@ -47,6 +47,11 @@ type modelsEngine struct {
 	failStart, hang bool
 	// signedOut makes usage checks answer as a CLI with no plan login.
 	signedOut bool
+	// agyMode makes speak emit agyErr/agyOut once /start runs and close stdout.
+	agyMode        bool
+	agyOut, agyErr string
+	started        chan struct{}
+	startOnce      sync.Once
 }
 
 func (f *modelsEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +99,14 @@ func (f *modelsEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", 500)
 	case p == "/containers/m1/wait":
 		_, _ = io.WriteString(w, `{"StatusCode":0}`)
-	case p == "/containers/m1/start", p == "/containers/m1/kill", r.Method == "DELETE" && p == "/containers/m1":
+	case p == "/containers/m1/start":
+		f.startOnce.Do(func() {
+			if f.started != nil {
+				close(f.started)
+			}
+		})
+		w.WriteHeader(204)
+	case p == "/containers/m1/kill", r.Method == "DELETE" && p == "/containers/m1":
 		w.WriteHeader(204)
 	default:
 		http.NotFound(w, r)
@@ -112,6 +124,18 @@ func (f *modelsEngine) speak(conn net.Conn, in *bufio.Reader) {
 		h[0] = stream
 		binary.BigEndian.PutUint32(h[4:], uint32(len(s)))
 		_, _ = conn.Write(append(h, s...))
+	}
+	if f.agyMode {
+		if f.started != nil {
+			<-f.started
+		}
+		if f.agyErr != "" {
+			say(2, f.agyErr)
+		}
+		if f.agyOut != "" {
+			say(1, f.agyOut)
+		}
+		return
 	}
 	for {
 		line, err := in.ReadString('\n')
@@ -163,7 +187,7 @@ func startModelsEngine(t *testing.T) (*modelsEngine, *Docker) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &modelsEngine{}
+	f := &modelsEngine{started: make(chan struct{})}
 	srv := &http.Server{Handler: f}
 	go func() { _ = srv.Serve(l) }()
 	t.Cleanup(func() { _ = srv.Close() })
@@ -301,6 +325,30 @@ func TestDockerListModelsCodexReadsLoginBackAfterExit(t *testing.T) {
 	wait, read, kill := f.index("POST /containers/m1/wait"), f.index("GET /containers/m1/archive"), f.index("POST /containers/m1/kill")
 	if wait < 0 || read < 0 || kill < 0 || !(wait < read && read < kill) {
 		t.Fatalf("want wait < archive read < kill, got %v", f.calls)
+	}
+}
+
+func TestDockerListModelsAntigravityAndStderr(t *testing.T) {
+	const agyLogin = `{"v":1,"files":{".gemini/antigravity-cli/antigravity-oauth-token":"tok"}}`
+
+	f, d := startModelsEngine(t)
+	f.agyMode = true
+	f.agyOut = "gemini-4-carbon-medium\tGemini 4 Carbon (Medium)\nclaude-opus-5-5-low\tClaude Opus 5.5 (Low)"
+	f.agyErr = "\r⠋ Fetching available models...\r⠙ Fetching available models..."
+	models, err := d.ListModels(context.Background(), "claim-agy", agentdef.HarnessAntigravity, agyLogin, "scope")
+	if err != nil || len(models) != 2 || models[0].ID != "gemini-4-carbon-medium" || !models[0].Default || models[1].ID != "claude-opus-5-5-low" {
+		t.Fatalf("models %+v err %v", models, err)
+	}
+	if f.archive[homePath+"|.gemini/antigravity-cli/antigravity-oauth-token"] != "tok" {
+		t.Fatalf("archive = %v", f.archive)
+	}
+
+	f2, d2 := startModelsEngine(t)
+	f2.agyMode = true
+	f2.agyErr = "\r⠋ Fetching available models...\r⠙ Fetching available models...\nError: Please sign in to view available models."
+	_, err = d2.ListModels(context.Background(), "claim-agy-err", agentdef.HarnessAntigravity, agyLogin, "scope")
+	if err == nil || !strings.Contains(err.Error(), "Error: Please sign in to view available models.") || strings.Contains(err.Error(), "\r") {
+		t.Fatalf("expected cleaned stderr in error, got %v", err)
 	}
 }
 
