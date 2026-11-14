@@ -496,6 +496,8 @@ export function chatStatusOf(call: { tool: string; input: unknown }): ChatStatus
       return status("repo-search", "looking for a repository");
     case "use_repository":
       return status("repo-attach", "checking out a repository");
+    case "request_push":
+      return status("repo-attach", "asking to push a branch");
     case "start_video":
       return status("video-render", "setting up a video");
     case "update_video":

@@ -197,6 +197,12 @@ func TestCodingChatWithoutRepoUsesScratchWorkspace(t *testing.T) {
 }
 
 func TestCodingChatGitCredentials(t *testing.T) {
+	// The fake backend's processes inherit this one's environment: only what
+	// the runner injects may be measured.
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GIT_PAT", runner.SSHKeyEnv, runner.SSHDirEnv} {
+		t.Setenv(name, "")
+		os.Unsetenv(name)
+	}
 	e := setup(t)
 	t.Setenv("FAKE_HARNESS_MODE", "chat")
 	if err := e.setOverride(agentdef.Override{Harness: agentdef.HarnessClaudeCode, Model: "opus-5.5"}); err != nil {
@@ -241,10 +247,13 @@ func TestCodingChatGitCredentials(t *testing.T) {
 	has := func(reply, name string) bool {
 		return strings.Contains(" "+strings.ReplaceAll(reply, "\n", " ")+" ", " "+name+" ")
 	}
+	// Pushing waits for the person (request_push), so a coding chat's turn
+	// holds no git credential at all, whatever the remote: the runner clones
+	// and pushes in its own containers.
 	for url, want := range map[string]struct{ pat, ssh bool }{
-		"https://github.com/acme/app":      {true, true},
-		"git@github.com:acme/app":          {true, true},
-		"https://git.example.com/acme/app": {true, true},
+		"https://github.com/acme/app":      {false, false},
+		"git@github.com:acme/app":          {false, false},
+		"https://git.example.com/acme/app": {false, false},
 	} {
 		reply := envNames(url)
 		if !has(reply, "ANTHROPIC_API_KEY") {
@@ -265,7 +274,8 @@ func TestCodingChatGitCredentials(t *testing.T) {
 			}
 		}
 	}
-	// Repository-less coding chats can attach a repository in the same turn.
+	// Nor does a repository-less one: a repository it attaches is cloned for
+	// it when the next message starts.
 	p := e.persona("Scratch", true, false)
 	chat, err := e.runs.StartChat(e.ctx, e.ws, e.me.ID, runs.ChatInput{Project: "PAY", Title: "none", PersonaID: &p.ID})
 	if err != nil {
@@ -273,8 +283,8 @@ func TestCodingChatGitCredentials(t *testing.T) {
 	}
 	reply := e.postSh(chat.ID, "env | cut -d= -f1 | sort | tr '\\n' ' '")
 	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GIT_PAT", runner.SSHKeyEnv} {
-		if !has(reply, name) {
-			t.Errorf("no-repo coding chat lacks %s: %s", name, reply)
+		if has(reply, name) {
+			t.Errorf("no-repo coding chat holds %s: %s", name, reply)
 		}
 	}
 }
