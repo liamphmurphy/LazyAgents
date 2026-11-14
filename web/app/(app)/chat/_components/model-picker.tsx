@@ -37,7 +37,11 @@ export function modelLabel(groups: Group[] | undefined, s: Selection) {
 // Two harnesses' models plus the efforts outgrow the room above a low
 // composer (the Welcome's), so the menu scrolls inside whatever space Radix
 // finds instead of running off the top of the window.
-const menuPanel = cx(floatPanel, "w-64 max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto");
+const menuHeight = "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]";
+const menuPanel = cx(floatPanel, "w-64 overflow-y-auto", menuHeight);
+// Models and efforts side by side, each column scrolling on its own, so the
+// efforts never sit below a long model list.
+const columnsPanel = cx(floatPanel, "flex w-[min(26rem,calc(100vw-16px))]", menuHeight);
 const MENU_EDGE = 8;
 
 const item =
@@ -120,8 +124,8 @@ export function modelEffortSummary(groups: Group[] | undefined, value: Selection
 
 /**
  * The composer's model and effort, as one quiet control ("Opus 5.5 · Auto"): they're set
- * together and rarely change. One menu: the models by harness, then the reasoning effort
- * the picked model offers (none when it has no effort control).
+ * together and rarely change. One menu in two columns: the models by harness, and beside
+ * them the reasoning effort the picked model offers (one column when it has no effort control).
  */
 export function ModelEffortPicker({
   groups,
@@ -162,47 +166,48 @@ export function ModelEffortPicker({
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" side="top" sideOffset={6} collisionPadding={MENU_EDGE} className={menuPanel}>
-          <DropdownMenu.Item aria-label="Automatic model" className={item} onSelect={() => onChange({ harness: value.harness, model: value.model, auto: true })}>
-            <span className="flex items-center gap-2">
-              Auto
-              <span className="ml-auto w-4 text-accent">{value.auto && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
-            </span>
-            <span className="text-12 text-fg-tertiary">Picks the model for each message</span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
-          {(groups ?? []).map((g, i) => (
-            <DropdownMenu.Group key={g.harness} aria-label={g.label}>
-              {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
-              <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
-              {!g.available && (
-                <div role="status" className="px-2 py-1 text-12 text-fg-tertiary">
-                  {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
-                </div>
-              )}
-              {g.models.map((m) => {
-                const on = !value.auto && value.harness === g.harness && (value.model === m.id || catalogModelLabel([m], value.model) === m.label);
-                return (
-                  <DropdownMenu.Item
-                    key={m.id}
-                    disabled={!g.available}
-                    aria-label={`${g.label} ${m.label}${g.available ? "" : ` (unavailable: ${g.unavailable_reason ?? "not configured"})`}`}
-                    className={item}
-                    onSelect={() => onChange({ harness: g.harness, model: m.id })}
-                  >
-                    <span className="flex items-center gap-2">
-                      {m.label}
-                      <span className="ml-auto w-4 text-accent">{on && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
-                    </span>
-                    {!g.available && <span className="text-12 text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
-                  </DropdownMenu.Item>
-                );
-              })}
-            </DropdownMenu.Group>
-          ))}
+        <DropdownMenu.Content align="end" side="top" sideOffset={6} collisionPadding={MENU_EDGE} className={options.length ? columnsPanel : menuPanel}>
+          <div className={options.length ? "min-w-0 flex-1 overflow-y-auto" : undefined}>
+            <DropdownMenu.Item aria-label="Automatic model" className={item} onSelect={() => onChange({ harness: value.harness, model: value.model, auto: true })}>
+              <span className="flex items-center gap-2">
+                Auto
+                <span className="ml-auto w-4 text-accent">{value.auto && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
+              </span>
+              <span className="text-12 text-fg-tertiary">Picks the model for each message</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+            {(groups ?? []).map((g, i) => (
+              <DropdownMenu.Group key={g.harness} aria-label={g.label}>
+                {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
+                <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">{g.label}</DropdownMenu.Label>
+                {!g.available && (
+                  <div role="status" className="px-2 py-1 text-12 text-fg-tertiary">
+                    {g.checking ? "Checking available models…" : g.unavailable_reason ?? "Model discovery unavailable"}
+                  </div>
+                )}
+                {g.models.map((m) => {
+                  const on = !value.auto && value.harness === g.harness && (value.model === m.id || catalogModelLabel([m], value.model) === m.label);
+                  return (
+                    <DropdownMenu.Item
+                      key={m.id}
+                      disabled={!g.available}
+                      aria-label={`${g.label} ${m.label}${g.available ? "" : ` (unavailable: ${g.unavailable_reason ?? "not configured"})`}`}
+                      className={item}
+                      onSelect={() => onChange({ harness: g.harness, model: m.id })}
+                    >
+                      <span className="flex items-center gap-2">
+                        {m.label}
+                        <span className="ml-auto w-4 text-accent">{on && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
+                      </span>
+                      {!g.available && <span className="text-12 text-fg-tertiary">{g.unavailable_reason ?? "Unavailable"}</span>}
+                    </DropdownMenu.Item>
+                  );
+                })}
+              </DropdownMenu.Group>
+            ))}
+          </div>
           {options.length > 0 && (
-            <DropdownMenu.Group aria-label="Reasoning effort">
-              <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+            <DropdownMenu.Group aria-label="Reasoning effort" className="ml-1 w-36 flex-none overflow-y-auto border-l border-border-subtle pl-1">
               <DropdownMenu.Label className="px-2 py-1 text-12 font-medium text-fg-tertiary">Reasoning effort</DropdownMenu.Label>
               {options.map((e) => (
                 <DropdownMenu.Item key={e ?? "default"} className={item} onSelect={() => onEffort(e)}>
