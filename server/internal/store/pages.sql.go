@@ -611,6 +611,7 @@ func (q *Queries) PutKnowledgeAsset(ctx context.Context, arg PutKnowledgeAssetPa
 
 const queryPages = `-- name: QueryPages :many
 SELECT a.id, a.workspace_id, a.project_id, a.epic_id, a.type, a.title, a.number, a.summary, a.author_type, a.author_id, a.current_version_id, a.search_text, a.search, a.created_at, a.updated_at, a.path, a.audience, a.owner_user_id, a.persona_direct, a.persona_paused, a.chat_session_id, a.canvas_id, v.properties,
+  coalesce((SELECT cv.kind FROM chat_canvases cv WHERE cv.id = a.canvas_id), '')::text AS canvas_kind,
   (SELECT count(*) FROM knowledge_links l WHERE l.source_kind = 'artifact' AND l.source_id = a.id AND l.target_kind = 'unresolved')::int AS unresolved,
   (SELECT count(*) FROM artifact_versions s WHERE s.artifact_id = a.id AND (s.state = 'suggested' OR (s.created_by_type = 'agent' AND s.review_state = 'pending')))::int AS pending
 FROM artifacts a JOIN artifact_versions v ON v.id = a.current_version_id
@@ -675,6 +676,7 @@ type QueryPagesRow struct {
 	ChatSessionID    *uuid.UUID
 	CanvasID         *uuid.UUID
 	Properties       json.RawMessage
+	CanvasKind       string
 	Unresolved       int32
 	Pending          int32
 }
@@ -728,6 +730,7 @@ func (q *Queries) QueryPages(ctx context.Context, arg QueryPagesParams) ([]Query
 			&i.ChatSessionID,
 			&i.CanvasID,
 			&i.Properties,
+			&i.CanvasKind,
 			&i.Unresolved,
 			&i.Pending,
 		); err != nil {

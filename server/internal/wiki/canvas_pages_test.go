@@ -7,7 +7,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
+	"github.com/liamphmurphy/vesper/server/internal/wiki"
 )
 
 // LAZYAGENTS-212: every deck and design is a Knowledge page. The page links to the canvas, which
@@ -131,5 +133,27 @@ func TestRenamingADeckRenamesItsPageAndDeletingThePageDeletesTheDeck(t *testing.
 	var canvases int
 	if err := e.svc.Pool.QueryRow(e.ctx, `SELECT count(*) FROM chat_canvases WHERE id = $1`, deck.ID).Scan(&canvases); err != nil || canvases != 0 {
 		t.Errorf("the deck outlived its page: %d (%v)", canvases, err)
+	}
+}
+
+func TestKnowledgeQueriesSayWhatAPageHolds(t *testing.T) {
+	e := setup(t)
+	chat := e.chat(t)
+	e.canvas(t, chat.ID, "design", "Checkout flow")
+	note := e.save(t, "Product/Onboarding brief", "Calm first five minutes.")
+	ctx := pageview.Person(e.ctx, e.me.ID)
+	table, err := wiki.QueryPages(ctx, e.q, e.ws, wiki.PageQuery{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{}
+	for _, r := range table.Rows {
+		kinds[r.Path] = r.Kind
+		if r.Kind == "design" && r.CanvasID == nil {
+			t.Errorf("%s: a design row without its canvas", r.Path)
+		}
+	}
+	if kinds["Designs/Checkout flow"] != "design" || kinds[*note.Note.Path] != "document" {
+		t.Errorf("kinds = %v", kinds)
 	}
 }
