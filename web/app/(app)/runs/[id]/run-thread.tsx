@@ -275,6 +275,15 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
           <Button variant="outline" onClick={again}>Write another</Button>
         </p>
       ) : (
+        <>
+        {/* The main pane talks to what it shows: this run's agent. Your persona is in the side panel's Chat. */}
+        <div data-testid="run-composer-to" className="flex items-center gap-1.5 px-1">
+          <span className="text-12 text-fg-tertiary">To</span>
+          <span className="inline-flex h-[24px] items-center gap-1.5 rounded-md border border-border bg-surface pl-0.5 pr-2 text-12 font-medium text-fg-2">
+            <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} size="sm" />
+            {run.agent.name}{run.ticket_key ? ` · ${run.ticket_key}` : ""}
+          </span>
+        </div>
         <div className={cx("flex items-end gap-2 rounded-xl border bg-surface p-2 focus-within:border-accent", waiting ? "border-state-human/60" : "border-border-strong")}>
           <label className="sr-only" htmlFor="run-composer">{label}</label>
           <TextArea
@@ -296,6 +305,7 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
             {comment.isPending ? "Sending…" : "Send"}
           </Button>
         </div>
+        </>
       )}
       <p className="px-1 text-11 text-fg-tertiary">
         {waiting ? "Your reply resumes the run." : `Goes to ${run.agent.name} as a comment on ${run.ticket_key}; it reads it on its next look at the ticket.`}

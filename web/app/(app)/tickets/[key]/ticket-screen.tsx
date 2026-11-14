@@ -30,6 +30,8 @@ import { ApprovalBanner, needsDispatch, RunCard } from "./run-parts";
 import { RunsHistory } from "./runs-history";
 import { ConflictBanner, useTicketSave, type SaveTicket, type TicketSaver } from "./ticket-save";
 import { Composer, Timeline } from "./timeline";
+import { PanelTabs, useChatTab } from "@/components/shell/context-panel";
+import { WorkChat } from "@/components/domain/work-chat";
 
 function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
   const [editing, setEditing] = useState(false);
@@ -303,6 +305,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const saver = useTicketSave(t);
+  const [chat, setChat] = useChatTab("lazyagents.tickets.panel-tab");
 
   // J/K step through the project's tickets; E opens the editor.
   useEffect(() => {
@@ -432,7 +435,15 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               </section>
             </div>
           </article>
+          {chat ? (
+            // The work chat scrolls itself, so the panel holds the screen's height while the page scrolls beside it.
+            <aside aria-label="Properties" className="sticky top-0 flex h-[calc(100dvh-var(--tab-bar-h,0px))] flex-[1_1_300px] flex-col gap-3 self-start border-l border-border-subtle bg-panel px-2 pt-4 lg:max-w-[360px]">
+              <div className="px-2"><PanelTabs first="Properties" chat onChat={setChat} /></div>
+              <WorkChat subject={{ kind: "ticket", key: t.key, title: t.title }} />
+            </aside>
+          ) : (
           <aside aria-label="Properties" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[360px]">
+            <PanelTabs first="Properties" chat={false} onChat={setChat} />
             {saver.conflict && (
               <ConflictBanner what={saver.conflict.what} reloading={ticket.isFetching} onReapply={saver.reapply} onKeep={saver.keepLatest} />
             )}
@@ -448,6 +459,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               <BacklinksPanel kind="ticket" id={t.id} compact />
             </section>
           </aside>
+          )}
         </div>
       )}
       {editing && t && boot.data && (

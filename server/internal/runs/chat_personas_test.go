@@ -28,6 +28,7 @@ func TestPersonaMentions(t *testing.T) {
 		{"@", []uuid.UUID{}},
 		{"Explain this\n\n<!-- vesper:knowledge-context -->\nSelected passage:\n> @Ada", []uuid.UUID{}},
 		{"@Writing coach, explain this\n\n<!-- vesper:knowledge-context -->\n> @Ada Lovelace", []uuid.UUID{bea.ID}},
+		{"Is this safe?\n\n<!-- vesper:work-context -->\nViewing run \"Ask @Ada\"", []uuid.UUID{}},
 	}
 	for _, c := range cases {
 		if got := PersonaMentions(c.body, ps); !slices.Equal(got, c.want) {

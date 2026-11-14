@@ -228,6 +228,38 @@ test("the composer replies to a waiting run as a comment mentioning the agent", 
   await expect(page.getByRole("form", { name: "Follow up with Builder" })).toBeVisible();
 });
 
+test("the side panel's Chat talks to your persona about the run; the run's composer goes to its agent", async ({ page }) => {
+  const { api } = await installRuns(page);
+  await page.goto(`/runs/${RUNNING}`);
+  // The main pane talks to what it shows.
+  await expect(page.getByTestId("run-composer-to")).toHaveText(/^To.*Builder · WEB-9$/);
+  const panel = page.getByRole("complementary", { name: "Context" });
+  const tabs = panel.getByRole("tablist", { name: "Side panel" });
+  await tabs.getByRole("tab", { name: "Chat" }).click();
+  await panel.getByRole("button", { name: "Start a chat" }).click();
+  await expect.poll(() => api.created.length).toBe(1);
+  expect(api.created[0].hidden).toBe(true);
+  await expect(panel.getByTestId("work-chat-subject")).toHaveText("Viewing: WEB-9 · Search index");
+  const box = panel.getByRole("combobox", { name: "Message" });
+  await box.fill("Is this safe to merge?");
+  await box.press("Enter");
+  await expect.poll(() => api.posted.length).toBe(1);
+  expect(api.posted[0].body.body).toBe(`Is this safe to merge?\n\n<!-- vesper:work-context -->\nViewing run ${RUNNING} (“Search index”) by Builder for ticket WEB-9.`);
+  expect(api.posted[0].body.context_refs).toEqual([{ kind: "ticket", key: "WEB-9" }]);
+  // The reply finishes before the next message, so it posts rather than queueing as a follow-up.
+  await expect(panel.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+
+  // The chat follows you to another run, and says which one each message is about.
+  await page.goto(`/runs/${DONE}`);
+  await expect(tabs.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+  await expect(panel.getByTestId("work-chat-subject")).toHaveText("Viewing: WEB-3 · Session refresh");
+  await panel.getByRole("combobox", { name: "Message" }).fill("And this one?");
+  await panel.getByRole("combobox", { name: "Message" }).press("Enter");
+  await expect.poll(() => api.posted.length).toBe(2);
+  expect(api.posted[1].chat).toBe(api.posted[0].chat);
+  expect(api.posted[1].body.body).toContain("Viewing run " + DONE);
+});
+
 test("the Context panel shows the ticket, code and run, opens the views, and remembers closing", async ({ page }) => {
   await installRuns(page);
   await page.goto(`/runs/${APPROVING}`);
