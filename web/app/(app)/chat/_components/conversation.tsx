@@ -44,6 +44,7 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
+import { HistoryNav } from "@/components/shell/history-nav";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -1043,7 +1044,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             onRestored={restored}
           />
         ) : (
-        <div data-testid="chat-header" className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
+        <div data-testid="chat-header" className="@container flex min-h-[44px] items-center gap-2.5 border-b border-border-subtle py-1.5 pl-3 pr-6">
+          <HistoryNav />
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}

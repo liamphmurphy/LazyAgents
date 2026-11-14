@@ -129,6 +129,20 @@ test("the rail's Chat entry opens the chats, where the remembered Chats navigato
   await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
 });
 
+test("the pane bar's back and forward keep your place across layouts", async ({ page }) => {
+  await installBoardApi(page);
+  await page.goto("/tickets?layout=board&project=WEB");
+  const history = page.getByRole("group", { name: "History" });
+  await expect(history.getByRole("button", { name: "Forward" })).toBeDisabled();
+  await page.getByRole("navigation", { name: "Tickets layout" }).getByRole("link", { name: "List" }).click();
+  await expect(page).toHaveURL(/\/tickets\?project=WEB$/);
+  await history.getByRole("button", { name: "Back" }).click();
+  await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
+  await expect(history.getByRole("button", { name: "Forward" })).toBeEnabled();
+  await history.getByRole("button", { name: "Forward" }).click();
+  await expect(page).toHaveURL(/\/tickets\?project=WEB$/);
+});
+
 test("an archived or unknown project shows an explicit empty state with a way back", async ({ page }) => {
   const api = await installWithArchived(page);
   await page.goto("/tickets?layout=board&project=OPS");
