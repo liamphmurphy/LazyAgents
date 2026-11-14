@@ -132,7 +132,8 @@ export function WorkChat({ subject }: { subject?: WorkSubject }) {
   };
   // A new work chat starts with the persona last used here, named in the empty state's To chip.
   const starting = useDockPersona(SCOPE);
-  const openPersonaId = (chat?.speaker ?? chat?.persona)?.id;
+  // The chat's own persona, not a guest who spoke last in a group chat.
+  const openPersonaId = chat?.persona?.id;
   const rememberPersona = starting.remember;
   useEffect(() => rememberPersona(openPersonaId), [rememberPersona, openPersonaId]);
   const start = () => create.mutate({ title: "Work", hidden: true, ...(starting.id ? { persona_id: starting.id } : {}) }, { onSuccess: (c) => select(c.id) });

@@ -175,7 +175,8 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   const open = useChat(id).data;
   // A new chat starts with the persona last used here; the empty dock names it rather than "your persona".
   const starting = useDockPersona(APP_SCOPE);
-  const openPersonaId = (open?.speaker ?? open?.persona)?.id;
+  // The chat's own persona, not a guest who spoke last in a group chat.
+  const openPersonaId = open?.persona?.id;
   const rememberPersona = starting.remember;
   useEffect(() => rememberPersona(openPersonaId), [rememberPersona, openPersonaId]);
   const persona = open ? personaLook(open.speaker ?? open.persona).name : starting.look.name;
