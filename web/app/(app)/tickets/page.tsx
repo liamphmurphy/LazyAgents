@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { LegacyWork } from "../work/legacy-work";
+import { TicketsLayouts } from "./_components/tickets-layouts";
 
 export default function TicketsPage() {
   return (
     <Suspense>
-      <LegacyWork view="tickets" />
+      <TicketsLayouts />
     </Suspense>
   );
 }

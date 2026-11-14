@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, type MouseEvent } from "react";
 import type { TicketStatus } from "@/lib/api/client";
 import {
@@ -38,6 +38,7 @@ import {
 } from "./work-details";
 import { BoardView } from "../tickets/_components/board-screen";
 import { RunList, useRunList } from "../runs/run-list";
+import { ticketsHref } from "@/lib/tickets-layout";
 import "./work.css";
 
 export function WorkScreen() {
@@ -87,6 +88,22 @@ export function WorkScreen() {
   const showRun = !!runId && (!companion || params.get("companion") !== "hide");
   const showBrief = companion || context === "ticket" || context === "epic";
   const navigate: Navigate = updateWorkUrl;
+  const router = useRouter();
+  // Browsing tickets or epics belongs to the full Tickets screens; Work's own
+  // ticket and epic views are only for a focused item beside its run.
+  const browse =
+    (view === "tickets" && !params.get("ticket")) ||
+    (view === "epics" && !params.get("epic"));
+  useEffect(() => {
+    if (!browse) return;
+    const keep: Record<string, string> = {};
+    if (project) keep.project = project;
+    if (view === "tickets" && params.get("layout") === "board") {
+      router.replace(ticketsHref("board", keep));
+    } else {
+      router.replace(ticketsHref(view === "epics" ? "epics" : "list", keep));
+    }
+  }, [browse, view, project, params, router]);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -170,23 +187,10 @@ export function WorkScreen() {
         </Link>
       </div>
       <div className="work-tabs">
-        {(["activity", "tickets", "epics"] as const).map((v) => (
-          <button
-            key={v}
-            aria-current={view === v ? "page" : undefined}
-            onClick={() =>
-              go({
-                view: v,
-                context: null,
-                companion: null,
-                list: null,
-                layout: null,
-              })
-            }
-          >
-            {v[0].toUpperCase() + v.slice(1)}
-          </button>
-        ))}
+        <button aria-current="page">Activity</button>
+        {/* Tickets and Epics are the full Tickets screens (list, board, map, epics), kept whole. */}
+        <Link href={ticketsHref("list", project ? { project } : undefined)}>Tickets</Link>
+        <Link href={ticketsHref("epics", project ? { project } : undefined)}>Epics</Link>
       </div>
       <TextInput
         ref={searchRef}
