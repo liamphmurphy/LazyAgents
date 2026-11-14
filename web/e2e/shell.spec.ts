@@ -141,9 +141,9 @@ test("back and forward live on the rail, so every screen has them, whatever its 
   await expect(page.getByRole("group", { name: "History" })).toHaveCount(1);
   await nav(page).getByRole("link", { name: "Reports", exact: true }).click();
   await expect(page).toHaveURL(/\/reports/);
-  await history.getByRole("button", { name: "Back" }).click();
+  await history.getByRole("button", { name: "Go back" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await history.getByRole("button", { name: "Forward" }).click();
+  await history.getByRole("button", { name: "Go forward" }).click();
   await expect(page).toHaveURL(/\/reports/);
 });
 
@@ -151,13 +151,13 @@ test("back and forward keep your place across Tickets layouts", async ({ page })
   await installBoardApi(page);
   await page.goto("/tickets?layout=board&project=WEB");
   const history = page.getByRole("group", { name: "History" });
-  await expect(history.getByRole("button", { name: "Forward" })).toBeDisabled();
+  await expect(history.getByRole("button", { name: "Go forward" })).toBeDisabled();
   await page.getByRole("navigation", { name: "Tickets layout" }).getByRole("link", { name: "List" }).click();
   await expect(page).toHaveURL(/\/tickets\?project=WEB$/);
-  await history.getByRole("button", { name: "Back" }).click();
+  await history.getByRole("button", { name: "Go back" }).click();
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
-  await expect(history.getByRole("button", { name: "Forward" })).toBeEnabled();
-  await history.getByRole("button", { name: "Forward" }).click();
+  await expect(history.getByRole("button", { name: "Go forward" })).toBeEnabled();
+  await history.getByRole("button", { name: "Go forward" }).click();
   await expect(page).toHaveURL(/\/tickets\?project=WEB$/);
 });
 

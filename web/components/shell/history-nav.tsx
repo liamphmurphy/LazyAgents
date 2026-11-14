@@ -37,10 +37,10 @@ export function HistoryNav({ className }: { className?: string }) {
   const button = "grid size-[30px] flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
   return (
     <div role="group" aria-label="History" data-testid="history-nav" className={cx("flex flex-none flex-col items-center", className)}>
-      <button type="button" aria-label="Back" title="Back" disabled={!can.back} onClick={() => router.back()} className={button}>
+      <button type="button" aria-label="Go back" title="Back" disabled={!can.back} onClick={() => router.back()} className={button}>
         <Icon name="chevr" size={14} className="rotate-180" />
       </button>
-      <button type="button" aria-label="Forward" title="Forward" disabled={!can.forward} onClick={() => router.forward()} className={button}>
+      <button type="button" aria-label="Go forward" title="Forward" disabled={!can.forward} onClick={() => router.forward()} className={button}>
         <Icon name="chevr" size={14} />
       </button>
     </div>

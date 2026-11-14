@@ -203,7 +203,8 @@ test("J and K move between messages, R replies to the one in focus, Esc goes bac
   await open(page);
   await say(page, "second");
   await expect(page.getByTestId("assistant-message")).toHaveCount(2);
-  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  // Leave the composer without clicking anything: the left edge is the rail, whose links navigate.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("k");
   await expect(page.getByTestId("assistant-message").last()).toBeFocused();
   await expect(page.getByTestId("assistant-message").last().getByRole("toolbar")).toHaveCSS("opacity", "1");
@@ -216,7 +217,8 @@ test("J and K move between messages, R replies to the one in focus, Esc goes bac
   await expect(box(page)).toHaveValue(/^> Echo: second/);
   await page.keyboard.press("Escape");
   // The ? reference lists them.
-  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  // Leave the composer without clicking anything: the left edge is the rail, whose links navigate.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("?");
   await expect(page.getByRole("dialog").getByText("Start a thread on the message")).toBeVisible();
 });
