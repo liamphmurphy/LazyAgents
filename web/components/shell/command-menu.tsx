@@ -31,6 +31,7 @@ import {
   ticketKeyFrom,
   type PaletteGroup,
   RECENT_KEY,
+  KIND_JUMPS,
   type PaletteLink,
 } from "@/lib/command-palette";
 import { APP_ITEMS, NAV_GROUPS, TOOL_ITEMS, projectSection, switchHref, withProject } from "@/lib/project-scope";
@@ -239,7 +240,7 @@ export function CommandMenu() {
         local: true,
       }))
     : [];
-  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
+  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...KIND_JUMPS.map((i) => ({ ...i, kind: "in Knowledge" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
   // is:app on its own lists every app.
   const appsWanted = filters.text ? appMatches(appsMenu, filters.text) : filters.groups.includes("Apps") ? appsMenu : [];
   const apps: Item[] = offers("Apps")

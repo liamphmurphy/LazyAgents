@@ -40,7 +40,7 @@ func (s *Server) knowledgeRoutes(mux *http.ServeMux) {
 	}
 	handle("GET /api/v1/knowledge/pages", func(r *http.Request) (any, error) {
 		_, _, ws := me(r.Context())
-		query := wiki.PageQuery{Text: r.URL.Query().Get("q"), Tag: r.URL.Query().Get("tag"), Folder: r.URL.Query().Get("folder"), Audience: r.URL.Query().Get("audience"), IncludeAgent: r.URL.Query().Get("include_agent") == "true", Orphans: r.URL.Query().Get("orphans") == "true", Unresolved: r.URL.Query().Get("unresolved") == "true"}
+		query := wiki.PageQuery{Text: r.URL.Query().Get("q"), Tag: r.URL.Query().Get("tag"), Folder: r.URL.Query().Get("folder"), Audience: r.URL.Query().Get("audience"), IncludeAgent: r.URL.Query().Get("include_agent") == "true", Orphans: r.URL.Query().Get("orphans") == "true", Unresolved: r.URL.Query().Get("unresolved") == "true", Kind: r.URL.Query().Get("kind")}
 		query.Limit, _ = strconv.Atoi(r.URL.Query().Get("limit"))
 		query.Offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
 		return wiki.QueryPages(r.Context(), s.Q, ws, query)

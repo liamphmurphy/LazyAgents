@@ -133,10 +133,10 @@ async function openInspector(page: Page) {
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
-test("designs live in Knowledge: the old index goes there, and New page makes a design that opens in it", async ({ page }) => {
+test("designs live in Knowledge: the old index goes to their start page, and New page makes a design that opens in it", async ({ page }) => {
   const { s } = await install(page, { [D1]: acceptance });
   await page.goto("/apps/designs");
-  await expect(page).toHaveURL(/\/knowledge$/);
+  await expect(page).toHaveURL(/\/knowledge\?kind=design$/);
   // Designs is no longer an app of its own.
   await page.getByRole("button", { name: "Apps" }).click();
   await expect(page.getByRole("dialog", { name: "Apps" }).getByRole("link", { name: "Designs" })).toHaveCount(0);

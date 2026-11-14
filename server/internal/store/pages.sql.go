@@ -630,8 +630,9 @@ AND (NOT $12::boolean OR NOT EXISTS (
  SELECT 1 FROM knowledge_links l WHERE (l.source_kind = 'artifact' AND l.source_id = a.id)
  OR (l.target_id = a.id AND (l.source_kind <> 'artifact' OR EXISTS (SELECT 1 FROM artifacts src WHERE src.id = l.source_id AND artifact_visible(src.audience,src.owner_user_id,$2::uuid))))))
 AND (NOT $13::boolean OR EXISTS (SELECT 1 FROM knowledge_links l WHERE l.source_kind = 'artifact' AND l.source_id = a.id AND l.target_kind = 'unresolved'))
+AND ($14::text = '' OR $14::text = CASE coalesce((SELECT cv.kind FROM chat_canvases cv WHERE cv.id = a.canvas_id), '') WHEN 'deck' THEN 'deck' WHEN 'design' THEN 'design' ELSE 'document' END)
 ORDER BY a.updated_at DESC, a.id
-LIMIT $15 OFFSET $14
+LIMIT $16 OFFSET $15
 `
 
 type QueryPagesParams struct {
@@ -648,6 +649,7 @@ type QueryPagesParams struct {
 	LinksTo        *uuid.UUID
 	Orphans        bool
 	UnresolvedOnly bool
+	PageKind       string
 	PageOffset     int32
 	PageLimit      int32
 }
@@ -681,6 +683,7 @@ type QueryPagesRow struct {
 	Pending          int32
 }
 
+// Mirrors wiki.PageKind: a deck or design page is one whose canvas is that kind; everything else is a document.
 func (q *Queries) QueryPages(ctx context.Context, arg QueryPagesParams) ([]QueryPagesRow, error) {
 	rows, err := q.db.Query(ctx, queryPages,
 		arg.WorkspaceID,
@@ -696,6 +699,7 @@ func (q *Queries) QueryPages(ctx context.Context, arg QueryPagesParams) ([]Query
 		arg.LinksTo,
 		arg.Orphans,
 		arg.UnresolvedOnly,
+		arg.PageKind,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

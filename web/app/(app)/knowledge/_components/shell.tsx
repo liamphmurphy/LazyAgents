@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { ancestors, buildTree, closeTab, folderPaths, isoDay, joinPath, movedPath, nameOf, openTab, pageHref, pageIcon, parentOf, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
+import { START_TAB, ancestors, buildTree, closeTab, folderPaths, isoDay, joinPath, kindHref, movedPath, nameOf, openTab, pageHref, pageIcon, parentOf, parseKind, startTabKind, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
 import { useAllPages, useCreatePage, useDaily, useDeleteFolder, useDeletePage, useMoveFolder, useMovePage, usePage } from "@/lib/api/knowledge-hooks";
 import { DropdownMenu } from "radix-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -113,9 +113,9 @@ const pinnedStore = localStore<string[]>(PINNED_KEY, NO_PINS);
 // A folder lists this many pages until "+ N more", so one big folder can't bury the rest of the tree.
 const FOLDER_PAGES = 8;
 
-/** The tab a Knowledge address shows. */
-function activeTab(pathname: string): string | undefined {
-  if (pathname === "/knowledge") return "home";
+/** The tab a Knowledge address shows; ?kind= on Knowledge's own address is a kind's start page. */
+function activeTab(pathname: string, kind: string | null): string | undefined {
+  if (pathname === "/knowledge") return parseKind(kind) ? START_TAB : "home";
   if (pathname.startsWith("/knowledge/graph")) return "graph";
   if (pathname.startsWith("/knowledge/connect")) return "connect";
   return /^\/knowledge\/([0-9a-f-]{36})/.exec(pathname)?.[1];
@@ -127,6 +127,7 @@ export function tabHref(t: Tab): string {
   if (t.kind === "graph") return "/knowledge/graph";
   if (t.kind === "connect") return "/knowledge/connect";
   if (t.kind === "home") return "/knowledge";
+  if (t.kind === "start") return kindHref(startTabKind(t));
   return pageHref(t.id, t.title);
 }
 
@@ -139,9 +140,10 @@ export function tabHref(t: Tab): string {
 export function KnowledgeShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams();
   const view = useStore(viewStore);
   const tabs = useStore(tabsStore);
-  const active = activeTab(pathname);
+  const active = activeTab(pathname, search.get("kind"));
   // A deck or design page opens its editor here: its structure is the column's list, its own
   // dock is the companion, and its actions sit in this bar (EditorEmbedContext).
   const activeKind = tabs.find((t) => t.id === active)?.kind;
@@ -246,7 +248,7 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
 
 function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onClose: (id: string) => void }) {
   const icon = (t: Tab): IconName =>
-    t.kind === "graph" ? "graph" : t.kind === "connect" ? "link" : t.kind === "home" ? "dashboard" : t.kind === "deck" ? "slides" : t.kind === "design" ? "designs" : "artifacts";
+    t.kind === "graph" ? "graph" : t.kind === "connect" ? "link" : t.kind === "home" ? "dashboard" : t.kind === "start" ? pageIcon({ kind: startTabKind(t) }) : t.kind === "deck" ? "slides" : t.kind === "design" ? "designs" : "artifacts";
   return (
     <div role="tablist" aria-label="Open pages" className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pl-1">
       {tabs.map((t) => {
