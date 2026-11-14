@@ -11,7 +11,7 @@ import { Kbd, Skeleton } from "@/components/ui/primitives";
 import { useToday } from "./kit";
 import { isTyping } from "@/components/shell/shortcuts";
 import { NavigatorPortal } from "@/components/shell/navigator-slot";
-import { HistoryNav } from "@/components/shell/history-nav";
+import { TopBar } from "@/components/shell/topbar";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
@@ -215,11 +215,8 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
       <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Back and forward lead the page; the tabs stay one tablist beside them. */}
-          <div className="flex flex-none items-center border-b border-border-subtle bg-panel">
-            <HistoryNav className="pl-2" />
-            <TabStrip tabs={tabs} active={active} onClose={close} />
-          </div>
+          {/* The shared top bar, with the open pages as its tabs: the same height and back button as every page. */}
+          <TopBar tabs={<TabStrip tabs={tabs} active={active} onClose={close} />} />
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
         <KnowledgeDock pageId={pageIdOf(pathname)} />
@@ -235,7 +232,7 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
 function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onClose: (id: string) => void }) {
   const icon = (t: Tab): IconName => (t.kind === "graph" ? "graph" : t.kind === "connect" ? "link" : t.kind === "home" ? "dashboard" : "artifacts");
   return (
-    <div role="tablist" aria-label="Open pages" className="flex h-10 min-w-0 flex-1 items-end gap-1 overflow-x-auto px-2">
+    <div role="tablist" aria-label="Open pages" className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pl-1">
       {tabs.map((t) => {
         const on = t.id === active;
         return (
@@ -263,7 +260,7 @@ function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onC
           </div>
         );
       })}
-      <Link href="/knowledge" aria-label="New tab" className="mb-2 grid size-6 flex-none place-items-center rounded text-fg-tertiary hover:bg-hover">
+      <Link href="/knowledge" aria-label="New tab" className="mb-[9px] grid size-6 flex-none place-items-center rounded text-fg-tertiary hover:bg-hover">
         <Icon name="plus" size={13} />
       </Link>
     </div>
