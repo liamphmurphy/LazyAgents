@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover } from "radix-ui";
-import { useId, useState } from "react";
+import { useContext, useId, useState } from "react";
 import type { LinkTarget } from "@/lib/api/client";
 import { useLinkSuggest } from "@/lib/api/hooks";
 import { chipFromTarget, type Chip } from "@/lib/chat-context";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SuggestionList } from "@/components/domain/link-editor";
 import { composerIconButton } from "./reply-tools";
+import { OpenLinkedItem } from "./item-panel";
+import type { LinkedItem } from "@/lib/chat-panels";
 
 /** Only these kinds can be attached to a chat message. */
 export const acceptTarget = (t: LinkTarget) => chipFromTarget(t) !== null;
@@ -50,16 +52,28 @@ export function ChipList({ chips, onRemove, disabled }: { chips: Chip[]; onRemov
   );
 }
 
-/** What a sent message carried (read-only). */
+/** What a sent message carried. On the chat page a ticket or page opens beside the chat. */
 export function SentChips({ chips }: { chips: Chip[] }) {
+  const open = useContext(OpenLinkedItem);
   if (chips.length === 0) return null;
+  const linkOf = (c: Chip): LinkedItem | undefined =>
+    c.ref.kind === "ticket" && c.ref.key ? { kind: "ticket", key: c.ref.key } : c.ref.kind === "page" && c.ref.id ? { kind: "page", id: c.ref.id } : undefined;
   return (
     <ul aria-label="Context" className="flex flex-wrap justify-end gap-1" data-testid="sent-chips">
-      {chips.map((c) => (
-        <li key={c.key} className={chipClass} data-testid="sent-chip">
-          <Label chip={c} />
-        </li>
-      ))}
+      {chips.map((c) => {
+        const item = open && linkOf(c);
+        return (
+          <li key={c.key} className={chipClass} data-testid="sent-chip">
+            {item ? (
+              <button type="button" onClick={() => open(item)} title={`Open ${c.label} beside the chat`} className="inline-flex min-w-0 items-center gap-1.5 hover:text-fg">
+                <Label chip={c} />
+              </button>
+            ) : (
+              <Label chip={c} />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

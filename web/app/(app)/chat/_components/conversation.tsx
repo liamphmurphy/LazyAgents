@@ -44,6 +44,8 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
+import { linkedItems, openItem, type LinkedItem } from "@/lib/chat-panels";
+import { LinkedRow, OpenLinkedItem } from "./item-panel";
 import { useRecordVisit } from "@/components/shell/use-record-visit";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, typedText, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
@@ -595,7 +597,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   const setCommitEmail = useSetChatCommitEmail();
   const [commitPickerOpen, setCommitPickerOpen] = useState(false);
   // What the trays above the composer hold, so the status slot can rank them (the queries are shared with the trays).
-  const ticketRuns = (useChatTicketRuns(id).data?.runs ?? []).filter((r) => !runEnded(r.state));
+  const allTicketRuns = useChatTicketRuns(id).data?.runs;
+  const ticketRuns = (allTicketRuns ?? []).filter((r) => !runEnded(r.state));
   const workflowRuns = (useChatWorkflowRuns(id).data?.runs ?? []).filter((r) => runActive(r.state));
   const followups = useChatFollowups(id).data ?? [];
 
@@ -680,6 +683,21 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   }, [search, router, id]);
   // Refs only carry ids; remember what the chips were called so sent messages can show it.
   const [names, setNames] = useState(() => new Map<string, string>());
+  // What the conversation links to, opened beside it in the chat page's dock (not from an app's dock: it has none of its own).
+  const linked = useMemo(
+    () => linkedItems((list ?? []).flatMap((m) => (m.role === "user" ? (m.context_refs ?? []) : [])), allTicketRuns ?? []),
+    [list, allTicketRuns],
+  );
+  const openLinked = useCallback(
+    (item: LinkedItem) => router.replace(`${window.location.pathname}?${openItem(new URLSearchParams(window.location.search), item)}`, { scroll: false }),
+    [router],
+  );
+  const linkedLabel = (item: LinkedItem) => {
+    if (item.kind === "ticket") return item.key;
+    if (item.kind === "page") return names.get(item.id) ?? "Page";
+    const r = allTicketRuns?.find((x) => x.run_id === item.id);
+    return r ? `${r.ticket} run` : "Run";
+  };
 
   // Refetch the transcript when the chat changes (also covers polling without SSE).
   const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
@@ -1103,6 +1121,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
           {actions}
         </div>
         )}
+        {dockActivity && view === "chat" && <LinkedRow items={linked} label={linkedLabel} onOpen={openLinked} />}
         {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
         {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
         {!dockActivity && (
@@ -1174,6 +1193,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             <>
             <VideoPlayers.Provider value={players}>
             <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
+            <OpenLinkedItem.Provider value={dockActivity ? openLinked : undefined}>
             <OpenTurnStep.Provider value={openTurnStep}>
             <MessageActionsContext.Provider value={c.archived ? null : messageActions}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
@@ -1221,6 +1241,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             </ol>
             </MessageActionsContext.Provider>
             </OpenTurnStep.Provider>
+            </OpenLinkedItem.Provider>
             </ReplyActions>
             </VideoPlayers.Provider>
             {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activePanel, closePanel, closeThread, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThread, openThreads, setDock, sheetHidden, switchPanel, threadOf } from "./chat-panels.ts";
+import { activePanel, closePanel, closeThread, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThread, openThreads, setDock, sheetHidden, switchPanel, threadOf, closeItem, itemOf, linkedItems, openItem } from "./chat-panels.ts";
 
 const D = "01a1bbdd-4937-7baa-af62-b3726025d331";
 const C = "01a1bbdd-4937-7baa-af62-b3726025d332";
@@ -147,4 +147,33 @@ test("dock: a thread opens the dock on its tab, keeps the panels, and closing it
   const closed = closeThread(next);
   assert.equal(threadOf(closed), undefined);
   assert.equal(dockTab(closed, openPanels(closed, [D])), "design");
+});
+
+const RUN = "11111111-1111-4111-8111-111111111111";
+const PAGE = "55555555-5555-4555-8555-555555555555";
+
+test("a linked item opens beside the chat in the dock, survives in the URL, and closes back to the other tabs", () => {
+  const q = openItem(new URLSearchParams("canvas=none"), { kind: "ticket", key: "WEB-42" });
+  assert.equal(q.get("item"), "ticket:WEB-42");
+  assert.deepEqual(itemOf(q), { kind: "ticket", key: "WEB-42" });
+  assert.equal(dockTab(q, []), "item");
+  assert.equal(dockOpen(q, []), true);
+  const closed = closeItem(q);
+  assert.equal(itemOf(closed), undefined);
+  assert.equal(dockTab(closed, []), "activity");
+  assert.deepEqual(itemOf(openItem(new URLSearchParams(), { kind: "run", id: RUN })), { kind: "run", id: RUN });
+});
+
+test("only well-formed items open", () => {
+  for (const bad of ["ticket:web-1", "run:nope", "page:", "canvas:" + RUN, "WEB-1"]) assert.equal(itemOf(new URLSearchParams({ item: bad })), undefined, bad);
+});
+
+test("a chat's linked items: its context tickets and pages, newest first, then its runs, each once", () => {
+  const refs = [{ kind: "ticket", key: "WEB-1" }, { kind: "page", id: PAGE }, { kind: "artifact", id: "a" }, { kind: "ticket", key: "WEB-1" }, { kind: "ticket", key: "WEB-2" }];
+  assert.deepEqual(linkedItems(refs, [{ run_id: RUN }, { run_id: RUN }]), [
+    { kind: "ticket", key: "WEB-2" },
+    { kind: "ticket", key: "WEB-1" },
+    { kind: "page", id: PAGE },
+    { kind: "run", id: RUN },
+  ]);
 });
