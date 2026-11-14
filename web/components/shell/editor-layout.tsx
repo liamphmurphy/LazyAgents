@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { cx } from "@/lib/cx";
 import {
+  actOnDock,
   dockReducer,
   readingFocusActive,
   subscribeReadingFocus,
@@ -19,6 +20,7 @@ import { useCompact } from "@/lib/viewport";
 import { isTyping } from "./shortcuts";
 import { HistoryNav } from "./history-nav";
 import { NavigatorPortal } from "./navigator-slot";
+import { CompanionPortal } from "./companion";
 
 /** A tab in the right dock. `busy` pulses its ring, `unread` adds a dot (Chat uses both for the persona). */
 export type DockTab = {
@@ -125,7 +127,7 @@ export function EditorLayout({
 
   const dispatch = useCallback(
     (a: DockAction) => {
-      setState((s) => dockReducer(s, a));
+      setState((s) => actOnDock(s, a));
       if (!compact) return;
       if (a.type === "open" || a.type === "select") setSheetOpen(true);
       else if (a.type === "collapse" || a.type === "toggleHidden") setSheetOpen(false);
@@ -200,8 +202,11 @@ export function EditorLayout({
           <Header {...header} backInColumn={!!left} />
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
         </div>
-        {/* An app's panels unmount while the dock is collapsed, as they always have. */}
-        {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open && !state.hidden ? panels : null} railOnly={compact} />}
+        {/* The dock is the companion: in the shell's right-hand column on wide screens, here on phones.
+            An app's panels unmount while the dock is collapsed, as they always have. */}
+        <CompanionPortal>
+          {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open && !state.hidden ? panels : null} railOnly={compact} />}
+        </CompanionPortal>
       </div>
       {compact && docked && (
         <Sheet open={sheetOpen} onOpenChange={(o) => (o ? setSheetOpen(true) : dispatch({ type: "collapse" }))} title={active?.label ?? ""} className="h-[85dvh]">

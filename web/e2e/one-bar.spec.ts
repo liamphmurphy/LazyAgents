@@ -65,3 +65,34 @@ test("an editor's dock continues the top bar: the chat's header is the dock's fi
   // The app doesn't name itself again in its own dock.
   await expect(row).not.toContainText("Slides /");
 });
+
+test("the companion is one panel beside every page: the work chat where a page has none, and it stays open or folded as you move", async ({ page }) => {
+  await installBoardApi(page);
+  const panel = page.getByRole("complementary", { name: "Panel", exact: true });
+  const rail = page.getByRole("navigation", { name: "Panel rail" });
+  // Settings has no panel of its own: the companion is the work chat, folded to its rail at first.
+  await page.goto("/settings");
+  await expect(rail).toBeVisible();
+  await rail.getByRole("button", { name: "Open Chat" }).click();
+  await expect(panel.getByTestId("work-chat")).toBeVisible();
+  // It stands where every page's panel stands: the window's right edge, the full height.
+  const box = (await panel.boundingBox())!;
+  expect(Math.round(box.x + box.width)).toBe(1400);
+  expect(box.y).toBe(0);
+  // Open here, open on the next page; a page with its own panel shows its tabs in the same place.
+  await page.goto("/tickets/WEB-1");
+  await expect(panel.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: "Properties" })).toBeVisible();
+  // Folded there, folded everywhere.
+  await panel.getByRole("button", { name: "Collapse panel" }).click();
+  await page.goto("/library");
+  await expect(rail).toBeVisible();
+  await expect(panel).toHaveCount(0);
+});
+
+test("the chat page has no work chat beside it: the conversation is the page", async ({ page }) => {
+  await installChatApi(page);
+  await page.goto("/chat?new");
+  await expect(page.getByRole("combobox", { name: "Message" })).toBeVisible();
+  await expect(page.getByTestId("work-chat")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Panel rail" }).getByRole("button", { name: "Open Chat" })).toHaveCount(0);
+});

@@ -28,6 +28,7 @@ import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, type 
 import { useNewConversation } from "./chat-history";
 import { CanvasButton } from "@/components/domain/canvas-view";
 import { ChatPanelHost } from "./chat-panel-host";
+import { useClaimCompanion } from "@/components/shell/companion";
 import { useCompact } from "@/lib/viewport";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { PlaygroundButton } from "@/components/domain/playground";
@@ -339,6 +340,9 @@ function Welcome({ disabled, onNew, arrived }: { disabled: boolean; onNew: () =>
  * conversation" starts afresh. Memory and Personas open as right-hand panels from the main menu.
  */
 export function ChatScreen({ id }: { id?: string }) {
+  // The conversation is the page here, and its own dock (canvases, activity, linked items) is the
+  // right-hand panel: no work chat beside it.
+  useClaimCompanion();
   const router = useRouter();
   const search = useSearchParams();
   const current = useChat(id);

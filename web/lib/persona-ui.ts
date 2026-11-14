@@ -256,26 +256,6 @@ export function sortPersonas<T extends PersonaLike>(personas: T[]): T[] {
   );
 }
 
-/** Avatars that fit the menu's persona strip, beside the All button; the default takes one. */
-export const STRIP_PERSONAS = 6;
-
-/**
- * Which non-default personas get an avatar in the strip and which go behind "+N":
- * most-used first, with a slot given up for the overflow button only when needed.
- * A persona picked from the overflow takes the last slot so the pick stays visible.
- */
-export function splitPersonaStrip<P extends { id: string; chat_count: number }>(others: P[], picked: string, slots = STRIP_PERSONAS - 1): { shown: P[]; overflow: P[] } {
-  const sorted = [...others].sort((a, b) => b.chat_count - a.chat_count);
-  if (sorted.length <= slots) return { shown: sorted, overflow: [] };
-  const shown = sorted.slice(0, slots - 1);
-  const overflow = sorted.slice(slots - 1);
-  const i = overflow.findIndex((p) => p.id === picked);
-  if (i < 0 || !shown.length) return { shown, overflow };
-  const [moved] = overflow.splice(i, 1);
-  const displaced = shown.pop()!;
-  return { shown: [...shown, moved], overflow: [displaced, ...overflow] };
-}
-
 /** The list after "Set as default": the old default cleared, the new one set (optimistic update). */
 export function withDefault<T extends PersonaLike>(personas: T[], id: string): T[] {
   return personas.map((p) => (p.is_default === (p.id === id) ? p : { ...p, is_default: p.id === id }));

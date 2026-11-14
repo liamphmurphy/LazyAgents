@@ -8,9 +8,14 @@ const ATLAS = persona(1, { name: "Atlas", tone: "friendly", color: "#4fd1c5", is
 const NOVA = persona(2, { name: "Nova", tone: "playful", color: "#f472b6" });
 
 const history = (page: Page) => page.getByRole("navigation", { name: "Chats" });
-const strip = (page: Page) => page.getByRole("group", { name: "Show conversations for" });
-const picked = (page: Page) => strip(page).getByRole("button", { pressed: true });
-const pick = (page: Page, name: string | RegExp) => strip(page).getByRole("button", { name }).click();
+// The Chats list's one persona filter: a chip naming who it shows, opening a menu of personas.
+const strip = (page: Page) => page.getByRole("button", { name: /^Show conversations for:/ });
+const picked = strip;
+const shows = (name: string) => `Show conversations for: ${name}`;
+async function pick(page: Page, name: string | RegExp) {
+  await strip(page).click();
+  await page.getByRole("menuitemradio", { name: typeof name === "string" ? new RegExp(`^${name}`) : name }).click();
+}
 const switcher = (page: Page) => page.getByRole("button", { name: /^Persona for this conversation:/ });
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const welcomeBox = (page: Page) => page.getByRole("combobox", { name: "Message" });
@@ -63,15 +68,19 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   // Once a message is sent the persona is fixed.
   await expect(switcher(page)).toHaveCount(0);
 
-  // The sidebar opens on the default persona: only its conversations.
-  await expect(picked(page)).toHaveAccessibleName("Atlas Prime (default)");
+  // The sidebar opens on every persona, each row showing who the chat is with.
+  await expect(picked(page)).toHaveAccessibleName(shows("All personas"));
+  await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
+  await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(1);
+  // The default persona: only its conversations, and a row no longer needs its persona's picture.
+  await pick(page, /^Atlas Prime/);
+  await expect(picked(page)).toHaveAccessibleName(shows("Atlas Prime"));
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toHaveCount(0);
-  // A row only needs its persona's picture when the list mixes personas.
   await expect(history(page).getByRole("link", { name: /hello atlas/ }).locator(":scope > [aria-hidden]")).toHaveCount(0);
 
   // Another persona, then every persona.
-  await pick(page, /Nova/);
+  await pick(page, /^Nova/);
   await expect(history(page).getByRole("link", { name: /hi nova/ })).toBeVisible();
   await expect(history(page).getByRole("link", { name: /hello atlas/ })).toHaveCount(0);
   // New chat follows the sidebar's persona.
@@ -90,10 +99,15 @@ test("persona sidebar filter, reply identity, live edits and new-conversation pe
   await expect(onCarousel(page)).toHaveAccessibleName("Nova");
   expect(mock.created).toHaveLength(2);
   expect(mock.chatPersonaFilters).toEqual(expect.arrayContaining(["", NOVA.id, "all"]));
+  // Filtered to one persona, the list ends with a way to start another chat with it.
+  await pick(page, /^Nova/);
+  await expect(history(page).getByRole("button", { name: "New chat with Nova" })).toBeVisible();
+  await pick(page, "All personas");
+  await expect(history(page).getByRole("button", { name: /^New chat with/ })).toHaveCount(0);
 
   // The pick lasts for the session.
   await page.goto(atlasChat);
-  await expect(picked(page)).toHaveAccessibleName("All personas");
+  await expect(picked(page)).toHaveAccessibleName(shows("All personas"));
   expect(mock.unhandled).toEqual([]);
 });
 
@@ -106,7 +120,7 @@ test("picking a persona in the sidebar opens its newest conversation", async ({ 
   const atlasChat = new URL(page.url()).pathname;
 
   // A persona with no conversations leaves the open one alone and offers to start one.
-  await pick(page, /Nova/);
+  await pick(page, /^Nova/);
   await expect(history(page).getByText("No conversations with Nova yet.")).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(atlasChat);
   await history(page).getByRole("button", { name: "Start one with Nova →" }).click();
@@ -117,9 +131,9 @@ test("picking a persona in the sidebar opens its newest conversation", async ({ 
   const novaChat = new URL(page.url()).pathname;
 
   // Switching personas follows to each one's newest conversation.
-  await pick(page, /Atlas/);
+  await pick(page, /^Atlas/);
   await expect(page).toHaveURL(new RegExp(atlasChat));
-  await pick(page, /Nova/);
+  await pick(page, /^Nova/);
   await expect(page).toHaveURL(new RegExp(novaChat));
 
   // All personas keeps the open conversation.
@@ -132,7 +146,8 @@ test("picking a persona in the sidebar opens its newest conversation", async ({ 
 test("without personas the built-in Assistant is the default and there's no switcher", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");
-  await expect(picked(page)).toHaveAccessibleName("Assistant (default)");
+  // With no personas there is no one to filter by: no chip.
+  await expect(strip(page)).toHaveCount(0);
   await newChat(page);
   await expect(page.getByRole("heading", { level: 1, name: "Assistant" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Next persona" })).toHaveCount(0);
@@ -152,7 +167,7 @@ test("personas sit in the Chats list only: the collapsed strip and app screens n
   await expect(strip(page)).toBeVisible();
   // A screen with a list of its own (Runs) puts it in the column instead, with no personas.
   await page.goto("/runs");
-  await expect(menu.getByRole("group", { name: "Show conversations for" })).toHaveCount(0);
+  await expect(strip(page)).toHaveCount(0);
   await expect(menu.getByRole("button", { name: /^(Atlas|Nova)/ })).toHaveCount(0);
   // Collapsed, the strip holds the same fixed items on every screen, and no personas either.
   await menu.getByRole("button", { name: "Collapse sidebar" }).click();
@@ -194,11 +209,10 @@ test("the left column keeps its width whatever the titles and persona filter", a
   const menu = page.getByRole("complementary", { name: "Main menu" });
   const width = async () => (await menu.boundingBox())!.width;
   expect(await width()).toBe(248);
-  await pick(page, "All personas");
-  await expect(picked(page)).toHaveAccessibleName("All personas");
+  await expect(picked(page)).toHaveAccessibleName(shows("All personas"));
   expect(await width()).toBe(248);
   await pick(page, /^Atlas/);
-  await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
+  await expect(picked(page)).toHaveAccessibleName(shows("Atlas"));
   expect(await width()).toBe(248);
 });
 

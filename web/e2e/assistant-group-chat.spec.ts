@@ -93,7 +93,8 @@ test("a group chat shows everyone in it in the history and lists under each of i
   await expect(row).toContainText("With Atlas, Nova");
 
   // Picking Nova, who joined, lists it too.
-  await history.getByRole("group", { name: "Show conversations for" }).getByRole("button", { name: "Nova" }).click();
+  await page.getByRole("button", { name: /^Show conversations for:/ }).click();
+  await page.getByRole("menuitemradio", { name: /^Nova/ }).click();
   await expect.poll(() => mock.chatPersonaFilters).toContain(NOVA.id);
   await expect(row.getByTestId("persona-stack")).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/chat/${id}`));

@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/primitives";
 import { LiveUpdates } from "./live-updates";
 import { ViewedChatReader } from "./viewed-chat-reader";
 import { CommandMenu } from "./command-menu";
+import { CompanionColumn } from "./companion";
 import { isTyping, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./sidebar";
 import { SystemBanner } from "./system-banner";
@@ -114,6 +115,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SectionFade>{children}</SectionFade>
         </Suspense>
       </main>
+      {/* The companion: the page's own dock, or the work chat, in one place beside every page. */}
+      {!compact && data && (
+        <Suspense fallback={null}>
+          <CompanionColumn />
+        </Suspense>
+      )}
       {compact && (
         <Suspense fallback={null}>
           <TabBar />

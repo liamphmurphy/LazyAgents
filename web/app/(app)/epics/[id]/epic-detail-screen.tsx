@@ -24,7 +24,9 @@ import { DocTypeTag, Pill } from "@/components/domain/labels";
 import { EpicCompletion } from "@/components/domain/epic-completion";
 import { DependencyMap } from "@/components/domain/dependency-map";
 import { ticketsHref } from "@/lib/tickets-layout";
-import { ContextButton, ContextPanel, ContextSection, useContextPanel } from "@/components/shell/context-panel";
+import { ContextSection } from "@/components/shell/context-panel";
+import { CompanionDock } from "@/components/shell/companion";
+import { WorkChat } from "@/components/domain/work-chat";
 
 type TicketSummary = Schemas["TicketSummary"];
 
@@ -38,7 +40,6 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
         { label: e.epic.name },
       ]
     : [{ label: "Epics", href: ticketsHref("epics") }];
-  const [contextOpen, setContextOpen] = useContextPanel(CONTEXT_KEY);
   return (
     <>
       <TopBar
@@ -46,7 +47,6 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
         actions={e && (
           <>
             <ButtonLink variant="outline" icon="board" href={boardHref(e)}>View on board</ButtonLink>
-            {!contextOpen && <ContextButton onOpen={() => setContextOpen(true)} />}
           </>
         )}
       />
@@ -71,14 +71,11 @@ export function EpicDetailScreen({ epicId }: { epicId: string }) {
         )}
       </Content>
       </div>
-      {e && contextOpen && <EpicContext epic={e} onClose={() => setContextOpen(false)} />}
+      {e && <EpicContext epic={e} />}
       </div>
     </>
   );
 }
-
-/** Open (the default) or closed, remembered per browser, like the run page's. */
-const CONTEXT_KEY = "lazyagents.epics.context";
 
 const boardHref = (e: EpicOverview) => ticketsHref("board", { project: e.project.key, epic: e.epic.id });
 
@@ -144,13 +141,13 @@ function EpicDetail({ epic: e }: { epic: EpicOverview }) {
 }
 
 /**
- * The epic's Context panel, the same one the run page has: acceptance
- * criteria with the done gate, then specs and details with the burn-up.
+ * The epic's companion, like the run page's: a Context tab with the acceptance criteria and the done
+ * gate, then specs and details with the burn-up; and the work chat.
  */
-function EpicContext({ epic: e, onClose }: { epic: EpicOverview; onClose: () => void }) {
+function EpicContext({ epic: e }: { epic: EpicOverview }) {
   const tickets = useTickets({ epic: e.epic.id, view: "all" });
-  return (
-    <ContextPanel onClose={onClose}>
+  const context = (
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <ContextSection title="Acceptance criteria" aside={`${e.epic.criteria_done}/${e.epic.criteria_total}`}>
         <Completion projectKey={e.project.key} epicId={e.epic.id} />
       </ContextSection>
@@ -166,7 +163,16 @@ function EpicContext({ epic: e, onClose }: { epic: EpicOverview; onClose: () => 
           <BurnUpChart data={burnUp(tickets.data, { start: e.start_date, today: ymd(new Date()) })} />
         )}
       </ContextSection>
-    </ContextPanel>
+    </div>
+  );
+  return (
+    <CompanionDock
+      app="epic"
+      tabs={[
+        { id: "context", label: "Context", icon: "sidebar", content: context },
+        { id: "chat", label: "Chat", icon: "msg", content: <WorkChat /> },
+      ]}
+    />
   );
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
-// The run page's Context panel (LAZYAGENTS-163), replacing the Details mode:
+// The run page's companion (LAZYAGENTS-163, DESIGN.md §3): its Context tab holds
 // the ticket and its epic's progress, acceptance criteria with live ticks, the
 // code (branch, diff stat, PR), the run's facts (every column the old list's
-// "More columns" had), and buttons to the Raw log, Graph and Files views.
+// "More columns" had), and buttons to the Raw log, Graph and Files views; its
+// Chat tab is the work chat with this run in view.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -14,7 +15,8 @@ import { absoluteTime, ago, compact, duration } from "@/lib/format";
 import { runnerSlot, runTitle } from "@/lib/run-list";
 import { PURPOSE_LABEL, type RunViewMode } from "@/lib/run-view";
 import { Button } from "@/components/ui/button";
-import { ContextPanel, ContextSection as Section, PanelTabs, useChatTab, useContextPanel } from "@/components/shell/context-panel";
+import { ContextSection as Section } from "@/components/shell/context-panel";
+import { CompanionDock } from "@/components/shell/companion";
 import { Icon } from "@/components/ui/icon";
 import { WorkChat } from "@/components/domain/work-chat";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
@@ -22,14 +24,6 @@ import { CostValue } from "./run-thread";
 import { LoadingLines } from "@/components/ui/loading";
 
 type RunDetail = Schemas["RunDetail"];
-
-/** Open (the default) or closed, remembered per browser. */
-const CONTEXT_KEY = "lazyagents.runs.context";
-
-export const useRunContextPanel = () => useContextPanel(CONTEXT_KEY);
-
-/** Which side of the panel shows: the run's facts, or the work chat with your persona. Remembered per browser. */
-const useRunPanelTab = () => useChatTab("lazyagents.runs.panel-tab");
 
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
@@ -118,7 +112,7 @@ function CodeSection({ branch, pr, runPr }: { branch?: string; pr?: Schemas["Pul
   );
 }
 
-export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: RunViewMode; setMode: (m: RunViewMode) => void; onClose: () => void }) {
+export function RunContext({ d, mode, setMode }: { d: RunDetail; mode: RunViewMode; setMode: (m: RunViewMode) => void }) {
   const run = d.run;
   const slot = runnerSlot(d.events);
   const lastLog = [...d.turns].reverse().find((t) => t.has_log);
@@ -127,16 +121,8 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
       {label}
     </Button>
   );
-  const [tab, setTab] = useRunPanelTab();
-  const header = <PanelTabs first="Context" chat={tab} onChat={setTab} />;
-  if (tab)
-    return (
-      <ContextPanel onClose={onClose} header={header} fill>
-        <WorkChat subject={{ kind: "run", id: run.id, title: runTitle(run), agent: run.agent.name, ticketKey: run.ticket_key ?? undefined }} />
-      </ContextPanel>
-    );
-  return (
-    <ContextPanel onClose={onClose} header={header}>
+  const facts = (
+    <div className="min-h-0 flex-1 overflow-y-auto">
       {run.purpose === "ticket" && run.ticket_key ? <TicketSection ticketKey={run.ticket_key} run={run} /> : <CodeSection branch={run.branch} runPr={{ number: run.pr_number, url: run.pr_url }} />}
       <Section title="Run">
         <dl className="flex flex-col gap-1">
@@ -164,8 +150,15 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
           {lastLog && <a href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} className="text-accent hover:underline">Download raw log</a>}
         </div>
       </Section>
-    </ContextPanel>
+    </div>
+  );
+  return (
+    <CompanionDock
+      app="run"
+      tabs={[
+        { id: "context", label: "Context", icon: "sidebar", content: facts },
+        { id: "chat", label: "Chat", icon: "msg", content: <WorkChat subject={{ kind: "run", id: run.id, title: runTitle(run), agent: run.agent.name, ticketKey: run.ticket_key ?? undefined }} /> },
+      ]}
+    />
   );
 }
-
-export { ContextButton } from "@/components/shell/context-panel";

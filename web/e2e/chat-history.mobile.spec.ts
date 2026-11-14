@@ -40,7 +40,8 @@ test("the drawer lists history and switching chats closes it", async ({ page }) 
   await expect(d).toBeVisible();
   await expect(d.getByRole("button", { name: "New chat" })).toBeVisible();
   await expect(d.getByRole("searchbox", { name: "Search chats" })).toBeVisible();
-  await expect(d.getByRole("group", { name: "Show conversations for" })).toBeVisible();
+  // No personas of your own here, so no persona filter (assistant-persona-view covers it).
+  await expect(d.getByRole("button", { name: /^Show conversations for:/ })).toHaveCount(0);
   // Row actions show without hover.
   await expect(d.getByRole("button", { name: "Rename first chat" })).toBeVisible();
 
@@ -63,9 +64,10 @@ test("the drawer traps focus, closes on Escape, scrim and swipe, and returns foc
   await expect(drawer(page)).toHaveCount(0);
   await expect(opener).toBeFocused();
 
-  // A tap on the scrim beside the drawer.
+  // A tap on the scrim beside the drawer, once it has opened (it takes focus when it has).
   await opener.click();
   await expect(drawer(page)).toBeVisible();
+  await expect.poll(() => drawer(page).evaluate((d) => d.contains(document.activeElement))).toBe(true);
   await page.mouse.click(370, 400);
   await expect(drawer(page)).toHaveCount(0);
   await expect(opener).toBeFocused();

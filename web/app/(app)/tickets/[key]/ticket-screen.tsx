@@ -31,7 +31,7 @@ import { ApprovalBanner, needsDispatch, RunCard } from "./run-parts";
 import { RunsHistory } from "./runs-history";
 import { ConflictBanner, useTicketSave, type SaveTicket, type TicketSaver } from "./ticket-save";
 import { Composer, Timeline } from "./timeline";
-import { PanelTabs, useChatTab } from "@/components/shell/context-panel";
+import { CompanionDock } from "@/components/shell/companion";
 import { WorkChat, WorkChatSheet } from "@/components/domain/work-chat";
 
 function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
@@ -313,7 +313,6 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const saver = useTicketSave(t);
-  const [chat, setChat] = useChatTab("lazyagents.tickets.panel-tab");
 
   // J/K step through the project's tickets; E opens the editor.
   useEffect(() => {
@@ -443,31 +442,36 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
               </section>
             </div>
           </article>
-          {chat ? (
-            // The work chat scrolls itself, so the panel holds the screen's height while the page scrolls beside it.
-            <aside aria-label="Properties" className="sticky top-0 flex h-[calc(100dvh-var(--tab-bar-h,0px))] flex-[1_1_300px] flex-col gap-3 self-start border-l border-border-subtle bg-panel px-2 pt-4 lg:max-w-[360px]">
-              <div className="px-2"><PanelTabs first="Properties" chat onChat={setChat} /></div>
-              <WorkChat subject={{ kind: "ticket", key: t.key, title: t.title }} />
-            </aside>
-          ) : (
-          <aside aria-label="Properties" className="flex flex-[1_1_300px] flex-col gap-6 border-l border-border-subtle bg-panel px-4 py-6 lg:max-w-[360px]">
-            <PanelTabs first="Properties" chat={false} onChat={setChat} />
-            {saver.conflict && (
-              <ConflictBanner what={saver.conflict.what} reloading={ticket.isFetching} onReapply={saver.reapply} onKeep={saver.keepLatest} />
-            )}
-            <Properties t={t} boot={boot.data} save={saver.save} error={saver.error} />
-            <Dependencies ticket={t} />
-            {t.run && hasLiveRun(t) && <RunCard t={t} run={t.run} />}
-            <RunsHistory t={t} />
-            <div id="code" className="scroll-mt-16">
-              <CodeSection t={t} />
-            </div>
-            <section className="flex flex-col gap-2 px-1">
-              <h2 className="text-13 text-fg-tertiary">Backlinks</h2>
-              <BacklinksPanel kind="ticket" id={t.id} compact />
-            </section>
-          </aside>
-          )}
+          {/* The ticket's companion: Properties and Chat, in the shell's right-hand column. */}
+          <CompanionDock
+            app="ticket"
+            tabs={[
+              {
+                id: "properties",
+                label: "Properties",
+                icon: "sliders",
+                content: (
+                  <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-5">
+                    {saver.conflict && (
+                      <ConflictBanner what={saver.conflict.what} reloading={ticket.isFetching} onReapply={saver.reapply} onKeep={saver.keepLatest} />
+                    )}
+                    <Properties t={t} boot={boot.data} save={saver.save} error={saver.error} />
+                    <Dependencies ticket={t} />
+                    {t.run && hasLiveRun(t) && <RunCard t={t} run={t.run} />}
+                    <RunsHistory t={t} />
+                    <div id="code" className="scroll-mt-16">
+                      <CodeSection t={t} />
+                    </div>
+                    <section className="flex flex-col gap-2 px-1">
+                      <h2 className="text-13 text-fg-tertiary">Backlinks</h2>
+                      <BacklinksPanel kind="ticket" id={t.id} compact />
+                    </section>
+                  </div>
+                ),
+              },
+              { id: "chat", label: "Chat", icon: "msg", content: <WorkChat subject={{ kind: "ticket", key: t.key, title: t.title }} /> },
+            ]}
+          />
         </div>
       )}
       {editing && t && boot.data && (
