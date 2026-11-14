@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   GROUP_ORDER,
+  KIND_JUMPS,
   appMatches,
   groupOf,
   linkFromTarget,
@@ -156,6 +157,14 @@ test("a typed app name finds the app; app or apps lists them all", () => {
   assert.deepEqual(appMatches(apps, "s"), [{ label: "Slides" }]);
   assert.deepEqual(appMatches(apps, "deploy"), []);
   assert.deepEqual(appMatches(apps, ""), []);
+});
+
+test("Slides, Designs and Docs still find their start pages in Knowledge, by either name", () => {
+  const href = (q) => appMatches(KIND_JUMPS, q).map((a) => a.href);
+  assert.deepEqual(href("slides"), ["/knowledge?kind=deck"]);
+  assert.deepEqual(href("decks"), ["/knowledge?kind=deck"]);
+  assert.deepEqual(href("open designs"), ["/knowledge?kind=design"]);
+  assert.deepEqual(href("docs"), ["/knowledge?kind=document"]);
 });
 
 test("is:app filters to the Apps group", () => {

@@ -156,7 +156,15 @@ test("an app's name jumps to the app, and apps lists them all", async ({ page })
   await openPalette(page);
   await input(page).fill("apps");
   await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Knowledge/]);
-  await expect(results(page).getByRole("group", { name: "Apps" }).getByRole("option")).toHaveText([/Finance/, /Library/, /Workflows/, /Scheduled/, /Learn/, /Reports/]);
+  await expect(results(page).getByRole("group", { name: "Apps" }).getByRole("option")).toHaveText([/Finance/, /Library/, /Documents/, /Slides/, /Designs/, /Workflows/, /Scheduled/, /Learn/, /Reports/]);
+
+  // Slides and Designs left the Apps menu for Knowledge (LAZYAGENTS-212); their names find their start pages there.
+  await input(page).fill("slides");
+  await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Slides.*in Knowledge/]);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/knowledge\?kind=deck$/);
+  await page.goto("/board?project=WEB");
+  await openPalette(page);
 
   await input(page).fill("finance");
   await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Finance.*app/]);
