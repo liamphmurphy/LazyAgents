@@ -10,6 +10,8 @@ import { cx } from "@/lib/cx";
 import { defaultLabel, parseWikiLinks } from "@/lib/wikilinks";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
+import { KnowledgeCompletion } from "@/lib/knowledge-completion";
+import { api, unwrap } from "@/lib/api/client";
 import { fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
@@ -129,6 +131,13 @@ function Loaded({ page: p }: { page: Page }) {
             const hit = t.rows.find((r) => r.title.toLowerCase() === target.toLowerCase() || r.path.toLowerCase() === target.toLowerCase()) ?? t.rows[0];
             if (hit) router.push(pageHref(hit.id, hit.title));
           });
+        },
+      }),
+      KnowledgeCompletion.configure({
+        search: async (q, signal) => {
+          const result = await unwrap(api.GET("/knowledge/suggest", { params: { query: { q, include_agent: true } }, signal }));
+          return result.targets.filter((t) => t.kind === "artifact" && t.artifact_type === "note" && t.path && t.id)
+            .map((t) => ({ id: t.id!, title: t.title, path: t.path! }));
         },
       }),
     ],
