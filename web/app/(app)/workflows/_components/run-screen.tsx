@@ -32,16 +32,16 @@ function RunView({ run }: { run: WorkflowRun }) {
         crumbs={[{ label: "Workflows", href: "/workflows" }, { label: run.name }]}
         actions={
           <>
-            <span className="font-mono text-xs text-fg-tertiary">v{run.version}</span>
+            <span className="font-mono text-12 text-fg-tertiary">v{run.version}</span>
             <RunStatePill state={run.state} />
             {runActive(run.state) && <Button disabled={stop.isPending} onClick={() => stop.mutate()}>Stop</Button>}
-            <Link className="text-[13px] text-accent hover:underline" href={`/chat/${run.chat_id}`}>Open chat</Link>
+            <Link className="text-13 text-accent hover:underline" href={`/chat/${run.chat_id}`}>Open chat</Link>
           </>
         }
       />
       <Content wide>
         <div className="flex flex-col gap-4">
-          <p className="whitespace-pre-wrap text-[13px] text-fg-2">{run.input}</p>
+          <p className="whitespace-pre-wrap text-13 text-fg-2">{run.input}</p>
           {run.error && <Banner tone="blocked" title={run.error} />}
           <div className="h-[320px] rounded-xl border border-border">
             <ReactFlow
@@ -64,29 +64,29 @@ function RunView({ run }: { run: WorkflowRun }) {
             <section className="rounded-xl border border-border bg-surface p-3.5" data-testid="workflow-step-detail">
               <div className="mb-2 flex items-baseline gap-2">
                 <h2 className="type-heading">{node.title}</h2>
-                {step && <span className="font-mono text-xs text-fg-tertiary">attempt {step.attempt} · {step.check_result || step.state}</span>}
-                {step?.agent_run_id && <Link className="text-[12.5px] text-accent hover:underline" href={`/runs/${step.agent_run_id}`}>Open run</Link>}
+                {step && <span className="font-mono text-12 text-fg-tertiary">attempt {step.attempt} · {step.check_result || step.state}</span>}
+                {step?.agent_run_id && <Link className="text-13 text-accent hover:underline" href={`/runs/${step.agent_run_id}`}>Open run</Link>}
               </div>
-              {step?.note && <p className="mb-2 text-[12.5px] text-fg-secondary">{step.note}</p>}
+              {step?.note && <p className="mb-2 text-13 text-fg-secondary">{step.note}</p>}
               {checks.length > 0 && (
                 <div className="mb-3 flex flex-col gap-1" data-testid="workflow-check-attempts">
                   {checks.map((c) => (
                     <details key={c.attempt} className="rounded-lg border border-border-subtle bg-surface-sunken p-2">
-                      <summary className="cursor-pointer font-mono text-[11px] text-fg-secondary">Attempt {c.attempt} · {c.result}</summary>
-                      {c.note && <p className="mt-1 text-[12.5px] text-fg-secondary">{c.note}</p>}
-                      {c.output && <div className="mt-2 text-[13px]"><Markdown>{c.output}</Markdown></div>}
+                      <summary className="cursor-pointer font-mono text-11 text-fg-secondary">Attempt {c.attempt} · {c.result}</summary>
+                      {c.note && <p className="mt-1 text-13 text-fg-secondary">{c.note}</p>}
+                      {c.output && <div className="mt-2 text-13"><Markdown>{c.output}</Markdown></div>}
                     </details>
                   ))}
                 </div>
               )}
               {attempts.map((a) => (
                 <div key={a.attempt} className="mb-3" data-testid={`workflow-attempt-${a.attempt}`}>
-                  <p className="mb-1 font-mono text-[11px] text-fg-tertiary">Attempt {a.attempt}</p>
+                  <p className="mb-1 font-mono text-11 text-fg-tertiary">Attempt {a.attempt}</p>
                   <WorkflowImages runId={run.id} images={a.images} />
                 </div>
               ))}
               {carried.length > 0 && <div className="mb-3"><WorkflowImages runId={run.id} images={carried} /></div>}
-              {step?.output ? <div className="text-[13px]"><Markdown>{step.output}</Markdown></div> : <p className="text-[13px] text-fg-tertiary">No output yet.</p>}
+              {step?.output ? <div className="text-13"><Markdown>{step.output}</Markdown></div> : <p className="text-13 text-fg-tertiary">No output yet.</p>}
             </section>
           )}
         </div>

@@ -82,7 +82,7 @@ export function LocalGraph({ kind, id }: { kind: NodeKind; id: string | undefine
   const router = useRouter();
   const { data } = useGraph(kind, id, 2);
   if (!data) return <Skeleton className="h-[200px] w-full" />;
-  if (data.nodes.length <= 1) return <p className="text-xs text-fg-tertiary">No links yet. Linked pages, documents and tickets appear here.</p>;
+  if (data.nodes.length <= 1) return <p className="text-12 text-fg-tertiary">No links yet. Linked pages, documents and tickets appear here.</p>;
   const placed = layout(data, W, H);
   const at = new Map(placed.map((p) => [p.key, p]));
   const n1 = placed.filter((p) => p.hop === 1).length;

@@ -68,16 +68,16 @@ function VersionMenu({ label, versions, value, currentId, onChange }: {
   if (!v) return null;
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-fg-tertiary">{label}</span>
+      <span className="text-12 text-fg-tertiary">{label}</span>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
             aria-label={`${label}: ${v.label}`}
-            className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] hover:bg-hover"
+            className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-13 hover:bg-hover"
           >
             <span className="font-mono font-semibold">{v.label}</span>
-            {v.id === currentId && <span className="text-xs text-fg-secondary">current</span>}
+            {v.id === currentId && <span className="text-12 text-fg-secondary">current</span>}
             {v.review && <ReviewChip state={v.review.state} />}
             <Icon name="chev" size={14} />
           </button>
@@ -86,10 +86,10 @@ function VersionMenu({ label, versions, value, currentId, onChange }: {
           <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-72")}>
             {versions.map((x) => (
               <DropdownMenu.Item key={x.id} className={menuItem} onSelect={() => onChange(x.id)}>
-                <span className="w-7 font-mono text-xs font-semibold">{x.label}</span>
+                <span className="w-7 font-mono text-12 font-semibold">{x.label}</span>
                 {x.review && <ReviewChip state={x.review.state} />}
-                {x.id === currentId && <span className="text-[11px] text-pill-done-fg">current</span>}
-                <span className="ml-auto text-xs text-fg-tertiary">{timelineTime(x.created_at)}</span>
+                {x.id === currentId && <span className="text-11 text-pill-done-fg">current</span>}
+                <span className="ml-auto text-12 text-fg-tertiary">{timelineTime(x.created_at)}</span>
                 <span className="w-4 text-accent">{x.id === value && <Icon name="check" size={14} />}</span>
               </DropdownMenu.Item>
             ))}
@@ -102,7 +102,7 @@ function VersionMenu({ label, versions, value, currentId, onChange }: {
 
 function VersionChip({ v, isCurrent }: { v: Version; isCurrent: boolean }) {
   return (
-    <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-[11.5px] shadow-sm">
+    <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-12 shadow-sm">
       <span className="font-mono font-semibold">{v.label}</span>
       {isCurrent && <span className="text-fg-secondary">current</span>}
       {v.review && <span className="text-fg-secondary">· {reviewLabel(v.review.state)}</span>}
@@ -115,14 +115,14 @@ function ToolButton({ on, kbd, children, className, ...rest }: { on?: boolean; k
     <button
       type="button"
       className={cx(
-        "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40",
+        "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-13 text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40",
         on && "bg-accent-soft text-accent",
         className,
       )}
       {...rest}
     >
       {children}
-      {kbd && <Kbd className="text-[10px]">{kbd}</Kbd>}
+      {kbd && <Kbd className="text-10">{kbd}</Kbd>}
     </button>
   );
 }
@@ -135,13 +135,13 @@ function Toolbar({ scale, cam, onZoom, onFit, onActual, tool, onTool, canPin, sh
 }) {
   return (
     <div role="toolbar" aria-label="Canvas tools" className="pointer-events-auto flex items-center rounded-[10px] border border-border bg-surface p-1 shadow-[var(--shadow-float)]">
-      <ToolButton aria-label="Zoom out" title="Zoom out (−)" className="px-2 text-base" onClick={() => onZoom(1 / ZOOM_STEP)}>
+      <ToolButton aria-label="Zoom out" title="Zoom out (−)" className="px-2 text-16" onClick={() => onZoom(1 / ZOOM_STEP)}>
         −
       </ToolButton>
-      <output aria-label="Zoom level" className="w-12 text-center font-mono text-xs">
+      <output aria-label="Zoom level" className="w-12 text-center font-mono text-12">
         {Math.round(scale * 100)}%
       </output>
-      <ToolButton aria-label="Zoom in" title="Zoom in (+)" className="px-2 text-base" onClick={() => onZoom(ZOOM_STEP)}>
+      <ToolButton aria-label="Zoom in" title="Zoom in (+)" className="px-2 text-16" onClick={() => onZoom(ZOOM_STEP)}>
         +
       </ToolButton>
       <Divider />
@@ -399,7 +399,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
         <div className="flex min-w-0 items-center gap-2">
           {ticketKey && (
             <>
-              <Link href={`/tickets/${ticketKey}`} className="font-mono text-[12.5px] text-fg-tertiary hover:text-fg">
+              <Link href={`/tickets/${ticketKey}`} className="font-mono text-13 text-fg-tertiary hover:text-fg">
                 {ticketKey}
               </Link>
               <span aria-hidden="true" className="text-fg-tertiary">
@@ -407,7 +407,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
               </span>
             </>
           )}
-          <h1 id={titleId} className="truncate text-sm font-semibold">
+          <h1 id={titleId} className="truncate text-14 font-semibold">
             {artifactTitle(a)}
           </h1>
           <DocTypeTag type="mockup" />
@@ -450,8 +450,8 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
           </div>
           {shown === "swipe" && compare && (
             <>
-              <span className="pointer-events-none absolute bottom-24 left-4 rounded-full bg-fg/85 px-2.5 py-0.5 font-mono text-[11.5px] font-semibold text-bg">{compare.label}</span>
-              <span className="pointer-events-none absolute bottom-24 right-4 rounded-full bg-fg/85 px-2.5 py-0.5 font-mono text-[11.5px] font-semibold text-bg">{primary.label}</span>
+              <span className="pointer-events-none absolute bottom-24 left-4 rounded-full bg-fg/85 px-2.5 py-0.5 font-mono text-12 font-semibold text-bg">{compare.label}</span>
+              <span className="pointer-events-none absolute bottom-24 right-4 rounded-full bg-fg/85 px-2.5 py-0.5 font-mono text-12 font-semibold text-bg">{primary.label}</span>
             </>
           )}
           <div className="pointer-events-none absolute inset-x-0 bottom-9 flex justify-center">
@@ -468,7 +468,7 @@ function Workspace({ a, initialVersion, initialTicket }: { a: Artifact; initialV
               onShowPins={() => setShowPins((s) => !s)}
             />
           </div>
-          <p id={hintId} className="pointer-events-none absolute inset-x-4 bottom-2.5 truncate text-center text-[11px] text-fg-tertiary">
+          <p id={hintId} className="pointer-events-none absolute inset-x-4 bottom-2.5 truncate text-center text-11 text-fg-tertiary">
             {shown === "side"
               ? "Both panes share zoom and pan · pins go on the current version · "
               : shown === "swipe"

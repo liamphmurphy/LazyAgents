@@ -20,7 +20,7 @@ function Section({ title, aside, children, className }: { title: string; aside?:
     <section aria-label={title} className={cx("flex flex-col gap-2 border-b border-border-subtle px-5 py-4", className)}>
       <div className="flex items-center gap-2">
         <h2 className="type-micro uppercase text-fg-tertiary">{title}</h2>
-        {aside && <span className="ml-auto text-[11.5px] text-fg-tertiary">{aside}</span>}
+        {aside && <span className="ml-auto text-12 text-fg-tertiary">{aside}</span>}
       </div>
       {children}
     </section>
@@ -29,7 +29,7 @@ function Section({ title, aside, children, className }: { title: string; aside?:
 
 function PinBadge({ n, tone }: { n: number; tone: "draft" | "saved" }) {
   return (
-    <span className={cx("grid size-5 flex-none place-items-center rounded-full text-[11px] font-bold", tone === "draft" ? "bg-accent text-on-accent" : "bg-fg-secondary text-surface")}>
+    <span className={cx("grid size-5 flex-none place-items-center rounded-full text-11 font-bold", tone === "draft" ? "bg-accent text-on-accent" : "bg-fg-secondary text-surface")}>
       {n}
     </span>
   );
@@ -42,7 +42,7 @@ function Criteria({ ticketKey, keys, onTicket }: { ticketKey: string | null; key
   if (!ticketKey) {
     return (
       <Section title="Acceptance criteria">
-        <p className="text-xs text-fg-tertiary">This mockup isn&apos;t attached to a ticket, so there are no criteria to check it against.</p>
+        <p className="text-12 text-fg-tertiary">This mockup isn&apos;t attached to a ticket, so there are no criteria to check it against.</p>
       </Section>
     );
   }
@@ -52,7 +52,7 @@ function Criteria({ ticketKey, keys, onTicket }: { ticketKey: string | null; key
       title="Acceptance criteria"
       aside={
         keys.length > 1 ? (
-          <select aria-label="Ticket" value={ticketKey} onChange={(e) => onTicket(e.target.value)} className="rounded-sm border border-border bg-surface px-1 font-mono text-[11.5px] text-fg-secondary">
+          <select aria-label="Ticket" value={ticketKey} onChange={(e) => onTicket(e.target.value)} className="rounded-sm border border-border bg-surface px-1 font-mono text-12 text-fg-secondary">
             {keys.map((k) => (
               <option key={k} value={k}>
                 {k}
@@ -67,15 +67,15 @@ function Criteria({ ticketKey, keys, onTicket }: { ticketKey: string | null; key
       }
     >
       {ticket.isLoading ? (
-        <p className="text-xs text-fg-tertiary">Loading criteria…</p>
+        <p className="text-12 text-fg-tertiary">Loading criteria…</p>
       ) : ticket.isError ? (
-        <p role="alert" className="text-xs text-pill-blocked-fg">Couldn&apos;t load {ticketKey}.</p>
+        <p role="alert" className="text-12 text-pill-blocked-fg">Couldn&apos;t load {ticketKey}.</p>
       ) : criteria.length ? (
         <>
           <ul className="flex flex-col gap-1.5">
             {criteria.map((c) => (
               <li key={c.id}>
-                <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px] leading-snug">
+                <label className="flex cursor-pointer items-start gap-2.5 text-13 leading-snug">
                   <input
                     type="checkbox"
                     checked={!!ticked[c.id]}
@@ -87,10 +87,10 @@ function Criteria({ ticketKey, keys, onTicket }: { ticketKey: string | null; key
               </li>
             ))}
           </ul>
-          <p className="text-[11px] text-fg-tertiary">Ticks are your checklist for this review; they aren&apos;t saved.</p>
+          <p className="text-11 text-fg-tertiary">Ticks are your checklist for this review; they aren&apos;t saved.</p>
         </>
       ) : (
-        <p className="text-xs text-fg-tertiary">{ticketKey} has no acceptance criteria.</p>
+        <p className="text-12 text-fg-tertiary">{ticketKey} has no acceptance criteria.</p>
       )}
     </Section>
   );
@@ -145,22 +145,22 @@ export function ReviewPanel({
     <aside aria-label="Review" className="flex w-[360px] flex-none flex-col overflow-y-auto border-l border-border bg-surface max-lg:w-[300px]">
       <Section title="Reviewing">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-base font-semibold">{version.label}</span>
+          <span className="font-mono text-16 font-semibold">{version.label}</span>
           <ReviewChip state={state} />
-          {version.id === a.current_version.id && <span className="text-[11.5px] text-pill-done-fg">current</span>}
+          {version.id === a.current_version.id && <span className="text-12 text-pill-done-fg">current</span>}
         </div>
-        <p className="text-xs text-fg-secondary">
+        <p className="text-12 text-fg-secondary">
           {version.created_by.name} · <time dateTime={version.created_at} title={absoluteTime(version.created_at)}>{timelineTime(version.created_at)}</time>
           {version.note && <> · “{version.note}”</>}
         </p>
         {review?.reviewed_by && (
-          <p className="flex items-center gap-1.5 text-xs text-fg-secondary">
+          <p className="flex items-center gap-1.5 text-12 text-fg-secondary">
             <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} src={review.reviewed_by.avatar_url} size={16} label={false} />
             {review.reviewed_by.name}
             {review.reviewed_at && <time dateTime={review.reviewed_at} title={absoluteTime(review.reviewed_at)} className="text-fg-tertiary">· {timelineTime(review.reviewed_at)}</time>}
           </p>
         )}
-        {review && review.state !== "pending" && review.note && <p className="whitespace-pre-line text-[12.5px] text-fg-2">{review.note}</p>}
+        {review && review.state !== "pending" && review.note && <p className="whitespace-pre-line text-13 text-fg-2">{review.note}</p>}
       </Section>
 
       <Criteria key={ticketKey} ticketKey={ticketKey} keys={ticketKeys} onTicket={onTicket} />
@@ -176,7 +176,7 @@ export function ReviewPanel({
                 className={cx("-mx-1.5 flex items-start gap-2 rounded-md px-1.5 py-1", activePin === i && "bg-hover")}
               >
                 <PinBadge n={i + 1} tone={tone} />
-                <span className="min-w-0 flex-1 whitespace-pre-line break-words text-[12.5px] leading-5">{p.text}</span>
+                <span className="min-w-0 flex-1 whitespace-pre-line break-words text-13 leading-5">{p.text}</span>
                 {removable && (
                   <button
                     type="button"
@@ -194,10 +194,10 @@ export function ReviewPanel({
             ))}
           </ol>
         ) : (
-          <p className="text-xs text-fg-tertiary">{editable ? "No pins yet." : `No pins on ${version.label}.`}</p>
+          <p className="text-12 text-fg-tertiary">{editable ? "No pins yet." : `No pins on ${version.label}.`}</p>
         )}
         {editable && (
-          <p className="text-[11px] text-fg-tertiary">
+          <p className="text-11 text-fg-tertiary">
             {savedPins ? "Saved with the last decision. Pins you add start a new list for your next decision. " : ""}
             Press C or choose Pin, then click the mockup. Pins are added to the note as a numbered list.
           </p>
@@ -214,9 +214,9 @@ export function ReviewPanel({
             value={note}
             onChange={(e) => onNote(e.target.value)}
             placeholder="Overall feedback for the agent…"
-            className="text-[13px]"
+            className="text-13"
           />
-          <p className="text-[11px] text-fg-tertiary">Sent with the decision; pins follow as “1. … 2. …”.</p>
+          <p className="text-11 text-fg-tertiary">Sent with the decision; pins follow as “1. … 2. …”.</p>
           <div className="mt-1 flex gap-2">
             <Button variant="approve-outline" className="h-9 flex-1 justify-center" disabled={!note.trim() || deciding} onClick={() => onDecide("changes_requested")}>
               Request changes
@@ -225,19 +225,19 @@ export function ReviewPanel({
               Approve {version.label}
             </Button>
           </div>
-          <p className="text-[11px] text-fg-tertiary">Request changes needs a note. Agents waiting on this mockup resume with your decision; the ticket&apos;s gate updates.</p>
+          <p className="text-11 text-fg-tertiary">Request changes needs a note. Agents waiting on this mockup resume with your decision; the ticket&apos;s gate updates.</p>
           {error && (
-            <p role="alert" className="text-xs text-pill-blocked-fg">
+            <p role="alert" className="text-12 text-pill-blocked-fg">
               {error}
             </p>
           )}
-          <p role="status" className="text-xs text-pill-done-fg empty:hidden">
+          <p role="status" className="text-12 text-pill-done-fg empty:hidden">
             {saved === "approved" ? `Approved ${version.label}.` : saved === "changes_requested" ? `Changes requested on ${version.label}.` : ""}
           </p>
         </Section>
       ) : (
         <Section title="Decision">
-          <p className="text-xs text-fg-tertiary">Only the current version can be reviewed.</p>
+          <p className="text-12 text-fg-tertiary">Only the current version can be reviewed.</p>
           <Button variant="outline" className="self-start" onClick={() => onPickVersion(a.current_version.id)}>
             Review {a.current_version.label}
           </Button>
@@ -252,9 +252,9 @@ export function ReviewPanel({
                 <button
                   type="button"
                   onClick={() => onPickVersion(v.id)}
-                  className="-mx-1.5 flex w-[calc(100%+12px)] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-hover"
+                  className="-mx-1.5 flex w-[calc(100%+12px)] items-center gap-2 rounded-md px-1.5 py-1 text-left text-12 hover:bg-hover"
                 >
-                  <span className="font-mono text-[12px] font-semibold">{v.label}</span>
+                  <span className="font-mono text-12 font-semibold">{v.label}</span>
                   {v.review && <ReviewChip state={v.review.state} />}
                   {v.review && v.review.state !== "pending" && (
                     <span className="text-fg-secondary">{v.review.pins.length ? `${v.review.pins.length} pin${v.review.pins.length === 1 ? "" : "s"}` : v.review.note ? "note only" : ""}</span>

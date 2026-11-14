@@ -6,7 +6,7 @@ import { cx } from "@/lib/cx";
 import { floatPanel } from "@/components/domain/pickers";
 import { Icon } from "@/components/ui/icon";
 
-const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover";
+const item = "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 text-13 outline-none data-[highlighted]:bg-hover";
 
 /**
  * The chat's default project: where new tickets and epics go unless the persona names another.
@@ -59,7 +59,7 @@ export function ChatProjectPicker({ chat, disabled, dashed }: { chat: ProjectCha
           aria-label={current ? `Default project: ${current.name}` : "Set a default project"}
           title={update.isError ? "Couldn’t change the project. Try again." : current ? "New tickets go here unless you say otherwise" : "Pick where new tickets go. The chat reads every project either way."}
           className={cx(
-            "flex min-w-0 flex-none items-center gap-1.5 rounded-full border text-xs text-fg-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60",
+            "flex min-w-0 flex-none items-center gap-1.5 rounded-full border text-12 text-fg-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60",
             dashed ? "h-[26px] px-3" : "border-border bg-surface px-2.5 py-0.5",
             dashed && (current ? "border-border-strong bg-surface-raised" : "border-dashed border-border-strong text-fg-tertiary"),
             update.isError && "border-pill-blocked-fg",

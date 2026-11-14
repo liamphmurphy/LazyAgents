@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { cx } from "@/lib/cx";
 import { sparkPath } from "@/lib/finance";
 
@@ -61,34 +61,3 @@ export function Sparkline({ values, color, className }: { values: number[]; colo
   );
 }
 
-export type ToastMessage = { id: number; text: React.ReactNode; tone?: "error" };
-
-/** One message at a time along the bottom, for what a click just did. */
-export function useToast() {
-  const [toast, setToast] = useState<ToastMessage | null>(null);
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast((cur) => (cur?.id === toast.id ? null : cur)), 3600);
-    return () => window.clearTimeout(t);
-  }, [toast]);
-  const show = (text: React.ReactNode, tone?: "error") => setToast({ id: Date.now(), text, tone });
-  return { toast, show };
-}
-
-export function Toast({ toast }: { toast: ToastMessage | null }) {
-  return (
-    <div aria-live="polite" className="pointer-events-none fixed bottom-5 left-1/2 z-50">
-      {toast && (
-        <div
-          key={toast.id}
-          className={cx(
-            "fin-toast -translate-x-1/2 whitespace-nowrap rounded-lg border bg-surface-raised px-3.5 py-2 text-[12.5px] shadow-[var(--shadow-float)]",
-            toast.tone === "error" ? "border-pill-blocked-fg/40 text-pill-blocked-fg" : "border-border-strong text-fg-2",
-          )}
-        >
-          {toast.text}
-        </div>
-      )}
-    </div>
-  );
-}

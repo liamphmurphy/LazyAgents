@@ -35,13 +35,16 @@ import { Fridge } from "./fridge";
 import { Links } from "./links";
 import { ProjectDocs } from "./_components/project-docs";
 import { LibrarySourceSwitch } from "./_components/source-switch";
+import { confirmAction } from "@/components/ui/confirm";
+import { Spinner } from "@/components/ui/loading";
+import { PageHeader } from "@/components/ui/page-header";
 
 /** Where an item came from: its persona and chat, while they still exist, or the person's own upload. */
 function Source({ item }: { item: LibraryItem }) {
-  if (item.source === "upload") return <span className="min-w-0 truncate text-xs text-fg-tertiary">Uploaded by you</span>;
+  if (item.source === "upload") return <span className="min-w-0 truncate text-12 text-fg-tertiary">Uploaded by you</span>;
   const chat = item.chat_id ? `/chat/${item.chat_id}` : undefined;
   return (
-    <span className="min-w-0 truncate text-xs text-fg-tertiary">
+    <span className="min-w-0 truncate text-12 text-fg-tertiary">
       {item.persona_name ?? "Assistant"}
       {" · "}
       {chat ? (
@@ -68,7 +71,7 @@ function ReferenceActions({ item }: { item: LibraryItem }) {
   const error = set.error ?? clear.error;
   return (
     <>
-      {error && <span className="text-xs text-pill-blocked-fg">{error.message}</span>}
+      {error && <span className="text-12 text-pill-blocked-fg">{error.message}</span>}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button variant="secondary" icon="users" disabled={busy}>
@@ -106,7 +109,7 @@ function ReferenceBadge({ item }: { item: LibraryItem }) {
     <span
       data-testid="library-reference"
       title={`New images keep this likeness of ${who === "You" ? "you" : who}`}
-      className="absolute left-2 top-2 max-w-[calc(100%-16px)] truncate rounded-md bg-surface-raised px-1.5 py-0.5 text-[11px] text-fg shadow-[var(--shadow-float)]"
+      className="absolute left-2 top-2 max-w-[calc(100%-16px)] truncate rounded-md bg-surface-raised px-1.5 py-0.5 text-11 text-fg shadow-[var(--shadow-float)]"
     >
       {who} · reference
     </span>
@@ -128,8 +131,8 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
         >
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-col">
-              <Dialog.Title className="truncate text-[13px] text-fg">{item.title}</Dialog.Title>
-              <span className="truncate text-xs text-fg-tertiary">
+              <Dialog.Title className="truncate text-13 text-fg">{item.title}</Dialog.Title>
+              <span className="truncate text-12 text-fg-tertiary">
                 {item.filename} · {formatBytes(item.size_bytes)}
                 {item.duration_ms ? ` · ${clock(item.duration_ms)}` : ""} · {timelineTime(item.created_at)}
                 {referenceCaption(item) && ` · ${referenceCaption(item)}`}
@@ -139,7 +142,7 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
             <a
               href={libraryItemUrl(item.id, true)}
               download={item.filename}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-xs text-fg hover:bg-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-2.5 text-12 text-fg hover:bg-hover"
             >
               <Icon name="download" size={14} />
               Download
@@ -148,12 +151,9 @@ function ItemDialog({ item, open, onOpenChange, trigger, extra, children }: { it
               variant="ghost"
               icon="trash"
               disabled={del.isPending}
-              onClick={() => {
-                const msg =
-                  item.source === "upload"
-                    ? `Remove this ${noun} from your Library?`
-                    : `Remove this ${noun} from your Library? It stays in its chat while that chat exists.`;
-                if (window.confirm(msg)) del.mutate(item.id);
+              onClick={async () => {
+                const body = item.source === "upload" ? undefined : "It stays in its chat while that chat exists.";
+                if (await confirmAction({ title: `Remove this ${noun} from your Library?`, body, confirmLabel: "Remove" })) del.mutate(item.id);
               }}
             >
               Remove
@@ -187,7 +187,7 @@ function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
         item={item}
         open={open}
         onOpenChange={setOpen}
-        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-12 text-accent hover:underline">Open chat</Link>}
         trigger={
           <button
             type="button"
@@ -206,14 +206,14 @@ function VideoTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
             ) : (
               <span className="grid size-full place-items-center text-fg-tertiary"><Icon name="film" size={22} /></span>
             )}
-            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px text-[10px] text-[#fff]"><Icon name="play" size={8} />Video</span>
-            {item.duration_ms ? <span className="absolute bottom-1.5 right-1.5 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px font-mono text-[11px] text-[#fff]">{clock(item.duration_ms)}</span> : null}
+            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px text-10 text-[#fff]"><Icon name="play" size={8} />Video</span>
+            {item.duration_ms ? <span className="absolute bottom-1.5 right-1.5 rounded bg-[rgb(0_0_0/0.7)] px-1.5 py-px font-mono text-11 text-[#fff]">{clock(item.duration_ms)}</span> : null}
           </button>
         }
       >
         <video src={url} poster={poster} controls autoPlay playsInline className="min-h-0 max-h-[80vh] w-full bg-[#000]" />
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <span className="truncate text-13 text-fg">{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -237,10 +237,10 @@ function RenameField({ item }: { item: LibraryItem }) {
         maxLength={300}
         aria-label="Title"
         onChange={(e) => setTitle(e.target.value)}
-        className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-[13px] text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-13 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
       <Button type="submit" variant="secondary" disabled={!changed || rename.isPending}>{rename.isPending ? "Saving…" : "Rename"}</Button>
-      {rename.error && <span className="text-xs text-pill-blocked-fg">{rename.error.message}</span>}
+      {rename.error && <span className="text-12 text-pill-blocked-fg">{rename.error.message}</span>}
     </form>
   );
 }
@@ -262,7 +262,7 @@ function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
           setOpen(o);
           setAutoPlay(o);
         }}
-        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-12 text-accent hover:underline">Open chat</Link>}
         trigger={
           <button
             type="button"
@@ -270,7 +270,7 @@ function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
             className="relative flex aspect-video flex-col justify-end overflow-hidden rounded-lg border border-border bg-accent-soft px-3 pb-2 pt-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <Waveform peaks={item.peaks} bars={32} className="h-full min-h-0 flex-1" />
-            <span className="mt-1.5 flex items-center justify-between text-[11px] text-fg-secondary">
+            <span className="mt-1.5 flex items-center justify-between text-11 text-fg-secondary">
               <span className="flex items-center gap-1 rounded bg-surface px-1.5 py-px"><Icon name="audio" size={9} />Audio</span>
               {item.duration_ms ? <span className="font-mono">{clock(item.duration_ms)}</span> : <span>{audioFormat(item.content_type, item.filename)}</span>}
             </span>
@@ -280,7 +280,7 @@ function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
         <div className="flex flex-col gap-4 pb-1" data-testid="audio-dialog">
           <AudioPlayer src={libraryItemUrl(item.id)} peaks={item.peaks} durationMs={item.duration_ms} large autoPlay={autoPlay} />
           <RenameField item={item} />
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-fg-secondary">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-12 text-fg-secondary">
             <dt className="text-fg-tertiary">Format</dt>
             <dd>{audioFormat(item.content_type, item.filename)}</dd>
             {item.method && (
@@ -292,7 +292,7 @@ function AudioTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: 
           </dl>
         </div>
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <span className="truncate text-13 text-fg">{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -315,7 +315,7 @@ function ExportSourceLine({ item }: { item: LibraryItem }) {
   const tone = src.status === "changed" ? "text-[#C77700]" : src.status === "deleted" ? "text-pill-blocked-fg" : "text-fg-tertiary";
   const note = src.status === "changed" ? "edited since" : src.status === "deleted" ? "source deleted" : "up to date";
   return (
-    <span className={cx("min-w-0 truncate text-xs", tone)} data-testid="export-source" data-status={src.status}>
+    <span className={cx("min-w-0 truncate text-12", tone)} data-testid="export-source" data-status={src.status}>
       Source:{" "}
       {src.status === "deleted" ? (
         <>{app.label}</>
@@ -336,13 +336,13 @@ function fileMeta(item: LibraryItem): string {
 function FilePreviewPane({ item, open }: { item: LibraryItem; open: boolean }) {
   const q = useLibraryFilePreview(item.id, open);
   if (q.isPending) return <Skeleton className="h-48 w-full rounded-lg" />;
-  if (q.isError) return <p className="text-xs text-pill-blocked-fg" role="alert">Couldn’t read a preview: {q.error.message}</p>;
+  if (q.isError) return <p className="text-12 text-pill-blocked-fg" role="alert">Couldn’t read a preview: {q.error.message}</p>;
   const p = q.data;
-  const more = p.truncated ? <p className="mt-2 text-xs text-fg-tertiary">Showing the start of the file. Download it for the rest.</p> : null;
+  const more = p.truncated ? <p className="mt-2 text-12 text-fg-tertiary">Showing the start of the file. Download it for the rest.</p> : null;
   if (p.kind === "text")
     return (
       <div data-testid="file-preview" data-kind="text">
-        <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle bg-surface-sunken p-3 font-mono text-[12px] leading-[1.5] text-fg">{(p.lines ?? []).join("\n")}</pre>
+        <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle bg-surface-sunken p-3 font-mono text-12 leading-[1.5] text-fg">{(p.lines ?? []).join("\n")}</pre>
         {more}
       </div>
     );
@@ -350,7 +350,7 @@ function FilePreviewPane({ item, open }: { item: LibraryItem; open: boolean }) {
     return (
       <div data-testid="file-preview" data-kind="table">
         <div className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle">
-          <table className="w-full border-collapse text-left text-[12px]">
+          <table className="w-full border-collapse text-left text-12">
             <tbody>
               {(p.rows ?? []).map((row, i) => (
                 <tr key={i} className={cx("border-b border-border-subtle last:border-0", i === 0 && "bg-surface-sunken font-medium")}>
@@ -366,7 +366,7 @@ function FilePreviewPane({ item, open }: { item: LibraryItem; open: boolean }) {
   if (p.kind === "zip")
     return (
       <div data-testid="file-preview" data-kind="zip">
-        <ul className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle text-[12px]">
+        <ul className="max-h-[50vh] overflow-auto rounded-lg border border-border-subtle text-12">
           {(p.entries ?? []).map((e) => (
             <li key={e.name} className="flex items-center gap-3 border-b border-border-subtle px-2.5 py-1.5 last:border-0">
               <span className="min-w-0 flex-1 truncate font-mono text-fg">{e.name}</span>
@@ -374,10 +374,10 @@ function FilePreviewPane({ item, open }: { item: LibraryItem; open: boolean }) {
             </li>
           ))}
         </ul>
-        {p.truncated && <p className="mt-2 text-xs text-fg-tertiary">Showing {p.entries?.length} of {p.total} files. Nothing is unpacked.</p>}
+        {p.truncated && <p className="mt-2 text-12 text-fg-tertiary">Showing {p.entries?.length} of {p.total} files. Nothing is unpacked.</p>}
       </div>
     );
-  return <p className="text-sm text-fg-secondary" data-testid="file-preview" data-kind="none">No preview for this type of file. Download it to open it.</p>;
+  return <p className="text-14 text-fg-secondary" data-testid="file-preview" data-kind="none">No preview for this type of file. Download it to open it.</p>;
 }
 
 /** A file: a type badge, its name, a summary line and the source. A click opens a read-only preview with Download, Rename and Remove. */
@@ -389,11 +389,11 @@ function FileTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: b
         item={item}
         open={open}
         onOpenChange={setOpen}
-        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-xs text-accent hover:underline">Open chat</Link>}
+        extra={item.chat_id && <Link href={`/chat/${item.chat_id}`} className="text-12 text-accent hover:underline">Open chat</Link>}
         trigger={
           <button type="button" aria-label={`Open ${item.title}`} className="flex aspect-[2/1] flex-col justify-between rounded-lg border border-border bg-surface-sunken p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent">
-            <span className="text-[26px] font-bold leading-none text-accent">{typeBadge(item)}</span>
-            <span className="truncate text-xs text-fg-secondary">{fileMeta(item)}</span>
+            <span className="text-26 font-bold leading-none text-accent">{typeBadge(item)}</span>
+            <span className="truncate text-12 text-fg-secondary">{fileMeta(item)}</span>
           </button>
         }
       >
@@ -402,7 +402,7 @@ function FileTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen: b
           <FilePreviewPane item={item} open={open} />
         </div>
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg" title={item.filename}>{item.title}</span>
+      <span className="truncate text-13 text-fg" title={item.filename}>{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -414,20 +414,20 @@ function ExportTile({ item, initiallyOpen }: { item: LibraryItem; initiallyOpen:
   const app = item.export_source ? SOURCE_APP[item.export_source.kind].label : "";
   return (
     <li className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-surface-sunken p-3" data-testid="library-item" data-kind="export">
-      <span className="text-xs font-semibold text-accent">{typeBadge(item)}{app && ` · from ${app}`}</span>
+      <span className="text-12 font-semibold text-accent">{typeBadge(item)}{app && ` · from ${app}`}</span>
       <ItemDialog
         item={item}
         open={open}
         onOpenChange={setOpen}
-        trigger={<button type="button" aria-label={`Open ${item.title}`} className="min-w-0 truncate text-left text-[15px] font-semibold text-fg outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent">{item.title}</button>}
+        trigger={<button type="button" aria-label={`Open ${item.title}`} className="min-w-0 truncate text-left text-15 font-semibold text-fg outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent">{item.title}</button>}
       >
         <div className="flex flex-col gap-3 pb-1">
           <RenameField item={item} />
-          <p className="text-sm text-fg-secondary">A copy as it was when you exported it. {fileMeta(item)}</p>
+          <p className="text-14 text-fg-secondary">A copy as it was when you exported it. {fileMeta(item)}</p>
           <ExportSourceLine item={item} />
         </div>
       </ItemDialog>
-      <span className="truncate text-xs text-fg-secondary">{fileMeta(item)} · exported {timelineTime(item.created_at)}</span>
+      <span className="truncate text-12 text-fg-secondary">{fileMeta(item)} · exported {timelineTime(item.created_at)}</span>
       <ExportSourceLine item={item} />
     </li>
   );
@@ -444,8 +444,8 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
   if (item.kind === "document") {
     return (
       <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-surface p-3" data-testid="library-item">
-        <p className="truncate text-[13px] font-medium text-fg" title={item.title}>{item.title}</p>
-        <div className="flex items-center gap-3 text-[12.5px]">
+        <p className="truncate text-13 font-medium text-fg" title={item.title}>{item.title}</p>
+        <div className="flex items-center gap-3 text-13">
           <a className="text-accent hover:underline" href={url} target="_blank" rel="noreferrer">Open</a>
           <button type="button" className="text-fg-secondary hover:text-fg" disabled={del.isPending} onClick={() => del.mutate(item.id)}>Remove</button>
         </div>
@@ -474,7 +474,7 @@ function ItemTile({ item, openItem }: { item: LibraryItem; openItem?: string | n
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={item.title} className={cx("min-h-0 max-h-[80vh] w-full object-contain", diagram && "bg-white")} />
       </ItemDialog>
-      <span className="truncate text-[13px] text-fg">{item.title}</span>
+      <span className="truncate text-13 text-fg">{item.title}</span>
       <Source item={item} />
     </li>
   );
@@ -495,7 +495,7 @@ function UploadButton() {
   }
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {error && <span className="text-xs text-pill-blocked-fg">{error}</span>}
+      {error && <span className="text-12 text-pill-blocked-fg">{error}</span>}
       <input
         ref={input}
         type="file"
@@ -567,7 +567,7 @@ function Items({ kind, openItem }: { kind: LibraryItemKind; openItem?: string | 
       {lib.hasNextPage && (
         <div className="flex justify-center">
           <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
-            {lib.isFetchingNextPage ? "Loading…" : "Show more"}
+            {lib.isFetchingNextPage && <Spinner />}Show more
           </Button>
         </div>
       )}
@@ -592,19 +592,16 @@ function Keepsakes() {
       <TopBar crumbs={[{ label: "Library" }]} />
       <Content>
         <div className="flex flex-col gap-5">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1 space-y-1">
-              <h1 className="type-display">Library</h1>
-              <p className="text-sm text-fg-secondary">
-                Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos and audio they render, are saved here automatically; files they hand you and exports you save from Slides, Designs and Docs are kept too and stay after their chat is deleted.
-                Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
-              </p>
-              <div className="pt-2">
-                <LibrarySourceSwitch source="yours" />
-              </div>
-            </div>
-            <UploadButton />
-          </div>
+          <PageHeader
+            title="Library"
+            description={<>
+              Keepsakes from your Assistant chats, private to you. Images your personas generate, and videos and audio they render, are saved here automatically; files they hand you and exports you save from Slides, Designs and Docs are kept too and stay after their chat is deleted.
+              Use an image as a persona&apos;s reference, or a photo as yours, and new images of them keep that likeness. SVG diagrams and recommended links are kept when you choose Save to Library on them.
+            </>}
+            actions={<UploadButton />}
+          >
+            <LibrarySourceSwitch source="yours" />
+          </PageHeader>
           <Tabs label="Library" value={tab} onChange={setTab} items={[{ key: "images", label: "Images" }, { key: "videos", label: "Videos" }, { key: "audio", label: "Audio" }, { key: "files", label: "Files" }, { key: "exports", label: "Exports" }, { key: "diagrams", label: "Diagrams" }, { key: "documents", label: "Documents" }, { key: "links", label: "Links" }, { key: "fridge", label: "Fridge" }]} />
           {tab === "fridge" ? <Fridge /> : tab === "links" ? <Links /> : <Items kind={KINDS[tab] ?? "image"} openItem={openItem} />}
         </div>

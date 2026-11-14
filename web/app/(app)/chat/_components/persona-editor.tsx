@@ -42,7 +42,7 @@ import { PersonaAvatar } from "@/components/domain/persona-avatar";
 import { Button, IconButton } from "@/components/ui/button";
 import { TextArea, TextInput } from "@/components/ui/primitives";
 
-const label = "text-[11px] font-medium uppercase tracking-wide text-fg-tertiary";
+const label = "text-11 font-medium uppercase tracking-wide text-fg-tertiary";
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
 /** The chat background the name is read on: the theme's --bg, or the dark ground. */
@@ -109,9 +109,9 @@ function CustomColor({ state, dispatch }: { state: NonNullable<ColorState["custo
           </Button>
         </div>
         {state.error ? (
-          <p id="persona-hex-error" role="alert" className="text-xs text-pill-blocked-fg">{state.error}</p>
+          <p id="persona-hex-error" role="alert" className="text-12 text-pill-blocked-fg">{state.error}</p>
         ) : (
-          <p className="text-[11.5px] text-fg-tertiary">Pick on the wheel or type a hex value.</p>
+          <p className="text-12 text-fg-tertiary">Pick on the wheel or type a hex value.</p>
         )}
       </div>
     </div>
@@ -125,7 +125,7 @@ function ColorRow({ state, dispatch, bg }: { state: ColorState; dispatch: (a: Co
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <span id="persona-color-label" className={label}>Color</span>
-        <span className="text-[11px] text-fg-tertiary">Used for the name and the initials avatar</span>
+        <span className="text-11 text-fg-tertiary">Used for the name and the initials avatar</span>
       </div>
       <div role="radiogroup" aria-labelledby="persona-color-label" className="flex flex-wrap items-center gap-2">
         {PRESET_COLORS.map((c) => (
@@ -149,7 +149,7 @@ function ColorRow({ state, dispatch, bg }: { state: ColorState; dispatch: (a: Co
           role="radio"
           aria-checked={custom}
           onClick={() => dispatch(state.custom ? { type: "cancel" } : { type: "open" })}
-          className="ml-1 inline-flex items-center gap-2 rounded-full pr-2 text-xs text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
+          className="ml-1 inline-flex items-center gap-2 rounded-full pr-2 text-12 text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span
             aria-hidden
@@ -164,12 +164,12 @@ function ColorRow({ state, dispatch, bg }: { state: ColorState; dispatch: (a: Co
         <div role="status" className="flex items-start gap-2 rounded-lg border border-pill-human-fg/40 bg-pill-human-bg px-3 py-2">
           <span aria-hidden className="text-pill-human-fg">⚠</span>
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-xs text-pill-human-fg">
+            <span className="text-12 text-pill-human-fg">
               Low contrast: {warn.ratio} on this theme (aim for 4.5:1).
             </span>
-            <span className="text-xs text-fg-secondary">Names in this color will be hard to read.</span>
+            <span className="text-12 text-fg-secondary">Names in this color will be hard to read.</span>
           </div>
-          <button type="button" className="self-end text-xs text-accent hover:underline" onClick={() => dispatch({ type: "preset", color: warn.suggestion })}>
+          <button type="button" className="self-end text-12 text-accent hover:underline" onClick={() => dispatch({ type: "preset", color: warn.suggestion })}>
             Use {warn.suggestion}
           </button>
         </div>
@@ -234,7 +234,7 @@ function AvatarField({
         <div className="flex flex-col items-center gap-2">
           <PersonaAvatar name={name || "?"} color={color} src={src} size={48} />
           <PersonaAvatar name={name || "?"} color={color} src={src} size={24} />
-          <span className="text-[11px] text-fg-tertiary">Result</span>
+          <span className="text-11 text-fg-tertiary">Result</span>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -246,16 +246,16 @@ function AvatarField({
           Use initials
         </Button>
       </div>
-      <p className="text-[11.5px] text-fg-tertiary">{AVATAR_HINT}</p>
-      <p className="text-[11.5px] text-fg-tertiary">No image: initials on the persona color.</p>
+      <p className="text-12 text-fg-tertiary">{AVATAR_HINT}</p>
+      <p className="text-12 text-fg-tertiary">No image: initials on the persona color.</p>
       <div aria-live="polite" className="flex flex-col gap-2">
         {errors.map((e, i) => (
           <div key={i} role="alert" className="flex items-start gap-2 rounded-lg bg-pill-blocked-bg px-3 py-2">
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-xs text-pill-blocked-fg">{e.title}</span>
-              <span className="text-xs text-fg-secondary">{e.hint}</span>
+              <span className="text-12 text-pill-blocked-fg">{e.title}</span>
+              <span className="text-12 text-fg-secondary">{e.hint}</span>
             </div>
-            <button type="button" aria-label="Dismiss" className="text-xs text-pill-blocked-fg" onClick={() => setErrors(errors.filter((_, j) => j !== i))}>
+            <button type="button" aria-label="Dismiss" className="text-12 text-pill-blocked-fg" onClick={() => setErrors(errors.filter((_, j) => j !== i))}>
               ✕
             </button>
           </div>
@@ -263,8 +263,8 @@ function AvatarField({
       </div>
       {dragging && (
         <div className="rounded-lg border border-dashed border-accent bg-accent-soft px-3 py-4 text-center">
-          <p className="text-[13px] text-fg">Drop an image to upload</p>
-          <p className="text-[11px] text-fg-tertiary">Your current avatar is kept until a new one uploads.</p>
+          <p className="text-13 text-fg">Drop an image to upload</p>
+          <p className="text-11 text-fg-tertiary">Your current avatar is kept until a new one uploads.</p>
         </div>
       )}
     </div>
@@ -283,25 +283,25 @@ function Preview({ name, color, src, tone }: { name: string; color: string; src?
         <div className="flex gap-2.5">
           <PersonaAvatar name={shown} color={color} src={src} size={28} />
           <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-[13px]">
+            <p className="text-13">
               <span className="font-semibold" style={{ color }}>{shown}</span>
-              <span className="ml-2 text-[11px] text-fg-tertiary">{t.label} · now</span>
+              <span className="ml-2 text-11 text-fg-tertiary">{t.label} · now</span>
             </p>
             {t.sample.map((line) => (
-              <p key={line} className="text-[13px] text-fg">{line}</p>
+              <p key={line} className="text-13 text-fg">{line}</p>
             ))}
           </div>
         </div>
         <div className="flex flex-col gap-1.5 border-t border-border pt-2">
-          <span className="text-[11px] uppercase tracking-wide text-fg-tertiary">In the sidebar</span>
+          <span className="text-11 uppercase tracking-wide text-fg-tertiary">In the sidebar</span>
           <div className="flex items-center gap-2">
             <PersonaAvatar name={shown} color={color} src={src} size={20} />
-            <span className="flex-1 truncate text-xs text-fg">Weekly recap</span>
-            <span className="text-[11px] text-fg-tertiary">Today</span>
+            <span className="flex-1 truncate text-12 text-fg">Weekly recap</span>
+            <span className="text-11 text-fg-tertiary">Today</span>
           </div>
         </div>
       </div>
-      <p className="text-[11.5px] text-fg-tertiary">Updates as you edit.</p>
+      <p className="text-12 text-fg-tertiary">Updates as you edit.</p>
     </div>
   );
 }
@@ -321,8 +321,8 @@ function Toggle({ id, checked, onChange, title, hint }: { id: string; checked: b
         className="mt-0.5 size-4 flex-none accent-[var(--accent)]"
       />
       <div className="flex flex-col gap-0.5">
-        <label htmlFor={id} className="text-[13px] text-fg">{title}</label>
-        <p id={`${id}-hint`} className="text-[11.5px] text-fg-tertiary">{hint}</p>
+        <label htmlFor={id} className="text-13 text-fg">{title}</label>
+        <p id={`${id}-hint`} className="text-12 text-fg-tertiary">{hint}</p>
       </div>
     </div>
   );
@@ -479,7 +479,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
 
             {conflict && (
               <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-border-subtle bg-pill-human-bg px-6 py-2.5">
-                <span className="flex-1 text-[13px] text-pill-human-fg">
+                <span className="flex-1 text-13 text-pill-human-fg">
                   This persona changed somewhere else since you opened it. Reload to get the latest; your edits here will be lost.
                 </span>
                 <Button variant="approve" disabled={!latest || latest.revision === saved?.revision} onClick={reload}>
@@ -508,11 +508,11 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                       onChange={(e) => set({ name: e.target.value })}
                       className="pr-16"
                     />
-                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-fg-tertiary">
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-11 text-fg-tertiary">
                       {draft.name.length} / {NAME_MAX}
                     </span>
                   </span>
-                  {nameError && <p id="persona-name-error" role="alert" className="text-xs text-pill-blocked-fg">{nameError}</p>}
+                  {nameError && <p id="persona-name-error" role="alert" className="text-12 text-pill-blocked-fg">{nameError}</p>}
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -526,7 +526,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                         aria-checked={draft.tone === t.value}
                         onClick={() => set({ tone: t.value })}
                         className={cx(
-                          "h-7 rounded-full border px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                          "h-7 rounded-full border px-3 text-12 outline-none focus-visible:ring-2 focus-visible:ring-accent",
                           draft.tone === t.value ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-secondary hover:bg-hover",
                         )}
                       >
@@ -534,7 +534,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-fg-secondary">{tone.label}: {tone.hint}</p>
+                  <p className="text-12 text-fg-secondary">{tone.label}: {tone.hint}</p>
                 </div>
 
                 <ColorRow state={color} dispatch={dispatch} bg={bg} />
@@ -551,7 +551,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     aria-invalid={field?.field === "custom_instructions"}
                     onChange={(e) => set({ instructions: e.target.value })}
                   />
-                  <div id="persona-instructions-hint" className="flex justify-between gap-3 text-[11.5px] text-fg-tertiary">
+                  <div id="persona-instructions-hint" className="flex justify-between gap-3 text-12 text-fg-tertiary">
                     <span>
                       Added to the Assistant&apos;s instructions for this persona. Can&apos;t override safety rules, memory or tool permissions.
                     </span>
@@ -559,7 +559,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                       {draft.instructions.length} / {INSTRUCTIONS_MAX}
                     </span>
                   </div>
-                  {field?.field === "custom_instructions" && <p role="alert" className="text-xs text-pill-blocked-fg">{field.message}</p>}
+                  {field?.field === "custom_instructions" && <p role="alert" className="text-12 text-pill-blocked-fg">{field.message}</p>}
                 </div>
 
                 <fieldset className="flex flex-col gap-3">
@@ -571,8 +571,8 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     title="Write code"
                     hint="Writes and runs code in its chat’s workspace and any repository your GitHub credential can access."
                   />
-                  {draft.code && <a href="/settings#repositories" className="pl-[26px] text-xs text-accent">Manage saved repositories & organizations</a>}
-                  {!draft.code && field?.field === "repos" && <p role="alert" className="text-xs text-pill-blocked-fg">{field.message}</p>}
+                  {draft.code && <a href="/settings#repositories" className="pl-[26px] text-12 text-accent">Manage saved repositories & organizations</a>}
+                  {!draft.code && field?.field === "repos" && <p role="alert" className="text-12 text-pill-blocked-fg">{field.message}</p>}
                   <Toggle
                     id="persona-images"
                     checked={draft.images}
@@ -581,10 +581,10 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                     hint="Creates images with Codex or Antigravity; works with any model in the chat. Images appear in the conversation."
                   />
                   {draft.images && (
-                    <label htmlFor="persona-image-engine" className="flex items-center gap-2 pl-[26px] text-xs text-fg-secondary">
+                    <label htmlFor="persona-image-engine" className="flex items-center gap-2 pl-[26px] text-12 text-fg-secondary">
                       Image engine
                       <select id="persona-image-engine" value={draft.imageEngine} onChange={(e) => set({ imageEngine: e.target.value })}
-                        className="h-[26px] rounded-md border border-border-strong bg-surface px-2 text-[12.5px] text-fg focus:border-accent focus:outline-none">
+                        className="h-[26px] rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none">
                         <option value="">Workspace setting</option>
                         <option value="auto">Auto</option>
                         <option value="codex">Codex</option>
@@ -646,7 +646,7 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
 
             <div className="flex flex-wrap items-center gap-3 border-t border-border-subtle px-6 py-4">
               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <label className="flex items-center gap-2 text-[13px] text-fg">
+                <label className="flex items-center gap-2 text-13 text-fg">
                   <input
                     type="checkbox"
                     checked={draft.makeDefault}
@@ -656,8 +656,8 @@ export function PersonaEditor({ persona, onClose }: { persona: Persona | "new"; 
                   />
                   {isDefault ? "This is your default persona" : "Make this my default persona"}
                 </label>
-                <p className="text-[11.5px] text-fg-tertiary">Applies to your Assistant conversations only, never to ticket or epic agents.</p>
-                {error !== null && !field && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(error)}</p>}
+                <p className="text-12 text-fg-tertiary">Applies to your Assistant conversations only, never to ticket or epic agents.</p>
+                {error !== null && !field && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(error)}</p>}
               </div>
               <Dialog.Close asChild>
                 <Button variant="secondary">Cancel</Button>

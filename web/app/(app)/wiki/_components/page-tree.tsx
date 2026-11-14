@@ -78,7 +78,7 @@ const indent = (depth: number) => ({ paddingLeft: 4 + depth * 12 });
 
 function Count({ n, label }: { n: number; label?: string }) {
   return (
-    <span className="ml-auto flex-none pl-2 font-mono text-[11.5px] text-fg-tertiary" title={label ?? `${n} pages`}>
+    <span className="ml-auto flex-none pl-2 font-mono text-12 text-fg-tertiary" title={label ?? `${n} pages`}>
       {n}
     </span>
   );
@@ -91,7 +91,7 @@ function RowLink({ href, on, depth, icon, children, right }: { href: string; on:
       href={href}
       aria-current={on ? "page" : undefined}
       className={cx(
-        "relative flex h-7 items-center gap-1.5 rounded-sm pr-2 text-[13px]",
+        "relative flex h-7 items-center gap-1.5 rounded-sm pr-2 text-13",
         on ? "bg-selected font-medium text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
       )}
       style={{ paddingLeft: 32 + depth * 12 }}
@@ -114,7 +114,7 @@ function PageRow({ p, depth, ctx }: { p: WikiPageSummary; depth: number; ctx: Tr
         icon={<Icon name="artifacts" size={13} className="flex-none text-fg-tertiary" />}
         right={
           p.suggestions > 0 ? (
-            <span className="font-mono text-[11px] text-pill-human-fg" title={`${p.suggestions} suggested edits`}>
+            <span className="font-mono text-11 text-pill-human-fg" title={`${p.suggestions} suggested edits`}>
               {p.suggestions}
             </span>
           ) : undefined
@@ -175,7 +175,7 @@ function FolderRow({
           <Link
             href={href}
             aria-current={on ? "page" : undefined}
-            className={cx("flex h-7 min-w-0 flex-1 items-center gap-2 rounded-sm px-1 text-[13px] font-medium", on ? "text-fg" : "text-fg-2 hover:bg-hover")}
+            className={cx("flex h-7 min-w-0 flex-1 items-center gap-2 rounded-sm px-1 text-13 font-medium", on ? "text-fg" : "text-fg-2 hover:bg-hover")}
           >
             <span className="truncate">{name}</span>
             {hint}
@@ -185,7 +185,7 @@ function FolderRow({
             type="button"
             tabIndex={-1}
             onClick={() => !forced && ctx.toggle(id, !expanded)}
-            className="flex h-7 min-w-0 flex-1 items-center gap-2 px-1 text-left text-[13px] font-medium text-fg-2"
+            className="flex h-7 min-w-0 flex-1 items-center gap-2 px-1 text-left text-13 font-medium text-fg-2"
           >
             <span className="truncate">{name}</span>
             {hint}
@@ -232,7 +232,7 @@ function TreeList({ f, depth, ctx, first, folderLabel }: { f: Tree; depth: numbe
 function IndexRow({ href, on, depth, children, hint }: { href: string; on: boolean; depth: number; children: ReactNode; hint?: string }) {
   return (
     <li>
-      <RowLink href={href} on={on} depth={depth} icon={<Icon name="tickets" size={13} className="flex-none text-fg-tertiary" />} right={hint && <span className="text-[11px] text-fg-tertiary">{hint}</span>}>
+      <RowLink href={href} on={on} depth={depth} icon={<Icon name="tickets" size={13} className="flex-none text-fg-tertiary" />} right={hint && <span className="text-11 text-fg-tertiary">{hint}</span>}>
         {children}
       </RowLink>
     </li>
@@ -250,7 +250,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
     <FolderRow id="ns:reports" name="Reports" count={total} countLabel={`${total} reports`} depth={depth} ctx={ctx}>
       <ul className="flex flex-col">
         {reports.isError ? (
-          <li className="py-1 text-xs text-fg-tertiary" style={{ paddingLeft: 44 + depth * 12 }}>
+          <li className="py-1 text-12 text-fg-tertiary" style={{ paddingLeft: 44 + depth * 12 }}>
             Couldn&apos;t load reports.
           </li>
         ) : !reports.data ? (
@@ -258,7 +258,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
             <Skeleton className="h-3 w-2/3" />
           </li>
         ) : newest.length === 0 ? (
-          <li className="py-1 text-xs text-fg-tertiary" style={{ paddingLeft: 44 + depth * 12 }}>
+          <li className="py-1 text-12 text-fg-tertiary" style={{ paddingLeft: 44 + depth * 12 }}>
             No reports yet.
           </li>
         ) : (
@@ -269,7 +269,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
                 on={false}
                 depth={depth + 1}
                 right={
-                  <span className="flex-none font-mono text-[10.5px] text-fg-tertiary">
+                  <span className="flex-none font-mono text-11 text-fg-tertiary">
                     {r.project?.key ? `${r.project.key} · ` : ""}
                     {timelineTime(r.updated_at)}
                   </span>
@@ -282,7 +282,7 @@ function Reports({ depth, ctx }: { depth: number; ctx: TreeCtx }) {
         )}
         {total > newest.length && (
           <li>
-            <Link href="/library?source=projects&type=report" className="flex h-7 items-center text-xs text-accent hover:underline" style={{ paddingLeft: 44 + depth * 12 }}>
+            <Link href="/library?source=projects&type=report" className="flex h-7 items-center text-12 text-accent hover:underline" style={{ paddingLeft: 44 + depth * 12 }}>
               All {total} reports →
             </Link>
           </li>
@@ -336,7 +336,7 @@ export function PageTree({ pages, current, index }: { pages: WikiPageSummary[] |
   return (
     <nav aria-label="Wiki pages" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="px-2 text-xs font-medium text-fg-tertiary">Namespaces</h2>
+        <h2 className="px-2 text-12 font-medium text-fg-tertiary">Namespaces</h2>
         <ul className="flex flex-col">
           <FolderRow
             id="architecture"
@@ -381,7 +381,7 @@ export function PageTree({ pages, current, index }: { pages: WikiPageSummary[] |
           <FolderRow
             id="agents"
             name="Agent memory"
-            hint={<span className="font-mono text-[11px] font-normal text-fg-tertiary">agents/</span>}
+            hint={<span className="font-mono text-11 font-normal text-fg-tertiary">agents/</span>}
             count={memory.count}
             depth={0}
             ctx={ctx}
@@ -389,18 +389,18 @@ export function PageTree({ pages, current, index }: { pages: WikiPageSummary[] |
             {memory.count ? (
               <TreeList f={memory} depth={1} ctx={ctx} folderLabel={(f) => (f.path.split("/").length === 2 ? `@${f.name}` : f.name)} />
             ) : (
-              <p className="py-1 pl-11 text-xs text-fg-tertiary">Agents add notes here as they work.</p>
+              <p className="py-1 pl-11 text-12 text-fg-tertiary">Agents add notes here as they work.</p>
             )}
           </FolderRow>
           <Reports depth={0} ctx={ctx} />
         </ul>
       </div>
       <div className="flex flex-col gap-1">
-        <h2 className="px-2 text-xs font-medium text-fg-tertiary">Other pages</h2>
+        <h2 className="px-2 text-12 font-medium text-fg-tertiary">Other pages</h2>
         {other.folders.size + other.pages.length ? (
           <TreeList f={other} depth={0} ctx={ctx} />
         ) : (
-          <p className="px-2 text-xs text-fg-tertiary">No other pages yet.</p>
+          <p className="px-2 text-12 text-fg-tertiary">No other pages yet.</p>
         )}
       </div>
     </nav>

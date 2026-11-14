@@ -129,14 +129,11 @@ test("removing an audio file asks first", async ({ page }) => {
   const seen = await installLibrary(page, [audio("a-1")]);
   await page.goto("/library?tab=audio&item=a-1");
   const dialog = page.getByRole("dialog", { name: "Metal riff demo" });
-  let asked = "";
-  page.once("dialog", (d) => {
-    asked = d.message();
-    return d.accept();
-  });
   await dialog.getByRole("button", { name: "Remove" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText("audio file");
+  await confirm.getByRole("button", { name: "Remove" }).click();
   await expect(page.getByTestId("library-item")).toHaveCount(0);
-  expect(asked).toContain("audio file");
   expect(seen.deleted).toEqual(["a-1"]);
 });
 

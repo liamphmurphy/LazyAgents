@@ -12,7 +12,9 @@ import { Markdown } from "@/components/domain/markdown";
 import { VideoFrame } from "@/components/domain/recommend-fence";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { undoable } from "@/components/ui/toast";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
+import { Spinner } from "@/components/ui/loading";
 
 const FILTERS = [{ key: "all", label: "All" }, { key: "video", label: "Videos" }, { key: "page", label: "Pages" }] as const;
 type Filter = (typeof FILTERS)[number]["key"];
@@ -26,6 +28,9 @@ function LinkCard({ item }: { item: LibraryItem }) {
   const embed = videoEmbedUrl(item.video_id);
   const image = item.size_bytes > 0 ? libraryItemUrl(item.id) : undefined;
   const site = item.site || hostOf(url);
+  // Removed but still undoable: hidden here until the toast goes and the delete runs.
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
   return (
     <li data-testid="library-link" data-kind={embed ? "video" : "page"} className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface">
       {embed ? (
@@ -41,18 +46,18 @@ function LinkCard({ item }: { item: LibraryItem }) {
       )}
       <div className="flex flex-1 flex-col gap-1 p-3">
         <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 hover:underline">
-          <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-fg">{item.title}</span>
+          <span className="min-w-0 flex-1 text-14 font-semibold text-fg">{item.title}</span>
           <Icon name="link" size={13} className="mt-0.5 flex-none text-fg-tertiary" />
         </a>
-        <span className="truncate text-xs text-fg-tertiary">{site}</span>
-        {item.note && <p className="mt-1 text-[12.5px] italic text-fg-secondary">“{item.note}”</p>}
+        <span className="truncate text-12 text-fg-tertiary">{site}</span>
+        {item.note && <p className="mt-1 text-13 italic text-fg-secondary">“{item.note}”</p>}
         {item.summary && (
-          <details data-testid="link-summary" className="mt-1 text-[12.5px]">
+          <details data-testid="link-summary" className="mt-1 text-13">
             <summary className="cursor-pointer font-medium text-fg-secondary">Summary</summary>
             <Markdown className="mt-1.5 text-fg-2">{summaryText(item.summary)}</Markdown>
           </details>
         )}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-xs text-fg-tertiary">
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-12 text-fg-tertiary">
           <span className="min-w-0 truncate">From {item.persona_name ?? "Assistant"} · {timelineTime(item.created_at)}</span>
           <button type="button" disabled={status.isPending} className="ml-auto flex-none text-accent hover:underline" onClick={() => status.mutate({ itemId: item.id, status: done(item) ? "to_read" : "done" })}>
             {done(item) ? "Move to To read" : "Mark done"}
@@ -62,9 +67,13 @@ function LinkCard({ item }: { item: LibraryItem }) {
             aria-label={`Remove ${item.title}`}
             disabled={del.isPending}
             className="flex-none hover:text-fg"
-            onClick={() => {
-              if (window.confirm("Remove this link from your Library?")) del.mutate(item.id);
-            }}
+            onClick={() => undoable({
+              title: `Removed ${item.title}`,
+              failed: `Couldn't remove ${item.title}`,
+              hide: () => setHidden(true),
+              restore: () => setHidden(false),
+              commit: () => del.mutateAsync(item.id),
+            })}
           >
             <Icon name="trash" size={14} />
           </button>
@@ -106,14 +115,14 @@ export function Links() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-      <div role="group" aria-label="Reading queue" className="flex gap-1 text-xs">
+      <div role="group" aria-label="Reading queue" className="flex gap-1 text-12">
         {(["to_read", "done"] as const).map((q) => (
           <button key={q} type="button" aria-pressed={queue === q} onClick={() => setQueue(q)} className={cx("rounded-full px-3 py-1", queue === q ? "bg-accent-soft font-semibold text-accent" : "text-fg-secondary hover:text-fg")}>
             {q === "done" ? "Done" : "To read"} ({items.filter((i) => (q === "done") === done(i)).length})
           </button>
         ))}
       </div>
-      <div role="group" aria-label="Filter links" className="flex justify-end gap-1 text-xs">
+      <div role="group" aria-label="Filter links" className="flex justify-end gap-1 text-12">
         {FILTERS.map((f) => (
           <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} className={cx("rounded-full px-3 py-1", filter === f.key ? "bg-accent-soft font-semibold text-accent" : "text-fg-secondary hover:text-fg")}>
             {f.label}
@@ -127,7 +136,7 @@ export function Links() {
       {lib.hasNextPage && (
         <div className="flex justify-center">
           <Button onClick={() => lib.fetchNextPage()} disabled={lib.isFetchingNextPage}>
-            {lib.isFetchingNextPage ? "Loading…" : "Show more"}
+            {lib.isFetchingNextPage && <Spinner />}Show more
           </Button>
         </div>
       )}

@@ -67,18 +67,18 @@ export function AudioPlayer({
         onSeek={(f) => length && seekTo(f * length)}
         className={large ? "h-28 rounded-lg bg-surface-sunken px-3 py-2" : "h-10"}
       />
-      <div className="flex items-center gap-2.5 text-xs text-fg-secondary">
+      <div className="flex items-center gap-2.5 text-12 text-fg-secondary">
         <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} className={cx(btn, "size-9 bg-accent text-bg hover:text-bg")} data-testid="audio-toggle">
           <Icon name={playing ? "pause" : "play"} size={14} />
         </button>
-        <button type="button" aria-label="Back 10 seconds" className={cx(btn, "h-7 px-1.5 text-[11px]")} onClick={() => seekTo(skip(at, -10, length))}>−10s</button>
-        <button type="button" aria-label="Forward 10 seconds" className={cx(btn, "h-7 px-1.5 text-[11px]")} onClick={() => seekTo(skip(at, 10, length))}>+10s</button>
+        <button type="button" aria-label="Back 10 seconds" className={cx(btn, "h-7 px-1.5 text-11")} onClick={() => seekTo(skip(at, -10, length))}>−10s</button>
+        <button type="button" aria-label="Forward 10 seconds" className={cx(btn, "h-7 px-1.5 text-11")} onClick={() => seekTo(skip(at, 10, length))}>+10s</button>
         <span className="font-mono tabular-nums" data-testid="audio-time">{clock(at * 1000)} / {length ? clock(length * 1000) : "–:––"}</span>
         <span className="flex-1" />
         <button
           type="button"
           aria-label={`Speed ${speedLabel(rate)}`}
-          className={cx(btn, "h-7 px-1.5 font-mono text-[11px]")}
+          className={cx(btn, "h-7 px-1.5 font-mono text-11")}
           onClick={() => {
             const next = nextSpeed(rate);
             setRate(next);
@@ -87,11 +87,11 @@ export function AudioPlayer({
         >
           {speedLabel(rate)}
         </button>
-        <button type="button" aria-label="Loop" aria-pressed={loop} className={cx(btn, "h-7 px-1.5 text-[11px]", loop && "text-accent")} onClick={() => setLoop((x) => !x)}>
+        <button type="button" aria-label="Loop" aria-pressed={loop} className={cx(btn, "h-7 px-1.5 text-11", loop && "text-accent")} onClick={() => setLoop((x) => !x)}>
           Loop {loop ? "on" : "off"}
         </button>
       </div>
-      {failed && <p className="text-xs text-pill-blocked-fg" role="alert">This browser couldn&apos;t play the file. Download it to listen.</p>}
+      {failed && <p className="text-12 text-pill-blocked-fg" role="alert">This browser couldn&apos;t play the file. Download it to listen.</p>}
     </div>
   );
 }

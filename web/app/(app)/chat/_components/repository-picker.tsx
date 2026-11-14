@@ -10,7 +10,7 @@ import { repoShortName, repositoryChoices, sameRepo, type RepoChoice } from "@/l
 import { composerPill } from "./reply-tools";
 
 const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:bg-hover focus-visible:outline-none";
-const heading = "px-2 py-1 text-xs font-medium text-fg-tertiary";
+const heading = "px-2 py-1 text-12 font-medium text-fg-tertiary";
 
 function Choices({ title, choices, value, note, onChoose }: {
   title: string; choices: RepoChoice[]; value?: string; note?: (i: number) => string | undefined; onChoose: (url: string) => void;
@@ -23,7 +23,7 @@ function Choices({ title, choices, value, note, onChoose }: {
         <button type="button" onClick={() => onChoose(r.url)} aria-current={!!value && sameRepo(value, r.url)} className={row}>
           <span className="min-w-0 flex-1">
             <span className="block truncate">{r.name}</span>
-            {note?.(i) && <span className="block text-xs text-fg-tertiary">{note(i)}</span>}
+            {note?.(i) && <span className="block text-12 text-fg-tertiary">{note(i)}</span>}
           </span>
           <span className="w-4 flex-none text-accent">{value && sameRepo(value, r.url) && <Icon name="check" size={14} strokeWidth={1.8} />}</span>
         </button>
@@ -69,16 +69,16 @@ export function RepositoryPicker({ value, pending, onPick, disabled, error, sign
         <Popover.Content side="top" align="start" sideOffset={6} collisionPadding={8} className={cx(floatPanel, "w-80 max-h-[min(26rem,var(--radix-popover-content-available-height))] overflow-y-auto")}>
           {other ? <>
             <form onSubmit={(e) => { e.preventDefault(); if (text.trim()) choose(text.trim()); }} className="flex flex-col gap-2 p-1">
-              <label className="flex flex-col gap-1.5 text-xs text-fg-secondary">Repository name or GitHub URL
-                <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="owner/repo or saved name" className="rounded-md border border-border bg-background p-2 text-[13px] text-fg" />
+              <label className="flex flex-col gap-1.5 text-12 text-fg-secondary">Repository name or GitHub URL
+                <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="owner/repo or saved name" className="rounded-md border border-border bg-background p-2 text-13 text-fg" />
               </label>
               <div className="flex items-center gap-3">
-                <button type="submit" disabled={!text.trim()} className="rounded-md bg-accent px-3 py-1 text-xs text-on-accent disabled:opacity-40">Use repository</button>
-                <button type="button" onClick={() => setOther(false)} className="text-xs text-fg-secondary hover:text-fg">Back</button>
+                <button type="submit" disabled={!text.trim()} className="rounded-md bg-accent px-3 py-1 text-12 text-on-accent disabled:opacity-40">Use repository</button>
+                <button type="button" onClick={() => setOther(false)} className="text-12 text-fg-secondary hover:text-fg">Back</button>
               </div>
             </form>
-            {repos.isPending && <p className="px-2 py-1 text-xs text-fg-secondary">Loading saved repositories…</p>}
-            {repos.error && <p role="alert" className="px-2 py-1 text-xs text-pill-blocked-fg">{repos.error.message}</p>}
+            {repos.isPending && <p className="px-2 py-1 text-12 text-fg-secondary">Loading saved repositories…</p>}
+            {repos.error && <p role="alert" className="px-2 py-1 text-12 text-pill-blocked-fg">{repos.error.message}</p>}
             <ul aria-label="Saved repositories" className="mt-1">
               {matching.map((r) => <li key={r.url}><button type="button" onClick={() => choose(r.url)} className={row}><span className="truncate">{r.name}</span></button></li>)}
             </ul>
@@ -86,20 +86,20 @@ export function RepositoryPicker({ value, pending, onPick, disabled, error, sign
             {/* A repo set with /repo that no list holds is still shown, so the current choice is never hidden. */}
             <Choices title="This chat" choices={choices.current ? [choices.current] : []} value={value} onChoose={choose} />
             <Choices title={personaName ? `${personaName}’s repositories` : "Persona repositories"} choices={choices.persona} value={value} note={(i) => (i === 0 ? "Default for new chats" : undefined)} onChoose={choose} />
-            {repos.error && <p role="alert" className="px-2 py-1 text-xs text-pill-blocked-fg">{repos.error.message}</p>}
+            {repos.error && <p role="alert" className="px-2 py-1 text-12 text-pill-blocked-fg">{repos.error.message}</p>}
             <Choices title="Saved repositories" choices={choices.saved} value={value} onChoose={choose} />
             <div role="separator" className="my-1 h-px bg-border-subtle" />
             <button type="button" onClick={() => setOther(true)} className={row}>
               <span className="min-w-0 flex-1">
                 <span className="block">Other repository…</span>
-                <span className="block text-xs text-fg-tertiary">Search saved repositories or paste a URL</span>
+                <span className="block text-12 text-fg-tertiary">Search saved repositories or paste a URL</span>
               </span>
             </button>
-            <p className="px-2 pb-1 pt-2 text-xs text-fg-tertiary">Any repository your GitHub credential can access. <a href="/settings#repositories" className="text-accent">Manage saved repos and owners</a></p>
+            <p className="px-2 pb-1 pt-2 text-12 text-fg-tertiary">Any repository your GitHub credential can access. <a href="/settings#repositories" className="text-accent">Manage saved repos and owners</a></p>
           </>}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-    {error && !open && <p role="alert" className="absolute bottom-full left-0 mb-1 w-max max-w-[320px] text-xs text-pill-blocked-fg">{error.message}</p>}
+    {error && !open && <p role="alert" className="absolute bottom-full left-0 mb-1 w-max max-w-[320px] text-12 text-pill-blocked-fg">{error.message}</p>}
   </div>;
 }

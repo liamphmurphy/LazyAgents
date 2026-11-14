@@ -49,7 +49,7 @@ function Section({ title, children, className }: { title: string; children: Reac
 function Specimen({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="text-[11.5px] text-fg-tertiary">{label}</span>
+      <span className="text-12 text-fg-tertiary">{label}</span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   );
@@ -59,7 +59,7 @@ function TypeRow({ children, spec }: { children: ReactNode; spec: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       {children}
-      <span className="flex-none font-mono text-[11px] text-fg-tertiary">{spec}</span>
+      <span className="flex-none font-mono text-11 text-fg-tertiary">{spec}</span>
     </div>
   );
 }
@@ -71,12 +71,12 @@ export default function Foundations() {
         <div className="flex items-center gap-4">
           <Mark size={52} />
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.03em]">Vesper Foundations</h1>
-            <span className="text-sm text-fg-secondary">The design language for supervising autonomous coding agents</span>
+            <h1 className="text-32 font-semibold leading-[1.1] tracking-[-0.03em]">Vesper Foundations</h1>
+            <span className="text-14 text-fg-secondary">The design language for supervising autonomous coding agents</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <span className="font-mono text-xs text-fg-tertiary">v0.2 · live components</span>
+          <span className="font-mono text-12 text-fg-tertiary">v0.2 · live components</span>
           <ThemeSwitch />
         </div>
       </header>
@@ -86,8 +86,8 @@ export default function Foundations() {
           {SURFACES.map(([name, v]) => (
             <div key={v} className="flex flex-col gap-1.5">
               <span className="h-[52px] rounded-[9px] border border-border-float" style={{ background: `var(${v})` }} />
-              <span className="text-xs font-medium">{name}</span>
-              <span className="font-mono text-[11px] text-fg-tertiary">{v}</span>
+              <span className="text-12 font-medium">{name}</span>
+              <span className="font-mono text-11 text-fg-tertiary">{v}</span>
             </div>
           ))}
         </div>
@@ -115,7 +115,7 @@ export default function Foundations() {
                 <StatusGlyph state={state} surface="var(--surface)" label={false} />
                 <span className="flex-1">{STATUS_LABEL[state]}</span>
                 <SmallPill tone={tone}>{pill}</SmallPill>
-                <span className="w-[120px] text-right font-mono text-[11px] text-fg-tertiary">{token}</span>
+                <span className="w-[120px] text-right font-mono text-11 text-fg-tertiary">{token}</span>
               </div>
             ))}
           </div>
@@ -124,7 +124,7 @@ export default function Foundations() {
         <Section title="Priority & identity">
           <div className="flex items-center gap-[18px]">
             {(["urgent", "high", "medium", "low", "none"] as const).map((p) => (
-              <span key={p} className="flex flex-col items-center gap-1.5 text-[11.5px] capitalize text-fg-secondary">
+              <span key={p} className="flex flex-col items-center gap-1.5 text-12 capitalize text-fg-secondary">
                 <PriorityGlyph priority={p} label={false} />
                 {p}
               </span>
@@ -136,7 +136,7 @@ export default function Foundations() {
               <AgentAvatar key={h} name={AGENT_NAMES[i]} colorIndex={i} size="md" />
             ))}
           </div>
-          <p className="text-[12.5px] leading-normal text-fg-secondary">
+          <p className="text-13 leading-normal text-fg-secondary">
             <b className="font-medium text-fg">Agents are rounded squares</b>, each with a fixed hue.{" "}
             <b className="font-medium text-fg">People are circles</b> in neutral grey, so you can tell at a glance who did the work.
           </p>
@@ -209,16 +209,16 @@ export default function Foundations() {
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 border-t border-border-subtle pt-[18px]">
           <div className="flex flex-col gap-1">
-            <span className="text-[13px] font-semibold">Color means state</span>
-            <span className="text-[12.5px] leading-normal text-fg-secondary">Amber always asks for a human. Red always means blocked. The accent is kept for primary actions and focus.</span>
+            <span className="text-13 font-semibold">Color means state</span>
+            <span className="text-13 leading-normal text-fg-secondary">Amber always asks for a human. Red always means blocked. The accent is kept for primary actions and focus.</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[13px] font-semibold">Mono for machine output</span>
-            <span className="text-[12.5px] leading-normal text-fg-secondary">Ticket IDs, branches, models, counts and permissions are set in JetBrains Mono, so they read as exact values.</span>
+            <span className="text-13 font-semibold">Mono for machine output</span>
+            <span className="text-13 leading-normal text-fg-secondary">Ticket IDs, branches, models, counts and permissions are set in JetBrains Mono, so they read as exact values.</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[13px] font-semibold">Borders over shadows</span>
-            <span className="text-[12.5px] leading-normal text-fg-secondary">Surfaces sit on 1px borders 4–6% brighter than the ground. Shadows are kept for floating menus and command bars.</span>
+            <span className="text-13 font-semibold">Borders over shadows</span>
+            <span className="text-13 leading-normal text-fg-secondary">Surfaces sit on 1px borders 4–6% brighter than the ground. Shadows are kept for floating menus and command bars.</span>
           </div>
         </div>
       </Section>
@@ -265,7 +265,7 @@ export default function Foundations() {
               <PropertyRow label="Status"><StatusGlyph state="in_progress" surface="var(--surface)" label={false} />In progress</PropertyRow>
               <PropertyRow label="Priority"><PriorityGlyph priority="urgent" label={false} />Urgent</PropertyRow>
               <PropertyRow label="Agent"><AgentAvatar name="Atlas" colorIndex={0} label={false} />Atlas</PropertyRow>
-              <PropertyRow label="Branch"><span className="font-mono text-xs">atlas/pay-214-partition</span></PropertyRow>
+              <PropertyRow label="Branch"><span className="font-mono text-12">atlas/pay-214-partition</span></PropertyRow>
             </Card>
             <div className="flex gap-6">
               <Stat label="Run time" value="38m" />

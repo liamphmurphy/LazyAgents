@@ -33,8 +33,8 @@ function TimeSlider({ minutes, onChange }: { minutes: number; onChange: (m: numb
   return (
     <div className="guide-stagger flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[22px] font-semibold text-fg" aria-live="polite">{timeLabel(minutes)}</span>
-        {minutes > PART_MINUTES && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">In {partsEstimate(minutes)} parts</span>}
+        <span className="text-22 font-semibold text-fg" aria-live="polite">{timeLabel(minutes)}</span>
+        {minutes > PART_MINUTES && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-12 font-semibold text-accent">In {partsEstimate(minutes)} parts</span>}
       </div>
       <input
         type="range"
@@ -47,12 +47,12 @@ function TimeSlider({ minutes, onChange }: { minutes: number; onChange: (m: numb
         onChange={(e) => onChange(TIME_STEPS[Number(e.target.value)])}
         className="w-full cursor-pointer accent-[var(--accent)]"
       />
-      <div className="relative h-4 text-[11px] text-fg-tertiary" aria-hidden>
+      <div className="relative h-4 text-11 text-fg-tertiary" aria-hidden>
         <span className="absolute left-0">30 min</span>
         <span className="absolute -translate-x-1/2" style={{ left: `${partsFrom * 100}%` }}>8h · parts beyond</span>
         <span className="absolute right-0">20h</span>
       </div>
-      <p className="text-xs text-fg-secondary">{timeDetail(minutes)}</p>
+      <p className="text-12 text-fg-secondary">{timeDetail(minutes)}</p>
     </div>
   );
 }
@@ -85,8 +85,8 @@ function Options<T extends string>({ name, label, options, value, onChange }: {
           )}>
             <input type="radio" className="sr-only" name={name} checked={on} data-step-focus={on || undefined} onChange={() => onChange(o.value)} />
             <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-medium text-fg">{o.label}</span>
-              <span className="block text-xs text-fg-secondary">{o.detail}</span>
+              <span className="block text-14 font-medium text-fg">{o.label}</span>
+              <span className="block text-12 text-fg-secondary">{o.detail}</span>
             </span>
             <span className={cx("grid size-[18px] flex-none place-items-center rounded-full border transition-colors", on ? "border-accent bg-accent text-on-accent" : "border-border-strong")}>
               {on && <Icon name="check" size={12} strokeWidth={2.2} className="motion-pop" />}
@@ -101,9 +101,9 @@ function Options<T extends string>({ name, label, options, value, onChange }: {
 function ReviewRow({ label, onEdit, children }: { label: string; onEdit: () => void; children: ReactNode }) {
   return (
     <button type="button" aria-label={`Edit ${label.toLowerCase()}`} onClick={onEdit} className="group flex w-full items-baseline gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover">
-      <span className="w-16 flex-none text-xs text-fg-tertiary">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{children}</span>
-      <span className={cx("flex-none text-xs text-accent transition-opacity group-focus-visible:opacity-100", hoverReveal())}>Edit</span>
+      <span className="w-16 flex-none text-12 text-fg-tertiary">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-13 text-fg">{children}</span>
+      <span className={cx("flex-none text-12 text-accent transition-opacity group-focus-visible:opacity-100", hoverReveal())}>Edit</span>
     </button>
   );
 }
@@ -174,7 +174,7 @@ export function NewModuleGuide() {
           <div className="guide-stagger flex flex-col gap-3">
             <Question htmlFor="learn-topic">What do you want to learn?</Question>
             <TextInput id="learn-topic" data-step-focus maxLength={200} placeholder="How Postgres MVCC and vacuum actually work" value={topic} onChange={(e) => setTopic(e.target.value)} />
-            <p className="text-xs text-fg-tertiary">Be as specific as you like. A narrow topic makes a better module.</p>
+            <p className="text-12 text-fg-tertiary">Be as specific as you like. A narrow topic makes a better module.</p>
           </div>
         );
       case 1:
@@ -182,7 +182,7 @@ export function NewModuleGuide() {
           <div className="guide-stagger flex flex-col gap-3">
             <Question htmlFor="learn-goal">What&apos;s it for?</Question>
             <TextArea id="learn-goal" data-step-focus rows={4} maxLength={1000} placeholder="I debug slow queries at work and want to understand table bloat" value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={onGoalKey} />
-            <p className="text-xs text-fg-tertiary">This shapes what gets taught. Skip it if you&apos;re just curious.</p>
+            <p className="text-12 text-fg-tertiary">This shapes what gets taught. Skip it if you&apos;re just curious.</p>
           </div>
         );
       case 2:
@@ -211,7 +211,7 @@ export function NewModuleGuide() {
             </div>
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               <Field label="Tutor" htmlFor="learn-tutor">
-                <select id="learn-tutor" value={tutor} onChange={(e) => setTutor(e.target.value)} className="h-[30px] rounded-md border border-border-strong bg-btn-outline px-2 text-[13px] text-fg-2">
+                <select id="learn-tutor" value={tutor} onChange={(e) => setTutor(e.target.value)} className="h-[30px] rounded-md border border-border-strong bg-btn-outline px-2 text-13 text-fg-2">
                   <option value="">Default persona</option>
                   {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -238,7 +238,7 @@ export function NewModuleGuide() {
         >
           <div className="flex items-center gap-2 px-[18px] pt-3.5">
             <Dialog.Title className="type-heading">New Learning Module</Dialog.Title>
-            <span className="font-mono text-xs text-fg-tertiary">{step + 1} of {STEPS.length}</span>
+            <span className="font-mono text-12 text-fg-tertiary">{step + 1} of {STEPS.length}</span>
             <Dialog.Close asChild>
               <IconButton icon="x" label="Close" className="ml-auto" />
             </Dialog.Close>
@@ -246,7 +246,7 @@ export function NewModuleGuide() {
           <div className="flex gap-1 px-[18px] pt-3" aria-hidden>
             {STEPS.map((s, i) => (
               <span key={s} className="h-1 flex-1 overflow-hidden rounded-full bg-track">
-                <span className={cx("block h-full origin-left rounded-full bg-accent transition-transform duration-300 ease-out motion-reduce:transition-none", i <= step ? "scale-x-100" : "scale-x-0")} />
+                <span className={cx("block h-full origin-left rounded-full bg-accent transition-transform duration-(--motion-slow) ease-out motion-reduce:transition-none", i <= step ? "scale-x-100" : "scale-x-0")} />
               </span>
             ))}
           </div>
@@ -270,7 +270,7 @@ export function NewModuleGuide() {
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
-              <span className="min-w-0 flex-1 text-xs text-fg-tertiary">{step === LAST ? "Drafting takes one short run. You approve the outline before any research starts." : null}</span>
+              <span className="min-w-0 flex-1 text-12 text-fg-tertiary">{step === LAST ? "Drafting takes one short run. You approve the outline before any research starts." : null}</span>
               {step > 0 && <Button variant="ghost" onClick={() => go(step - 1)}>Back</Button>}
               <Button variant="primary" type="submit" disabled={blocked} onClick={(e) => { if (e.detail > 1) e.preventDefault(); }}>
                 {step === LAST ? (create.isPending ? "Starting…" : "Draft outline") : step === 1 && !goal.trim() ? "Skip" : "Continue"}

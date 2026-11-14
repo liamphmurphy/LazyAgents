@@ -91,7 +91,7 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
           onKeyDown={onKey}
           placeholder="Find or create a page…  (#tag searches tags)"
           aria-label="Find or create a page"
-          className="h-14 flex-1 bg-transparent text-[17px] text-fg outline-none placeholder:text-fg-tertiary"
+          className="h-14 flex-1 bg-transparent text-18 text-fg outline-none placeholder:text-fg-tertiary"
         />
         <Kbd>esc</Kbd>
       </div>
@@ -105,10 +105,10 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
             >
               <Icon name={r.properties?.query ? "board" : "artifacts"} size={15} className={i === at ? "text-accent" : "text-fg-tertiary"} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-fg">
+                <span className="block truncate text-14 text-fg">
                   <Match text={r.title} q={tag ? "" : typed} />
                 </span>
-                <span className="block truncate text-xs text-fg-tertiary">{r.path.split("/").slice(0, -1).join(" / ") || "Top level"}</span>
+                <span className="block truncate text-12 text-fg-tertiary">{r.path.split("/").slice(0, -1).join(" / ") || "Top level"}</span>
               </span>
               {i === at && <Kbd>↵</Kbd>}
               <Icon name={AUDIENCE[r.audience].icon} size={13} className="text-fg-tertiary" />
@@ -121,7 +121,7 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
               onMouseEnter={() => setAt(() => rows.length)}
               onClick={make}
               disabled={create.isPending}
-              className={cx("mt-1 flex w-full items-center gap-3 rounded-lg border border-dashed border-border px-3 py-2.5 text-left text-sm", at === rows.length && "bg-selected")}
+              className={cx("mt-1 flex w-full items-center gap-3 rounded-lg border border-dashed border-border px-3 py-2.5 text-left text-14", at === rows.length && "bg-selected")}
             >
               <Icon name="plus" size={15} className="text-accent" />
               <span className="flex-1 text-fg-2">
@@ -131,9 +131,9 @@ function Switcher({ onClose, includeAgent }: { onClose: () => void; includeAgent
             </button>
           </li>
         )}
-        {!rows.length && !canCreate && <li className="px-3 py-6 text-center text-xs text-fg-tertiary">{results.isPending ? "Searching…" : "Nothing matches."}</li>}
+        {!rows.length && !canCreate && <li className="px-3 py-6 text-center text-12 text-fg-tertiary">{results.isPending ? "Searching…" : "Nothing matches."}</li>}
       </ul>
-      <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-[11px] text-fg-tertiary">
+      <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-11 text-fg-tertiary">
         <span><Kbd>↑↓</Kbd> navigate</span>
         <span><Kbd>↵</Kbd> open</span>
         <span><Kbd>⌘↵</Kbd> new tab</span>

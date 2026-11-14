@@ -12,7 +12,7 @@ type Change = Schemas["ChatCodeChange"];
 
 function Counts({ additions, deletions }: { additions: number; deletions: number }) {
   return (
-    <span className="flex flex-none items-center gap-1.5 font-mono text-xs tabular-nums">
+    <span className="flex flex-none items-center gap-1.5 font-mono text-12 tabular-nums">
       <span className="text-state-done">+{additions}</span>
       <span className="text-state-blocked">−{deletions}</span>
     </span>
@@ -62,7 +62,7 @@ function Diff({ patch, path, active }: { patch: string; path: string; active: bo
   hunks.forEach((h, hi) => h.index.forEach((ri, li) => toks?.[hi]?.[li] && byRow.set(ri, toks[hi][li])));
   return (
     <div className="max-h-[480px] overflow-auto" tabIndex={0} role="region" aria-label={`Diff of ${path}`}>
-      <div className="min-w-max font-mono text-xs leading-[1.55]">
+      <div className="min-w-max font-mono text-12 leading-[1.55]">
         {rows.map((r, i) => (
           <div key={i} className={cx("flex", ROW_CLASS[r.kind])} data-diff-row={r.kind}>
             {r.kind === "hunk" || r.kind === "meta" ? (
@@ -85,7 +85,7 @@ function Diff({ patch, path, active }: { patch: string; path: string; active: bo
 }
 
 function FileBody({ c, active }: { c: Change; active: boolean }) {
-  const note = (t: string) => <p className="px-3 py-2 text-xs text-fg-tertiary">{t}</p>;
+  const note = (t: string) => <p className="px-3 py-2 text-12 text-fg-tertiary">{t}</p>;
   if (c.binary) return note("Binary file changed");
   if (!c.patch) return note("Diff not shown (too large).");
   return (
@@ -111,10 +111,10 @@ function FileRow({ c, open, onToggle, active }: { c: Change; open: boolean; onTo
           className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-row-hover"
         >
           <Icon name={open ? "chev" : "chevr"} size={13} className="flex-none text-fg-tertiary" />
-          <span title={badge.label} aria-label={badge.label} className="flex-none rounded bg-selected px-1 font-mono text-[10px] font-semibold text-fg-secondary">
+          <span title={badge.label} aria-label={badge.label} className="flex-none rounded bg-selected px-1 font-mono text-10 font-semibold text-fg-secondary">
             {badge.letter}
           </span>
-          <span className="min-w-0 truncate font-mono text-xs text-fg" dir="ltr">
+          <span className="min-w-0 truncate font-mono text-12 text-fg" dir="ltr">
             {c.repository && <span className="text-fg-tertiary">{c.repository.replace("https://github.com/", "").replace(/\.git$/, "")} / </span>}
             {c.status === "renamed" && c.old_path ? `${c.old_path} → ${c.path}` : c.path}
           </span>
@@ -163,7 +163,7 @@ export function CodeChanges({ changes }: { changes?: Change[] }) {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-row-hover"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-13 hover:bg-row-hover"
       >
         <Icon name={open ? "chev" : "chevr"} size={14} className="flex-none text-fg-tertiary" />
         <Icon name="terminal" size={14} className="flex-none text-fg-secondary" />

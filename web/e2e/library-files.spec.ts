@@ -112,14 +112,11 @@ test("removing a file asks first and says file", async ({ page }) => {
   const seen = await installLibrary(page, [file("f-py")]);
   await page.goto("/library?tab=files&item=f-py");
   const dialog = page.getByRole("dialog", { name: "render_riff.py" });
-  let asked = "";
-  page.once("dialog", (d) => {
-    asked = d.message();
-    return d.accept();
-  });
   await dialog.getByRole("button", { name: "Remove" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText("this file");
+  await confirm.getByRole("button", { name: "Remove" }).click();
   await expect(page.getByTestId("library-item")).toHaveCount(0);
-  expect(asked).toContain("this file");
   expect(seen.deleted).toEqual(["f-py"]);
 });
 

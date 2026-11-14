@@ -49,7 +49,7 @@ export function ShortcutsDialog() {
           className="motion-dialog fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[600px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border-float bg-surface-raised shadow-xl outline-none"
         >
           <div className="flex items-center border-b border-border px-6 py-3">
-            <Dialog.Title className="flex-1 text-base font-semibold">Keyboard shortcuts</Dialog.Title>
+            <Dialog.Title className="flex-1 text-16 font-semibold">Keyboard shortcuts</Dialog.Title>
             <Dialog.Close asChild>
               <IconButton icon="x" label="Close keyboard shortcuts" />
             </Dialog.Close>
@@ -57,12 +57,12 @@ export function ShortcutsDialog() {
           <div className="overflow-y-auto px-6 pb-5">
             {SHORTCUTS.map((s) => (
               <section key={s.section} aria-labelledby={`shortcuts-${s.section.replaceAll(" ", "-")}`}>
-                <h3 id={`shortcuts-${s.section.replaceAll(" ", "-")}`} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">
+                <h3 id={`shortcuts-${s.section.replaceAll(" ", "-")}`} className="pb-1 pt-4 text-11 font-medium uppercase tracking-wide text-fg-tertiary">
                   {s.section}
                 </h3>
                 <dl>
                   {s.items.map((i) => (
-                    <div key={i.label} className="flex min-h-[28px] items-center gap-4 text-sm">
+                    <div key={i.label} className="flex min-h-[28px] items-center gap-4 text-14">
                       <dt className="flex-1">{i.label}</dt>
                       <dd className="flex gap-1">
                         {i.keys.map((k) => (

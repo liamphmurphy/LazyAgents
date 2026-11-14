@@ -30,6 +30,7 @@ import {
 import { ROLE_MAX } from "@/lib/profile-ui";
 import { setWizardStep } from "@/components/domain/setup-progress";
 import { PersonaAvatar, PersonaPortrait, personaLook, toneLabel } from "./persona";
+import { Spinner } from "@/components/ui/loading";
 
 // The first-run Welcome Wizard (LAZYAGENTS-102). It is the new-chat welcome:
 // the default Assistant hosts it from the carousel slot, says each step's line
@@ -67,7 +68,7 @@ function useTyped(text: string, every: number) {
 function SaidLine({ text }: { text: string }) {
   const typed = useTyped(text, 18);
   return (
-    <p aria-live="polite" className="mt-2 min-h-[42px] max-w-[440px] text-center text-[14px] text-fg-secondary">
+    <p aria-live="polite" className="mt-2 min-h-[42px] max-w-[440px] text-center text-14 text-fg-secondary">
       <Typed typed={typed} text={text} />
       <span aria-hidden className="wizard-caret" />
     </p>
@@ -89,31 +90,29 @@ function TypedName({ text }: { text: string }) {
   return <Typed typed={useTyped(text, 35)} text={text} />;
 }
 
-const field = "h-[30px] w-full rounded-[7px] border border-border-strong bg-surface-sunken px-2.5 text-[13px] text-fg outline-none transition-[border-color,box-shadow] focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]";
-const primary = "h-[30px] rounded-[7px] bg-accent px-3.5 text-[13px] font-semibold text-on-accent transition-[opacity,transform] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35";
-const ghost = "inline-flex h-[30px] items-center gap-2 rounded-[7px] border border-border-strong px-3 text-[13px] text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50";
+const field = "h-[30px] w-full rounded-[7px] border border-border-strong bg-surface-sunken px-2.5 text-13 text-fg outline-none transition-[border-color,box-shadow] focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]";
+const primary = "h-[30px] rounded-[7px] bg-accent px-3.5 text-13 font-semibold text-on-accent transition-[opacity,transform] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35";
+const ghost = "inline-flex h-[30px] items-center gap-2 rounded-[7px] border border-border-strong px-3 text-13 text-fg-2 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50";
 
 function Foot({ hint, children }: { hint?: ReactNode; children: ReactNode }) {
   return (
     <div className="mt-3 flex items-center justify-end gap-2.5">
-      <span className="mr-auto text-xs text-fg-tertiary" data-testid="wizard-hint">{hint}</span>
+      <span className="mr-auto text-12 text-fg-tertiary" data-testid="wizard-hint">{hint}</span>
       {children}
     </div>
   );
 }
 
 function Alert({ error }: { error?: string }) {
-  return error ? <p role="alert" className="mt-2 text-[12.5px] text-pill-blocked-fg">{error}</p> : null;
+  return error ? <p role="alert" className="mt-2 text-13 text-pill-blocked-fg">{error}</p> : null;
 }
-
-const Spinner = () => <span aria-hidden className="inline-block size-3 animate-spin rounded-full border-2 border-border-strong border-t-accent" />;
 
 // ------------------------------------------------------------ 0 · greeting
 
 function Greeting({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <p className="px-0.5 pb-7 pt-1 text-[15px] text-fg-tertiary">Three short steps: who you are, how I’ll think, and who else you’d like to talk to.</p>
+      <p className="px-0.5 pb-7 pt-1 text-15 text-fg-tertiary">Three short steps: who you are, how I’ll think, and who else you’d like to talk to.</p>
       <Foot>
         <button type="button" className={primary} onClick={onNext}>Let’s begin</button>
       </Foot>
@@ -184,28 +183,28 @@ function AboutYou({ onNext }: { onNext: () => void }) {
           onDrop={(e) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files[0]); }}
           data-testid="profile-photo"
         >
-          <span aria-hidden className="text-2xl font-semibold text-[#FFF6DD]">{initialOf(name)}</span>
+          <span aria-hidden className="text-26 font-semibold text-[#FFF6DD]">{initialOf(name)}</span>
           {shown && (
             // A local object URL or the private avatar route: next/image adds nothing.
             // eslint-disable-next-line @next/next/no-img-element
             <img key={shown} src={shown} alt="Your profile photo" className="wizard-photo absolute inset-0 size-full rounded-full object-cover" />
           )}
-          <span aria-hidden className="absolute -bottom-0.5 -right-0.5 grid size-[22px] place-items-center rounded-full bg-accent text-sm font-bold text-on-accent shadow-[0_0_0_3px_var(--surface)]">＋</span>
+          <span aria-hidden className="absolute -bottom-0.5 -right-0.5 grid size-[22px] place-items-center rounded-full bg-accent text-14 font-bold text-on-accent shadow-[0_0_0_3px_var(--surface)]">＋</span>
           <input ref={input} type="file" accept={PHOTO_TYPES.join(",")} aria-label="Profile photo" className="sr-only" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <div className="min-w-0 flex-1">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2.5">
             <label className="block">
-              <span className="mb-[5px] block text-xs text-fg-secondary">Your name</span>
+              <span className="mb-[5px] block text-12 text-fg-secondary">Your name</span>
               <input className={field} value={name} maxLength={80} autoFocus onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="block">
-              <span className="mb-[5px] block text-xs text-fg-secondary">What you do</span>
+              <span className="mb-[5px] block text-12 text-fg-secondary">What you do</span>
               <input className={field} value={work} placeholder="e.g. Backend engineer, Go" onChange={(e) => setWork(e.target.value)} />
             </label>
           </div>
-          <p className="mt-2 text-xs text-fg-tertiary">
-            Profile photo <span className="ml-0.5 rounded bg-selected px-[5px] py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-secondary">Optional</span>{" · "}
+          <p className="mt-2 text-12 text-fg-tertiary">
+            Profile photo <span className="ml-0.5 rounded bg-selected px-[5px] py-0.5 text-10 font-semibold uppercase tracking-[0.06em] text-fg-secondary">Optional</span>{" · "}
             {photo ? (
               <>looking good · <button type="button" className="text-accent hover:underline" onClick={() => setPhoto(null)}>Remove</button></>
             ) : (
@@ -280,13 +279,13 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
   const busy = verify.isPending || checking;
   const ok = verified !== undefined;
   return (
-    <section aria-label={label} data-verified={ok || undefined} className={cx("rounded-[10px] border border-border bg-surface-sunken p-3 transition-[border-color,box-shadow] duration-[400ms]", ok && "wizard-verified")}>
-      <h3 className="flex items-center gap-2 text-[14px] font-semibold">
+    <section aria-label={label} data-verified={ok || undefined} className={cx("rounded-[10px] border border-border bg-surface-sunken p-3 transition-[border-color,box-shadow] duration-(--motion-slow)", ok && "wizard-verified")}>
+      <h3 className="flex items-center gap-2 text-14 font-semibold">
         {label}
-        {images && <span data-testid={`${id}-images`} className="rounded-full bg-[color-mix(in_srgb,var(--brand-star)_22%,transparent)] px-2 py-px text-[10.5px] font-semibold text-[var(--brand-star)]">Images</span>}
+        {images && <span data-testid={`${id}-images`} className="rounded-full bg-[color-mix(in_srgb,var(--brand-star)_22%,transparent)] px-2 py-px text-11 font-semibold text-[var(--brand-star)]">Images</span>}
       </h3>
-      <p className="mt-0.5 text-xs text-fg-tertiary">{by}</p>
-      <p className="mb-2.5 mt-1 min-h-[52px] text-xs text-fg-tertiary">
+      <p className="mt-0.5 text-12 text-fg-tertiary">{by}</p>
+      <p className="mb-2.5 mt-1 min-h-[52px] text-12 text-fg-tertiary">
         {apiKeyOnly
           ? hostLogins
             ? "Runs use the agy sign-in on this host. Sign it in there, then Verify checks it. Nothing to paste."
@@ -298,7 +297,7 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
           {!apiKeyOnly && <div role="radiogroup" aria-label={`${label} sign-in`} className="mb-2 flex rounded-[7px] border border-border bg-bg p-0.5">
             {(["subscription", "api_key"] as const).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
-                className={cx("h-[22px] flex-1 rounded-[5px] text-xs transition-colors", kind === k ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg")}>
+                className={cx("h-[22px] flex-1 rounded-[5px] text-12 transition-colors", kind === k ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg")}>
                 {k === "subscription" ? "Subscription" : "API key"}
               </button>
             ))}
@@ -306,7 +305,7 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
           <input type="password" autoComplete="off" spellCheck={false} aria-label={`${label} credential`} className={field}
             placeholder={credentialPlaceholder(id, kind)} title={credentialHelp(id, kind)} value={value} onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) run(); }} />
-          {stored && !ok && <p className="mt-1.5 text-[11.5px] text-fg-tertiary">Already set up for this workspace: leave it empty to check that one. Pasting replaces it for everyone.</p>}
+          {stored && !ok && <p className="mt-1.5 text-12 text-fg-tertiary">Already set up for this workspace: leave it empty to check that one. Pasting replaces it for everyone.</p>}
         </>
       )}
       <div className="mt-2 flex items-center gap-2">
@@ -314,14 +313,14 @@ function HarnessCard({ id, label, by, images, apiKeyOnly, paste, hostLogins, sto
           {busy ? <><Spinner /><span className="sr-only">Verifying</span></> : ok ? "Verified" : "Verify"}
         </button>
         {ok && (
-          <span className="wizard-badge text-xs text-state-done" data-testid={`${id}-models`}>
+          <span className="wizard-badge text-12 text-state-done" data-testid={`${id}-models`}>
             <svg aria-hidden className="wizard-check mr-1 inline" width="12" height="12" viewBox="0 0 12 12" style={{ verticalAlign: -1 }}>
               <path d="M2 6.5l2.5 2.5L10 3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
             </svg>
             {verified} {verified === 1 ? "model" : "models"}
           </span>
         )}
-        {checking && <span className="text-xs text-fg-tertiary">Asking the runner…</span>}
+        {checking && <span className="text-12 text-fg-tertiary">Asking the runner…</span>}
       </div>
       <Alert error={error} />
     </section>
@@ -340,11 +339,11 @@ function ConnectHarness({ onNext }: { onNext: (verified: HarnessId[]) => void })
   return (
     <>
       {hostLogins ? (
-        <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
+        <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-13 text-fg-secondary">
           This server runs Claude Code, Codex and Antigravity with the <code>claude</code>, <code>codex</code> and <code>agy</code> sign-ins on its host. Sign the CLI in there, then Verify checks it.
         </p>
       ) : secretsOff ? (
-        <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-[12.5px] text-fg-secondary">
+        <p role="note" className="mb-2.5 rounded-[8px] border border-border bg-surface-sunken px-3 py-2 text-13 text-fg-secondary">
           Secrets are off on this server (<code>SECRETS_KEY</code> isn’t set), so Vesper can’t store a credential here. Set it and restart the API, then paste one here.
         </p>
       ) : null}
@@ -384,9 +383,9 @@ function DraftCard({ draft }: { draft?: Proposal }) {
         <PersonaAvatar persona={{ name: draft.name, color: draft.color, avatar_url: picture }} size={44} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold"><TypedName text={draft.name} /></div>
-        <div className="text-xs text-fg-tertiary">{toneLabel(draft.tone)}{draft.reason && ` · ${draft.reason}`}</div>
-        <ul className="wizard-stagger mt-1 list-disc pl-4 text-[12.5px] text-fg-2">
+        <div className="text-14 font-semibold"><TypedName text={draft.name} /></div>
+        <div className="text-12 text-fg-tertiary">{toneLabel(draft.tone)}{draft.reason && ` · ${draft.reason}`}</div>
+        <ul className="wizard-stagger mt-1 list-disc pl-4 text-13 text-fg-2">
           {draftBullets(draft.custom_instructions).map((b, i) => (
             <li key={b} style={{ "--i": i } as CSSProperties}>{b}</li>
           ))}
@@ -506,13 +505,13 @@ function FirstPersona({ harness, onDone }: { harness?: HarnessId; onDone: (perso
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
         placeholder={draft ? "Tell me what to change…" : "A blunt senior engineer who pairs with me…"}
-        className="w-full resize-none bg-transparent px-0.5 py-1 text-[15px] leading-[1.6] text-fg outline-none placeholder:text-fg-tertiary"
+        className="w-full resize-none bg-transparent px-0.5 py-1 text-15 leading-[1.6] text-fg outline-none placeholder:text-fg-tertiary"
       />
       {!draft && !waiting && (
         <ul aria-label="Examples" className="mt-2.5 flex flex-wrap gap-1.5">
           {PERSONA_EXAMPLES.map((x) => (
             <li key={x}>
-              <button type="button" onClick={() => setText(x)} className="inline-flex h-[26px] items-center rounded-full border border-border-strong px-2.5 text-xs text-fg-secondary transition-colors hover:bg-hover hover:text-fg">{x}</button>
+              <button type="button" onClick={() => setText(x)} className="inline-flex h-[26px] items-center rounded-full border border-border-strong px-2.5 text-12 text-fg-secondary transition-colors hover:bg-hover hover:text-fg">{x}</button>
             </li>
           ))}
         </ul>
@@ -570,7 +569,7 @@ export function WelcomeWizard({ only, onDone }: { only?: "harness"; onDone: (per
         <div className="flex h-28 items-center">
           <PersonaPortrait persona={host} breathe />
         </div>
-        <h1 className="mt-5 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-fg">{host.name}</h1>
+        <h1 className="mt-5 text-26 font-semibold leading-tight tracking-[-0.02em] text-fg">{host.name}</h1>
         <SaidLine key={line} text={line} />
         <div className="mt-[22px] w-full overflow-hidden rounded-xl border border-border-strong bg-surface p-3.5">
           <div key={step} className={leaving ? "wizard-leave" : "wizard-enter"} aria-label={["Welcome", "About you", "Connect a harness", "Your first persona"][step]} role="group">

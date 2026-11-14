@@ -53,17 +53,17 @@ function CardGroup({ label, cards, focused }: { label: string; cards: Card[]; fo
   if (cards.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-tertiary">{label}</h4>
+      <h4 className="text-12 font-semibold uppercase tracking-wide text-fg-tertiary">{label}</h4>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(205px,1fr))] gap-2">
         {cards.map((c) => (
           <li key={c.key} data-testid="source" data-cite={c.n} className="min-w-0">
             <SourceLink href={c.href} external={c.external} tip={c.tip} className={cx("flex h-full items-center gap-2.5 rounded-[10px] border bg-surface px-2.5 py-2 transition-colors hover:border-border-strong", c.n !== undefined && c.n === focused ? "border-accent" : "border-border")}>
               <SourceTile tile={c.tile} size={30} />
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] font-semibold text-fg">{c.title}</span>
-                <span className="truncate text-xs text-fg-tertiary">{c.meta}</span>
+                <span className="truncate text-13 font-semibold text-fg">{c.title}</span>
+                <span className="truncate text-12 text-fg-tertiary">{c.meta}</span>
               </span>
-              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-xs font-semibold text-accent">{c.n}</span>}
+              {c.n !== undefined && <span aria-hidden className="ml-auto flex-none self-start rounded bg-accent-soft px-1 font-mono text-12 font-semibold text-accent">{c.n}</span>}
             </SourceLink>
           </li>
         ))}
@@ -149,7 +149,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   const vesperCards = vesper.map(vesperCard).map(numbered);
   const webCards = used.map(webCard).map(numbered);
   const cards = [...vesperCards, ...webCards];
-  const shell = "w-full max-w-[min(720px,100%)] text-[12.5px]";
+  const shell = "w-full max-w-[min(720px,100%)] text-13";
   const pill = "inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1.5 pr-3 transition-colors hover:border-border-strong";
 
   // A lone source has nothing to open: the row is its link.
@@ -160,8 +160,8 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
         <div data-testid="source" data-cite={c.n}>
           <SourceLink href={c.href} external={c.external} tip={c.tip} className={pill}>
             <SourceTile tile={c.tile} size={22} />
-            <span className={cx("truncate text-[13px] font-semibold", c.href ? "text-accent" : "text-fg")}>{c.title}</span>
-            <span className="flex-none text-xs text-fg-tertiary">· {c.meta.split(" · ")[0]}</span>
+            <span className={cx("truncate text-13 font-semibold", c.href ? "text-accent" : "text-fg")}>{c.title}</span>
+            <span className="flex-none text-12 text-fg-tertiary">· {c.meta.split(" · ")[0]}</span>
           </SourceLink>
         </div>
       </section>
@@ -172,8 +172,8 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
   const split = total > 0 ? sourceSplit(vesper.length, used.length) : "none used";
   const toggle = (
     <>
-      <span className="text-[13px] font-semibold text-fg">{heading}</span>
-      <span className="truncate text-xs text-fg-tertiary">{split}</span>
+      <span className="text-13 font-semibold text-fg">{heading}</span>
+      <span className="truncate text-12 text-fg-tertiary">{split}</span>
       <Icon name="chev" size={12} className={cx("flex-none text-fg-tertiary transition-transform", open && "rotate-180")} />
     </>
   );
@@ -192,7 +192,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
           ) : (
             <span aria-hidden className="grid size-[22px] flex-none place-items-center rounded-md bg-surface-sunken text-fg-secondary"><Icon name="search" size={12} /></span>
           )}
-          {cards.length > MAX_TILES && <span aria-hidden className="flex-none text-xs font-semibold text-fg-tertiary">+{cards.length - MAX_TILES}</span>}
+          {cards.length > MAX_TILES && <span aria-hidden className="flex-none text-12 font-semibold text-fg-tertiary">+{cards.length - MAX_TILES}</span>}
           {toggle}
         </button>
       </section>
@@ -235,7 +235,7 @@ export function Sources({ citations, body, listed, runId, since, until, webEvent
                 {more.map((s) => (
                   <li key={s.url} data-testid="source-more" className="flex items-baseline gap-3">
                     <a href={s.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-accent hover:underline">{s.title}</a>
-                    <span className="flex-none text-xs text-fg-tertiary">{s.host}</span>
+                    <span className="flex-none text-12 text-fg-tertiary">{s.host}</span>
                   </li>
                 ))}
               </ul>

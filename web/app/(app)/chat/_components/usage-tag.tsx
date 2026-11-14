@@ -40,7 +40,7 @@ function effortNote(m: Message): string | undefined {
  * and how the effort was chosen.
  */
 export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
-  const tagClass = "font-mono text-xs text-fg-tertiary";
+  const tagClass = "font-mono text-12 text-fg-tertiary";
   if (m.input_tokens === undefined) {
     return (
       <span className={tagClass} data-testid="model-tag">
@@ -75,9 +75,9 @@ export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
             align="start"
             sideOffset={6}
             data-testid="usage-tooltip"
-            className={cx(floatPanel, "flex flex-col gap-1 px-3 py-2 text-xs")}
+            className={cx(floatPanel, "flex flex-col gap-1 px-3 py-2 text-12")}
           >
-            <span className="text-xs text-fg-tertiary">This reply</span>
+            <span className="text-12 text-fg-tertiary">This reply</span>
             <Row label="Input" value={compact(t.input)} note={cache || undefined} />
             <Row label="Output" value={compact(t.output)} />
             <Row label="Cost" value={cost ?? "not reported"} />
@@ -85,7 +85,7 @@ export function UsageTag({ m, children }: { m: Message; children: ReactNode }) {
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>
-      {cost && <span className="text-xs text-fg-tertiary"> · {cost}</span>}
+      {cost && <span className="text-12 text-fg-tertiary"> · {cost}</span>}
     </>
   );
 }

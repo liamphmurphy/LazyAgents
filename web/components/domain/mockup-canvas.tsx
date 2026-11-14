@@ -290,7 +290,7 @@ export function MockupCanvas({
   };
 
   if (!tree) {
-    return <p className="rounded-xl border border-border bg-surface-sunken p-4 text-[13px] text-fg-tertiary">Visual editing needs a well-formed SVG. Fix the markup in Source.</p>;
+    return <p className="rounded-xl border border-border bg-surface-sunken p-4 text-13 text-fg-tertiary">Visual editing needs a well-formed SVG. Fix the markup in Source.</p>;
   }
 
   const { width: _w, height: _h, x: _x, y: _y, ...rootAttrs } = tree.attrs;
@@ -324,7 +324,7 @@ export function MockupCanvas({
           <span className="ml-auto">{toolbarEnd}</span>
         </div>
         {san && san.skipped > 0 && (
-          <p className="flex flex-wrap items-center gap-2 text-xs text-fg-tertiary">
+          <p className="flex flex-wrap items-center gap-2 text-12 text-fg-tertiary">
             <span>
               {san.skipped} element{san.skipped === 1 ? "" : "s"} can&apos;t be shown in the visual editor; they&apos;re kept in the source. The image preview is authoritative.
             </span>
@@ -376,7 +376,7 @@ export function MockupCanvas({
                     e.stopPropagation();
                   }}
                   style={{ position: "absolute", left: editing.left - 4, top: editing.top - 4, minWidth: Math.max(editing.width + 24, 96), height: Math.max(editing.height + 8, 26) }}
-                  className="rounded-sm border border-accent bg-surface px-1.5 text-[13px] text-fg focus:outline-none"
+                  className="rounded-sm border border-accent bg-surface px-1.5 text-13 text-fg focus:outline-none"
                 />
               )}
             </div>
@@ -400,7 +400,7 @@ function Inspector({ el, path, apply, wide }: { el: Element | null; path: string
   if (!el || !path) {
     return (
       <aside className={shell} aria-label="Inspector">
-        <p className="text-xs text-fg-tertiary">Select an element on the canvas to edit it. Drag to move, double-click text to edit it.</p>
+        <p className="text-12 text-fg-tertiary">Select an element on the canvas to edit it. Drag to move, double-click text to edit it.</p>
       </aside>
     );
   }
@@ -408,13 +408,13 @@ function Inspector({ el, path, apply, wide }: { el: Element | null; path: string
   const set = (name: string, v: string) => apply(path, (_, e) => (e ? (setAttr(e, name, v), undefined) : false), `attr:${path}:${name}`);
   const attr = (name: string) => el.getAttribute(name) ?? "";
   const text = (id: string, label: string, name: string) => (
-    <label key={name} className="flex flex-col gap-1 text-xs text-fg-secondary" htmlFor={`${id}-${name}`}>
+    <label key={name} className="flex flex-col gap-1 text-12 text-fg-secondary" htmlFor={`${id}-${name}`}>
       {label}
       <TextInput mono id={`${id}-${name}`} value={attr(name)} onChange={(e) => set(name, e.target.value)} className="!h-7" />
     </label>
   );
   const color = (label: string, name: string) => (
-    <div key={name} className="flex flex-col gap-1 text-xs text-fg-secondary">
+    <div key={name} className="flex flex-col gap-1 text-12 text-fg-secondary">
       <label htmlFor={`mk-insp-${name}`}>{label}</label>
       <div className="flex items-center gap-1.5">
         <input type="color" aria-label={`${label} colour`} value={toHex(attr(name))} onChange={(e) => set(name, e.target.value.toUpperCase())} className="h-7 w-8 flex-none cursor-pointer rounded-sm border border-border-strong bg-surface p-0.5" />
@@ -425,9 +425,9 @@ function Inspector({ el, path, apply, wide }: { el: Element | null; path: string
   const geometry = GEOMETRY[tag] ?? [];
   return (
     <aside className={cx(shell, "flex flex-col gap-2.5")} aria-label="Inspector" key={path}>
-      <h3 className="font-mono text-[12.5px] text-fg-2">&lt;{tag}&gt;</h3>
+      <h3 className="font-mono text-13 text-fg-2">&lt;{tag}&gt;</h3>
       {tag === "text" && (
-        <label className="flex flex-col gap-1 text-xs text-fg-secondary" htmlFor="mk-insp-content">
+        <label className="flex flex-col gap-1 text-12 text-fg-secondary" htmlFor="mk-insp-content">
           Text
           <TextInput id="mk-insp-content" value={getText(el)} onChange={(e) => apply(path, (_, x) => (x ? (setText(x, e.target.value), undefined) : false), `text:${path}`)} className="!h-7" />
         </label>

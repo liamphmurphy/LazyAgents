@@ -20,6 +20,7 @@ import { ProjectScopeState, useProjectScope } from "@/components/shell/project-s
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { LibrarySourceSwitch } from "./source-switch";
 import { ArtifactPreview } from "./preview";
+import { PageHeader } from "@/components/ui/page-header";
 
 const TABS: Array<{ key: "all" | ArtifactType; label: string }> = [
   { key: "all", label: "All" },
@@ -120,16 +121,10 @@ export function ProjectDocs() {
       />
       <div className="flex flex-1 flex-wrap">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5 px-7 py-8 max-sm:px-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <h1 className="type-display">Library</h1>
-              <p className="text-sm text-fg-secondary">Shared with the workspace: context agents read before they work, and the reports they leave behind.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <LibrarySourceSwitch source="projects" />
-              <ProjectPicker />
-            </div>
-          </div>
+          <PageHeader title="Library" description="Shared with the workspace: context agents read before they work, and the reports they leave behind.">
+            <LibrarySourceSwitch source="projects" />
+            <ProjectPicker />
+          </PageHeader>
 
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex h-[34px] min-w-[220px] flex-1 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-fg-tertiary focus-within:border-accent">
@@ -139,7 +134,7 @@ export function ProjectDocs() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search titles and contents"
-                className="flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-tertiary"
+                className="flex-1 bg-transparent text-13 text-fg outline-none placeholder:text-fg-tertiary"
               />
             </label>
             <Tabs
@@ -173,7 +168,7 @@ export function ProjectDocs() {
             </span>
             <span className="flex flex-col">
               <span className="font-medium">Drop PRDs, specs or ADRs here</span>
-              <span className="text-[12.5px] text-fg-tertiary">
+              <span className="text-13 text-fg-tertiary">
                 Markdown, PDF or images. Markdown is split into sections so agents can cite them.
               </span>
             </span>
@@ -187,9 +182,9 @@ export function ProjectDocs() {
             </Banner>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-              <table className="w-full min-w-[720px] border-collapse text-[13px]">
+              <table className="w-full min-w-[720px] border-collapse text-13">
                 <thead>
-                  <tr className="text-left text-[12.5px] text-fg-tertiary">
+                  <tr className="text-left text-13 text-fg-tertiary">
                     <th className="px-4 py-3 font-normal">Name</th>
                     <th className="w-[150px] px-3 py-3 font-normal">Author</th>
                     <th className="w-[170px] px-3 py-3 font-normal">Project</th>
@@ -234,7 +229,7 @@ export function ProjectDocs() {
                                 >
                                   {artifactTitle(a)}
                                 </button>
-                                <span className="flex items-center gap-2 text-xs text-fg-tertiary">
+                                <span className="flex items-center gap-2 text-12 text-fg-tertiary">
                                   {a.path ?? artifactMeta(a)}
                                   {a.review_state && <ReviewChip state={a.review_state} />}
                                 </span>
@@ -254,8 +249,8 @@ export function ProjectDocs() {
                               <span className="text-fg-tertiary">Workspace</span>
                             )}
                           </td>
-                          <td className="px-3 font-mono text-xs text-fg-secondary">{a.ticket_count || "–"}</td>
-                          <td className="px-4 text-right text-xs text-fg-tertiary" title={new Date(a.updated_at).toLocaleString()}>
+                          <td className="px-3 font-mono text-12 text-fg-secondary">{a.ticket_count || "–"}</td>
+                          <td className="px-4 text-right text-12 text-fg-tertiary" title={new Date(a.updated_at).toLocaleString()}>
                             {shortAgo(a.updated_at)}
                           </td>
                         </tr>

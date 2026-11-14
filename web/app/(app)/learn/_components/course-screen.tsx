@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Banner, Skeleton } from "@/components/ui/primitives";
 import { BuildStepper, OutlineReview } from "./outline-review";
 import { StudyView } from "./study-view";
+import { confirmAction } from "@/components/ui/confirm";
 
 export function CourseScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -16,8 +17,8 @@ export function CourseScreen({ id }: { id: string }) {
   const course = useCourse(id);
   const stop = useStopCourse(id);
   const del = useDeleteCourse();
-  const discard = () => {
-    if (window.confirm("Delete this module, its progress and its tutor conversation?")) del.mutate(id, { onSuccess: () => router.push("/learn") });
+  const discard = async () => {
+    if (await confirmAction({ title: "Delete this module?", body: "Its progress and its tutor conversation are deleted too.", confirmLabel: "Delete module" })) del.mutate(id, { onSuccess: () => router.push("/learn") });
   };
   const c = course.data;
   const state = c?.summary.state as BuildState | undefined;
@@ -25,7 +26,7 @@ export function CourseScreen({ id }: { id: string }) {
   const laterPart = !!c && c.summary.part > 0;
   const actions = c && (laterPart ? (
     <>
-      <Link href={`/learn/${id}`} className="inline-flex h-7 items-center rounded-md px-2.5 text-xs text-fg-secondary hover:bg-hover">Back to studying</Link>
+      <Link href={`/learn/${id}`} className="inline-flex h-7 items-center rounded-md px-2.5 text-12 text-fg-secondary hover:bg-hover">Back to studying</Link>
       <Button variant="outline" disabled={stop.isPending} onClick={() => stop.mutate(undefined, { onSuccess: () => router.push(`/learn/${id}`) })}>Discard this part</Button>
     </>
   ) : (
@@ -55,7 +56,7 @@ export function CourseScreen({ id }: { id: string }) {
                 <div className="space-y-1">
                   <h1 className="type-title">{c.summary.topic}</h1>
                   {courseBuilding(state) && (
-                    <p className="text-sm text-fg-secondary">
+                    <p className="text-14 text-fg-secondary">
                       {COURSE_STATE_LABELS[state]}{c.summary.build_note ? ` · ${c.summary.build_note}` : ""}. This takes a while; you can leave and come back.
                     </p>
                   )}

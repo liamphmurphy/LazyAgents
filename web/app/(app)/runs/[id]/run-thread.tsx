@@ -41,7 +41,7 @@ export function CostValue({ d }: { d: RunDetail }) {
   return (
     <>
       {runCost(d.run.cost_usd, d.run.cost_source)}
-      {d.child_runs.length > 0 && <span className="ml-1.5 text-xs font-normal text-fg-tertiary">{subPriced ? "+" : "≥ +"}${sub.toFixed(2)} sub</span>}
+      {d.child_runs.length > 0 && <span className="ml-1.5 text-12 font-normal text-fg-tertiary">{subPriced ? "+" : "≥ +"}${sub.toFixed(2)} sub</span>}
     </>
   );
 }
@@ -66,9 +66,9 @@ function NowLine({ d }: { d: RunDetail }) {
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   return (
     <div className="flex flex-none flex-col gap-1.5 border-b border-border-subtle py-2.5">
-      <p className={cx(COLUMN, "flex items-baseline gap-3 text-[13px]")}>
-        <span className="flex-none text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">{now ? "Now" : "Plan"}</span>
-        {p.total > 0 && <span title={p.current?.text} className="flex-none font-mono text-xs text-fg-tertiary">Step {p.current?.position ?? p.done} of {p.total}</span>}
+      <p className={cx(COLUMN, "flex items-baseline gap-3 text-13")}>
+        <span className="flex-none text-11 font-semibold uppercase tracking-wide text-fg-tertiary">{now ? "Now" : "Plan"}</span>
+        {p.total > 0 && <span title={p.current?.text} className="flex-none font-mono text-12 text-fg-tertiary">Step {p.current?.position ?? p.done} of {p.total}</span>}
         <span role="status" className="min-w-0 flex-1 truncate text-fg-2">{now ?? (p.done === p.total ? "All steps done" : p.current?.text)}</span>
       </p>
       {p.total > 0 && (
@@ -82,7 +82,7 @@ function NowLine({ d }: { d: RunDetail }) {
             aria-valuetext={`${p.done} of ${p.total} steps done`}
             className="h-[3px] overflow-hidden rounded-full bg-surface-sunken"
           >
-            <div className={cx("h-full rounded-full", run.state === "waiting" ? "bg-state-human" : "bg-state-done")} style={{ width: `${pct}%` }} />
+            <div className={cx("h-full rounded-full", run.state === "waiting" ? "bg-state-human" : run.state === "running" ? "live-sheen bg-state-done" : "bg-state-done")} style={{ width: `${pct}%` }} />
           </div>
         </div>
       )}
@@ -100,17 +100,17 @@ function Line({ at, mark, tone, children, onClick, label }: { at: string; mark: 
       <span
         aria-hidden
         className={cx(
-          "flex h-5 min-w-5 flex-none items-center justify-center rounded px-1 font-mono text-[10.5px] font-semibold",
+          "flex h-5 min-w-5 flex-none items-center justify-center rounded px-1 font-mono text-11 font-semibold",
           tone === "error" ? "bg-pill-blocked-bg text-pill-blocked-fg" : tone === "gate" ? "bg-pill-human-bg text-pill-human-fg" : tone === "done" ? "text-state-done" : "bg-surface-sunken text-fg-secondary",
         )}
       >
         {mark}
       </span>
       <span className="min-w-0 flex-1">{children}</span>
-      <time dateTime={at} title={absoluteTime(at)} className="flex-none pt-0.5 font-mono text-[11px] text-fg-tertiary">{clock.format(new Date(at))}</time>
+      <time dateTime={at} title={absoluteTime(at)} className="flex-none pt-0.5 font-mono text-11 text-fg-tertiary">{clock.format(new Date(at))}</time>
     </>
   );
-  const cls = "flex w-full items-start gap-2.5 py-1 text-left text-[13px] text-fg-secondary";
+  const cls = "flex w-full items-start gap-2.5 py-1 text-left text-13 text-fg-secondary";
   return (
     <li>
       {onClick ? <button type="button" aria-label={label} onClick={onClick} className={cx(cls, "rounded-md hover:bg-hover")}>{body}</button> : <div className={cls}>{body}</div>}
@@ -124,18 +124,18 @@ function SubRunCard({ child, agent, task, at }: { child?: Run; agent: string; ta
       <div className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
         {child ? <AgentAvatar name={child.agent.name} colorIndex={child.agent.color_index} label={false} size="md" /> : <span aria-hidden className="size-7 flex-none rounded-full bg-surface-sunken" />}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="flex flex-wrap items-center gap-2 text-[13px]">
+          <p className="flex flex-wrap items-center gap-2 text-13">
             <span className="font-medium text-fg">{child?.agent.name ?? agent}</span>
             <span className="text-fg-tertiary">sub-run</span>
             {child && <StatusPill run={child} />}
           </p>
-          {task && <p className="line-clamp-2 text-[13px] text-fg-2">{task}</p>}
-          <p className="font-mono text-[11px] text-fg-tertiary">
+          {task && <p className="line-clamp-2 text-13 text-fg-2">{task}</p>}
+          <p className="font-mono text-11 text-fg-tertiary">
             {clock.format(new Date(at))}
             {child && ` · ${child.model} · ${duration(child.started_at, child.ended_at)} · ${runCost(child.cost_usd, child.cost_source)}`}
           </p>
         </div>
-        {child && <Link href={`/runs/${child.id}`} className="flex-none text-xs text-accent hover:underline">Open run ↗</Link>}
+        {child && <Link href={`/runs/${child.id}`} className="flex-none text-12 text-accent hover:underline">Open run ↗</Link>}
       </div>
     </li>
   );
@@ -146,7 +146,7 @@ function FeedRow({ item, d, onOpenTurn }: { item: FeedItem; d: RunDetail; onOpen
   switch (item.kind) {
     case "turn":
       return (
-        <li className="flex items-center gap-3 pb-1 pt-4 text-[11px] text-fg-tertiary">
+        <li className="flex items-center gap-3 pb-1 pt-4 text-11 text-fg-tertiary">
           <span aria-hidden className="h-px flex-1 bg-border-subtle" />
           <button type="button" onClick={() => onOpenTurn(item.turn)} aria-label={`Turn ${item.turn}, ${item.tools} tool calls. Open in the raw log`} className="rounded px-1 hover:text-fg hover:underline">
             Turn {item.turn}{item.tools > 0 && ` · ${item.tools} tool call${item.tools === 1 ? "" : "s"}`}
@@ -159,11 +159,11 @@ function FeedRow({ item, d, onOpenTurn }: { item: FeedItem; d: RunDetail; onOpen
         <li className="flex gap-3 py-2">
           <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} size="md" />
           <div className="min-w-0 flex-1">
-            <p className="mb-0.5 flex items-baseline gap-2 text-[13px]">
+            <p className="mb-0.5 flex items-baseline gap-2 text-13">
               <span className="font-semibold text-fg">{run.agent.name}</span>
-              <time dateTime={item.at} title={absoluteTime(item.at)} className="text-[11px] text-fg-tertiary">{clock.format(new Date(item.at))}</time>
+              <time dateTime={item.at} title={absoluteTime(item.at)} className="text-11 text-fg-tertiary">{clock.format(new Date(item.at))}</time>
             </p>
-            <div className="text-[15px] leading-relaxed text-fg-2"><Markdown>{item.text}</Markdown></div>
+            <div className="text-15 leading-relaxed text-fg-2"><Markdown>{item.text}</Markdown></div>
           </div>
         </li>
       );
@@ -198,9 +198,9 @@ function Outcome({ d }: { d: RunDetail }) {
   const href = workHref(run);
   return (
     <section aria-label="Outcome" className={cx("my-3 flex flex-col gap-2 rounded-xl border bg-surface p-3.5", run.state === "failed" ? "border-pill-blocked-bg" : "border-border")}>
-      <h2 className="text-xs font-medium text-fg-tertiary">Outcome</h2>
-      {run.outcome ? <p className="whitespace-pre-line text-[14px] text-fg-2">{run.outcome}</p> : <p className="text-[13px] text-fg-secondary">The run ended without an outcome.</p>}
-      {final && final !== run.outcome && !run.outcome && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13px] text-fg-secondary">{final}</p>}
+      <h2 className="text-12 font-medium text-fg-tertiary">Outcome</h2>
+      {run.outcome ? <p className="whitespace-pre-line text-14 text-fg-2">{run.outcome}</p> : <p className="text-13 text-fg-secondary">The run ended without an outcome.</p>}
+      {final && final !== run.outcome && !run.outcome && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-13 text-fg-secondary">{final}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {run.pr_url && run.pr_number ? <ButtonLink variant="outline" href={run.pr_url}>PR #{run.pr_number} ↗</ButtonLink> : null}
         {href && <ButtonLink variant="outline" href={href}>{run.purpose === "ticket" ? run.ticket_key : run.purpose === "planning" ? "Review proposals" : "Open chat"}</ButtonLink>}
@@ -213,9 +213,9 @@ function Outcome({ d }: { d: RunDetail }) {
 function Question({ run, question }: { run: Run; question: string | null }) {
   return (
     <div role="group" aria-label="Needs attention" className="my-2 flex flex-col gap-1.5 rounded-xl border border-state-human/40 bg-surface p-3.5">
-      <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
-      {question && <div className="max-h-60 overflow-y-auto text-[14px] leading-relaxed text-fg-2"><Markdown>{question}</Markdown></div>}
-      <p className="text-xs text-fg-tertiary">Answer in the box below.</p>
+      <p className="text-12 font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
+      {question && <div className="max-h-60 overflow-y-auto text-14 leading-relaxed text-fg-2"><Markdown>{question}</Markdown></div>}
+      <p className="text-12 text-fg-tertiary">Answer in the box below.</p>
     </div>
   );
 }
@@ -235,8 +235,8 @@ function NextLine({ next, query }: { next: Schemas["InboxItem"]; query: string }
   }, [href, router]);
   const kind = KIND[next.kind]?.label ?? next.kind;
   return (
-    <p className="my-3 flex items-center gap-2 text-[13px]">
-      <span className="flex-none text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">Next</span>
+    <p className="my-3 flex items-center gap-2 text-13">
+      <span className="flex-none text-11 font-semibold uppercase tracking-wide text-fg-tertiary">Next</span>
       <Link href={href} data-next-line className="min-w-0 truncate text-accent hover:underline">
         {kind} · {next.title}{next.agent ? ` · ${next.agent.name}` : ""}
       </Link>
@@ -270,7 +270,7 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
     >
       {comment.isError && <Banner tone="blocked" title="Couldn't send">{comment.error.message}</Banner>}
       {sent ? (
-        <p role="status" className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13px] text-fg-secondary">
+        <p role="status" className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-13 text-fg-secondary">
           {waiting ? `Sent. Resuming ${run.agent.name}…` : `Sent to ${run.agent.name} as a comment on ${run.ticket_key}.`}
           <Button variant="outline" onClick={again}>Write another</Button>
         </p>
@@ -290,14 +290,14 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
                 submit();
               }
             }}
-            className="max-h-48 min-h-9 flex-1 resize-none border-0 bg-transparent py-1.5 text-[14px] shadow-none focus:ring-0"
+            className="max-h-48 min-h-9 flex-1 resize-none border-0 bg-transparent py-1.5 text-14 shadow-none focus:ring-0"
           />
           <Button type="submit" variant={waiting ? "approve" : "primary"} disabled={!body.trim() || comment.isPending}>
             {comment.isPending ? "Sending…" : "Send"}
           </Button>
         </div>
       )}
-      <p className="px-1 text-[11px] text-fg-tertiary">
+      <p className="px-1 text-11 text-fg-tertiary">
         {waiting ? "Your reply resumes the run." : `Goes to ${run.agent.name} as a comment on ${run.ticket_key}; it reads it on its next look at the ticket.`}
       </p>
     </form>
@@ -327,8 +327,8 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
       <div className={cx(COLUMN, "flex flex-none items-center gap-3 py-3")}>
         <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} size="md" />
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
-          <h1 className="truncate text-[16px] font-semibold text-fg">{runTitle(run)}</h1>
-          <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-fg-tertiary">
+          <h1 className="truncate text-16 font-semibold text-fg">{runTitle(run)}</h1>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-12 text-fg-tertiary">
             {run.agent.name}
             <span aria-hidden>·</span>
             <WorkLink run={run} />
@@ -355,7 +355,7 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
               {feed.map((item, i) => <FeedRow key={`${item.kind}:${item.at}:${i}`} item={item} d={d} onOpenTurn={onOpenTurn} />)}
             </ol>
           ) : (
-            <p className="py-8 text-center text-[13px] text-fg-tertiary">
+            <p className="py-8 text-center text-13 text-fg-tertiary">
               {run.state === "queued" ? "The run starts when a runner slot is free." : "Messages appear as the agent works."}
             </p>
           )}
@@ -369,7 +369,7 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
       {canWrite ? (
         <Composer run={run} lastSeq={d.events.at(-1)?.seq ?? 0} />
       ) : !ended && (run.purpose === "planning" || run.purpose === "chat") && workHref(run) ? (
-        <p className={cx(COLUMN, "flex-none pb-4 pt-2 text-[12px] text-fg-tertiary")}>
+        <p className={cx(COLUMN, "flex-none pb-4 pt-2 text-12 text-fg-tertiary")}>
           Write to {run.agent.name} in the {run.purpose === "planning" ? <Link href={workHref(run)!} className="text-accent hover:underline">plan</Link> : <Link href={workHref(run)!} className="text-accent hover:underline">chat</Link>}.
         </p>
       ) : null}

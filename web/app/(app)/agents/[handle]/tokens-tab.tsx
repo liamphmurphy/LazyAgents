@@ -13,9 +13,9 @@ import { Banner, Card, EmptyState, Field, Skeleton, TextInput } from "@/componen
 function Command({ label, text }: { label: string; text: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-fg-tertiary">{label}</span>
+      <span className="text-12 text-fg-tertiary">{label}</span>
       <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-sunken p-2.5">
-        <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-fg-2">{text}</pre>
+        <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-12 text-fg-2">{text}</pre>
         <CopyButton text={text} label={`Copy ${label}`} />
       </div>
     </div>
@@ -43,7 +43,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
       </Banner>
 
       {minted && (
-        <Card title="Copy this token now" action={<span className="text-xs text-pill-human-fg">It won&apos;t be shown again</span>} bodyClassName="flex flex-col gap-3 px-[18px] py-4">
+        <Card title="Copy this token now" action={<span className="text-12 text-pill-human-fg">It won&apos;t be shown again</span>} bodyClassName="flex flex-col gap-3 px-[18px] py-4">
           <Command label="Token" text={minted.token} />
           <Command
             label="Claude Code"
@@ -54,7 +54,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
             text={`export LAZYAGENTS_TOKEN=${minted.token}\ncodex mcp add lazyagents --url ${minted.mcp_url} --bearer-token-env-var LAZYAGENTS_TOKEN`}
           />
           <Command label="Antigravity: add to ~/.gemini/config/mcp_config.json" text={antigravityMcpConfig(minted.mcp_url, minted.token)} />
-          <p className="text-xs text-fg-tertiary">The Agent API at /mcp arrives with the rest of Phase 4; tokens you mint now will work with it.</p>
+          <p className="text-12 text-fg-tertiary">The Agent API at /mcp arrives with the rest of Phase 4; tokens you mint now will work with it.</p>
         </Card>
       )}
 
@@ -72,7 +72,7 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
           <Button type="submit" variant="primary" icon="key" disabled={create.isPending}>
             Create token
           </Button>
-          {create.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{create.error.message}</span>}
+          {create.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{create.error.message}</span>}
         </form>
         {!list.data ? (
           <div className="p-4"><Skeleton className="h-16" /></div>
@@ -82,9 +82,9 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-[13px]">
+            <table className="w-full min-w-[560px] border-collapse text-13">
               <thead>
-                <tr className="text-left text-[12.5px] text-fg-tertiary">
+                <tr className="text-left text-13 text-fg-tertiary">
                   <th className="px-[18px] py-2.5 font-normal">Label</th>
                   <th className="px-2 py-2.5 font-normal">Token</th>
                   <th className="px-2 py-2.5 font-normal">Created</th>
@@ -96,17 +96,17 @@ export function TokensTab({ detail }: { detail: AgentDetail }) {
                 {list.data.tokens.map((t) => (
                   <tr key={t.id} className={cx("border-t border-border-row", t.revoked_at && "text-fg-tertiary")}>
                     <td className="px-[18px] py-2.5">{t.label || <span className="text-fg-tertiary">Untitled</span>}</td>
-                    <td className="px-2 font-mono text-xs">{t.prefix}…</td>
-                    <td className="px-2 text-xs text-fg-secondary">
+                    <td className="px-2 font-mono text-12">{t.prefix}…</td>
+                    <td className="px-2 text-12 text-fg-secondary">
                       {ago(t.created_at)}
                       {t.created_by && ` by ${t.created_by.name}`}
                     </td>
-                    <td className="px-2 text-xs text-fg-secondary">{t.last_used_at ? ago(t.last_used_at) : "Never"}</td>
+                    <td className="px-2 text-12 text-fg-secondary">{t.last_used_at ? ago(t.last_used_at) : "Never"}</td>
                     <td className="pr-[18px] text-right">
                       {t.revoked_at ? (
-                        <span className="text-xs">Revoked</span>
+                        <span className="text-12">Revoked</span>
                       ) : (
-                        <Button variant="ghost" className="h-7 text-xs text-pill-blocked-fg" onClick={() => revoke.mutate(t.id)}>
+                        <Button variant="ghost" className="h-7 text-12 text-pill-blocked-fg" onClick={() => revoke.mutate(t.id)}>
                           Revoke
                         </Button>
                       )}

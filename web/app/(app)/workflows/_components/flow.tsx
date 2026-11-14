@@ -46,11 +46,11 @@ function StepNode({ data, selected }: NodeProps<FlowNode>) {
       className={cx("w-[168px] rounded-[10px] border bg-surface px-2.5 py-2", selected ? "border-2 border-accent" : status ? STATUS[status] : diff ? DIFF[diff] : "border-border-strong")}
     >
       {n.type !== "trigger" && <Handle type="target" position={Position.Left} />}
-      <p className={cx("text-[9.5px] font-semibold uppercase tracking-wide", n.type === "gate" ? "text-state-human" : "text-fg-tertiary")}>
+      <p className={cx("text-10 font-semibold uppercase tracking-wide", n.type === "gate" ? "text-state-human" : "text-fg-tertiary")}>
         {diff && DIFF_WORD[diff]}{NODE_LABEL[n.type]}
       </p>
-      <p className="truncate text-[13px] font-semibold text-fg">{n.title || "Untitled"}</p>
-      <p className="truncate text-[10.5px] text-fg-tertiary">{status === "waiting" ? "Waiting for you" : nodeSummary(n)}</p>
+      <p className="truncate text-13 font-semibold text-fg">{n.title || "Untitled"}</p>
+      <p className="truncate text-11 text-fg-tertiary">{status === "waiting" ? "Waiting for you" : nodeSummary(n)}</p>
       {!isOutput(n.type) && <Handle type="source" position={Position.Right} />}
     </div>
   );

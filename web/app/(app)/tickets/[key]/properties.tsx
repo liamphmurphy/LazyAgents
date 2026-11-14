@@ -26,8 +26,8 @@ function PropButton({ label, children, className, ...rest }: { label: string; ch
       className={cx("flex min-h-[34px] w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-hover", className)}
       {...rest}
     >
-      <span className="w-[88px] flex-none text-[12.5px] text-fg-tertiary">{label}</span>
-      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px] text-fg">{children}</span>
+      <span className="w-[88px] flex-none text-13 text-fg-tertiary">{label}</span>
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-13 text-fg">{children}</span>
     </button>
   );
 }
@@ -66,7 +66,7 @@ function InlineProp({
   };
   return (
     <div className="flex min-h-[34px] items-center gap-2.5 px-2">
-      <label htmlFor={`prop-${label}`} className="w-[88px] flex-none text-[12.5px] text-fg-tertiary">
+      <label htmlFor={`prop-${label}`} className="w-[88px] flex-none text-13 text-fg-tertiary">
         {label}
       </label>
       <input
@@ -80,7 +80,7 @@ function InlineProp({
           if (e.key === "Enter") commit(e.currentTarget.value);
           if (e.key === "Escape") setEditing(false);
         }}
-        className="h-7 min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg outline-none focus:border-accent [color-scheme:inherit]"
+        className="h-7 min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 text-13 text-fg outline-none focus:border-accent [color-scheme:inherit]"
       />
     </div>
   );
@@ -92,7 +92,7 @@ function estimatorLine(t: Ticket, boot: Bootstrap) {
   if (!by) return null;
   const who = by.type === "agent" ? `@${boot.agents.find((a) => a.id === by.id)?.handle ?? by.name}` : by.name;
   return (
-    <span className="text-[11.5px] text-fg-tertiary">
+    <span className="text-12 text-fg-tertiary">
       by {who}
       {t.estimated_at && (
         <>
@@ -174,15 +174,15 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
         </PropButton>
       </EpicMenu>
       <div className="flex min-h-[34px] items-center gap-2.5 px-2">
-        <span className="w-[88px] flex-none text-[12.5px] text-fg-tertiary">Project</span>
-        <span className="flex items-center gap-2 text-[13px]">
+        <span className="w-[88px] flex-none text-13 text-fg-tertiary">Project</span>
+        <span className="flex items-center gap-2 text-13">
           <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: t.project.color }} />
           {t.project.name}
         </span>
       </div>
       <div className="flex min-h-[34px] items-center gap-2.5 px-2">
-        <span className="w-[88px] flex-none text-[12.5px] text-fg-tertiary">Mockup</span>
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px]">
+        <span className="w-[88px] flex-none text-13 text-fg-tertiary">Mockup</span>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-13">
           {t.mockup_gate.from_epic ? (
             <span className="text-fg-secondary">Required by epic {t.epic?.name ?? ""}</span>
           ) : (
@@ -195,7 +195,7 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
         </span>
       </div>
       <div className="flex min-h-[34px] items-start gap-2.5 px-2 py-1">
-        <span aria-hidden className="w-[88px] flex-none pt-1.5 text-[12.5px] text-fg-tertiary">
+        <span aria-hidden className="w-[88px] flex-none pt-1.5 text-13 text-fg-tertiary">
           Estimate
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -207,14 +207,14 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
               onChange={(p) => save({ estimate_points: p }, `Estimate → ${p}`)}
             />
             {t.estimate_points != null && !closed && (
-              <button type="button" onClick={() => save({ estimate_points: null }, "Estimate cleared")} className="rounded px-1 text-[11.5px] text-fg-tertiary hover:text-fg-secondary">
+              <button type="button" onClick={() => save({ estimate_points: null }, "Estimate cleared")} className="rounded px-1 text-12 text-fg-tertiary hover:text-fg-secondary">
                 Clear
               </button>
             )}
           </div>
           {t.estimate_points != null && estimatorLine(t, boot)}
-          {closed && <span className="text-[11.5px] text-fg-tertiary">Closed tickets can’t be re-estimated.</span>}
-          {t.estimate && <span className="text-[11.5px] text-fg-tertiary">Legacy note: {t.estimate}</span>}
+          {closed && <span className="text-12 text-fg-tertiary">Closed tickets can’t be re-estimated.</span>}
+          {t.estimate && <span className="text-12 text-fg-tertiary">Legacy note: {t.estimate}</span>}
         </div>
       </div>
       <InlineProp
@@ -231,7 +231,7 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
         </PropButton>
       </LabelPicker>
       {error && (
-        <p role="alert" className="px-2 pt-2 text-xs text-pill-blocked-fg">
+        <p role="alert" className="px-2 pt-2 text-12 text-pill-blocked-fg">
           {error}
         </p>
       )}
@@ -245,15 +245,15 @@ export function CodeSection({ t }: { t: Ticket }) {
   const prState = t.pr ? t.pr.state[0].toUpperCase() + t.pr.state.slice(1) : "";
   return (
     <section className="flex flex-col gap-3 px-2">
-      <h2 className="text-[12.5px] text-fg-tertiary">Code</h2>
+      <h2 className="text-13 text-fg-tertiary">Code</h2>
       {t.branch && (
-        <div className="flex items-center gap-2.5 font-mono text-xs text-fg-2">
+        <div className="flex items-center gap-2.5 font-mono text-12 text-fg-2">
           <Icon name="branch" size={14} className="text-fg-tertiary" />
           <span className="truncate">{t.branch}</span>
         </div>
       )}
       {t.pr && (
-        <div className="flex items-center gap-2.5 text-[13px]">
+        <div className="flex items-center gap-2.5 text-13">
           <Icon name="pr" size={14} className="text-fg-tertiary" />
           {t.pr.url ? (
             <a href={t.pr.url} target="_blank" rel="noreferrer noopener" className="hover:underline">
@@ -265,7 +265,7 @@ export function CodeSection({ t }: { t: Ticket }) {
             </span>
           )}
           {t.pr.additions != null && (
-            <span className="ml-auto font-mono text-xs">
+            <span className="ml-auto font-mono text-12">
               <span className="text-pill-done-fg">+{t.pr.additions}</span>{" "}
               <span className="text-pill-blocked-fg">−{t.pr.deletions ?? 0}</span>
             </span>
@@ -274,7 +274,7 @@ export function CodeSection({ t }: { t: Ticket }) {
       )}
       {t.pr?.closed_unmerged && <Flag tone="blocked">PR closed without merging</Flag>}
       {t.pr?.synced_at && (
-        <span className="text-[11.5px] text-fg-tertiary" title={absoluteTime(t.pr.synced_at)}>
+        <span className="text-12 text-fg-tertiary" title={absoluteTime(t.pr.synced_at)}>
           Synced from GitHub {ago(t.pr.synced_at)}
         </span>
       )}

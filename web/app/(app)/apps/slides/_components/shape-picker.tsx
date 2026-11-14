@@ -103,7 +103,7 @@ export function ShapePicker({ chip, onPick }: { chip: string; onPick: (s: ShapeK
             aria-label="Search shapes"
             aria-controls="shape-grid"
             autoComplete="off"
-            className="mb-2 h-8 w-full rounded-md border border-border-strong bg-transparent px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mb-2 h-8 w-full rounded-md border border-border-strong bg-transparent px-2.5 text-13 outline-none focus-visible:ring-2 focus-visible:ring-accent"
             onKeyDown={(e) => {
               if (e.key === "ArrowDown" && flat[0]) {
                 e.preventDefault();
@@ -117,7 +117,7 @@ export function ShapePicker({ chip, onPick }: { chip: string; onPick: (s: ShapeK
           <div id="shape-grid" role="grid" aria-label="Shapes" className="max-h-[60vh] overflow-y-auto" onKeyDown={onGridKey}>
             {groups.map((g) => (
               <div key={g.category} role="rowgroup" aria-label={g.category}>
-                <div className="mb-1 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-3">{g.category}</div>
+                <div className="mb-1 px-0.5 text-11 font-semibold uppercase tracking-wide text-fg-3">{g.category}</div>
                 {Array.from({ length: Math.ceil(g.shapes.length / COLS) }, (_, r) => g.shapes.slice(r * COLS, (r + 1) * COLS)).map((row, r) => (
                 <div key={r} role="row" className="mb-2 grid grid-cols-6 gap-2">
                   {row.map((s) => (
@@ -146,9 +146,9 @@ export function ShapePicker({ chip, onPick }: { chip: string; onPick: (s: ShapeK
             ))}
             {!groups.length && <p className="px-1 py-6 text-center text-fg-3">No shapes match “{query}”.</p>}
           </div>
-          <div className="mt-1 flex items-center justify-between border-t border-border-subtle pt-2 text-[12px]">
+          <div className="mt-1 flex items-center justify-between border-t border-border-subtle pt-2 text-12">
             <span className="text-fg-2" aria-live="polite">{label(focus) ?? (flat.length ? `${flat.length} shapes` : "")}</span>
-            <span className="text-[11px] text-fg-3">↑↓←→ move · Enter insert · Esc close</span>
+            <span className="text-11 text-fg-3">↑↓←→ move · Enter insert · Esc close</span>
           </div>
         </Popover.Content>
       </Popover.Portal>

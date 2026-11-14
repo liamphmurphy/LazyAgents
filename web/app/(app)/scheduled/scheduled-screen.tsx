@@ -14,9 +14,11 @@ import { Segmented, Toggle } from "@/components/ui/controls";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { PersonaAvatar, personaLook } from "../chat/_components/persona";
+import { confirmAction } from "@/components/ui/confirm";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none";
+const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none";
 const DAY_LETTERS = [[1, "M"], [2, "T"], [3, "W"], [4, "T"], [5, "F"], [6, "S"], [0, "S"]] as const;
 const PILL: Record<string, string> = {
   done: "bg-pill-done-bg text-pill-done-fg",
@@ -29,7 +31,7 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday:
 
 function RunPill({ state }: { state: string }) {
   const r = RUN_LABEL[state];
-  return <span className={cx("flex-none rounded-full px-2.5 py-0.5 text-[11px]", PILL[r.tone])}>{r.label}</span>;
+  return <span className={cx("flex-none rounded-full px-2.5 py-0.5 text-11", PILL[r.tone])}>{r.label}</span>;
 }
 
 type Draft = ScheduledTaskInput & { weekdays: number[]; connector_ids: string[]; month_day: number; cron: string; instructions: string; max_minutes: number; max_cost_micros: number };
@@ -60,15 +62,13 @@ export function ScheduledScreen() {
       <Content>
         <div className="flex gap-6 max-xl:flex-col">
           <div className="flex min-w-0 flex-1 flex-col gap-6">
-            <header className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h1 className="type-display">Scheduled tasks</h1>
-                <p className="text-sm text-fg-secondary">Prompts and workflows that run on their own. Results arrive in your Inbox.</p>
-              </div>
-              <Button variant="primary" icon="plus" onClick={() => setOpen("new")}>New task</Button>
-            </header>
+            <PageHeader
+              title="Scheduled tasks"
+              description="Prompts and workflows that run on their own. Results arrive in your Inbox."
+              actions={<Button variant="primary" icon="plus" onClick={() => setOpen("new")}>New task</Button>}
+            />
             <Segmented label="Show tasks" value={filter} onChange={setFilter} small options={[{ value: "all", label: `All ${all.length}` }, { value: "active", label: `Active ${count(true)}` }, { value: "paused", label: `Paused ${count(false)}` }]} />
-            {save.isError && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(save.error)}</p>}
+            {save.isError && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(save.error)}</p>}
             {tasks.isError ? (
               <Banner tone="blocked" title="Couldn’t load tasks">{errorText(tasks.error)}</Banner>
             ) : !tasks.data ? (
@@ -85,12 +85,12 @@ export function ScheduledScreen() {
                       <button type="button" onClick={() => setOpen(t.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                         {t.kind === "workflow" ? <span className="grid size-8 flex-none place-items-center rounded-md border border-border-strong bg-selected text-fg-secondary"><Icon name="graph" size={14} /></span> : <PersonaAvatar persona={personaLook(persona)} size={32} />}
                         <span className="min-w-0 flex-1">
-                          <span className={cx("block truncate text-[14px] font-semibold", t.enabled ? "text-fg" : "text-fg-secondary")}>{t.name}</span>
-                          <span className="block truncate text-[12.5px] text-fg-secondary">{[t.kind === "workflow" ? "Workflow" : (persona?.name ?? "Default persona"), t.project, describeSchedule(t)].filter(Boolean).join(" · ")}</span>
+                          <span className={cx("block truncate text-14 font-semibold", t.enabled ? "text-fg" : "text-fg-secondary")}>{t.name}</span>
+                          <span className="block truncate text-13 text-fg-secondary">{[t.kind === "workflow" ? "Workflow" : (persona?.name ?? "Default persona"), t.project, describeSchedule(t)].filter(Boolean).join(" · ")}</span>
                         </span>
                         <span className="w-36 flex-none max-sm:hidden">
-                          <span className="block text-xs text-fg-tertiary">Next run</span>
-                          <span className="block truncate text-[12.5px] text-fg-2">{t.enabled && t.next_run_at ? when(t.next_run_at) : "Paused"}</span>
+                          <span className="block text-12 text-fg-tertiary">Next run</span>
+                          <span className="block truncate text-13 text-fg-2">{t.enabled && t.next_run_at ? when(t.next_run_at) : "Paused"}</span>
                         </span>
                       </button>
                       <span className="w-20 flex-none text-right">{last && <RunPill state={last.state} />}</span>
@@ -165,7 +165,7 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
           {draft.frequency === "weekly" && (
             <div role="group" aria-label="Days" className="flex gap-1.5">
               {DAY_LETTERS.map(([d, letter]) => (
-                <button key={d} type="button" aria-pressed={draft.weekdays.includes(d)} aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d]} onClick={() => toggleDay(d)} className={cx("size-8 rounded-full border text-xs", draft.weekdays.includes(d) ? "border-accent bg-accent font-semibold text-on-accent" : "border-border-strong bg-surface text-fg-secondary hover:bg-hover")}>{letter}</button>
+                <button key={d} type="button" aria-pressed={draft.weekdays.includes(d)} aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d]} onClick={() => toggleDay(d)} className={cx("size-8 rounded-full border text-12", draft.weekdays.includes(d) ? "border-accent bg-accent font-semibold text-on-accent" : "border-border-strong bg-surface text-fg-secondary hover:bg-hover")}>{letter}</button>
               ))}
             </div>
           )}
@@ -178,7 +178,7 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
             </div>
           )}
           <TextInput aria-label="Time zone" value={draft.timezone} onChange={(e) => set({ timezone: e.target.value })} />
-          {task?.upcoming.length ? <p className="text-xs text-fg-tertiary">Next: {task.upcoming.map(when).join(" and ")}</p> : null}
+          {task?.upcoming.length ? <p className="text-12 text-fg-tertiary">Next: {task.upcoming.map(when).join(" and ")}</p> : null}
         </div>
       </Field>
       {draft.kind === "prompt" && (
@@ -187,21 +187,21 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
             <div className="flex flex-wrap gap-2">
               {available.map((c) => {
                 const on = draft.connector_ids.includes(c.id);
-                return <button key={c.id} type="button" aria-pressed={on} onClick={() => toggleConnector(c.id)} className={cx("rounded-full border px-3 py-1 text-xs", on ? "border-accent bg-accent-soft text-fg" : "border-border-strong bg-surface text-fg-secondary hover:bg-hover")}>{c.name}</button>;
+                return <button key={c.id} type="button" aria-pressed={on} onClick={() => toggleConnector(c.id)} className={cx("rounded-full border px-3 py-1 text-12", on ? "border-accent bg-accent-soft text-fg" : "border-border-strong bg-surface text-fg-secondary hover:bg-hover")}>{c.name}</button>;
               })}
             </div>
           ) : (
-            <p className="text-xs text-fg-tertiary">This persona has no connectors. <Link className="text-accent hover:underline" href="/customization?who=connectors">Manage connectors</Link></p>
+            <p className="text-12 text-fg-tertiary">This persona has no connectors. <Link className="text-accent hover:underline" href="/customization?who=connectors">Manage connectors</Link></p>
           )}
         </Field>
       )}
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-[18px] py-3.5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[12.5px] text-fg-2">Results go to your Inbox. If a tool needs approval, the run waits there.</p>
-            <p className="text-xs text-fg-tertiary">Stops after {draft.max_minutes} minutes or {moneyLabel(draft.max_cost_micros)}, whichever comes first.</p>
+            <p className="text-13 text-fg-2">Results go to your Inbox. If a tool needs approval, the run waits there.</p>
+            <p className="text-12 text-fg-tertiary">Stops after {draft.max_minutes} minutes or {moneyLabel(draft.max_cost_micros)}, whichever comes first.</p>
           </div>
-          <button type="button" className="flex-none text-xs text-accent hover:underline" aria-expanded={limits} onClick={() => setLimits((v) => !v)}>Edit limits</button>
+          <button type="button" className="flex-none text-12 text-accent hover:underline" aria-expanded={limits} onClick={() => setLimits((v) => !v)}>Edit limits</button>
         </div>
         {limits && (
           <div className="grid grid-cols-2 gap-3">
@@ -217,17 +217,17 @@ function Editor({ task, onClose, onCreated }: { task?: ScheduledTask; onClose: (
             {task.runs.map((r) => (
               <li key={r.id} data-testid="scheduled-run" className="flex items-center gap-3 border-b border-border-row px-3 py-2 last:border-b-0">
                 <RunPill state={r.state} />
-                <span className="flex-1 truncate text-[12.5px] text-fg-2">{when(r.started_at)}{r.trigger === "catchup" && " (catch-up)"}</span>
-                <span className="max-w-40 truncate text-xs text-fg-tertiary" title={r.error}>{r.error || (r.cost_micros ? moneyLabel(r.cost_micros) : "")}</span>
-                {r.href && <Link className="text-xs text-accent hover:underline" href={r.href}>Open</Link>}
+                <span className="flex-1 truncate text-13 text-fg-2">{when(r.started_at)}{r.trigger === "catchup" && " (catch-up)"}</span>
+                <span className="max-w-40 truncate text-12 text-fg-tertiary" title={r.error}>{r.error || (r.cost_micros ? moneyLabel(r.cost_micros) : "")}</span>
+                {r.href && <Link className="text-12 text-accent hover:underline" href={r.href}>Open</Link>}
               </li>
             ))}
           </ul>
         </section>
       )}
-      {error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errorText(error)}</p>}
+      {error && <p role="alert" className="text-13 text-pill-blocked-fg">{errorText(error)}</p>}
       <div className="flex items-center justify-between border-t border-border-subtle pt-3">
-        {task ? <button type="button" className="text-[13px] text-pill-blocked-fg hover:underline" onClick={() => window.confirm(`Delete ${task.name}?`) && remove.mutate(task.id, { onSuccess: onClose })}>Delete task</button> : <span />}
+        {task ? <button type="button" className="text-13 text-pill-blocked-fg hover:underline" onClick={async () => { if (await confirmAction({ title: `Delete ${task.name}?`, body: "It won't run again.", confirmLabel: "Delete task" })) remove.mutate(task.id, { onSuccess: onClose }); }}>Delete task</button> : <span />}
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={save.isPending || !draft.name.trim()} onClick={submit}>Save</Button>

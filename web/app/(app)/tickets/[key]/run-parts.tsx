@@ -101,17 +101,17 @@ export function ApprovalBanner({ t, ap, expanded = false }: { t: Ticket; ap: App
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
           {showAction && ap.action_preview && (
             <>
-              <span className="text-xs text-fg-tertiary">
+              <span className="text-12 text-fg-tertiary">
                 {ap.brokered ? "Vesper runs exactly this after you approve; the agent never sees the credential." : "Requested action"}
               </span>
-              <pre className="max-h-64 overflow-auto rounded-lg bg-surface-sunken p-3 font-mono text-xs leading-relaxed text-fg-2">{ap.action_preview}</pre>
+              <pre className="max-h-64 overflow-auto rounded-lg bg-surface-sunken p-3 font-mono text-12 leading-relaxed text-fg-2">{ap.action_preview}</pre>
             </>
           )}
-          <label className="flex items-center gap-2 text-xs text-fg-tertiary">
+          <label className="flex items-center gap-2 text-12 text-fg-tertiary">
             Note to {ap.agent.name}
             <TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional; sent with your decision" className="flex-1" />
           </label>
-          {decide.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{decide.error.message}</span>}
+          {decide.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{decide.error.message}</span>}
         </div>
       )}
     </div>
@@ -129,7 +129,7 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
         <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} size="md" label={false} />
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="font-semibold">{run.agent.name}</span>
-          <span className="truncate font-mono text-[11px] text-fg-tertiary">
+          <span className="truncate font-mono text-11 text-fg-tertiary">
             {run.model} · {run.harness}
             {run.mode === "unmanaged" && " · unmanaged"}
           </span>
@@ -137,13 +137,13 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
         <SmallPill tone={st.tone}>{st.label}</SmallPill>
       </div>
       {run.state === "queued" && (
-        <p className="text-xs text-fg-secondary">Dispatched{run.dispatched_by && ` by ${run.dispatched_by.name}`}. Starts when a runner slot is free.</p>
+        <p className="text-12 text-fg-secondary">Dispatched{run.dispatched_by && ` by ${run.dispatched_by.name}`}. Starts when a runner slot is free.</p>
       )}
       {run.state === "waiting" && run.wait_reason === "human_reply" && (
-        <p className="text-xs text-pill-human-fg">Waiting for a reply. Mention @{run.agent.handle} in a comment to resume.</p>
+        <p className="text-12 text-pill-human-fg">Waiting for a reply. Mention @{run.agent.handle} in a comment to resume.</p>
       )}
       {run.state === "waiting" && run.wait_reason === "mockup_review" && (
-        <p className="text-xs text-pill-human-fg">Waiting for mockup review. The run resumes once a person reviews the mockup.</p>
+        <p className="text-12 text-pill-human-fg">Waiting for mockup review. The run resumes once a person reviews the mockup.</p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Run time" value={duration(run.started_at, run.ended_at)} />
@@ -153,22 +153,22 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
       </div>
       {(run.scopes.length > 0 || run.approval_scopes.length > 0) && (
         <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">
-          <span className="text-[11.5px] text-fg-tertiary">Permissions</span>
+          <span className="text-12 text-fg-tertiary">Permissions</span>
           <div className="flex flex-wrap gap-1">
             {run.scopes.map((s) => (
               <MonoChip key={s} variant="outline">{s}</MonoChip>
             ))}
             {run.approval_scopes.map((s) => (
-              <span key={s} className="rounded-[5px] bg-pill-human-bg px-[7px] py-0.5 font-mono text-[11px] text-pill-human-fg">
+              <span key={s} className="rounded-[5px] bg-pill-human-bg px-[7px] py-0.5 font-mono text-11 text-pill-human-fg">
                 {s} · approval
               </span>
             ))}
           </div>
         </div>
       )}
-      {run.outcome && <p className="whitespace-pre-line text-xs text-fg-secondary">{run.outcome}</p>}
+      {run.outcome && <p className="whitespace-pre-line text-12 text-fg-secondary">{run.outcome}</p>}
       {run.mode === "managed" && (
-        <Link href={`/runs/${run.id}`} className="flex items-center gap-1.5 text-xs text-accent hover:underline">
+        <Link href={`/runs/${run.id}`} className="flex items-center gap-1.5 text-12 text-accent hover:underline">
           <Icon name="terminal" size={13} /> View run log
         </Link>
       )}
@@ -188,7 +188,7 @@ export function RunCard({ t, run }: { t: Ticket; run: Run }) {
           </Button>
         </div>
       )}
-      {control.isError && <span role="alert" className="text-xs text-pill-blocked-fg">{control.error.message}</span>}
+      {control.isError && <span role="alert" className="text-12 text-pill-blocked-fg">{control.error.message}</span>}
     </section>
   );
 }
@@ -213,9 +213,9 @@ export function PlanCard({ plan }: { plan: Run["plan"] }) {
   return (
     <ol className="mt-2 flex flex-col gap-1.5 rounded-xl border border-border bg-surface px-4 py-3">
       {plan.map((s) => (
-        <li key={s.position} className="flex items-center gap-3 text-[13px]">
+        <li key={s.position} className="flex items-center gap-3 text-13">
           <StepGlyph state={s.state} />
-          <span className="w-4 font-mono text-xs text-fg-tertiary">{s.position}</span>
+          <span className="w-4 font-mono text-12 text-fg-tertiary">{s.position}</span>
           <span className={cx(s.state === "pending" ? "text-fg-secondary" : "text-fg-2", s.state === "current" && "font-medium text-fg")}>{s.text}</span>
         </li>
       ))}

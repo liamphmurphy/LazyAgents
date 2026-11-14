@@ -241,7 +241,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
     <div className="flex flex-col gap-1">
       <div role="group" aria-label="Show conversations for" className={cx("flex items-center py-0.5", overflow.length > 0 || shown.length === STRIP_PERSONAS - 1 ? "justify-between" : "gap-1.5")}>
         <button type="button" aria-label="All personas" aria-pressed={value === "all"} title="All personas" disabled={filter.loading} onClick={() => filter.set("all")}
-          className={cx("h-7 flex-none rounded-full px-3 text-xs font-semibold disabled:opacity-60", value === "all" ? "bg-selected text-fg outline-2 outline-accent" : "bg-surface text-fg-secondary hover:text-fg")}>
+          className={cx("h-7 flex-none rounded-full px-3 text-12 font-semibold disabled:opacity-60", value === "all" ? "bg-selected text-fg outline-2 outline-accent" : "bg-surface text-fg-secondary hover:text-fg")}>
           All
         </button>
         <PersonaAvatarButton label={`${defaultLook.name} (default)`} on={value === "default"} state={defaultId ? activity.get(defaultId) : undefined} disabled={filter.loading} onClick={() => filter.set("default")}>
@@ -256,7 +256,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button type="button" aria-label="More personas" title="More personas"
-                className="grid size-7 flex-none place-items-center rounded-full border border-border-strong bg-surface text-xs font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
+                className="grid size-7 flex-none place-items-center rounded-full border border-border-strong bg-surface text-12 font-semibold text-fg-secondary hover:bg-hover data-[state=open]:border-accent">
                 +{overflow.length}
               </button>
             </DropdownMenu.Trigger>
@@ -266,7 +266,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
                   <DropdownMenu.Item key={p.id} className={item} onSelect={() => filter.set(p.id)}>
                     <PersonaAvatar persona={p} />
                     <PersonaName persona={p} className="truncate" />
-                    <span className="ml-auto font-mono text-xs text-fg-tertiary">{p.chat_count}</span>
+                    <span className="ml-auto font-mono text-12 text-fg-tertiary">{p.chat_count}</span>
                   </DropdownMenu.Item>
                 ))}
                 <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
@@ -280,7 +280,7 @@ export function PersonaStrip({ filter, activity }: { filter: PersonaFilterState;
         )}
       </div>
       {!!filter.error && (
-        <p role="alert" className="flex flex-wrap items-center gap-x-2 px-1 text-xs">
+        <p role="alert" className="flex flex-wrap items-center gap-x-2 px-1 text-12">
           <span className="text-pill-blocked-fg">Couldn’t load personas.</span>
           <button type="button" className="text-accent hover:underline" onClick={filter.retry}>
             Retry
@@ -319,7 +319,7 @@ export function PersonaSwitcher({
           type="button"
           disabled={disabled}
           aria-label={`Persona for this conversation: ${current.name}`}
-          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full bg-selected pl-1.5 pr-2.5 text-[12.5px] font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-[30px] max-w-full items-center gap-1.5 rounded-full bg-selected pl-1.5 pr-2.5 text-13 font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PersonaAvatar persona={current} size={18} />
           <span className="truncate">{current.name}</span>
@@ -328,7 +328,7 @@ export function PersonaSwitcher({
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" side="top" sideOffset={6} className={cx(floatPanel, "w-[290px]")}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-fg-tertiary">
+          <DropdownMenu.Label className="px-2 py-1 text-12 font-medium uppercase tracking-wide text-fg-tertiary">
             Persona for this conversation
           </DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={value ?? ""} onValueChange={onChange}>
@@ -337,7 +337,7 @@ export function PersonaSwitcher({
                 <PersonaAvatar persona={p} />
                 <PersonaName persona={p} className="truncate" />
                 <CapabilityBadges capabilities={p.capabilities} />
-                <span className="truncate text-xs text-fg-tertiary">
+                <span className="truncate text-12 text-fg-tertiary">
                   {p.id === defaultId ? "(default) · " : ""}
                   {toneLabel(p.tone)}
                 </span>
@@ -348,7 +348,7 @@ export function PersonaSwitcher({
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
           <DropdownMenu.Item className={item} onSelect={manage}>
-            <span className="text-xs text-fg-secondary">Manage personas…</span>
+            <span className="text-12 text-fg-secondary">Manage personas…</span>
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -466,15 +466,15 @@ export function PersonaGreeting({
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
       <PersonaPortrait persona={persona} size={72} />
-      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-fg">
+      <h2 className="mt-3 text-22 font-semibold tracking-[-0.02em] text-fg">
         {firstName ? `Hi ${firstName}, I’m ` : "I’m "}
         {persona.id ? persona.name : "your assistant"}.
       </h2>
-      <p className="text-sm text-fg-secondary">
+      <p className="text-14 text-fg-secondary">
         A new conversation{isDefault ? " with your default persona" : ""}
         {persona.id ? ` · ${toneLabel(tone)} tone` : ""}
       </p>
-      <p className="max-w-[520px] text-sm text-fg-secondary">
+      <p className="max-w-[520px] text-14 text-fg-secondary">
         {canSwitch
           ? "Pick another persona below before you send your first message."
           : "Ask about your runs, tickets, epics and wiki, or have me draft tickets. I save useful things to your private memory and tell you when I do."}

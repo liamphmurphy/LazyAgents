@@ -19,7 +19,7 @@ function LayoutSwitch({ layout, current, compact }: { layout: TicketsLayout; cur
           aria-current={l === layout ? "page" : undefined}
           className={cx(
             "flex items-center rounded-md px-3",
-            compact ? "h-[32px] flex-1 justify-center text-[13px]" : "h-[26px] text-[12.5px]",
+            compact ? "h-[32px] flex-1 justify-center text-13" : "h-[26px] text-13",
             l === layout ? "bg-selected font-medium text-fg shadow-[inset_0_0_0_1px_var(--border-strong)]" : "text-fg-secondary hover:text-fg",
           )}
         >
@@ -43,7 +43,7 @@ export function TicketsLayoutBar({ layout }: { layout: TicketsLayout }) {
     return (
       <header className="flex flex-col gap-2.5 border-b border-border-subtle px-4 pb-2.5 pt-3">
         <div className="flex items-center gap-2">
-          <h1 className="flex-1 type-heading text-[17px]">Tickets</h1>
+          <h1 className="flex-1 type-heading text-18">Tickets</h1>
           {/* The board shows one project at a time, so it doesn't offer All projects. */}
           <div className="flex min-w-0 max-w-[60%]">
             <ProjectPicker allowAll={layout !== "board"} />

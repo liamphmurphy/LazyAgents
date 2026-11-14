@@ -41,8 +41,8 @@ const KINDS = [
 function CardStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="truncate text-xs text-fg-tertiary">{label}</dt>
-      <dd className="font-mono text-[15px] font-medium text-fg">{value}</dd>
+      <dt className="truncate text-12 text-fg-tertiary">{label}</dt>
+      <dd className="font-mono text-15 font-medium text-fg">{value}</dd>
     </div>
   );
 }
@@ -53,10 +53,10 @@ function LiveWork({ work }: { work: AgentOverview["assignments"][number] }) {
   return (
     <Link href={`/runs/${work.run_id}`} className="flex flex-col gap-0.5 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5 hover:border-border-hover">
       <span className="flex min-w-0 items-baseline gap-2">
-        <span className="flex-none font-mono text-xs text-fg-secondary">{work.ticket.key}</span>
-        <span className="min-w-0 truncate text-[13px] text-fg-2">{work.ticket.title}</span>
+        <span className="flex-none font-mono text-12 text-fg-secondary">{work.ticket.key}</span>
+        <span className="min-w-0 truncate text-13 text-fg-2">{work.ticket.title}</span>
       </span>
-      <span className="truncate text-xs text-fg-tertiary">
+      <span className="truncate text-12 text-fg-tertiary">
         {step}
         {work.step || work.state.replaceAll("_", " ")}
       </span>
@@ -78,7 +78,7 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
           <Link href={`${href}?tab=overview`} className="block truncate type-heading hover:text-accent">
             {a.name}
           </Link>
-          <p className="truncate text-xs text-fg-secondary">
+          <p className="truncate text-12 text-fg-secondary">
             {sub ? "Sub agent" : "Main"}
             {a.role && ` · ${a.role}`}
           </p>
@@ -88,7 +88,7 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <MonoChip>{a.model}</MonoChip>
         <MonoChip variant="outline">{o.harness}</MonoChip>
-        <span className="font-mono text-[11px] text-fg-tertiary">@{a.handle}</span>
+        <span className="font-mono text-11 text-fg-tertiary">@{a.handle}</span>
       </div>
       <dl className="grid grid-cols-4 gap-2 border-y border-border-subtle py-3" title="Live runs include planning runs. Done and spend cover the last 7 days.">
         <CardStat label="Live runs" value={live} />
@@ -104,12 +104,12 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
           <LiveWork key={work.run_id} work={work} />
         ))}
         {o.assignments.length > 1 && (
-          <Link className="block text-xs text-fg-tertiary hover:text-accent" href={`${href}?tab=overview`}>
+          <Link className="block text-12 text-fg-tertiary hover:text-accent" href={`${href}?tab=overview`}>
             +{o.assignments.length - 1} more live run{o.assignments.length > 2 ? "s" : ""} →
           </Link>
         )}
         {!live && (
-          <p className="rounded-lg border border-dashed border-border-strong px-3 py-2.5 text-[13px] text-fg-secondary">
+          <p className="rounded-lg border border-dashed border-border-strong px-3 py-2.5 text-13 text-fg-secondary">
             {sub
               ? "Runs only when a main agent delegates a task to it. Sub agents can't take tickets."
               : o.queue_count
@@ -118,7 +118,7 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
           </p>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-1.5 text-12">
         <span className="mr-1 text-fg-tertiary">Scopes</span>
         {modes.allowed > 0 && <Flag tone="done">{modes.allowed} allowed</Flag>}
         {modes.requires_approval > 0 && <Flag tone="human">{modes.requires_approval} approval</Flag>}
@@ -128,7 +128,7 @@ export function AgentCard({ overview: o }: { overview: AgentOverview }) {
           Scopes →
         </Link>
       </div>
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-3 text-xs">
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-3 text-12">
         <Link href={`${href}?tab=overview`} className="font-medium text-accent">
           Open agent →
         </Link>
@@ -190,7 +190,7 @@ export function AgentsSection() {
         <span className="grid size-[72px] flex-none place-items-center rounded-2xl bg-selected text-fg-secondary"><Icon name="agents" size={28} /></span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h2 className="truncate type-display text-fg">Agents</h2>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-14 text-fg-secondary">
             Agents run your tickets; personas talk with you. A Start card hands a ticket to its agent, and the agent&apos;s scopes, budget and project overrides decide what the run may do.
           </p>
         </div>
@@ -236,7 +236,7 @@ export function AgentsSection() {
             />
           </Field>
           <div className="flex flex-col gap-1.5">
-            <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
+            <span className="text-13 font-medium text-fg-2">Kind</span>
             <Segmented
               label="Agent kind"
               value={form.kind}
@@ -260,7 +260,7 @@ export function AgentsSection() {
           {create.isError && (
             <span
               role="alert"
-              className="w-full text-xs text-pill-blocked-fg"
+              className="w-full text-12 text-pill-blocked-fg"
             >
               {create.error.message}
             </span>
@@ -280,7 +280,7 @@ export function AgentsSection() {
               onClick={() => setStatus(st)}
               aria-pressed={status === st}
               className={cx(
-                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-12",
                 status === st
                   ? "border-border-strong bg-selected text-fg"
                   : "border-border text-fg-secondary hover:bg-hover",
@@ -347,7 +347,7 @@ export function AgentsSection() {
         </div>
       )}
       {roster.data && (
-        <p className="text-xs text-fg-tertiary">
+        <p className="text-12 text-fg-tertiary">
           Live runs include planning runs. Open tickets are assigned tickets
           awaiting dispatch plus tickets with a live run. Spend counts runs
           started in the last 7 days; refreshed{" "}

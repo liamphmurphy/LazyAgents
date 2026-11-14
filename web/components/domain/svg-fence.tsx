@@ -73,14 +73,14 @@ export function DiagramVisual({ source, captions = [], alt, label = "SVG image",
     </div>
   );
   const nav = stepped && printing ? (
-    <ol className="list-decimal border-t border-border-row py-2 pl-8 pr-3 text-[13px] text-fg-2">
+    <ol className="list-decimal border-t border-border-row py-2 pl-8 pr-3 text-13 text-fg-2">
       {captions.map((c, i) => <li key={i}>{c}</li>)}
     </ol>
   ) : stepped && (
     <div className="flex items-center gap-2 border-t border-border-row px-3 py-2">
       <Button variant="ghost" aria-label="Previous step" disabled={at === 0} onClick={() => setStep(at - 1)}>←</Button>
-      <p aria-live="polite" className="min-w-0 flex-1 text-[13px] text-fg-2">
-        <span className="mr-2 font-mono text-xs text-fg-tertiary">{at + 1}/{count}</span>
+      <p aria-live="polite" className="min-w-0 flex-1 text-13 text-fg-2">
+        <span className="mr-2 font-mono text-12 text-fg-tertiary">{at + 1}/{count}</span>
         {captions[at]}
       </p>
       <Button variant="ghost" aria-label="Next step" disabled={at === count - 1} onClick={() => setStep(at + 1)}>→</Button>
@@ -119,7 +119,7 @@ export function DiagramVisual({ source, captions = [], alt, label = "SVG image",
         </>
       ) : (
         <>
-          {failed && <p role="alert" className="border-b border-border-row px-3 py-1 text-xs text-pill-blocked-fg">This SVG couldn&apos;t be displayed.{code !== undefined ? " Its source is below." : ` ${name}`}</p>}
+          {failed && <p role="alert" className="border-b border-border-row px-3 py-1 text-12 text-pill-blocked-fg">This SVG couldn&apos;t be displayed.{code !== undefined ? " Its source is below." : ` ${name}`}</p>}
           {sourceView}
         </>
       )}

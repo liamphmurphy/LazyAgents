@@ -5,12 +5,12 @@ export type Crumb = { label: ReactNode; href?: string; swatch?: string; mono?: b
 
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px] text-fg-tertiary">
+    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-13 text-fg-tertiary">
       {items.map((c, i) => {
         const last = i === items.length - 1;
         if (last) {
           return (
-            <span key={i} aria-current="page" className={c.mono ? "font-mono text-[12.5px] text-fg" : "font-medium text-fg"}>
+            <span key={i} aria-current="page" className={c.mono ? "font-mono text-13 text-fg" : "font-medium text-fg"}>
               {c.label}
             </span>
           );

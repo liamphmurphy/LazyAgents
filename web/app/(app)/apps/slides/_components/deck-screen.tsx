@@ -34,6 +34,7 @@ import { ThemeEditor, type ThemeEditTarget } from "./theme-editor";
 import { Thumbnails } from "./thumbnails";
 import type { StylePatch } from "./style-menus";
 import { Toolbar, type TextFormat, type ToolbarActions } from "./toolbar";
+import { confirmAction } from "@/components/ui/confirm";
 
 type SaveState = "saved" | "unsaved" | "saving" | "conflict" | "error";
 const SAVE_LABEL: Record<SaveState, string> = { saved: "Saved", unsaved: "Unsaved changes", saving: "Saving…", conflict: "Not saved", error: "Not saved" };
@@ -568,9 +569,9 @@ export function DeckScreen({ id }: { id: string }) {
       setThemeError(undefined);
       setThemeEdit(saved ? { start: themeBody(saved), target: { kind: "saved", id: saved.id } } : deck ? { start: deck.theme, target: { kind: "deck" } } : null);
     },
-    deleteSavedTheme: (tid) => {
+    deleteSavedTheme: async (tid) => {
       const t = savedThemes?.find((x) => x.id === tid);
-      if (!t || !window.confirm(`Delete the theme “${t.name}”? Decks using it keep their copy.`)) return;
+      if (!t || !await confirmAction({ title: `Delete the theme “${t.name}”?`, body: "Decks using it keep their copy.", confirmLabel: "Delete theme" })) return;
       deleteTheme.mutate(tid, { onError: (e) => setNotice(`Couldn't delete ${t.name}: ${errorText(e)}`) });
     },
     setBackground: (col, key) => slide && update(mapSlide(slide.id, (s) => ({ ...s, background: col ? { color: col } : undefined })), key && `${slide.id}:${key}`),
@@ -779,7 +780,7 @@ export function DeckScreen({ id }: { id: string }) {
       </span>
     ),
     presence: ref.data && (
-      <span className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
+      <span className="flex items-center gap-1.5 text-12 text-fg-tertiary">
         <PersonaAvatar persona={look} size={22} className={cx(live && "animate-pulse ring-2 ring-[#3FC1B0] motion-reduce:animate-none")} />
         {live ? `${persona} is editing…` : reviewing ? `${persona} suggested changes` : `${persona} can edit`}
       </span>
@@ -888,7 +889,7 @@ export function DeckScreen({ id }: { id: string }) {
             {live && <Banner tone="human" title={`${persona} is editing…`}>The canvas is read-only until {persona} finishes; you’ll then review the changes.</Banner>}
             {archived && <Banner tone="human" title="This deck’s chat is archived">Restore the chat to edit the deck.</Banner>}
             {saveState.s === "error" && <Banner tone="blocked" title="Couldn’t save your changes" actions={<Button onClick={() => void flush().catch(() => undefined)}>Retry now</Button>}>{saveState.message} Your edits are kept in this tab; don’t close it yet.</Banner>}
-            {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("text-[12px]", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
+            {(notice || uploading) && <p role={notice ? "alert" : "status"} className={cx("text-12", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>}
             <SlideCanvas
               deck={deck}
               slide={slide}
@@ -908,14 +909,14 @@ export function DeckScreen({ id }: { id: string }) {
               overflow={overflowHere}
             />
             <label className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3">
-              <span className="flex items-center justify-between text-[12px] font-medium text-fg-secondary">
+              <span className="flex items-center justify-between text-12 font-medium text-fg-secondary">
                 Speaker notes
-                <span className="font-mono text-[11.5px] font-normal text-fg-tertiary">
+                <span className="font-mono text-12 font-normal text-fg-tertiary">
                   Slide {deck.slides.findIndex((s) => s.id === slide.id) + 1} of {deck.slides.length}
                 </span>
               </span>
               <textarea
-                className="min-h-[72px] resize-y bg-transparent text-[13.5px] text-fg-2 outline-none placeholder:text-fg-tertiary"
+                className="min-h-[72px] resize-y bg-transparent text-14 text-fg-2 outline-none placeholder:text-fg-tertiary"
                 placeholder="What to say on this slide"
                 value={slide.notes ?? ""}
                 readOnly={readOnly}
@@ -926,7 +927,7 @@ export function DeckScreen({ id }: { id: string }) {
                 }}
               />
             </label>
-            <label className="flex items-center gap-2 text-[12.5px] text-fg-secondary">
+            <label className="flex items-center gap-2 text-13 text-fg-secondary">
               <input type="checkbox" checked={!!slide.hidden} disabled={readOnly} onChange={(e) => update(mapSlide(slide.id, (s) => ({ ...s, hidden: e.target.checked || undefined })))} />
               Skip this slide when presenting and exporting
             </label>
@@ -983,7 +984,7 @@ export function DeckScreen({ id }: { id: string }) {
       id: "review",
       label: "Review",
       icon: "check",
-      badge: changeCount ? <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{changeCount}</span> : undefined,
+      badge: changeCount ? <span className="rounded-full bg-pill-review-bg px-1.5 text-11 text-pill-review-fg">{changeCount}</span> : undefined,
       content:
         baseDeck && headDeck ? (
           <DeckReview

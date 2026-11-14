@@ -8,6 +8,8 @@ import { Content, TopBar } from "@/components/shell/topbar";
 import { Button } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton, TextInput } from "@/components/ui/primitives";
 import { RunStatePill } from "@/components/domain/workflow-cards";
+import { confirmAction } from "@/components/ui/confirm";
+import { PageHeader } from "@/components/ui/page-header";
 
 export function WorkflowsScreen() {
   const router = useRouter();
@@ -29,10 +31,7 @@ export function WorkflowsScreen() {
       <TopBar crumbs={[{ label: "Workflows" }]} />
       <Content>
         <div className="flex flex-col gap-6">
-          <div className="space-y-1">
-            <h1 className="type-display">Workflows</h1>
-            <p className="text-sm text-fg-secondary">Fixed sequences of steps Vesper runs for you. Start one from a chat with /workflow, or ask a persona and confirm its suggestion.</p>
-          </div>
+          <PageHeader title="Workflows" description="Fixed sequences of steps Vesper runs for you. Start one from a chat with /workflow, or ask a persona and confirm its suggestion." />
           {list.length > 0 && createForm}
           {(create.error || workflows.error) && <Banner tone="blocked" title={(create.error ?? workflows.error)?.message} />}
           {workflows.isPending ? (
@@ -45,13 +44,13 @@ export function WorkflowsScreen() {
                 <li key={w.id}>
                   <Card bodyClassName="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/workflows/${w.id}`} className="text-[14px] font-semibold text-fg hover:underline">{w.name}</Link>
-                      {w.description && <p className="truncate text-[12.5px] text-fg-secondary">{w.description}</p>}
+                      <Link href={`/workflows/${w.id}`} className="text-14 font-semibold text-fg hover:underline">{w.name}</Link>
+                      {w.description && <p className="truncate text-13 text-fg-secondary">{w.description}</p>}
                     </div>
-                    <span className="flex-none font-mono text-xs text-fg-tertiary">
+                    <span className="flex-none font-mono text-12 text-fg-tertiary">
                       {w.published_version > 0 ? `v${w.published_version}${w.unpublished_changes ? " · edited" : ""}` : "Draft"}
                     </span>
-                    <Button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete ${w.name}? Runs already started keep going.`)) del.mutate(w.id); }}>Delete</Button>
+                    <Button disabled={del.isPending} onClick={async () => { if (await confirmAction({ title: `Delete ${w.name}?`, body: "Runs already started keep going.", confirmLabel: "Delete workflow" })) del.mutate(w.id); }}>Delete</Button>
                   </Card>
                 </li>
               ))}
@@ -63,8 +62,8 @@ export function WorkflowsScreen() {
               <ul className="flex flex-col gap-1">
                 {runs.data!.runs.slice(0, 20).map((r) => (
                   <li key={r.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-hover">
-                    <Link href={`/workflows/runs/${r.id}`} className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline">{r.name}</Link>
-                    <span className="min-w-0 max-w-[40%] truncate text-xs text-fg-tertiary">{r.input}</span>
+                    <Link href={`/workflows/runs/${r.id}`} className="min-w-0 flex-1 truncate text-13 text-fg hover:underline">{r.name}</Link>
+                    <span className="min-w-0 max-w-[40%] truncate text-12 text-fg-tertiary">{r.input}</span>
                     <RunStatePill state={r.state} />
                   </li>
                 ))}

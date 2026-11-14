@@ -48,7 +48,7 @@ function PinMarker({ n, pin, left, top, tone, active, onHover }: {
       onFocus={() => onHover?.(n - 1)}
       onBlur={() => onHover?.(null)}
       className={cx(
-        "absolute grid size-6 -translate-x-1/2 -translate-y-1/2 cursor-default place-items-center rounded-full text-[11.5px] font-bold shadow-sm ring-2 ring-surface transition-transform",
+        "absolute grid size-6 -translate-x-1/2 -translate-y-1/2 cursor-default place-items-center rounded-full text-12 font-bold shadow-sm ring-2 ring-surface transition-transform",
         tone === "draft" ? "bg-accent text-on-accent" : "bg-fg-secondary text-surface",
         active && "scale-125",
       )}
@@ -75,7 +75,7 @@ function PinComposer({ n, left, top, box, versionLabel, onSave, onCancel }: {
     <>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-dashed border-accent bg-surface text-[11.5px] font-bold text-accent"
+        className="pointer-events-none absolute grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-dashed border-accent bg-surface text-12 font-bold text-accent"
         style={{ left, top }}
       >
         {n}
@@ -101,8 +101,8 @@ function PinComposer({ n, left, top, box, versionLabel, onSave, onCancel }: {
         style={{ left: x, top: y, width: COMPOSER_W }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-[12.5px] font-semibold">Comment {n}</span>
-          <span className="text-[11px] text-fg-tertiary">on {versionLabel}</span>
+          <span className="text-13 font-semibold">Comment {n}</span>
+          <span className="text-11 text-fg-tertiary">on {versionLabel}</span>
         </div>
         <TextArea
           aria-label={`Comment ${n}`}
@@ -112,7 +112,7 @@ function PinComposer({ n, left, top, box, versionLabel, onSave, onCancel }: {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="What should change here?"
-          className="text-[13px]"
+          className="text-13"
         />
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onCancel}>
@@ -289,7 +289,7 @@ export function Pane({
       onPointerCancel={end}
     >
       {!drawing ? (
-        <p className="absolute inset-0 grid place-items-center text-[13px] text-fg-tertiary">Loading mockup…</p>
+        <p className="absolute inset-0 grid place-items-center text-13 text-fg-tertiary">Loading mockup…</p>
       ) : swipeWith && swipe !== undefined ? (
         // Clip both sides: drawings without an opaque background would otherwise show through each other.
         <div className="pointer-events-none absolute inset-0" style={{ clipPath: `inset(0 0 0 ${swipe * 100}%)` }}>

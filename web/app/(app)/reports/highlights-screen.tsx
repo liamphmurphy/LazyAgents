@@ -11,29 +11,30 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { ReportsTabNav } from "./reports-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 const ranges = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "custom", label: "Custom" }] as const;
-const field = "rounded-md border border-border-strong bg-surface px-2 py-1 text-sm text-fg";
+const field = "rounded-md border border-border-strong bg-surface px-2 py-1 text-14 text-fg";
 
 function Metric({ label, value, note }: { label: string; value: string | number; note: string }) {
   return <section aria-label={label} className="rounded-xl border border-border bg-surface p-4">
-    <h2 className="text-sm text-fg-secondary">{label}</h2>
-    <p className="my-2 text-[26px] font-semibold">{value}</p>
-    <p className="text-xs text-fg-tertiary">{note}</p>
+    <h2 className="text-14 text-fg-secondary">{label}</h2>
+    <p className="my-2 text-26 font-semibold">{value}</p>
+    <p className="text-12 text-fg-tertiary">{note}</p>
   </section>;
 }
 
 function Distribution({ title, rows, total, note }: { title: string; rows: HighlightRow[]; total: number; note: string }) {
   return <section aria-label={title} className="rounded-xl border border-border bg-surface p-4">
     <h2 className="type-heading">{title}</h2>
-    <p className="mt-1 mb-3 text-xs text-fg-tertiary">{note}</p>
-    {rows.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-      <thead className="text-xs text-fg-secondary"><tr><th scope="col" className="py-2 font-normal">Choice</th><th scope="col" className="px-3 text-right font-normal">Turns</th><th scope="col" className="text-right font-normal">Share</th><th scope="col" className="pl-3 text-right font-normal">Auto effort</th></tr></thead>
+    <p className="mt-1 mb-3 text-12 text-fg-tertiary">{note}</p>
+    {rows.length ? <div className="overflow-x-auto"><table className="w-full text-left text-14">
+      <thead className="text-12 text-fg-secondary"><tr><th scope="col" className="py-2 font-normal">Choice</th><th scope="col" className="px-3 text-right font-normal">Turns</th><th scope="col" className="text-right font-normal">Share</th><th scope="col" className="pl-3 text-right font-normal">Auto effort</th></tr></thead>
       <tbody>{rows.map((r) => <tr key={r.key} className="border-t border-border-subtle">
-        <th scope="row" className="max-w-64 py-3 pr-3 text-sm font-normal"><span className="break-words">{r.label}</span><div aria-hidden className="mt-1 h-1 rounded bg-hover"><div className="h-1 rounded bg-accent" style={{ width: `${total ? r.turns / total * 100 : 0}%` }} /></div></th>
+        <th scope="row" className="max-w-64 py-3 pr-3 text-14 font-normal"><span className="break-words">{r.label}</span><div aria-hidden className="mt-1 h-1 rounded bg-hover"><div className="h-1 rounded bg-accent" style={{ width: `${total ? r.turns / total * 100 : 0}%` }} /></div></th>
         <td className="px-3 text-right font-mono">{r.turns}</td><td className="text-right font-mono">{share(r.turns, total)}</td><td className="pl-3 text-right font-mono">{r.automatic}</td>
       </tr>)}</tbody>
-    </table></div> : <p className="py-4 text-sm text-fg-secondary">No recorded samples.</p>}
+    </table></div> : <p className="py-4 text-14 text-fg-secondary">No recorded samples.</p>}
   </section>;
 }
 
@@ -74,7 +75,7 @@ export function HighlightsScreen() {
       <Metric label="Effort raised" value={share(report.raised, report.automatic)} note={`${report.raised} of ${report.automatic} Auto turns · go-ahead, retry or edit`} />
       <Metric label="Average turn time" value={report.averageMs === undefined ? "Unknown" : `${(report.averageMs / 1000).toFixed(1)}s`} note={`${report.timed} timed turns · includes tools, excludes queue time`} />
     </div>
-    <p className="text-sm text-fg-secondary">{report.adjusted} Auto turns used a different recorded effort than requested. Auto turns without an actual effort remain model default / unrecorded.</p>
+    <p className="text-14 text-fg-secondary">{report.adjusted} Auto turns used a different recorded effort than requested. Auto turns without an actual effort remain model default / unrecorded.</p>
     <div className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
       <Distribution title="Requested Auto effort" rows={report.levels} total={report.automatic} note="What the message called for, before model support limited the effort." />
       <Distribution title="Actual effort" rows={report.efforts} total={report.turns} note="What ran, across the selected reply turns." />
@@ -87,15 +88,14 @@ export function HighlightsScreen() {
   return <>
     <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Highlights" }]} />
     <Content><div className="flex flex-col gap-5">
-      <div><h1 className="type-display">Reports</h1><p className="mt-1 text-sm text-fg-secondary">Routing decisions across your persona chats.</p></div>
-      <div className="flex flex-wrap items-center gap-3"><ReportsTabNav tab="highlights" /><ProjectPicker /></div>
+      <PageHeader title="Reports" description="Routing decisions across your persona chats."><ReportsTabNav tab="highlights" /><ProjectPicker /></PageHeader>
       <div className="flex flex-wrap items-center gap-3">
         <Segmented label="Date range" options={ranges} value={range} onChange={(value) => set({ range: value, from: undefined, to: undefined })} />
-        {range === "custom" && <><label className="text-sm">From <input aria-label="From" type="date" className={field} value={dates.from} onChange={(e) => set({ from: e.target.value })} /></label><label className="text-sm">To <input aria-label="To" type="date" className={field} value={dates.to} onChange={(e) => set({ to: e.target.value })} /></label></>}
-        <label className="text-sm">Persona <select className={field} value={persona} onChange={(e) => set({ persona: e.target.value })}><option value="all">All personas</option>{all.personas.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+        {range === "custom" && <><label className="text-14">From <input aria-label="From" type="date" className={field} value={dates.from} onChange={(e) => set({ from: e.target.value })} /></label><label className="text-14">To <input aria-label="To" type="date" className={field} value={dates.to} onChange={(e) => set({ to: e.target.value })} /></label></>}
+        <label className="text-14">Persona <select className={field} value={persona} onChange={(e) => set({ persona: e.target.value })}><option value="all">All personas</option>{all.personas.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
         <Segmented label="Effort choices" options={[{ value: "all", label: "All effort choices" }, { value: "auto", label: "Auto only" }]} value={mode} onChange={(value) => set({ selection: value })} />
       </div>
-      <p className="text-xs text-fg-tertiary">{dates.from} – {dates.to} UTC · One sample per replying turn. Older replies without effort metadata stay unclassified. This view includes your chats only; Costs also includes other run types.</p>
+      <p className="text-12 text-fg-tertiary">{dates.from} – {dates.to} UTC · One sample per replying turn. Older replies without effort metadata stay unclassified. This view includes your chats only; Costs also includes other run types.</p>
       {body}
     </div></Content>
   </>;

@@ -10,6 +10,7 @@ import { CodeFence } from "./code-fence";
 import { DesignCard } from "./design-card";
 import { RecommendActions } from "./recommend-fence";
 import { SvgFenceMessage } from "./svg-fence";
+import { LoadingText } from "@/components/ui/loading";
 
 /**
  * A ```canvas fence. The last card for a canvas is its live copy, which expands
@@ -51,8 +52,8 @@ export function CanvasFence({ code, info }: { code: string; info?: string }) {
     >
       <Icon name={canvas?.kind === "svg" ? "library" : canvas?.kind === "deck" ? "slides" : "edit"} size={16} className="flex-none text-fg-tertiary" />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-[13.5px] font-semibold text-fg">{canvas?.title ?? "Canvas"}</span>
-        <span className="text-xs text-fg-secondary">{canvas ? `${canvas.kind === "svg" ? "SVG mockup" : canvas.kind === "deck" ? "Slide deck" : "Document"} · v${canvas.seq}` : "Loading…"}</span>
+        <span className="truncate text-14 font-semibold text-fg">{canvas?.title ?? "Canvas"}</span>
+        <span className="text-12 text-fg-secondary">{canvas ? `${canvas.kind === "svg" ? "SVG mockup" : canvas.kind === "deck" ? "Slide deck" : "Document"} · v${canvas.seq}` : <LoadingText />}</span>
       </span>
     </button>
   );

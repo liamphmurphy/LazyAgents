@@ -20,7 +20,7 @@ function Chip({ children, className, ...rest }: { children: ReactNode } & Compon
   return (
     <button
       type="button"
-      className={cx("inline-flex h-[26px] items-center gap-[7px] whitespace-nowrap rounded-sm border border-border-strong px-[9px] text-xs text-fg-2 hover:bg-hover", className)}
+      className={cx("inline-flex h-[26px] items-center gap-[7px] whitespace-nowrap rounded-sm border border-border-strong px-[9px] text-12 text-fg-2 hover:bg-hover", className)}
       {...rest}
     >
       {children}
@@ -132,14 +132,14 @@ export function Composer() {
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
             <Icon name="chevr" size={12} className="text-fg-tertiary" />
-            <Dialog.Title className="text-[12.5px] font-normal text-fg-secondary">New ticket</Dialog.Title>
+            <Dialog.Title className="text-13 font-normal text-fg-secondary">New ticket</Dialog.Title>
             <Dialog.Close asChild>
               <IconButton icon="x" label="Close" className="ml-auto" />
             </Dialog.Close>
           </div>
 
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
-            {boot.data && !project && <div className="space-y-2 text-sm text-fg-secondary"><p>Choose an active project before creating a ticket.</p><ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink></div>}
+            {boot.data && !project && <div className="space-y-2 text-14 text-fg-secondary"><p>Choose an active project before creating a ticket.</p><ButtonLink href="/settings/projects" variant="outline">Manage projects</ButtonLink></div>}
             <label htmlFor="nt-title" className="sr-only">
               Title
             </label>
@@ -150,7 +150,7 @@ export function Composer() {
               maxLength={300}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ticket title"
-              className="bg-transparent text-[19px] font-semibold tracking-[-0.015em] text-fg outline-none placeholder:text-fg-tertiary"
+              className="bg-transparent text-20 font-semibold tracking-[-0.015em] text-fg outline-none placeholder:text-fg-tertiary"
             />
             <label htmlFor="nt-desc" className="sr-only">
               Description
@@ -166,8 +166,8 @@ export function Composer() {
 
             <section className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-[13px] font-semibold">Acceptance criteria</h2>
-                <span className="text-xs text-fg-tertiary">Agents tick these off as they verify them</span>
+                <h2 className="text-13 font-semibold">Acceptance criteria</h2>
+                <span className="text-12 text-fg-tertiary">Agents tick these off as they verify them</span>
               </div>
               {criteria.map((c, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -186,12 +186,12 @@ export function Composer() {
                         setCriteria([...criteria, ""]);
                       }
                     }}
-                    className="h-8 flex-1 bg-transparent text-[13.5px] text-fg outline-none"
+                    className="h-8 flex-1 bg-transparent text-14 text-fg outline-none"
                   />
                   <IconButton icon="x" label={`Remove criterion ${i + 1}`} size={24} onClick={() => setCriteria(criteria.filter((_, j) => j !== i))} />
                 </div>
               ))}
-              <Button variant="ghost" icon="plus" onClick={() => setCriteria([...criteria, ""])} className="w-fit px-2 text-[12.5px] text-fg-secondary">
+              <Button variant="ghost" icon="plus" onClick={() => setCriteria([...criteria, ""])} className="w-fit px-2 text-13 text-fg-secondary">
                 Add criterion
               </Button>
             </section>
@@ -242,12 +242,12 @@ export function Composer() {
                     )}
                   </Chip>
                 </LabelPicker>
-                <label className="inline-flex h-[26px] items-center gap-[7px] rounded-sm border border-border-strong px-[9px] text-xs focus-within:border-accent">
+                <label className="inline-flex h-[26px] items-center gap-[7px] rounded-sm border border-border-strong px-[9px] text-12 focus-within:border-accent">
                   <span className="font-mono text-fg-tertiary">M</span>
                   <span className="sr-only">Estimate</span>
                   <input value={estimate} onChange={(e) => setEstimate(e.target.value)} placeholder="estimate" className="w-24 bg-transparent text-fg-2 outline-none placeholder:text-fg-tertiary" />
                 </label>
-                <label className="inline-flex h-[26px] items-center gap-[7px] rounded-sm border border-border-strong px-[9px] text-xs text-fg-2 focus-within:border-accent">
+                <label className="inline-flex h-[26px] items-center gap-[7px] rounded-sm border border-border-strong px-[9px] text-12 text-fg-2 focus-within:border-accent">
                   <Icon name="clock" size={13} className="text-fg-tertiary" />
                   <span className={due ? "" : "text-fg-tertiary"}>{due ? `Due ${dueDate(due)}` : "Due"}</span>
                   <input type="date" aria-label="Due date" value={due} onChange={(e) => setDue(e.target.value)} className="w-[18px] bg-transparent text-transparent outline-none [color-scheme:inherit]" />
@@ -258,20 +258,20 @@ export function Composer() {
 
           <div className="flex flex-wrap items-center gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
             {epic?.requires_mockup ? (
-              <span className="text-xs text-fg-secondary">Mockup required by epic {epic.name}</span>
+              <span className="text-12 text-fg-secondary">Mockup required by epic {epic.name}</span>
             ) : (
-              <label className="inline-flex items-center gap-2 text-[12.5px] text-fg-secondary">
+              <label className="inline-flex items-center gap-2 text-13 text-fg-secondary">
                 <input type="checkbox" checked={requiresMockup} onChange={(e) => setRequiresMockup(e.target.checked)} className="size-3.5 accent-[var(--accent)]" />
                 Requires mockup
               </label>
             )}
             <Toggle checked={createMore} onChange={setCreateMore} label="Create more" />
-            <span className="flex min-w-[200px] flex-1 items-center gap-1.5 text-xs text-fg-tertiary">
+            <span className="flex min-w-[200px] flex-1 items-center gap-1.5 text-12 text-fg-tertiary">
               <Icon name="lock" size={12} />
               {agent ? `Assigning doesn't start ${agent.name}. You dispatch when it's ready.` : "Assigning an agent queues the ticket; a person dispatches it."}
             </span>
             {create.isError && (
-              <span role="alert" className="w-full text-xs text-pill-blocked-fg">
+              <span role="alert" className="w-full text-12 text-pill-blocked-fg">
                 {create.error.message}
               </span>
             )}

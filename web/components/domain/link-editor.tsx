@@ -60,10 +60,10 @@ export function SuggestionList({
         >
           <TargetMark t={t} size={13} />
           <span className="min-w-0 flex-1 truncate">
-            {t.display_id && <span className="mr-1.5 font-mono text-xs text-fg-secondary">{t.display_id}</span>}
+            {t.display_id && <span className="mr-1.5 font-mono text-12 text-fg-secondary">{t.display_id}</span>}
             {t.kind === "artifact" && t.artifact_type === "note" ? t.path : t.title}
           </span>
-          <span className="text-[11px] text-fg-tertiary">{kindLabel(t)}</span>
+          <span className="text-11 text-fg-tertiary">{kindLabel(t)}</span>
         </div>
       ))}
     </div>

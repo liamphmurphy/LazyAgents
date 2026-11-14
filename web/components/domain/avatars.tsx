@@ -144,7 +144,7 @@ export function AvatarStack({
           <ActorAvatar actor={a} size="stack" ring={surface} />
         </span>
       ))}
-      {extra > 0 && <span className="ml-1.5 font-mono text-[11px] text-fg-tertiary">+{extra}</span>}
+      {extra > 0 && <span className="ml-1.5 font-mono text-11 text-fg-tertiary">+{extra}</span>}
     </span>
   );
 }

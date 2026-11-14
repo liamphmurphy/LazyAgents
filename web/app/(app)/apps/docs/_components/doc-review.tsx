@@ -53,7 +53,7 @@ export function DocReview({ review, busy, error }: { review: DocReviewState; bus
   const { segments, changes, decisions, decide, undo } = review;
   return (
     <div className="flex min-h-0 flex-col" data-testid="doc-review">
-      {error && <p role="alert" className="px-4 pt-2 text-xs text-pill-blocked-fg">{error}</p>}
+      {error && <p role="alert" className="px-4 pt-2 text-12 text-pill-blocked-fg">{error}</p>}
       <div className="doc-page mx-auto w-full max-w-[720px] px-8 pb-24 pt-10 max-sm:px-5">
         {segments.map((s, i) =>
           s.kind === "same" ? (
@@ -72,7 +72,7 @@ export function DocReview({ review, busy, error }: { review: DocReviewState; bus
                   <Markdown className="type-reading text-fg-2">{s.after.join("\n\n")}</Markdown>
                 </div>
               )}
-              <div className="mt-1 flex justify-end gap-1.5 text-[12px]">
+              <div className="mt-1 flex justify-end gap-1.5 text-12">
                 {decisions[s.id] ? (
                   <button type="button" className="text-fg-tertiary hover:text-fg" disabled={busy} onClick={() => undo(s.id)}>
                     {decisions[s.id] === "accept" ? "Accepted" : "Rejected"} · Undo
@@ -113,16 +113,16 @@ function sectionOf(segments: Segment[], at: number): string | undefined {
 export function DocReviewList({ review, persona, busy, error }: { review: DocReviewState; persona: string; busy: boolean; error?: string }) {
   const { segments, changes, decisions, left, undo, everything } = review;
   return (
-    <div data-testid="doc-review-list" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 text-[13px]">
+    <div data-testid="doc-review-list" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 text-13">
       <div role="status" className="flex flex-col gap-0.5">
         <span className="font-semibold text-fg">{persona} suggested {changes.length === 1 ? "a change" : `${changes.length} changes`}</span>
-        <span className="text-[12px] text-fg-tertiary">{left === changes.length ? "Accept or reject each one, or all at once." : `${left} left to decide.`}</span>
+        <span className="text-12 text-fg-tertiary">{left === changes.length ? "Accept or reject each one, or all at once." : `${left} left to decide.`}</span>
       </div>
       <div className="flex gap-2">
         <Button variant="secondary" disabled={busy} onClick={() => everything("reject")}>Reject all</Button>
         <Button variant="primary" disabled={busy} onClick={() => everything("accept")}>Accept all</Button>
       </div>
-      {error && <p role="alert" className="text-xs text-pill-blocked-fg">{error}</p>}
+      {error && <p role="alert" className="text-12 text-pill-blocked-fg">{error}</p>}
       <ol aria-label="Suggestions" className="flex flex-col gap-2">
         {segments.map((s, i) => {
           if (s.kind !== "change") return null;
@@ -135,13 +135,13 @@ export function DocReviewList({ review, persona, busy, error }: { review: DocRev
                 className="flex w-full flex-col items-start gap-1 rounded-lg px-3 py-2 text-left hover:bg-hover"
                 onClick={() => document.getElementById(changeAnchor(s.id))?.scrollIntoView({ behavior: "smooth", block: "start" })}
               >
-                <span className="text-[12px] text-fg-tertiary">Change {s.id + 1}{section ? ` · ${section}` : ""}</span>
+                <span className="text-12 text-fg-tertiary">Change {s.id + 1}{section ? ` · ${section}` : ""}</span>
                 <span className="text-fg">
                   {s.after.length ? `“${clip(plain(s.after.join(" ")))}”` : <>Removes “{clip(plain(s.before.join(" ")))}”</>}
                 </span>
               </button>
               {d && (
-                <button type="button" disabled={busy} onClick={() => undo(s.id)} className="px-3 pb-2 text-[12px] text-fg-tertiary hover:text-fg">
+                <button type="button" disabled={busy} onClick={() => undo(s.id)} className="px-3 pb-2 text-12 text-fg-tertiary hover:text-fg">
                   {d === "accept" ? "Accepted" : "Rejected"} · Undo
                 </button>
               )}

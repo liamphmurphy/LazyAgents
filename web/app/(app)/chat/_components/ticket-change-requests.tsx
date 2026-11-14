@@ -44,7 +44,7 @@ export function TicketChangeRequests({ chatId, disabled }: { chatId: string; dis
         <ChangeCard key={r.id} r={r} busy={busy} onDecide={(d) => onDecide(r.id, d)} />
       ))}
       {error && (
-        <p role="alert" className="max-w-[min(720px,100%)] text-[12.5px] text-pill-blocked-fg">
+        <p role="alert" className="max-w-[min(720px,100%)] text-13 text-pill-blocked-fg">
           Not applied: {error}
         </p>
       )}
@@ -57,7 +57,7 @@ function ChangeCard({ r, busy, onDecide }: { r: TicketChangeRequest; busy: boole
   const name = r.persona?.name ?? "The assistant";
   return (
     <div data-testid="ticket-change" className="flex max-w-[min(720px,100%)] flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-3">
-      <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-tertiary">
+      <p className="flex flex-wrap items-center gap-1.5 text-12 text-fg-tertiary">
         <PersonaAvatar persona={by} size={16} />
         <PersonaName persona={by} />
         <span>{VERB[r.tool]}</span>
@@ -65,7 +65,7 @@ function ChangeCard({ r, busy, onDecide }: { r: TicketChangeRequest; busy: boole
           {r.ticket_key}
         </Link>
       </p>
-      <p className="text-[14px] font-medium text-fg">{r.ticket_title}</p>
+      <p className="text-14 font-medium text-fg">{r.ticket_title}</p>
       <dl className="flex flex-col gap-1.5 rounded-md border border-border-subtle bg-surface-sunken px-3 py-2">
         {r.changes.map((c) => (
           <ChangeRow key={c.field} c={c} />
@@ -89,7 +89,7 @@ function ChangeCard({ r, busy, onDecide }: { r: TicketChangeRequest; busy: boole
 function ChangeRow({ c }: { c: Change }) {
   if (!isBlock(c)) {
     return (
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]" data-testid="ticket-change-row">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-13" data-testid="ticket-change-row">
         <dt className="w-32 shrink-0 text-fg-tertiary">{c.label}</dt>
         <dd className="flex min-w-0 flex-wrap items-baseline gap-1.5 break-words">
           {c.before !== undefined && (
@@ -104,11 +104,11 @@ function ChangeRow({ c }: { c: Change }) {
     );
   }
   return (
-    <div className="flex flex-col gap-1 text-[13px]" data-testid="ticket-change-row">
+    <div className="flex flex-col gap-1 text-13" data-testid="ticket-change-row">
       <dt className="text-fg-tertiary">{c.label}</dt>
       <dd className="flex flex-col gap-1">
         {c.before !== undefined && (
-          <details className="text-[12.5px]">
+          <details className="text-13">
             <summary className="cursor-pointer text-fg-tertiary">Current</summary>
             <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-fg-tertiary">{blockText(c, c.before)}</pre>
           </details>

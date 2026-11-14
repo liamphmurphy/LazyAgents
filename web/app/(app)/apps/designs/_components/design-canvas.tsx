@@ -505,7 +505,7 @@ export function DesignCanvas(p: CanvasProps) {
           }}
         />
       )}
-      <div className={cx("pointer-events-none absolute right-3 top-3 rounded-md bg-surface/80 px-2 py-1 text-[11px] text-fg-tertiary", !readOnly && "hidden")}>Read-only</div>
+      <div className={cx("pointer-events-none absolute right-3 top-3 rounded-md bg-surface/80 px-2 py-1 text-11 text-fg-tertiary", !readOnly && "hidden")}>Read-only</div>
     </div>
   );
 }

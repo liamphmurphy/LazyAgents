@@ -18,7 +18,7 @@ import { EditorLayout } from "@/components/shell/editor-layout";
 import { AccountsDialog } from "./accounts-dialog";
 import { AskPanel, useFinanceAsk } from "./ask-panel";
 import { ImportDialog } from "./import-dialog";
-import { Toast, useToast } from "./motion";
+import { toast } from "@/components/ui/toast";
 import { CashFlow, Kpis, Recurring, Review, Spending } from "./sections";
 
 const errorText = (e: unknown) =>
@@ -40,7 +40,8 @@ export function FinanceScreen() {
   const openChat = () => setShowChat((n) => n + 1);
   const ask = useFinanceAsk(data?.space_id);
   const refresh = useRefreshFinance();
-  const { toast, show } = useToast();
+  // One Finance message at a time: a new one replaces the last.
+  const show = (title: React.ReactNode, tone: "success" | "error" = "success") => toast({ id: "finance", title, tone });
   const categorize = useCategorize();
   const [saveRules, setSaveRules] = useState(true);
   // Rows sliding out of the review queue while their category saves.
@@ -64,7 +65,7 @@ export function FinanceScreen() {
                   <>
                     {" "}
                     · future{" "}
-                    <code className="text-[11px] text-accent">
+                    <code className="text-11 text-accent">
                       {r.pattern}
                     </code>{" "}
                     too
@@ -76,7 +77,7 @@ export function FinanceScreen() {
             show(
               <>
                 Rule saved ·{" "}
-                <code className="text-[11px] text-accent">{r.pattern}</code> →{" "}
+                <code className="text-11 text-accent">{r.pattern}</code> →{" "}
                 {category}
                 {r.updated
                   ? ` · ${r.updated} past ${r.updated === 1 ? "match" : "matches"} updated`
@@ -220,7 +221,6 @@ export function FinanceScreen() {
               />
             </>
           )}
-          <Toast toast={toast} />
         </>
       }
     />
@@ -232,7 +232,7 @@ function Subline({ data }: { data: FinanceOverview }) {
     .map((a) => accountLabel(a.name, a.mask))
     .join(", ");
   return (
-    <p className="motion-rise text-[12px] text-fg-tertiary">
+    <p className="motion-rise text-12 text-fg-tertiary">
       {data.accounts.length}{" "}
       {data.accounts.length === 1 ? "account" : "accounts"} · {names}
       {data.last_import &&
@@ -251,10 +251,10 @@ function Welcome({ onImport }: { onImport: () => void }) {
       >
         <Icon name="dollar" size={22} />
       </span>
-      <h1 className="text-[20px] font-semibold tracking-[-0.015em] text-fg">
+      <h1 className="text-20 font-semibold tracking-[-0.015em] text-fg">
         Your money, with an assistant that can count
       </h1>
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-13 text-fg-secondary">
         Import a CSV or OFX export from your bank or card. Vesper skips anything
         already imported, pairs card payments with your checking account so
         nothing counts twice, and learns your categories as you correct them.
@@ -262,7 +262,7 @@ function Welcome({ onImport }: { onImport: () => void }) {
       <Button variant="primary" icon="upload" onClick={onImport}>
         Import a statement
       </Button>
-      <p className="flex items-center gap-[6px] text-[11.5px] text-fg-tertiary">
+      <p className="flex items-center gap-[6px] text-12 text-fg-tertiary">
         <Icon name="lock" size={12} />
         Only you see this, and only Ask, here in Finance, can read it.
       </p>

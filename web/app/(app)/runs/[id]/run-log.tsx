@@ -92,7 +92,7 @@ function lifecycleText(p: P): ReactNode {
     case "harness_started":
       return (
         <>
-          <code className="inline">{str(p.harness)}</code> started · session <span className="font-mono text-xs">{str(p.session_id).slice(0, 13)}</span>
+          <code className="inline">{str(p.harness)}</code> started · session <span className="font-mono text-12">{str(p.session_id).slice(0, 13)}</span>
         </>
       );
     case "turn_ended":
@@ -135,30 +135,30 @@ function ToolRow({ row, open, onToggle, runs, calls }: { row: Extract<Row<RunEve
       <div className="flex items-center gap-2 px-3 py-2">
         <button type="button" aria-expanded={open} onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span aria-hidden className="w-3 flex-none text-fg-tertiary">{open ? "▾" : "▸"}</span>
-          <span className="font-mono text-[12.5px] font-medium">{toolName(str(p.tool))}</span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-tertiary">{argSummary(p.input)}</span>
+          <span className="font-mono text-13 font-medium">{toolName(str(p.tool))}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-12 text-fg-tertiary">{argSummary(p.input)}</span>
         </button>
-        {link && <Link href={link.href} className="flex-none text-xs text-accent hover:underline">Open {link.label} ↗</Link>}
-        {child && <Link href={`/runs/${child.id}`} className="flex-none text-xs text-accent hover:underline">{child.agent.name} run ↗</Link>}
+        {link && <Link href={link.href} className="flex-none text-12 text-accent hover:underline">Open {link.label} ↗</Link>}
+        {child && <Link href={`/runs/${child.id}`} className="flex-none text-12 text-accent hover:underline">{child.agent.name} run ↗</Link>}
         {denied ? (
           <Flag tone="blocked">denied by harness</Flag>
         ) : failed ? (
           <Flag tone="blocked">error{r.exit_code != null ? ` · exit ${str(r.exit_code)}` : ""}</Flag>
         ) : result ? (
-          <span className="flex flex-none items-center gap-1.5 font-mono text-[11px] text-fg-tertiary">
+          <span className="flex flex-none items-center gap-1.5 font-mono text-11 text-fg-tertiary">
             <Icon name="check" size={13} className="text-state-done" />
             <span className="sr-only">done</span>
             {took != null && took >= 1000 ? `${Math.round(took / 1000)}s` : ""}
           </span>
         ) : (
-          <span className="text-[11px] text-fg-tertiary">running…</span>
+          <span className="text-11 text-fg-tertiary">running…</span>
         )}
       </div>
       {open && (
         out ? (
-          <pre className="max-h-64 overflow-auto border-t border-border-subtle px-3 py-2 font-mono text-[11.5px] leading-relaxed text-fg-secondary">{out}</pre>
+          <pre className="max-h-64 overflow-auto border-t border-border-subtle px-3 py-2 font-mono text-12 leading-relaxed text-fg-secondary">{out}</pre>
         ) : (
-          <p className="border-t border-border-subtle px-3 py-2 text-xs text-fg-tertiary">{result ? "No output." : "No result yet."}</p>
+          <p className="border-t border-border-subtle px-3 py-2 text-12 text-fg-tertiary">{result ? "No output." : "No result yet."}</p>
         )
       )}
     </div>
@@ -183,29 +183,29 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
       const stepText = p.kind === "step" ? (plan.find((s) => s.position === Number(p.step)) ?? plan[Number(p.step) - 1])?.text : undefined;
       body =
         p.kind === "plan" ? (
-          <span className="text-[13px] text-fg-2">Posted a plan: {Array.isArray(p.steps) ? p.steps.length : 0} steps</span>
+          <span className="text-13 text-fg-2">Posted a plan: {Array.isArray(p.steps) ? p.steps.length : 0} steps</span>
         ) : p.kind === "step" ? (
-          <span className="text-[13px] text-fg-2">
-            Step {str(p.step)} → <span className="font-mono text-xs">{str(p.state)}</span>
+          <span className="text-13 text-fg-2">
+            Step {str(p.step)} → <span className="font-mono text-12">{str(p.state)}</span>
             {stepText && <span className="ml-2 text-fg-secondary">{stepText}</span>}
           </span>
         ) : p.kind === "thinking" ? (
-          <details className="text-[13px]">
+          <details className="text-13">
             <summary className="cursor-pointer text-fg-secondary">Thinking</summary>
             <p className="mt-1 whitespace-pre-wrap border-l-2 border-border pl-3 leading-relaxed text-fg-secondary">{str(p.text)}</p>
           </details>
         ) : p.kind ? (
-          <span className="font-mono text-[12px] text-fg-secondary">
+          <span className="font-mono text-12 text-fg-secondary">
             {str(p.kind)} {p.payload ? JSON.stringify(p.payload) : ""}
           </span>
         ) : (
-          <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg-2">{str(p.text)}</p>
+          <p className="whitespace-pre-wrap text-14 leading-relaxed text-fg-2">{str(p.text)}</p>
         );
       break;
     }
     case "usage":
       body = (
-        <span className="font-mono text-[12px] text-fg-secondary">
+        <span className="font-mono text-12 text-fg-secondary">
           turn total · {compact(Number(p.input_tokens ?? 0))} in · {compact(Number(p.output_tokens ?? 0))} out
           {(() => { const t = tokenBreakdown(eventTokenUsage(p)); return t.hasBreakdown ? ` · ${compact(t.cached)} cached · ${compact(t.uncached)} uncached${t.unknown ? ` · ${compact(t.unknown)} cache unknown` : ""}` : " · cache breakdown unavailable"; })()}
           {` · ${runCost(Number(p.cost_usd ?? 0), p.cost_source === "harness" || p.cost_source === "computed" ? String(p.cost_source) : p.cost_known === true || (p.cost_known === undefined && Number(p.cost_usd ?? 0) > 0) ? "harness" : "unknown")}`}
@@ -213,13 +213,13 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
       );
       break;
     case "error":
-      body = <span className="whitespace-pre-wrap text-[13px] text-pill-blocked-fg">{str(p.message)}</span>;
+      body = <span className="whitespace-pre-wrap text-13 text-pill-blocked-fg">{str(p.message)}</span>;
       break;
     case "tool_result":
-      body = <span className="font-mono text-xs text-fg-tertiary">result for {toolName(str(p.tool))}</span>;
+      body = <span className="font-mono text-12 text-fg-tertiary">result for {toolName(str(p.tool))}</span>;
       break;
     default:
-      body = <span className="text-[13px] text-fg-2">{lifecycleText(p)}</span>;
+      body = <span className="text-13 text-fg-2">{lifecycleText(p)}</span>;
   }
   return (
     <li
@@ -230,12 +230,12 @@ function EventRow({ entry, plan, tools, runs, calls }: { entry: Entry; plan: Run
         amber && "shadow-[inset_2px_0_0_var(--state-human)]",
       )}
     >
-      <time dateTime={e.at} title={absoluteTime(e.at)} className="pt-0.5 font-mono text-[11.5px] text-fg-tertiary">
+      <time dateTime={e.at} title={absoluteTime(e.at)} className="pt-0.5 font-mono text-12 text-fg-tertiary">
         {clock.format(new Date(e.at))}
       </time>
-      <span className="pt-0.5 font-mono text-[11.5px] text-fg-tertiary max-sm:hidden">{row.kind === "tool" ? "tool" : e.type}</span>
+      <span className="pt-0.5 font-mono text-12 text-fg-tertiary max-sm:hidden">{row.kind === "tool" ? "tool" : e.type}</span>
       <div className="min-w-0 max-sm:col-start-2">
-        {source && <Link href={`/runs/${source.id}`} className="mb-1 block text-xs font-medium text-accent hover:underline">{source.agent.name} · delegated agent</Link>}
+        {source && <Link href={`/runs/${source.id}`} className="mb-1 block text-12 font-medium text-accent hover:underline">{source.agent.name} · delegated agent</Link>}
         {body}
       </div>
     </li>
@@ -270,10 +270,10 @@ function TurnGroup({ turn, t, items, open, onToggle, runId }: { turn: number; t?
         className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 bg-surface-sunken px-5 py-2 text-left hover:bg-hover max-sm:px-3"
       >
         <span aria-hidden className="w-3 flex-none text-fg-tertiary">{open ? "▾" : "▸"}</span>
-        <span className="text-[13px] font-semibold">{turn === 0 ? "Setup" : `Turn ${turn}`}</span>
-        {t && <span className="min-w-0 flex-1 truncate text-xs text-fg-secondary">{triggerLine(t.trigger, t.input_message, TRIGGER)}</span>}
+        <span className="text-13 font-semibold">{turn === 0 ? "Setup" : `Turn ${turn}`}</span>
+        {t && <span className="min-w-0 flex-1 truncate text-12 text-fg-secondary">{triggerLine(t.trigger, t.input_message, TRIGGER)}</span>}
         {t && (
-          <span className="font-mono text-[11px] text-fg-tertiary">
+          <span className="font-mono text-11 text-fg-tertiary">
             {t.status === "pending" ? "waiting for the runner" : t.status === "running" ? <span className="text-pill-done-fg">running</span> : (
               <>
                 {clock.format(new Date(t.process_started_at ?? t.started_at)).slice(0, 5)}
@@ -290,7 +290,7 @@ function TurnGroup({ turn, t, items, open, onToggle, runId }: { turn: number; t?
         <div id={id}>
           <ol>{items}</ol>
           {t && (t.has_log || t.status === "done") && (
-            <p className="flex items-center justify-between gap-3 px-5 py-2 font-mono text-[11px] text-fg-tertiary max-sm:px-3">
+            <p className="flex items-center justify-between gap-3 px-5 py-2 font-mono text-11 text-fg-tertiary max-sm:px-3">
               <span>Turn {turn} total · {compact(Number(u.input_tokens ?? 0))} in · {compact(Number(u.output_tokens ?? 0))} out · {cost}</span>
               {t.has_log && <a href={`/api/v1/runs/${runId}/turns/${t.seq}/log`} className="text-accent hover:underline" aria-label={`Raw log of turn ${t.seq}`}>raw log</a>}
             </p>
@@ -316,7 +316,7 @@ function Header({ d }: { d: RunDetail }) {
               <MonoChip variant="outline">{PURPOSE_LABEL[run.purpose]}</MonoChip>
               <RunCostChip run={run} />
             </span>
-            <span className="text-xs text-fg-tertiary">
+            <span className="text-12 text-fg-tertiary">
               {run.purpose === "ticket" && run.ticket_key ? (
                 <Link href={`/tickets/${encodeURIComponent(run.ticket_key)}`} className="text-accent hover:underline"><span className="font-mono">{run.ticket_key}</span> {run.work_title} ↗</Link>
               ) : href ? (
@@ -337,7 +337,7 @@ function Header({ d }: { d: RunDetail }) {
         <Stat label="Tool calls" value={run.tool_calls} />
         {run.purpose === "ticket" && (
           <>
-            <Stat label="Branch" value={run.branch ? <span className="font-mono text-xs">{run.branch}</span> : "–"} />
+            <Stat label="Branch" value={run.branch ? <span className="font-mono text-12">{run.branch}</span> : "–"} />
             <Stat
               label="Pull request"
               value={run.pr_url && run.pr_number ? <a href={run.pr_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">#{run.pr_number} ↗</a> : "–"}
@@ -535,7 +535,7 @@ export function RunLogScreen({ id }: { id: string }) {
               </Button>
             )}
             {live && (
-              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
+              <Button variant="outline" icon="x" className="text-pill-blocked-fg" disabled={control.isPending} onClick={async () => { if (await confirmCancel(run.agent.name)) control.mutate("cancel"); }}>
                 Cancel run
               </Button>
             )}
@@ -590,13 +590,13 @@ export function RunLogScreen({ id }: { id: string }) {
           </div>
           {run.outcome && !live && (
             <div className="px-5 pt-3">
-              <p className="whitespace-pre-line rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13px] text-fg-2">{run.outcome}</p>
+              <p className="whitespace-pre-line rounded-lg border border-border bg-surface px-3.5 py-2.5 text-13 text-fg-2">{run.outcome}</p>
             </div>
           )}
           {children.some((child) => child.isError) && (
             <div className="px-5 pt-3"><Banner tone="blocked" title="Couldn't load delegated agent logs">Some delegated activity is unavailable. Open the delegated run or try again.</Banner></div>
           )}
-          {children.some((child) => child.isPending) && <p role="status" className="px-5 py-2 text-xs text-fg-secondary">Loading delegated agent logs…</p>}
+          {children.some((child) => child.isPending) && <p role="status" className="px-5 py-2 text-12 text-fg-secondary">Loading delegated agent logs…</p>}
           <div
             ref={scroller}
             role="log"
@@ -606,7 +606,7 @@ export function RunLogScreen({ id }: { id: string }) {
             className="min-h-0 flex-1 overflow-y-auto max-xl:max-h-[70dvh]"
           >
           {logBody}
-          <p className="px-5 py-4 text-xs text-fg-tertiary">
+          <p className="px-5 py-4 text-12 text-fg-tertiary">
             Normalized events. The raw harness stream of each turn is kept with the run ({run.mode === "managed" ? "raw links on each turn" : "unmanaged sessions have none"}).
           </p>
           </div>

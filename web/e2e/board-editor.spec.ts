@@ -38,8 +38,8 @@ test("Enter opens the editor; Esc closes with no request and focus returns to th
   await expect(dialog(page)).toBeVisible();
   await expect(dialog(page).getByLabel("Title", { exact: true })).toHaveValue("Build ticket modal");
   await dialog(page).getByLabel("Title", { exact: true }).fill("Unsaved");
-  page.once("dialog", (dialog) => dialog.accept());
   await page.keyboard.press("Escape");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Discard" }).click();
   await expect(dialog(page)).toHaveCount(0);
   await expect(page).not.toHaveURL(/ticket=/);
   await expect(page).toHaveURL(/project=WEB/);
@@ -249,8 +249,9 @@ test("declining discard keeps the unsaved draft open", async ({ page }) => {
   await page.goto("/board?project=WEB&ticket=WEB-1");
   const d = dialog(page);
   await d.getByLabel("Title", { exact: true }).fill("Keep me");
-  page.once("dialog", (dialog) => dialog.dismiss());
   await d.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Keep editing" }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(d.getByLabel("Title", { exact: true })).toHaveValue("Keep me");
   expect(api.patches).toEqual([]);
 });

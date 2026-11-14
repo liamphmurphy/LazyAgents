@@ -75,12 +75,12 @@ export function SnippetChips({ snippets, onEdit, disabled }: { snippets: Snippet
               aria-label={`Edit ${name}`}
               className="flex min-w-0 items-center gap-2 text-left disabled:cursor-default"
             >
-              <span aria-hidden className="grid size-7 flex-none place-items-center rounded-md bg-accent-soft font-mono text-[11px] font-semibold text-accent">
+              <span aria-hidden className="grid size-7 flex-none place-items-center rounded-md bg-accent-soft font-mono text-11 font-semibold text-accent">
                 {s.lang === "markdown" ? "M↓" : "{ }"}
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[12.5px] font-medium text-fg">{name}</span>
-                <span className="text-[11px] text-fg-tertiary">
+                <span className="truncate text-13 font-medium text-fg">{name}</span>
+                <span className="text-11 text-fg-tertiary">
                   {lines} {lines === 1 ? "line" : "lines"} · click to edit
                 </span>
               </span>
@@ -101,7 +101,7 @@ export function SnippetChips({ snippets, onEdit, disabled }: { snippets: Snippet
   );
 }
 
-const editorText = "font-mono text-xs leading-relaxed p-3 whitespace-pre";
+const editorText = "font-mono text-12 leading-relaxed p-3 whitespace-pre";
 
 /**
  * A textarea over its own highlighted copy: the textarea's text is transparent (the caret and
@@ -210,14 +210,14 @@ export function SnippetBubble({
           {draft && (
             <>
               <div className="flex items-center gap-2">
-                <h2 className="flex-1 text-[13px] font-semibold text-fg">{draft.key === undefined ? "Paste code or Markdown" : "Edit snippet"}</h2>
-                <label className="flex items-center gap-1.5 text-[12px] text-fg-tertiary">
+                <h2 className="flex-1 text-13 font-semibold text-fg">{draft.key === undefined ? "Paste code or Markdown" : "Edit snippet"}</h2>
+                <label className="flex items-center gap-1.5 text-12 text-fg-tertiary">
                   <span className="sr-only">Language</span>
                   <select
                     data-testid="snippet-lang"
                     value={draft.lang}
                     onChange={(e) => onDraft({ ...draft, lang: e.target.value, picked: true })}
-                    className="h-7 rounded-md border border-border bg-selected px-2 text-[12px] font-medium text-fg outline-none focus-visible:border-accent"
+                    className="h-7 rounded-md border border-border bg-selected px-2 text-12 font-medium text-fg outline-none focus-visible:border-accent"
                   >
                     {SNIPPET_LANGS.map((l) => (
                       <option key={l.tag} value={l.tag}>
@@ -237,19 +237,19 @@ export function SnippetBubble({
                 onChange={(text) => onDraft({ ...draft, text, lang: draft.picked ? draft.lang : detectLanguage(text) })}
               />
               {big && (
-                <p role="status" data-testid="snippet-big" className="rounded-lg border border-pill-human-fg/40 bg-pill-human-bg px-3 py-2 text-[12px] text-pill-human-fg">
+                <p role="status" data-testid="snippet-big" className="rounded-lg border border-pill-human-fg/40 bg-pill-human-bg px-3 py-2 text-12 text-pill-human-fg">
                   {lines.toLocaleString()} {lines === 1 ? "line" : "lines"} ({Math.ceil(draft.text.length / 1024).toLocaleString()} KB). That’s long for a message: as a file it
                   won’t flood the chat, and the agent can still search it.
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-[11.5px] text-fg-tertiary">
+                <span className="flex-1 text-12 text-fg-tertiary">
                   {empty ? "Sent as a fenced block after your message" : `${lines} ${lines === 1 ? "line" : "lines"} · ⌘Enter to ${big ? "attach" : "add"}`}
                 </span>
                 <button
                   type="button"
                   onClick={() => (big ? onSave(draft) : onDraft(null))}
-                  className="h-8 rounded-md bg-selected px-3 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg"
+                  className="h-8 rounded-md bg-selected px-3 text-13 text-fg-secondary hover:bg-hover hover:text-fg"
                 >
                   {big ? "Add anyway" : "Cancel"}
                 </button>
@@ -258,7 +258,7 @@ export function SnippetBubble({
                   data-testid="snippet-save"
                   disabled={empty}
                   onClick={() => (big ? onAttach : onSave)(draft)}
-                  className="h-8 rounded-md bg-accent px-3 text-[12.5px] font-semibold text-on-accent hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 rounded-md bg-accent px-3 text-13 font-semibold text-on-accent hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {big ? "Attach as file" : draft.key === undefined ? "Add to message" : "Save"}
                 </button>
@@ -282,7 +282,7 @@ export function PasteOffer({ offer, onSnippet, onAttach, onDismiss }: { offer: P
   const lines = lineCount(offer.text);
   return (
     <div role="status" data-testid="paste-offer" className="flex flex-wrap items-center gap-2 rounded-xl border border-accent bg-surface-raised px-3 py-2">
-      <p className="min-w-0 flex-1 text-[13px] text-fg">
+      <p className="min-w-0 flex-1 text-13 text-fg">
         {offer.big ? (
           <>
             {lines.toLocaleString()} {lines === 1 ? "line" : "lines"} pasted. That’s long for a message: attach it as a file?
@@ -294,15 +294,15 @@ export function PasteOffer({ offer, onSnippet, onAttach, onDismiss }: { offer: P
         )}
       </p>
       {offer.big ? (
-        <button type="button" data-testid="paste-offer-attach" onClick={onAttach} className="h-7 rounded-md bg-accent px-3 text-[12.5px] font-semibold text-on-accent hover:opacity-90">
+        <button type="button" data-testid="paste-offer-attach" onClick={onAttach} className="h-7 rounded-md bg-accent px-3 text-13 font-semibold text-on-accent hover:opacity-90">
           Attach as file
         </button>
       ) : (
-        <button type="button" data-testid="paste-offer-snippet" onClick={onSnippet} className="h-7 rounded-md bg-accent px-3 text-[12.5px] font-semibold text-on-accent hover:opacity-90">
+        <button type="button" data-testid="paste-offer-snippet" onClick={onSnippet} className="h-7 rounded-md bg-accent px-3 text-13 font-semibold text-on-accent hover:opacity-90">
           Code block
         </button>
       )}
-      <button type="button" onClick={onDismiss} className="h-7 rounded-md bg-selected px-3 text-[12.5px] text-fg-secondary hover:bg-hover hover:text-fg">
+      <button type="button" onClick={onDismiss} className="h-7 rounded-md bg-selected px-3 text-13 text-fg-secondary hover:bg-hover hover:text-fg">
         Keep as text
       </button>
     </div>

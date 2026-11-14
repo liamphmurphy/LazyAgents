@@ -18,7 +18,7 @@ export function CiteMarker({ n }: { n: number }) {
       aria-label={`Source ${n}${title ? `: ${title}` : ""}`}
       title={title}
       onClick={() => cites?.focus(n)}
-      className="mx-px inline-grid h-4 min-w-4 -translate-y-0.5 place-items-center rounded bg-accent-soft px-1 align-baseline font-mono text-[10.5px] font-semibold text-accent hover:underline"
+      className="mx-px inline-grid h-4 min-w-4 -translate-y-0.5 place-items-center rounded bg-accent-soft px-1 align-baseline font-mono text-11 font-semibold text-accent hover:underline"
     >
       {n}
     </button>

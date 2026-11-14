@@ -11,8 +11,8 @@ import { AgentAvatar } from "@/components/domain/avatars";
 import { DispatchDialog } from "@/components/domain/dispatch-dialog";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Kbd, Skeleton, TextArea } from "@/components/ui/primitives";
-import { usePulse } from "@/components/ui/motion";
+import { EmptyState, Kbd, Skeleton, TextArea } from "@/components/ui/primitives";
+import { useEntrances, usePulse } from "@/components/ui/motion";
 import { cx } from "@/lib/cx";
 import { KIND, approvalId, isOpen, nextSelection, step, trayAction, trayItems, waited, type TrayTab } from "@/lib/inbox";
 import { withMention } from "@/lib/run-question";
@@ -42,7 +42,7 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
         aria-expanded={open}
         data-needs-you
         className={cx(
-          "flex h-[32px] w-full items-center gap-2 rounded-[9px] px-2.5 text-[13px] font-medium",
+          "flex h-[32px] w-full items-center gap-2 rounded-[9px] px-2.5 text-13 font-medium",
           count > 0 ? "bg-pill-human-bg text-pill-human-fg hover:brightness-110" : "text-fg-secondary hover:bg-hover hover:text-fg",
           open && "ring-1 ring-state-human/50",
         )}
@@ -50,7 +50,7 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
         <span aria-hidden className={cx("size-2 flex-none rounded-full", count > 0 ? "bg-state-human" : "bg-fg-tertiary/50")} />
         <span className="flex-1 text-left">Needs you</span>
         {count > 0 && (
-          <span ref={pulse} aria-hidden className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-xs font-semibold text-approve-fg">
+          <span ref={pulse} aria-hidden className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-12 font-semibold text-approve-fg">
             {badge}
           </span>
         )}
@@ -69,7 +69,7 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
       >
         <Icon name="inbox" size={15} strokeWidth={1.6} />
         {count > 0 && (
-          <span ref={pulse} aria-hidden className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-[10px] font-semibold leading-none text-approve-fg">
+          <span ref={pulse} aria-hidden className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-10 font-semibold leading-none text-approve-fg">
             {badge}
           </span>
         )}
@@ -80,12 +80,12 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
         aria-label={label}
         aria-expanded={open}
         data-needs-you
-        className={cx("flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium", open || count > 0 ? "text-pill-human-fg" : "text-fg-tertiary")}
+        className={cx("flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 text-11 font-medium", open || count > 0 ? "text-pill-human-fg" : "text-fg-tertiary")}
       >
         <span className={cx("relative grid h-7 w-12 place-items-center rounded-full", open && "bg-selected")}>
           <Icon name="inbox" size={18} strokeWidth={1.6} />
           {count > 0 && (
-            <span ref={pulse} aria-hidden data-testid="tab-badge" className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-[10.5px] font-semibold leading-none text-approve-fg">
+            <span ref={pulse} aria-hidden data-testid="tab-badge" className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-state-human px-1 text-11 font-semibold leading-none text-approve-fg">
               {badge}
             </span>
           )}
@@ -154,6 +154,8 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
   if (current !== sel.id || at !== sel.index) setSel({ id: current, index: at });
   const keys = useRef<Record<string, RowKeys>>({});
   const listRef = useRef<HTMLDivElement>(null);
+  // Something new that needs you rises in; switching tabs replaces the list, which stays still.
+  useEntrances(listRef);
 
   // The tray opens with the first row focused, so J/K, A and D work at once.
   const focused = useRef(false);
@@ -228,7 +230,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
   };
 
   const tabClass = (on: boolean) =>
-    cx("flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-accent", on ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg");
+    cx("flex h-7 items-center gap-1.5 rounded-md px-2.5 text-13 font-medium outline-none focus-visible:ring-1 focus-visible:ring-accent", on ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg");
 
   return (
     <div data-tray className="flex min-h-0 flex-1 flex-col">
@@ -236,7 +238,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
         <div role="tablist" aria-label="Tray" className="flex items-center gap-1">
           <button type="button" role="tab" id="tray-tab-needs" aria-controls="tray-panel" aria-selected={tab === "needs"} tabIndex={tab === "needs" ? 0 : -1} onClick={() => switchTab("needs")} className={tabClass(tab === "needs")}>
             Needs you
-            <span className={cx("font-mono text-xs", needs.length ? "text-pill-human-fg" : "text-fg-tertiary")}>{needs.length}</span>
+            <span className={cx("font-mono text-12", needs.length ? "text-pill-human-fg" : "text-fg-tertiary")}>{needs.length}</span>
           </button>
           <button type="button" role="tab" id="tray-tab-updates" aria-controls="tray-panel" aria-selected={tab === "updates"} tabIndex={tab === "updates" ? 0 : -1} onClick={() => switchTab("updates")} className={tabClass(tab === "updates")}>
             Updates
@@ -248,7 +250,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
           </button>
         </div>
         {tab === "updates" && unread.length > 0 && (
-          <button type="button" onClick={markAll} disabled={read.isPending} className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-hover disabled:opacity-60">
+          <button type="button" onClick={markAll} disabled={read.isPending} className="ml-auto rounded-md px-2 py-1 text-12 font-medium text-accent hover:bg-hover disabled:opacity-60">
             Mark all read
           </button>
         )}
@@ -261,13 +263,13 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
             ))}
           </div>
         ) : inbox.isError ? (
-          <div role="alert" className="flex items-center gap-3 p-4 text-[13px] text-pill-blocked-fg">
+          <div role="alert" className="flex items-center gap-3 p-4 text-13 text-pill-blocked-fg">
             Couldn’t load what needs you. <Button onClick={() => inbox.refetch()}>Retry</Button>
           </div>
         ) : list.length === 0 ? (
-          <p className="px-3 py-8 text-center text-[13px] text-fg-tertiary">
-            {tab === "needs" ? "Nothing needs you right now." : "No updates yet."}
-          </p>
+          tab === "needs"
+            ? <EmptyState compact icon="check" title="Nothing needs you right now">Approvals, questions and reviews from your runs show up here.</EmptyState>
+            : <EmptyState compact icon="inbox" title="No updates yet">Finished runs and replies show up here.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-px">
             {list.map((item) => (
@@ -286,7 +288,7 @@ function Tray({ onClose, onDispatch }: { onClose: () => void; onDispatch: (key: 
           </ul>
         )}
       </div>
-      <div className="flex items-center gap-3 border-t border-border-subtle px-3.5 py-2 text-xs text-fg-tertiary">
+      <div className="flex items-center gap-3 border-t border-border-subtle px-3.5 py-2 text-12 text-fg-tertiary">
         <span aria-hidden className="hidden items-center gap-2.5 min-[480px]:flex">
           <span><Kbd>J</Kbd> <Kbd>K</Kbd> move</span>
           <span><Kbd>A</Kbd> <Kbd>D</Kbd> decide</span>
@@ -322,6 +324,7 @@ function Row({
   return (
     <li
       data-tray-row={item.id}
+      data-enter-key={item.id}
       aria-current={selected ? "true" : undefined}
       aria-label={`${kind.label}: ${item.title}`}
       tabIndex={selected ? 0 : -1}
@@ -345,14 +348,14 @@ function Row({
         </span>
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
-          <span className={cx("flex-none text-xs font-medium", kind.tone === "blocked" ? "text-pill-blocked-fg" : item.needs_you ? "text-pill-human-fg" : "text-fg-tertiary")}>
+        <span className="flex min-w-0 items-center gap-1.5 text-13">
+          <span className={cx("flex-none text-12 font-medium", kind.tone === "blocked" ? "text-pill-blocked-fg" : item.needs_you ? "text-pill-human-fg" : "text-fg-tertiary")}>
             {kind.label}
           </span>
           <span className={cx("truncate", unread || item.needs_you ? "font-semibold text-fg" : "text-fg-secondary")}>{item.title}</span>
           {unread && <span aria-label="unread" className="size-1.5 flex-none rounded-full bg-accent" />}
         </span>
-        <span className="truncate text-xs text-fg-tertiary">
+        <span className="truncate text-12 text-fg-tertiary">
           {meta && <span className="font-mono">{meta}</span>}
           {meta && " · "}
           {waited(item.created_at)}
@@ -385,7 +388,7 @@ function RowButtons({ children }: { children: ReactNode }) {
 
 function Failure({ error }: { error?: Error | null }) {
   return error ? (
-    <p role="alert" className="text-xs text-pill-blocked-fg">
+    <p role="alert" className="text-12 text-pill-blocked-fg">
       {error.message}
     </p>
   ) : null;
@@ -419,11 +422,11 @@ function ApproveActions({ item, register }: { item: Item; register: (k: RowKeys)
     register({ approve: () => send("approve"), deny: startDeny });
   });
   if (decide.isSuccess) {
-    return <span className="text-xs font-medium text-accent">{decide.variables?.decision === "deny" ? "Denied" : "Approved"}</span>;
+    return <span className="text-12 font-medium text-accent">{decide.variables?.decision === "deny" ? "Denied" : "Approved"}</span>;
   }
   return (
     <>
-      <span className="truncate text-xs text-fg-secondary">{item.summary}</span>
+      <span className="truncate text-12 text-fg-secondary">{item.summary}</span>
       {denying ? (
         <form
           className="flex flex-col gap-1.5 pt-0.5"
@@ -445,7 +448,7 @@ function ApproveActions({ item, register }: { item: Item; register: (k: RowKeys)
                 send("deny");
               }
             }}
-            className="text-[13px]"
+            className="text-13"
           />
           <RowButtons>
             <Button type="submit" variant="approve-outline" disabled={decide.isPending}>
@@ -494,7 +497,7 @@ function ReplyActions({ item, register }: { item: Item; register: (k: RowKeys) =
       },
     );
   };
-  if (comment.isSuccess) return <span className="text-xs font-medium text-accent">Sent</span>;
+  if (comment.isSuccess) return <span className="text-12 font-medium text-accent">Sent</span>;
   return (
     <form
       className="flex items-end gap-1.5 pt-0.5"
@@ -516,7 +519,7 @@ function ReplyActions({ item, register }: { item: Item; register: (k: RowKeys) =
             send();
           }
         }}
-        className="min-h-8 flex-1 resize-none py-1.5 text-[13px]"
+        className="min-h-8 flex-1 resize-none py-1.5 text-13"
       />
       <Button type="submit" variant="primary" className="h-8" disabled={!body.trim() || comment.isPending}>
         Send

@@ -16,11 +16,11 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 
 export function DefaultBadge({ small }: { small?: boolean }) {
   return (
-    <span className={cx("rounded-full bg-accent-soft px-2 text-accent", small ? "py-px text-[10px]" : "py-0.5 text-[11px]")}>Default</span>
+    <span className={cx("rounded-full bg-accent-soft px-2 text-accent", small ? "py-px text-10" : "py-0.5 text-11")}>Default</span>
   );
 }
 
-const link = "text-xs text-accent hover:underline disabled:opacity-50";
+const link = "text-12 text-accent hover:underline disabled:opacity-50";
 
 /**
  * Delete confirmation (mockup state 5b). Deleting the default asks who takes
@@ -44,24 +44,24 @@ export function DeleteDialog({ persona, all, onClose }: { persona: Persona; all:
           {persona.is_default ? (
             others.length ? (
               <fieldset className="flex flex-col gap-1">
-                <legend className="mb-2 text-xs text-fg-secondary">{persona.name} is your default. Choose a new default:</legend>
+                <legend className="mb-2 text-12 text-fg-secondary">{persona.name} is your default. Choose a new default:</legend>
                 {others.map((p) => (
                   <label key={p.id} className={cx("flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5", next === p.id ? "bg-selected" : "hover:bg-hover")}>
                     <input type="radio" name="next-default" checked={next === p.id} onChange={() => setNext(p.id)} className="accent-[var(--accent)]" />
                     <PersonaAvatar persona={p} size={18} />
-                    <PersonaName persona={p} className="text-[13px]" />
+                    <PersonaName persona={p} className="text-13" />
                   </label>
                 ))}
               </fieldset>
             ) : (
-              <p className="text-xs text-fg-secondary">{persona.name} is your default. The built-in Assistant becomes your default.</p>
+              <p className="text-12 text-fg-secondary">{persona.name} is your default. The built-in Assistant becomes your default.</p>
             )
           ) : (
-            <p className="text-xs text-fg-secondary">This can’t be undone.</p>
+            <p className="text-12 text-fg-secondary">This can’t be undone.</p>
           )}
-          <Dialog.Description className="text-xs text-fg-secondary">{deleteConsequence(persona.chat_count)}</Dialog.Description>
+          <Dialog.Description className="text-12 text-fg-secondary">{deleteConsequence(persona.chat_count)}</Dialog.Description>
           {del.isError && (
-            <p role="alert" className="text-xs text-pill-blocked-fg">
+            <p role="alert" className="text-12 text-pill-blocked-fg">
               {isConflict(del.error) ? `${persona.name} changed somewhere else. Close this and try again on the latest version.` : errorText(del.error)}
             </p>
           )}
@@ -96,11 +96,11 @@ function Portrait({ persona }: { persona: { name: string; color: string; avatar_
 /** What the person has allowed this persona to do, spelled out. */
 function Permissions({ capabilities }: { capabilities?: Schemas["PersonaCapabilities"] }) {
   const granted = CAPABILITIES.filter((c) => capabilities?.[c.key]);
-  if (!granted.length) return <p className="text-xs text-fg-tertiary">No extra permissions</p>;
+  if (!granted.length) return <p className="text-12 text-fg-tertiary">No extra permissions</p>;
   return (
     <ul aria-label="Permissions" data-testid="persona-permissions" className="flex flex-wrap gap-1">
       {granted.map((c) => (
-        <li key={c.key} title={c.title} className="inline-flex items-center gap-1 rounded-full bg-selected px-2 py-0.5 text-[11px] text-fg-secondary">
+        <li key={c.key} title={c.title} className="inline-flex items-center gap-1 rounded-full bg-selected px-2 py-0.5 text-11 text-fg-secondary">
           <Icon name={c.icon} size={12} />
           {c.label}
         </li>
@@ -136,7 +136,7 @@ export function PersonaProfile({ p, memories, onEdit, onDelete }: { p: Persona; 
           <PersonaName persona={p} className="truncate type-display" />
           {p.is_default && <DefaultBadge />}
         </div>
-        <p className="text-sm text-fg-secondary">{stats.join(" · ")}</p>
+        <p className="text-14 text-fg-secondary">{stats.join(" · ")}</p>
         <Permissions capabilities={p.capabilities} />
       </div>
       {/* Actions get their own row so a long name or stats line never crowds them. */}
@@ -148,12 +148,12 @@ export function PersonaProfile({ p, memories, onEdit, onDelete }: { p: Persona; 
             Set as default
           </button>
         )}
-        <button type="button" className={cx("text-xs text-pill-blocked-fg hover:underline", p.is_default && "ml-2")} onClick={onDelete} aria-label={`Delete ${p.name}`}>
+        <button type="button" className={cx("text-12 text-pill-blocked-fg hover:underline", p.is_default && "ml-2")} onClick={onDelete} aria-label={`Delete ${p.name}`}>
           Delete
         </button>
       </div>
-      {setDefault.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(setDefault.error)}</p>}
-      {create.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}
+      {setDefault.isError && <p role="alert" className="basis-full text-12 text-pill-blocked-fg">{errorText(setDefault.error)}</p>}
+      {create.isError && <p role="alert" className="basis-full text-12 text-pill-blocked-fg">{errorText(create.error)}</p>}
     </header>
   );
 }

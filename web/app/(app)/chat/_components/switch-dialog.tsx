@@ -44,26 +44,26 @@ export function HarnessSwitchDialog({
                 <Dialog.Title className="type-heading">
                   Switch to {to.harness} · {to.model}?
                 </Dialog.Title>
-                <Dialog.Description className="text-[13px] text-fg-secondary">
+                <Dialog.Description className="text-13 text-fg-secondary">
                   {to.harness} is a different harness, so the next message starts a new session. It gets a handoff of this
                   chat instead of {from.harness}’s session.
                 </Dialog.Description>
               </div>
               <section aria-label="Carries over" className="flex flex-col gap-1.5">
-                <h3 className="flex items-center gap-1.5 text-[12.5px] font-semibold text-state-done">
+                <h3 className="flex items-center gap-1.5 text-13 font-semibold text-state-done">
                   <Icon name="check" size={13} strokeWidth={2} /> Carries over
                 </h3>
-                <ul className="ml-5 flex flex-col gap-1 text-[13px]">
+                <ul className="ml-5 flex flex-col gap-1 text-13">
                   <li>The latest messages, up to 40 or 24,000 characters</li>
                   <li>The chat title and the context you attached</li>
                   <li>{agent}’s instructions</li>
                 </ul>
               </section>
               <section aria-label="Is lost" className="flex flex-col gap-1.5">
-                <h3 className="flex items-center gap-1.5 text-[12.5px] font-semibold text-pill-blocked-fg">
+                <h3 className="flex items-center gap-1.5 text-13 font-semibold text-pill-blocked-fg">
                   <Icon name="x" size={13} strokeWidth={2} /> Is lost
                 </h3>
-                <ul className="ml-5 flex flex-col gap-1 text-[13px]">
+                <ul className="ml-5 flex flex-col gap-1 text-13">
                   <li>{from.harness}’s hidden reasoning</li>
                   <li>Its tool calls and their results (only replies are kept)</li>
                   <li>Files and pages it read into its context</li>
@@ -71,7 +71,7 @@ export function HarnessSwitchDialog({
                   <li>Older messages beyond the handoff budget</li>
                 </ul>
               </section>
-              <p className="border-t border-border-subtle pt-3 text-xs text-fg-tertiary">
+              <p className="border-t border-border-subtle pt-3 text-12 text-fg-tertiary">
                 Changing model within {from.harness} keeps the session and doesn’t ask. The switch applies from your next
                 message; you can still pick again.
               </p>

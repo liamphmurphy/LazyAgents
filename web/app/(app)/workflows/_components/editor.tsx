@@ -18,13 +18,13 @@ import { PALETTE, ancestors, canConnect, diffGraphs, newNodeId, parentChecks, re
 import { FLOW_STYLE, NODE_TYPES, toFlowEdges, toFlowNodes, type FlowNode } from "./flow";
 
 const SAVE_DELAY = 700;
-const LABEL = "text-xs text-fg-secondary";
+const LABEL = "text-12 text-fg-secondary";
 
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex flex-col gap-1"><span className={LABEL}>{label}</span>{children}</label>;
 }
 
-const SELECT = "h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg";
+const SELECT = "h-[30px] rounded-md border border-border-strong bg-surface px-2 text-13 text-fg";
 
 function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: GraphNode; onChange: (patch: Partial<GraphNode>) => void; onRemove: () => void }) {
   const personas = usePersonas();
@@ -36,7 +36,7 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
   return (
     <div className="flex flex-col gap-3" data-testid="workflow-inspector">
       <Labeled label="Title"><TextInput aria-label="Title" value={node.title} onChange={(e) => onChange({ title: e.target.value })} /></Labeled>
-      <p className="font-mono text-[11px] text-fg-tertiary">{`{{${node.id}.output}}`}</p>
+      <p className="font-mono text-11 text-fg-tertiary">{`{{${node.id}.output}}`}</p>
       {node.type !== "trigger" && (
         <Labeled label={promptLabel[node.type] ?? "Body (empty uses the previous step's output)"}>
           <TextArea aria-label="Prompt" rows={5} value={c.prompt ?? ""} onChange={(e) => config({ prompt: e.target.value })} />
@@ -53,10 +53,10 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           <Labeled label="Or as agent (handle)">
             <TextInput mono aria-label="Agent handle" placeholder="atlas" value={c.agent_handle ?? ""} onChange={(e) => config({ agent_handle: e.target.value.trim() || undefined, persona_id: undefined })} />
           </Labeled>
-          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+          <label className="flex items-center gap-2 text-13 text-fg-2">
             <input type="checkbox" checked={!!c.web} onChange={(e) => config({ web: e.target.checked || undefined })} /> Read the web (this step can&apos;t read the workspace)
           </label>
-          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+          <label className="flex items-center gap-2 text-13 text-fg-2">
             <input type="checkbox" checked={!!c.images} disabled={!!c.agent_handle} onChange={(e) => config({ images: e.target.checked || undefined })} /> Generate images
           </label>
           {c.images && (
@@ -69,15 +69,15 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
                   <option value="antigravity">Antigravity</option>
                 </select>
               </Labeled>
-              <p className="text-[12px] text-fg-tertiary">Runs as a persona allowed to generate images. Later steps can see the images.</p>
+              <p className="text-12 text-fg-tertiary">Runs as a persona allowed to generate images. Later steps can see the images.</p>
             </>
           )}
-          <label className="flex items-center gap-2 text-[13px] text-fg-2">
+          <label className="flex items-center gap-2 text-13 text-fg-2">
             <input type="checkbox" aria-label="Check" checked={!!c.check} onChange={(e) => config({ check: e.target.checked || undefined, retry_from: undefined, max_attempts: undefined })} /> This step is a check (pass or fail)
           </label>
           {c.check && (
             <>
-              <p className="text-[12px] text-fg-tertiary">Nothing after this step runs unless it passes. A missing or unreadable result counts as a failure.</p>
+              <p className="text-12 text-fg-tertiary">Nothing after this step runs unless it passes. A missing or unreadable result counts as a failure.</p>
               <Labeled label="If the check fails">
                 <select aria-label="Re-run on failure" className={SELECT} value={c.retry_from ?? ""} onChange={(e) => config({ retry_from: e.target.value || undefined })}>
                   <option value="">Don&apos;t retry</option>
@@ -115,7 +115,7 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           <fieldset className="flex flex-col gap-1">
             <legend className={LABEL}>Show for review (none selected shows the previous steps)</legend>
             {before.filter((n) => n.type !== "trigger").map((n) => (
-              <label key={n.id} className="flex items-center gap-2 text-[13px] text-fg-2">
+              <label key={n.id} className="flex items-center gap-2 text-13 text-fg-2">
                 <input type="checkbox" checked={c.show?.includes(n.id) ?? false} onChange={(e) => config({ show: e.target.checked ? [...(c.show ?? []), n.id] : c.show?.filter((s) => s !== n.id) })} /> {n.title}
               </label>
             ))}
@@ -133,7 +133,7 @@ function Inspector({ graph, node, onChange, onRemove }: { graph: Graph; node: Gr
           </Labeled>
         </>
       )}
-      {(node.type === "wiki" || node.type === "ticket") && <p className="text-[12px] text-fg-tertiary">Images from earlier steps are left out: this output is text only.</p>}
+      {(node.type === "wiki" || node.type === "ticket") && <p className="text-12 text-fg-tertiary">Images from earlier steps are left out: this output is text only.</p>}
       {(node.type === "library" || node.type === "ticket") && (
         <Labeled label={node.type === "ticket" ? "Ticket title" : "Item title"}><TextInput aria-label="Item title" value={c.title ?? ""} onChange={(e) => config({ title: e.target.value })} /></Labeled>
       )}
@@ -186,18 +186,18 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
                 <span aria-hidden className="absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping" style={{ background: persona.color }} />
                 <PersonaAvatar name={persona.name} color={persona.color} src={persona.avatar_url} size={24} className="relative" />
               </span>
-              <span className="animate-skeleton text-xs text-fg-secondary">{persona.name} is working…</span>
+              <span className="animate-skeleton text-12 text-fg-secondary">{persona.name} is working…</span>
             </div>
           ) : <span />}
           {list.length > 0 && (
-            <button type="button" className="text-xs text-fg-tertiary hover:text-fg-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide conversation" : "Show conversation"}</button>
+            <button type="button" className="text-12 text-fg-tertiary hover:text-fg-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide conversation" : "Show conversation"}</button>
           )}
         </div>
       )}
       {open && list.length > 0 && (
         <div ref={transcript} className="flex max-h-[min(280px,40vh)] flex-col gap-2 overflow-y-auto px-1">
           {list.map((m) => (
-            <div key={m.id} className={m.role === "user" ? "self-end rounded-lg bg-selected px-2.5 py-1.5 text-[13px] text-fg" : "text-[13px]"}>
+            <div key={m.id} className={m.role === "user" ? "self-end rounded-lg bg-selected px-2.5 py-1.5 text-13 text-fg" : "text-13"}>
               {m.role === "user" ? m.body_md.replace(/^I'm editing my workflow "[^"]*" \(id [^)]*\)\. /, "") : <Markdown>{m.body_md}</Markdown>}
             </div>
           ))}
@@ -205,7 +205,7 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
       )}
       {error && <Banner tone="blocked" title={error.message} />}
       {personas.data && !builders.length && (
-        <p className="px-1 text-xs text-fg-secondary">No persona can create workflows yet. Turn on Create workflows for one in <Link href="/customization" className="underline">Customization</Link>.</p>
+        <p className="px-1 text-12 text-fg-secondary">No persona can create workflows yet. Turn on Create workflows for one in <Link href="/customization" className="underline">Customization</Link>.</p>
       )}
       {builders.length > 0 && (
         <div role="radiogroup" aria-label="Build as persona" className="flex flex-wrap gap-1">
@@ -217,7 +217,7 @@ function BuildChat({ workflow, chatId, onChatId, personaId, onPersonaId, onChatt
               aria-checked={p.id === persona?.id}
               // A chat keeps its persona for life, so switching starts a new one.
               onClick={() => { if (p.id !== persona?.id) { onPersonaId(p.id); onChatId(undefined); } }}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${p.id === persona?.id ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover"}`}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-12 ${p.id === persona?.id ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover"}`}
             >
               <span aria-hidden className="size-2 rounded-full" style={{ background: p.color }} />
               {p.name}
@@ -338,8 +338,8 @@ function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied,
         crumbs={[{ label: "Workflows", href: "/workflows" }, { label: workflow.name }]}
         actions={
           <>
-            <span className="font-mono text-xs text-fg-tertiary">{workflow.published_version > 0 ? `v${workflow.published_version}${workflow.unpublished_changes ? " · edited" : ""}` : "Draft"}</span>
-            <span className="text-xs text-fg-tertiary">{save.isPending ? "Saving…" : "Saved"}</span>
+            <span className="font-mono text-12 text-fg-tertiary">{workflow.published_version > 0 ? `v${workflow.published_version}${workflow.unpublished_changes ? " · edited" : ""}` : "Draft"}</span>
+            <span className="text-12 text-fg-tertiary">{save.isPending ? "Saving…" : "Saved"}</span>
             <Button variant="primary" onClick={flushAndPublish} disabled={issues.length > 0 || publish.isPending || !!preview || !workflow.unpublished_changes} hint={issues[0]?.message}>Publish</Button>
           </>
         }
@@ -348,7 +348,7 @@ function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied,
         <aside aria-label="Node types" className="w-[176px] flex-none overflow-y-auto border-r border-border-subtle bg-bg-sidebar p-3 max-md:hidden">
           {PALETTE.map((g) => (
             <div key={g.group} className="mb-4">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-tertiary">{g.group}</p>
+              <p className="mb-1.5 text-10 font-semibold uppercase tracking-wide text-fg-tertiary">{g.group}</p>
               {g.items.map((i) => (
                 <button
                   key={i.type}
@@ -357,7 +357,7 @@ function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied,
                   disabled={!!preview}
                   onDragStart={(e) => e.dataTransfer.setData("application/vesper-node", `${i.type}|${i.label}`)}
                   onClick={() => addNode(i.type, i.label)}
-                  className="mb-1.5 block w-full rounded-md border border-border-strong bg-surface px-2.5 py-1.5 text-left text-[13px] text-fg-2 hover:bg-hover disabled:opacity-50"
+                  className="mb-1.5 block w-full rounded-md border border-border-strong bg-surface px-2.5 py-1.5 text-left text-13 text-fg-2 hover:bg-hover disabled:opacity-50"
                 >
                   {i.label}
                 </button>
@@ -368,7 +368,7 @@ function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied,
         <div ref={canvas} className="relative min-h-[320px] min-w-0 flex-1" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
           {proposal && (
             <div data-testid="workflow-proposal" className="absolute left-1/2 top-3 z-10 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-[10px] border border-accent bg-surface-raised px-3 py-2 shadow-lg">
-              <span className="text-[13px] text-fg">{proposal.summary}</span>
+              <span className="text-13 text-fg">{proposal.summary}</span>
               <Button variant="primary" disabled={resolve.isPending} onClick={() => resolve.mutate({ proposalId: proposal.id, action: "apply" }, { onSuccess: onApplied })}>Apply</Button>
               <Button disabled={resolve.isPending} onClick={() => resolve.mutate({ proposalId: proposal.id, action: "discard" })}>Discard</Button>
             </div>
@@ -404,7 +404,7 @@ function Canvas({ workflow, chatId, onChatId, personaId, onPersonaId, onApplied,
             <div data-testid="workflow-issues" className="flex flex-col gap-1 border-t border-border-subtle pt-3">
               <p className={LABEL}>Before you can publish</p>
               {issues.map((i, n) => (
-                <button key={n} type="button" className="text-left text-[12.5px] text-pill-human-fg" onClick={() => i.node && setSelected(i.node)}>{i.message}</button>
+                <button key={n} type="button" className="text-left text-13 text-pill-human-fg" onClick={() => i.node && setSelected(i.node)}>{i.message}</button>
               ))}
             </div>
           )}
@@ -424,7 +424,7 @@ function WorkflowSettings({ workflow }: { workflow: Workflow }) {
       <Labeled label="When to use it (personas read this to recognize a request)">
         <TextArea aria-label="Description" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => description !== workflow.description && save.mutate({ description })} />
       </Labeled>
-      <p className="text-[12.5px] text-fg-tertiary">Select a node to edit it. Drag from a node&apos;s right edge to connect it.</p>
+      <p className="text-13 text-fg-tertiary">Select a node to edit it. Drag from a node&apos;s right edge to connect it.</p>
     </div>
   );
 }

@@ -28,6 +28,7 @@ import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/
 import { Content, TopBar } from "@/components/shell/topbar";
 import { ProjectPicker } from "@/components/shell/project-picker";
 import { ReportsTabNav } from "./reports-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Report = Schemas["CostReport"];
 type Slice = Schemas["CostSlice"];
@@ -41,7 +42,7 @@ const PRESETS = new Set<string>(RANGE_PRESETS.map((p) => p.value));
 const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const weekdayFmt = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 const yearFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const dateInput = "h-8 rounded-md border border-border-strong bg-surface px-2 font-mono text-xs text-fg";
+const dateInput = "h-8 rounded-md border border-border-strong bg-surface px-2 font-mono text-12 text-fg";
 
 function seriesColor(i: number, key: string): string {
   return key === OTHER ? "var(--text-tertiary)" : `var(--agent-${AGENT_HUES[i % AGENT_HUES.length]})`;
@@ -50,12 +51,12 @@ function seriesColor(i: number, key: string): string {
 function Kpi({ label, value, sub, tone, action }: { label: string; value: ReactNode; sub: ReactNode; tone?: "warn"; action?: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface px-[18px] py-4">
-      <div className="flex items-center justify-between gap-2 text-[13px] text-fg-secondary">
+      <div className="flex items-center justify-between gap-2 text-13 text-fg-secondary">
         {label}
         {action}
       </div>
-      <div className={tone === "warn" ? "text-[26px] font-semibold text-pill-human-fg" : "text-[26px] font-semibold"}>{value}</div>
-      <div className="text-xs text-fg-tertiary">{sub}</div>
+      <div className={tone === "warn" ? "text-26 font-semibold text-pill-human-fg" : "text-26 font-semibold"}>{value}</div>
+      <div className="text-12 text-fg-tertiary">{sub}</div>
     </div>
   );
 }
@@ -76,11 +77,11 @@ function SpendChart({ report, by, setBy, agentNames }: { report: Report; by: By;
     <section aria-labelledby="spend-over-time" className="rounded-xl border border-border bg-surface px-[18px] py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="spend-over-time" className="type-heading">
-          Spend over time <span className="ml-2 text-xs font-normal text-fg-tertiary">daily, stacked</span>
+          Spend over time <span className="ml-2 text-12 font-normal text-fg-tertiary">daily, stacked</span>
         </h2>
         <Segmented label="Group the chart" small options={BY_OPTIONS} value={by} onChange={setBy} />
       </div>
-      <p aria-live="polite" className="mt-2 min-h-5 text-xs text-fg-secondary">
+      <p aria-live="polite" className="mt-2 min-h-5 text-12 text-fg-secondary">
         {shown ? (
           <>
             <span className="font-medium text-fg">{weekdayFmt.format(new Date(shown.date))}</span> · {usd(shown.total)} · {shown.runs} {shown.runs === 1 ? "run" : "runs"}
@@ -98,7 +99,7 @@ function SpendChart({ report, by, setBy, agentNames }: { report: Report; by: By;
           return (
             <g key={t}>
               <line x1={left} x2={W} y1={y} y2={y} stroke="var(--border-subtle)" />
-              <text x={left - 6} y={y + 3} textAnchor="end" className="fill-fg-tertiary font-mono text-[10px]">{usd(max * t).replace(/\.00$/, "")}</text>
+              <text x={left - 6} y={y + 3} textAnchor="end" className="fill-fg-tertiary font-mono text-10">{usd(max * t).replace(/\.00$/, "")}</text>
             </g>
           );
         })}
@@ -125,14 +126,14 @@ function SpendChart({ report, by, setBy, agentNames }: { report: Report; by: By;
                 return <rect key={s.key} x={x} y={y} width={barW} height={h} fill={seriesColor(k, s.key)} opacity={hover === undefined || hover === i ? 0.9 : 0.5} />;
               })}
               {i % every === 0 && (
-                <text x={x + barW / 2} y={H - 6} textAnchor="middle" className="fill-fg-tertiary text-[10px]">{dayFmt.format(new Date(b.date))}</text>
+                <text x={x + barW / 2} y={H - 6} textAnchor="middle" className="fill-fg-tertiary text-10">{dayFmt.format(new Date(b.date))}</text>
               )}
             </g>
           );
         })}
       </svg>
       {keys.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs" aria-label="Series totals">
+        <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-12" aria-label="Series totals">
           {totals.map((s, i) => (
             <li key={s.key} className="flex items-center gap-1.5">
               <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: seriesColor(i, s.key) }} />
@@ -167,10 +168,10 @@ function Breakdown({
     <section aria-label={title} className="rounded-xl border border-border bg-surface">
       <div className="flex items-baseline justify-between gap-3 border-b border-border-subtle px-[18px] py-3">
         <h2 className="type-heading">{title}</h2>
-        {hint && <span className="text-xs text-fg-tertiary">{hint}</span>}
+        {hint && <span className="text-12 text-fg-tertiary">{hint}</span>}
       </div>
-      <table className="w-full text-left text-[13px]">
-        <thead className="text-xs text-fg-tertiary">
+      <table className="w-full text-left text-13">
+        <thead className="text-12 text-fg-tertiary">
           <tr>
             <th scope="col" className="px-[18px] py-2 font-medium">{title.replace(/^By /, "").replace(/^./, (c) => c.toUpperCase())}</th>
             <th scope="col" className="w-20 px-2 py-2 text-right font-medium">Share</th>
@@ -186,11 +187,11 @@ function Breakdown({
               <tr key={s.key} className="border-t border-border-row hover:bg-hover">
                 <td className="max-w-0 truncate px-[18px] py-2">
                   {link ? <Link href={link} className="hover:underline">{label}</Link> : label}
-                  {s.detail && <span className="ml-2 font-mono text-[11.5px] text-fg-tertiary">{s.detail}</span>}
+                  {s.detail && <span className="ml-2 font-mono text-12 text-fg-tertiary">{s.detail}</span>}
                 </td>
-                <td className="px-2 py-2 text-right font-mono text-xs text-fg-secondary">{share(s.cost_micros, total.cost_micros)}</td>
-                <td className="px-2 py-2 text-right font-mono text-xs text-fg-secondary">{metric === "runs" ? s.runs : compact(s.tokens)}</td>
-                <td className="px-[18px] py-2 text-right font-mono text-xs">{spendLabel(s.cost_micros, s.unpriced_runs)}</td>
+                <td className="px-2 py-2 text-right font-mono text-12 text-fg-secondary">{share(s.cost_micros, total.cost_micros)}</td>
+                <td className="px-2 py-2 text-right font-mono text-12 text-fg-secondary">{metric === "runs" ? s.runs : compact(s.tokens)}</td>
+                <td className="px-[18px] py-2 text-right font-mono text-12">{spendLabel(s.cost_micros, s.unpriced_runs)}</td>
               </tr>
             );
           })}
@@ -199,8 +200,8 @@ function Breakdown({
           <tr className="border-t border-border font-medium">
             <td className="px-[18px] py-2">Total</td>
             <td />
-            <td className="px-2 py-2 text-right font-mono text-xs">{metric === "runs" ? total.runs : compact(total.tokens)}</td>
-            <td className="px-[18px] py-2 text-right font-mono text-xs">{spendLabel(total.cost_micros, total.unpriced_runs)}</td>
+            <td className="px-2 py-2 text-right font-mono text-12">{metric === "runs" ? total.runs : compact(total.tokens)}</td>
+            <td className="px-[18px] py-2 text-right font-mono text-12">{spendLabel(total.cost_micros, total.unpriced_runs)}</td>
           </tr>
         </tfoot>
       </table>
@@ -214,15 +215,15 @@ function TopTickets({ tickets, projectNames, agentNames }: { tickets: Schemas["C
     <section aria-labelledby="top-tickets" className="rounded-xl border border-border bg-surface">
       <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border-subtle px-[18px] py-3">
         <h2 id="top-tickets" className="type-heading">
-          Most expensive tickets <span className="ml-2 text-xs font-normal text-fg-tertiary">top 10 in range, including sub agent runs</span>
+          Most expensive tickets <span className="ml-2 text-12 font-normal text-fg-tertiary">top 10 in range, including sub agent runs</span>
         </h2>
-        <span className="text-xs text-fg-tertiary">Points come from the ticket estimate</span>
+        <span className="text-12 text-fg-tertiary">Points come from the ticket estimate</span>
       </div>
       {tickets.length === 0 ? (
-        <p className="px-[18px] py-6 text-center text-[13px] text-fg-tertiary">No ticket spend in this range.</p>
+        <p className="px-[18px] py-6 text-center text-13 text-fg-tertiary">No ticket spend in this range.</p>
       ) : (
-        <table className="w-full text-left text-[13px]">
-          <thead className="text-xs text-fg-tertiary">
+        <table className="w-full text-left text-13">
+          <thead className="text-12 text-fg-tertiary">
             <tr>
               <th scope="col" className="w-8 px-[18px] py-2 font-medium">#</th>
               <th scope="col" className="px-2 py-2 font-medium">Ticket</th>
@@ -240,24 +241,24 @@ function TopTickets({ tickets, projectNames, agentNames }: { tickets: Schemas["C
               return (
                 <Fragment key={t.key}>
                   <tr className="border-t border-border-row hover:bg-hover">
-                    <td className="px-[18px] py-2 font-mono text-xs text-fg-tertiary">{i + 1}</td>
+                    <td className="px-[18px] py-2 font-mono text-12 text-fg-tertiary">{i + 1}</td>
                     <td className="max-w-0 px-2 py-2">
                       <span className="flex min-w-0 items-baseline gap-2">
-                        <Link href={`/tickets/${t.key}`} className="flex-none font-mono text-xs text-fg-secondary hover:underline">{t.key}</Link>
+                        <Link href={`/tickets/${t.key}`} className="flex-none font-mono text-12 text-fg-secondary hover:underline">{t.key}</Link>
                         <span className="min-w-0 truncate">{t.title}</span>
                       </span>
                     </td>
                     <td className="truncate px-2 py-2 text-fg-secondary max-md:hidden">{projectNames.get(t.project_key) ?? t.project_key}</td>
-                    <td className="px-2 py-2 text-right font-mono text-xs">{t.points ?? "–"}</td>
-                    <td className="px-2 py-2 text-right font-mono text-xs">{usd(t.cost_micros)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-xs text-fg-secondary">{cpp ?? <span className="font-sans text-fg-tertiary">Not estimated</span>}</td>
+                    <td className="px-2 py-2 text-right font-mono text-12">{t.points ?? "–"}</td>
+                    <td className="px-2 py-2 text-right font-mono text-12">{usd(t.cost_micros)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-12 text-fg-secondary">{cpp ?? <span className="font-sans text-fg-tertiary">Not estimated</span>}</td>
                     <td className="px-[18px] py-2 text-right">
                       <button
                         type="button"
                         aria-expanded={expanded}
                         aria-controls={`runs-${t.key}`}
                         onClick={() => setOpen(expanded ? undefined : t.key)}
-                        className="text-xs text-accent hover:underline"
+                        className="text-12 text-accent hover:underline"
                       >
                         {t.runs.length} {t.runs.length === 1 ? "run" : "runs"} {expanded ? "▾" : "▸"}
                       </button>
@@ -267,10 +268,10 @@ function TopTickets({ tickets, projectNames, agentNames }: { tickets: Schemas["C
                     <tr id={`runs-${t.key}`} className="bg-surface-sunken">
                       <td />
                       <td colSpan={6} className="px-2 pb-3 pt-1">
-                        <p className="py-1 text-xs text-fg-tertiary">Runs behind {t.key} · each opens its run log</p>
+                        <p className="py-1 text-12 text-fg-tertiary">Runs behind {t.key} · each opens its run log</p>
                         <ul className="flex flex-col">
                           {t.runs.map((r) => (
-                            <li key={r.id} className="flex items-center gap-3 border-t border-border-row py-1.5 text-xs first:border-t-0">
+                            <li key={r.id} className="flex items-center gap-3 border-t border-border-row py-1.5 text-12 first:border-t-0">
                               <span className="w-40 truncate">{r.parent_run_id ? "↳ " : ""}{agentNames.get(r.agent) ?? r.agent}</span>
                               <span className="w-36 truncate font-mono text-fg-secondary">{r.model}</span>
                               <span className="w-24 text-fg-secondary">{r.state}</span>
@@ -288,7 +289,7 @@ function TopTickets({ tickets, projectNames, agentNames }: { tickets: Schemas["C
           </tbody>
         </table>
       )}
-      <p className="border-t border-border-subtle px-[18px] py-2.5 text-xs text-fg-tertiary">
+      <p className="border-t border-border-subtle px-[18px] py-2.5 text-12 text-fg-tertiary">
         Ticket spend sums every run on the ticket in this range, sub agent runs included. The ticket header&apos;s cost chip shows all-time spend.
       </p>
     </section>
@@ -369,7 +370,7 @@ export function CostsScreen() {
             value={data.unpriced_runs}
             tone={data.unpriced_runs > 0 ? "warn" : undefined}
             sub={data.unpriced_runs > 0 ? "Unknown or partial cost; totals are lower bounds" : "Every run is priced"}
-            action={data.unpriced_runs > 0 ? <Link href="/runs" className="text-xs text-accent hover:underline">Show runs</Link> : undefined}
+            action={data.unpriced_runs > 0 ? <Link href="/runs" className="text-12 text-accent hover:underline">Show runs</Link> : undefined}
           />
         </div>
         <SpendChart report={data} by={by} setBy={(b) => set({ by: b === "agents" ? undefined : b })} agentNames={agentNames} />
@@ -396,30 +397,23 @@ export function CostsScreen() {
       <TopBar crumbs={[...projectCrumbs(project, "Reports").slice(0, -1), { label: "Reports", href: "/reports" }, { label: "Costs" }]} />
       <Content>
         <div className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-col gap-3">
-              <div className="space-y-1">
-                <h1 className="type-display">Reports</h1>
-                <p className="text-sm text-fg-secondary">
-                  Spend recorded on every run: ticket work, sub agents, planning and chat.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <ReportsTabNav tab="costs" />
-                <ProjectPicker />
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2">
+          <PageHeader
+            title="Reports"
+            description="Spend recorded on every run: ticket work, sub agents, planning and chat."
+            actions={<div className="flex flex-col items-end gap-2">
               <Segmented label="Date range" options={RANGE_PRESETS} value={preset} onChange={pickPreset} />
               {preset === "custom" && (
-                <div className="flex items-center gap-2 text-xs text-fg-tertiary">
+                <div className="flex items-center gap-2 text-12 text-fg-tertiary">
                   <label className="flex items-center gap-1.5">From<input type="date" className={dateInput} value={range.from} onChange={(e) => set({ from: e.target.value })} /></label>
                   <label className="flex items-center gap-1.5">To<input type="date" className={dateInput} value={range.to} onChange={(e) => set({ to: e.target.value })} /></label>
                 </div>
               )}
-              {!invalid && <p className="text-xs text-fg-tertiary">{rangeLabel}</p>}
-            </div>
-          </div>
+              {!invalid && <p className="text-12 text-fg-tertiary">{rangeLabel}</p>}
+            </div>}
+          >
+            <ReportsTabNav tab="costs" />
+            <ProjectPicker />
+          </PageHeader>
           {body}
         </div>
       </Content>

@@ -58,7 +58,8 @@ export function StatusGlyph({
       role={label ? "img" : undefined}
       aria-label={label ? STATUS_LABEL[state] : undefined}
       aria-hidden={label ? undefined : true}
-      className="inline-block flex-none rounded-full"
+      // A state change recolours in place rather than snapping (pies swap shape instantly).
+      className="inline-block flex-none rounded-full transition-[background-color,border-color] duration-(--motion-base)"
       style={{ width: size, height: size, ...styles[state] }}
     />
   );
@@ -70,7 +71,7 @@ export function PriorityGlyph({ priority, label = true }: { priority: Priority; 
     return (
       <span
         {...aria}
-        className="grid size-4 flex-none place-items-center rounded-xs bg-priority-urgent text-[11px] font-bold leading-none text-approve-fg"
+        className="grid size-4 flex-none place-items-center rounded-xs bg-priority-urgent text-11 font-bold leading-none text-approve-fg"
       >
         !
       </span>

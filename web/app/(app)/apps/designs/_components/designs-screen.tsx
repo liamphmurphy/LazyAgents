@@ -15,10 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
-const sectionLabel = "text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
+const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
+const sectionLabel = "text-11 font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
 
 /** The Designs app's Home (docs/design/designs-home.svg): start a design and find recent ones. */
 export function DesignsScreen() {
@@ -54,22 +55,18 @@ export function DesignsScreen() {
       <TopBar crumbs={[{ label: "Apps" }, { label: "Designs" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-6 py-6 max-sm:px-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="type-display text-fg">Designs</h1>
-              <p className="mt-1 text-[13px] text-fg-secondary">App flows, diagrams and wireframes you build with your personas.</p>
-            </div>
-            <Button variant="primary" icon="plus" disabled={create.isPending} onClick={() => startWith("blank")}>
-              New design
-            </Button>
-          </div>
+          <PageHeader
+            title="Designs"
+            description="App flows, diagrams and wireframes you build with your personas."
+            actions={<Button variant="primary" icon="plus" disabled={create.isPending} onClick={() => startWith("blank")}>New design</Button>}
+          />
 
           <form onSubmit={start} className="flex flex-col gap-3 rounded-xl border border-border-strong bg-surface p-3 focus-within:border-accent">
             <div className="flex items-center gap-2.5">
-              <span aria-hidden className="grid size-[26px] flex-none place-items-center rounded-full border border-accent text-[12px] font-bold text-accent">✦</span>
+              <span aria-hidden className="grid size-[26px] flex-none place-items-center rounded-full border border-accent text-12 font-bold text-accent">✦</span>
               <input
                 aria-label="Describe a design, or paste a ticket key"
-                className="min-w-0 flex-1 bg-transparent text-[14px] text-fg outline-none placeholder:text-fg-tertiary"
+                className="min-w-0 flex-1 bg-transparent text-14 text-fg outline-none placeholder:text-fg-tertiary"
                 placeholder="Describe a flow or diagram, or paste a ticket key…"
                 maxLength={2000}
                 value={prompt}
@@ -77,13 +74,13 @@ export function DesignsScreen() {
               />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] text-fg-tertiary">A title starts a blank design; a description or ticket key opens it with its chat drafting from it.</p>
+              <p className="text-12 text-fg-tertiary">A title starts a blank design; a description or ticket key opens it with its chat drafting from it.</p>
               <Button type="submit" variant="primary" disabled={create.isPending}>
                 {create.isPending ? "Creating…" : "Start"}
               </Button>
             </div>
           </form>
-          {create.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(create.error)}</p>}
+          {create.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(create.error)}</p>}
 
           <section aria-labelledby="designs-start" className="flex flex-col gap-3">
             <h2 id="designs-start" className={sectionLabel}>Start from</h2>
@@ -97,7 +94,7 @@ export function DesignsScreen() {
                     className="flex h-[128px] w-full flex-col justify-between rounded-xl border border-border bg-surface p-3 text-left outline-none transition-colors hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/35 disabled:opacity-60"
                   >
                     <span aria-hidden className="flex h-[70px] items-center justify-center">{s.art}</span>
-                    <span className="text-[13px] font-semibold text-fg">{s.label}</span>
+                    <span className="text-13 font-semibold text-fg">{s.label}</span>
                   </button>
                 </li>
               ))}
@@ -114,8 +111,8 @@ export function DesignsScreen() {
                   }}
                   className="flex h-[128px] w-full flex-col justify-between rounded-xl border border-accent/40 bg-accent-soft/40 p-3 text-left outline-none hover:border-accent focus-visible:ring-2 focus-visible:ring-accent/35"
                 >
-                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-fg"><span aria-hidden className="size-2 rounded-full bg-state-review" />From a ticket</span>
-                  <span className="text-[12px] text-fg-secondary">Your persona drafts the flow from its criteria</span>
+                  <span className="flex items-center gap-1.5 text-13 font-semibold text-fg"><span aria-hidden className="size-2 rounded-full bg-state-review" />From a ticket</span>
+                  <span className="text-12 text-fg-secondary">Your persona drafts the flow from its criteria</span>
                 </button>
               </li>
             </ul>
@@ -132,10 +129,10 @@ export function DesignsScreen() {
                     role="tab"
                     aria-selected={filter === f.key}
                     onClick={() => setFilter(f.key)}
-                    className={cx("flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px]", filter === f.key ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
+                    className={cx("flex items-center gap-1.5 rounded-md px-2.5 py-1 text-13", filter === f.key ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
                   >
                     {f.label}
-                    {f.key === "review" && review > 0 && <span className="rounded bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{review}</span>}
+                    {f.key === "review" && review > 0 && <span className="rounded bg-pill-review-bg px-1.5 text-11 text-pill-review-fg">{review}</span>}
                   </button>
                 ))}
               </div>
@@ -145,7 +142,7 @@ export function DesignsScreen() {
                 placeholder="Search designs"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="ml-auto h-[30px] w-[200px] rounded-md border border-border bg-surface px-2.5 text-[12.5px] text-fg outline-none placeholder:text-fg-tertiary focus:border-accent max-sm:w-full"
+                className="ml-auto h-[30px] w-[200px] rounded-md border border-border bg-surface px-2.5 text-13 text-fg outline-none placeholder:text-fg-tertiary focus:border-accent max-sm:w-full"
               />
             </div>
             {designs.isError ? (
@@ -167,7 +164,7 @@ export function DesignsScreen() {
                 Start one above. Every design you make, and every one a persona drafts for you, shows up here.
               </EmptyState>
             ) : shown.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-fg-tertiary">No designs match.</p>
+              <p className="py-6 text-center text-13 text-fg-tertiary">No designs match.</p>
             ) : (
               <ul aria-label="Designs" className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
                 {shown.map((d) => (
@@ -194,15 +191,15 @@ export function DesignsScreen() {
 function AlsoCard({ icon, title, children }: { icon: string; title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      <p className="text-[13px] text-fg"><span aria-hidden className="mr-1.5">{icon}</span>{title}</p>
-      <p className="mt-1 text-[12px] text-fg-secondary">{children}</p>
+      <p className="text-13 text-fg"><span aria-hidden className="mr-1.5">{icon}</span>{title}</p>
+      <p className="mt-1 text-12 text-fg-secondary">{children}</p>
     </div>
   );
 }
 
 /** Starter cards with the mockup's little pictures. */
 const STARTERS: { key: DesignStarter; label: string; art: ReactNode }[] = [
-  { key: "blank", label: "Blank", art: <span className="text-[22px] font-light text-fg-tertiary">+</span> },
+  { key: "blank", label: "Blank", art: <span className="text-22 font-light text-fg-tertiary">+</span> },
   {
     key: "mobile-flow",
     label: "Mobile flow",
@@ -280,20 +277,20 @@ function DesignCard({ d }: { d: DesignSummary }) {
           {body ? <DesignSvg design={body} assetUrl={(a) => designAssetHref(d.id, a)} className="block h-full w-full" title={`First page of ${d.title}`} pad={8} /> : <Skeleton className="h-full w-full opacity-40" />}
         </span>
         <span className="flex flex-1 flex-col gap-1 p-3 pr-10">
-          <span className="truncate text-[13.5px] font-semibold text-fg">{renaming ? " " : d.title}</span>
-          <span className="text-[12px] text-fg-tertiary">
+          <span className="truncate text-14 font-semibold text-fg">{renaming ? " " : d.title}</span>
+          <span className="text-12 text-fg-tertiary">
             {kindOf(body, d.frames)} · edited {ago(d.updated_at)}
           </span>
           {(links.length > 0 || d.pending_proposals > 0) && (
             <span className="mt-1 flex flex-wrap gap-1.5">
               {links.map((l) => (
-                <span key={l} className="max-w-[160px] truncate rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-[11px] text-fg-secondary">{l}</span>
+                <span key={l} className="max-w-[160px] truncate rounded bg-surface-sunken px-1.5 py-0.5 font-mono text-11 text-fg-secondary">{l}</span>
               ))}
-              {d.pending_proposals > 0 && <span className="rounded-full bg-pill-review-bg px-2 py-0.5 text-[11px] text-pill-review-fg">{d.pending_proposals} to review</span>}
+              {d.pending_proposals > 0 && <span className="rounded-full bg-pill-review-bg px-2 py-0.5 text-11 text-pill-review-fg">{d.pending_proposals} to review</span>}
             </span>
           )}
         </span>
-        {d.persona_edited && <span aria-label="A persona worked on this" className="absolute bottom-3 right-11 grid size-[20px] place-items-center rounded-full border border-accent text-[10px] font-bold text-accent">✦</span>}
+        {d.persona_edited && <span aria-label="A persona worked on this" className="absolute bottom-3 right-11 grid size-[20px] place-items-center rounded-full border border-accent text-10 font-bold text-accent">✦</span>}
       </Link>
       {renaming && (
         <form
@@ -307,7 +304,7 @@ function DesignCard({ d }: { d: DesignSummary }) {
             autoFocus
             aria-label="Design title"
             maxLength={200}
-            className="h-[26px] w-full rounded-md border border-accent bg-surface px-2 text-[13.5px] text-fg outline-none"
+            className="h-[26px] w-full rounded-md border border-accent bg-surface px-2 text-14 text-fg outline-none"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={commitRename}
@@ -340,13 +337,13 @@ function DesignCard({ d }: { d: DesignSummary }) {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      {error && <p role="alert" className="mt-1 text-[12px] text-pill-blocked-fg">{errorText(error)}</p>}
+      {error && <p role="alert" className="mt-1 text-12 text-pill-blocked-fg">{errorText(error)}</p>}
       <Dialog.Root open={confirming} onOpenChange={setConfirming}>
         <Dialog.Portal>
           <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
           <Dialog.Content className="motion-dialog fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100%-32px))] -translate-x-1/2 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none">
             <Dialog.Title className="type-heading">Delete “{d.title}”?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-[13px] text-fg-secondary">The design, its versions, suggestions and images are deleted. A shared chat is kept; a chat dedicated to this design is deleted. This can’t be undone.</Dialog.Description>
+            <Dialog.Description className="mt-2 text-13 text-fg-secondary">The design, its versions, suggestions and images are deleted. A shared chat is kept; a chat dedicated to this design is deleted. This can’t be undone.</Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
               <Dialog.Close asChild>
                 <Button variant="ghost">Cancel</Button>

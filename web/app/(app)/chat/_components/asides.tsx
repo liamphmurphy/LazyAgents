@@ -42,7 +42,7 @@ export function ReplyAsides({ asides, name }: { asides: Aside[]; name: string })
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border px-2.5 text-xs text-fg-secondary hover:bg-hover hover:text-fg"
+        className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border px-2.5 text-12 text-fg-secondary hover:bg-hover hover:text-fg"
       >
         <Icon name="branch" size={12} />
         {asideCount(asides.length)} · not in {name}&rsquo;s context
@@ -89,10 +89,10 @@ function AsideCard({ aside, live, actions, onHide }: { aside: Aside; live?: bool
       data-testid="aside"
       className="relative flex flex-col gap-2 rounded-xl border border-state-review/25 bg-surface px-3 py-2.5 before:absolute before:-left-[17px] before:top-[18px] before:w-4 before:border-t-[1.5px] before:border-state-review/35"
     >
-      <header className="flex items-center gap-2 text-xs text-fg-tertiary">
+      <header className="flex items-center gap-2 text-12 text-fg-tertiary">
         <PersonaAvatar persona={persona} size={20} />
-        <span className="text-[12.5px] font-medium text-pill-review-fg">{persona.name}</span>
-        <span className="rounded-xs bg-pill-review-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-pill-review-fg">Aside</span>
+        <span className="text-13 font-medium text-pill-review-fg">{persona.name}</span>
+        <span className="rounded-xs bg-pill-review-bg px-1.5 py-0.5 text-10 font-semibold uppercase tracking-[0.06em] text-pill-review-fg">Aside</span>
         <span className="min-w-0 truncate">{live ? "sees the live reply · read-only" : "asked during this reply"}</span>
         {live && answering && (
           <button type="button" disabled={stop.isPending} onClick={() => stop.mutate()} className="ml-auto rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-fg disabled:opacity-50">
@@ -105,17 +105,17 @@ function AsideCard({ aside, live, actions, onHide }: { aside: Aside; live?: bool
           </button>
         )}
       </header>
-      <p className="max-w-[90%] self-end whitespace-pre-wrap rounded-xl bg-selected px-3 py-1.5 text-[13.5px] text-fg">{question}</p>
+      <p className="max-w-[90%] self-end whitespace-pre-wrap rounded-xl bg-selected px-3 py-1.5 text-14 text-fg">{question}</p>
       {answer ? (
-        <div className="type-chat text-[13.5px] leading-[1.55] text-fg-2">
+        <div className="type-chat text-14 leading-[1.55] text-fg-2">
           <ChatMarkdown>{answer.body_md}</ChatMarkdown>
         </div>
       ) : failure ? (
-        <p role="alert" className="text-[13px] text-pill-blocked-fg">{failure}</p>
+        <p role="alert" className="text-13 text-pill-blocked-fg">{failure}</p>
       ) : answering ? (
-        <p role="status" className="text-shimmer text-[13px]">Reading the live reply: its steps, tool output and what it has written…</p>
+        <p role="status" className="text-shimmer text-13">Reading the live reply: its steps, tool output and what it has written…</p>
       ) : (
-        <p className="text-[13px] text-fg-tertiary">Stopped before answering.</p>
+        <p className="text-13 text-fg-tertiary">Stopped before answering.</p>
       )}
       {live && answer && actions && (
         <div className="flex flex-wrap gap-1.5">
@@ -134,4 +134,4 @@ function AsideCard({ aside, live, actions, onHide }: { aside: Aside; live?: bool
 }
 
 const ACTION =
-  "inline-flex h-[26px] items-center gap-1.5 rounded-md border border-border-strong px-2 text-xs text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-[26px] items-center gap-1.5 rounded-md border border-border-strong px-2 text-12 text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50";

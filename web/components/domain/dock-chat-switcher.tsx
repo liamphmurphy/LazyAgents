@@ -38,18 +38,18 @@ export function DockChatSwitcher({ current, sections, newLabel, onSelect, onNew,
         {sections.filter((s) => s.chats.length > 0).map((s, i) => (
           <DropdownMenu.Group key={s.label}>
             {i > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
-            <DropdownMenu.Label className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-fg-tertiary">{s.label}</DropdownMenu.Label>
+            <DropdownMenu.Label className="px-2 pb-1 pt-2 text-11 font-semibold uppercase tracking-wide text-fg-tertiary">{s.label}</DropdownMenu.Label>
             {s.chats.map((c) => (
               <ChatRow key={c.id} chat={c} selected={c.id === current?.id} onSelect={() => onSelect(c.id)} />
             ))}
           </DropdownMenu.Group>
         ))}
         {count > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />}
-        <DropdownMenu.Item onSelect={onNew} disabled={creating} className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-[13px] font-semibold text-accent outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50">
+        <DropdownMenu.Item onSelect={onNew} disabled={creating} className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-13 font-semibold text-accent outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50">
           <Icon name="plus" size={13} />
           {newLabel}
         </DropdownMenu.Item>
-        <DropdownMenu.Item asChild className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-[13px] text-fg-secondary outline-none data-[highlighted]:bg-hover">
+        <DropdownMenu.Item asChild className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-13 text-fg-secondary outline-none data-[highlighted]:bg-hover">
           <Link href="/chat">Open all in Chat <Icon name="expand" size={12} /></Link>
         </DropdownMenu.Item>
       </DropdownMenu.Content>
@@ -60,7 +60,7 @@ export function DockChatSwitcher({ current, sections, newLabel, onSelect, onNew,
       <span className="flex flex-none items-center gap-1" data-testid="dock-chat-switcher">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
-            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-fg-tertiary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-7 items-center gap-1 rounded-md px-1.5 text-11 font-semibold text-fg-tertiary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
             aria-label={label}
             title="Switch chat"
           >
@@ -87,11 +87,11 @@ export function DockChatSwitcher({ current, sections, newLabel, onSelect, onNew,
       <PersonaAvatar persona={personaLook(who)} size={20} />
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-surface px-2 py-1 text-left text-[13px] font-semibold text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-surface px-2 py-1 text-left text-13 font-semibold text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
           aria-label={label}
         >
           <span className="min-w-0 flex-1 truncate">{current?.title || "New chat"}</span>
-          {count > 0 && <span className="flex-none text-[11px] font-semibold text-fg-tertiary">{count}</span>}
+          {count > 0 && <span className="flex-none text-11 font-semibold text-fg-tertiary">{count}</span>}
           <Icon name="chev" size={12} className="flex-none text-fg-tertiary" />
         </DropdownMenu.Trigger>
         {menu}
@@ -100,7 +100,7 @@ export function DockChatSwitcher({ current, sections, newLabel, onSelect, onNew,
         type="button"
         onClick={onNew}
         disabled={creating}
-        className="flex flex-none items-center gap-1 rounded-md bg-selected px-2 py-1 text-[12px] font-semibold text-accent hover:bg-hover disabled:opacity-50"
+        className="flex flex-none items-center gap-1 rounded-md bg-selected px-2 py-1 text-12 font-semibold text-accent hover:bg-hover disabled:opacity-50"
         aria-label={newLabel}
         title={newLabel}
       >
@@ -122,8 +122,8 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
     >
       <PersonaAvatar persona={personaLook(who)} size={22} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold text-fg">{chat.title || "Untitled chat"}</span>
-        <span className="block truncate text-[11px] text-fg-tertiary">{detail}</span>
+        <span className="block truncate text-13 font-semibold text-fg">{chat.title || "Untitled chat"}</span>
+        <span className="block truncate text-11 text-fg-tertiary">{detail}</span>
       </span>
       {selected && <Icon name="check" size={13} className="flex-none text-accent" />}
     </DropdownMenu.Item>

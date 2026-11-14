@@ -48,7 +48,7 @@ export function Modal({
         <Dialog.Content
           aria-describedby={undefined}
           className={cx(
-            "fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-strong bg-surface-raised text-[13px] text-fg shadow-[var(--shadow-float)] outline-none",
+            "fixed left-1/2 top-[12vh] z-50 flex max-h-[80vh] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-strong bg-surface-raised text-13 text-fg shadow-[var(--shadow-float)] outline-none",
             className,
           )}
         >
@@ -69,7 +69,7 @@ export const AUDIENCE: Record<Audience, { label: string; icon: IconName; cls: st
 export function AudienceChip({ audience, className }: { audience: Audience; className?: string }) {
   const a = AUDIENCE[audience];
   return (
-    <span className={cx("inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold", a.cls, className)}>
+    <span className={cx("inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-12 font-semibold", a.cls, className)}>
       <Icon name={a.icon} size={13} />
       {a.label}
     </span>
@@ -77,13 +77,13 @@ export function AudienceChip({ audience, className }: { audience: Audience; clas
 }
 
 export function Tag({ children }: { children: ReactNode }) {
-  return <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-[11px] font-medium text-accent">{children}</span>;
+  return <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-11 font-medium text-accent">{children}</span>;
 }
 
 /** The thin bar under a Knowledge screen: what's going on at the left, counts at the right. */
 export function StatusBar({ left, right }: { left?: ReactNode; right?: ReactNode }) {
   return (
-    <div className="flex h-6 flex-none items-center gap-4 border-t border-border-subtle bg-panel px-4 text-[11px] text-fg-tertiary">
+    <div className="flex h-6 flex-none items-center gap-4 border-t border-border-subtle bg-panel px-4 text-11 text-fg-tertiary">
       <span className="min-w-0 flex-1 truncate">{left}</span>
       <span className="flex flex-none items-center gap-4">{right}</span>
     </div>
@@ -94,8 +94,8 @@ export function StatusBar({ left, right }: { left?: ReactNode; right?: ReactNode
 export function SideHeading({ children, count, action }: { children: ReactNode; count?: number; action?: ReactNode }) {
   return (
     <div className="flex items-center gap-2 px-1 pb-2 pt-1">
-      <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">{children}</span>
-      {count !== undefined && <span className="rounded-full bg-selected px-1.5 text-[10px] font-semibold text-fg-secondary">{count}</span>}
+      <span className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">{children}</span>
+      {count !== undefined && <span className="rounded-full bg-selected px-1.5 text-10 font-semibold text-fg-secondary">{count}</span>}
       <span className="flex-1" />
       {action}
     </div>

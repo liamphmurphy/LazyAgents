@@ -77,7 +77,7 @@ export function MockupImage({
           style={zoom !== "fit" && natural ? { width: natural.w * scale, height: natural.h * scale } : undefined}
         />
       )}
-      {broken && <p className="p-4 text-xs text-pill-blocked-fg">The browser couldn&apos;t render this SVG.</p>}
+      {broken && <p className="p-4 text-12 text-pill-blocked-fg">The browser couldn&apos;t render this SVG.</p>}
     </div>
   );
 }

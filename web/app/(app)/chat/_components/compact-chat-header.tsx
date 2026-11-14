@@ -21,7 +21,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something w
 
 /** Every control in the header is a 44px touch target. */
 const target = "relative grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-50";
-const item = "flex min-h-[44px] cursor-default select-none items-center gap-2.5 rounded-md px-2.5 text-[15px] outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
+const item = "flex min-h-[44px] cursor-default select-none items-center gap-2.5 rounded-md px-2.5 text-15 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 
 /**
  * The chat header below COMPACT (DESIGN.md §3 Responsive): ≡ opens the history drawer, then the
@@ -73,7 +73,7 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
         />
         {editing ? (
           <form onSubmit={save} className="flex min-w-0 flex-1 items-center gap-1">
-            <TextInput aria-label="Conversation title" className="!h-[44px] min-w-0 flex-1 !text-[16px]" value={title} placeholder="New conversation" autoFocus onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} />
+            <TextInput aria-label="Conversation title" className="!h-[44px] min-w-0 flex-1 !text-16" value={title} placeholder="New conversation" autoFocus onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} />
             <button type="submit" aria-label="Save title" className={target} disabled={update.isPending}>
               <Icon name="check" size={18} />
             </button>
@@ -83,8 +83,8 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
           </form>
         ) : (
           <div className="min-w-0 flex-1 px-1">
-            <h1 className="truncate text-[15px] font-semibold leading-tight">{label}</h1>
-            <p data-testid="chat-subtitle" className="truncate text-xs text-fg-tertiary">
+            <h1 className="truncate text-15 font-semibold leading-tight">{label}</h1>
+            <p data-testid="chat-subtitle" className="truncate text-12 text-fg-tertiary">
               {who}
               {c.repo_url && <> · <span className="font-mono">{repoShortName(c.repo_url)}</span></>}
               {c.archived && " · Archived"}
@@ -131,15 +131,15 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
                     <DropdownMenu.Item className={item} disabled={running} onSelect={() => (afterClose.current = onRepository)}>
                       <Icon name="github" size={16} />
                       <span className="flex-1">Repository</span>
-                      <span className="max-w-[40%] truncate text-xs text-fg-tertiary">{c.repo_url ? repoShortName(c.repo_url) : "None"}</span>
+                      <span className="max-w-[40%] truncate text-12 text-fg-tertiary">{c.repo_url ? repoShortName(c.repo_url) : "None"}</span>
                     </DropdownMenu.Item>
                   )}
                   {!c.space && (
                     <>
                       <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
-                      <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-xs font-medium text-fg-tertiary">Default project</DropdownMenu.Label>
+                      <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-12 font-medium text-fg-tertiary">Default project</DropdownMenu.Label>
                       {project.locked ? (
-                        <p className="px-2.5 pb-1.5 text-[13px] text-fg-secondary">{project.current?.name ?? "No default"}</p>
+                        <p className="px-2.5 pb-1.5 text-13 text-fg-secondary">{project.current?.name ?? "No default"}</p>
                       ) : (
                         <ProjectRadioItems chat={c} projects={project.projects} onPick={project.pick} itemClassName={item} />
                       )}
@@ -169,7 +169,7 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
         )}
       </div>
       {update.isError && (
-        <p role="alert" className="px-2 pb-1 text-xs text-pill-blocked-fg">
+        <p role="alert" className="px-2 pb-1 text-12 text-pill-blocked-fg">
           {errorText(update.error)}
         </p>
       )}

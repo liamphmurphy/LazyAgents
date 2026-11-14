@@ -37,9 +37,9 @@ export function CommitEmailPicker({
       <div className="mb-2.5 flex items-start gap-2.5">
         <CommitGlyph />
         <div className="min-w-0 flex-1">
-          <h2 id="commit-email-title" className="text-[13px] font-semibold text-fg">Which email should commits use?</h2>
-          <p className="text-[12px] text-fg-secondary">
-            Commits in <span className="font-mono text-xs text-fg">{repoShortName(repo)}</span> are authored as you.
+          <h2 id="commit-email-title" className="text-13 font-semibold text-fg">Which email should commits use?</h2>
+          <p className="text-12 text-fg-secondary">
+            Commits in <span className="font-mono text-12 text-fg">{repoShortName(repo)}</span> are authored as you.
             {required ? " Pick one to start; you can change it later." : " It applies from the next reply."}
           </p>
         </div>
@@ -66,10 +66,10 @@ export function CommitEmailPicker({
               )}
             >
               <GraphRail on={on} />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5 font-mono text-xs leading-snug">
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 font-mono text-12 leading-snug">
                 <span className="flex items-center gap-1.5">
                   <span className={on ? "text-accent" : "text-pill-human-fg"}>commit {previewHash(email)}</span>
-                  {i === 0 && <span className="rounded-full bg-hover px-1.5 font-sans text-[10.5px] text-fg-secondary">primary</span>}
+                  {i === 0 && <span className="rounded-full bg-hover px-1.5 font-sans text-11 text-fg-secondary">primary</span>}
                 </span>
                 <span className="truncate text-fg-secondary" title={`${name} <${email}>`}>
                   Author: {name} &lt;<span className="text-fg">{email}</span>&gt;

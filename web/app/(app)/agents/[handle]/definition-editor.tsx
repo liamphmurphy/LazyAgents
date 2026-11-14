@@ -81,7 +81,7 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
     <SectionCard
       title="Memory"
       action={
-        <Link href={`/wiki/agents/${handle}/Memory`} className="text-xs text-accent hover:underline">
+        <Link href={`/wiki/agents/${handle}/Memory`} className="text-12 text-accent hover:underline">
           Open memory
         </Link>
       }
@@ -90,7 +90,7 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
       {m.enabled && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[12.5px] font-medium text-fg-2">Inject</span>
+            <span className="text-13 font-medium text-fg-2">Inject</span>
             <Segmented
               label="Inject"
               value={m.inject}
@@ -102,7 +102,7 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
                 { value: "search", label: "Search" },
               ]}
             />
-            <span className="text-xs text-fg-tertiary">{INJECT_HELP[m.inject]}</span>
+            <span className="text-12 text-fg-tertiary">{INJECT_HELP[m.inject]}</span>
           </div>
           <Field label="Token budget" htmlFor="ag-mem-tokens" hint="Most relevant pages first; the rest is trimmed.">
             <TextInput
@@ -118,7 +118,7 @@ function MemoryCard({ handle, spec, set }: { handle: string; spec: AgentSpec; se
           </Field>
         </div>
       )}
-      <p className="-mt-1 text-xs text-fg-tertiary">
+      <p className="-mt-1 text-12 text-fg-tertiary">
         The agent always writes to <code className="inline">agents/{handle}/</code>. Edits to other pages follow the{" "}
         <code className="inline">wiki:write</code> scope; without it they arrive as suggestions.
       </p>
@@ -167,7 +167,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           <TextInput id="ag-spec" value={draft.specialty} onChange={(e) => onChange({ ...draft, specialty: e.target.value })} />
         </Field>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12.5px] font-medium text-fg-2">Kind</span>
+          <span className="text-13 font-medium text-fg-2">Kind</span>
           <Segmented
             label="Agent kind"
             value={draft.kind}
@@ -177,14 +177,14 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               { value: "sub", label: "Sub" },
             ]}
           />
-          <p className="text-xs text-fg-tertiary">
+          <p className="text-12 text-fg-tertiary">
             {draft.kind === "main"
               ? "Takes tickets, and can delegate parts of them to sub agents."
               : "Can't be assigned tickets. Runs only when a main agent delegates a task to it."}
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12.5px] font-medium text-fg-2">Identity color</span>
+          <span className="text-13 font-medium text-fg-2">Identity color</span>
           <div role="radiogroup" aria-label="Identity color" className="flex gap-1.5">
             {AGENT_HUES.map((hue, i) => (
               <button
@@ -206,7 +206,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
       <SectionCard title="Runtime">
         <Toggle checked={spec.review_required ?? false} onChange={(review_required) => set({ review_required })} label="Require independent review before Done" />
         <div className="flex flex-col gap-2">
-          <span className="text-[12.5px] font-medium text-fg-2">Harness</span>
+          <span className="text-13 font-medium text-fg-2">Harness</span>
           <div className="flex flex-wrap items-center gap-3">
             <Segmented
               label="Harness"
@@ -214,10 +214,10 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               onChange={(h) => set({ harness: h })}
               options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
             />
-            <span className="text-xs text-fg-tertiary">Projects can switch harness in an override</span>
+            <span className="text-12 text-fg-tertiary">Projects can switch harness in an override</span>
           </div>
           {harness && (
-            <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-[12.5px]">
+            <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-13">
               <span className="text-fg-secondary">On {harness.label}, Vesper can</span>
               <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                 {CAP_LABELS.map(([k, label]) => (
@@ -243,7 +243,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
           <Field label="Effort" htmlFor="ag-effort" hint="Reasoning effort. Default uses the harness's own default.">
             <select
               id="ag-effort"
-              className="h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+              className="h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none"
               value={spec.harness_options[spec.harness]?.effort ?? ""}
               onChange={(e) => {
                 const rest = { ...spec.harness_options[spec.harness] };
@@ -286,20 +286,20 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
 
       <Card title="MCP servers" bodyClassName="p-0">
         <ul>
-          <li className="flex items-center gap-3 px-[18px] py-2.5 text-[13px]">
+          <li className="flex items-center gap-3 px-[18px] py-2.5 text-13">
             <Icon name="server" size={14} className="text-fg-tertiary" />
             <span className="font-mono">lazyagents</span>
-            <span className="truncate font-mono text-xs text-fg-tertiary">/mcp</span>
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-fg-tertiary">
+            <span className="truncate font-mono text-12 text-fg-tertiary">/mcp</span>
+            <span className="ml-auto flex items-center gap-1.5 text-12 text-fg-tertiary">
               <Icon name="lock" size={12} /> Always on · per-run token
             </span>
           </li>
           {spec.mcp_servers.map((m, i) => (
-            <li key={m.name} className="flex items-center gap-3 border-t border-border-row px-[18px] py-2 text-[13px]">
+            <li key={m.name} className="flex items-center gap-3 border-t border-border-row px-[18px] py-2 text-13">
               <Icon name="server" size={14} className="text-fg-tertiary" />
               <span className="font-mono">{m.name}</span>
-              <span className="min-w-0 truncate font-mono text-xs text-fg-tertiary">{m.url}</span>
-              <span className="ml-auto truncate text-xs text-fg-tertiary">{m.description}</span>
+              <span className="min-w-0 truncate font-mono text-12 text-fg-tertiary">{m.url}</span>
+              <span className="ml-auto truncate text-12 text-fg-tertiary">{m.description}</span>
               <IconButton icon="trash" label={`Remove ${m.name}`} onClick={() => set({ mcp_servers: spec.mcp_servers.filter((_, j) => j !== i) })} />
             </li>
           ))}
@@ -320,17 +320,17 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
       </Card>
 
       <SectionCard title="Usage fallbacks">
-        <p className="text-xs text-fg-tertiary">When provider usage runs out, continue with the next harness and model in this order. The checkout is preserved; each switch starts a fresh session. Configure credentials for each harness.</p>
+        <p className="text-12 text-fg-tertiary">When provider usage runs out, continue with the next harness and model in this order. The checkout is preserved; each switch starts a fresh session. Configure credentials for each harness.</p>
         {(spec.fallbacks ?? []).map((f, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-fg-tertiary">{i + 1}.</span>
+            <span className="text-12 text-fg-tertiary">{i + 1}.</span>
             <Segmented label={`Fallback ${i + 1} harness`} value={f.harness} options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
               onChange={(harness) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, harness, harness_options: v.harness_options?.effort ? { effort: v.harness_options.effort } : {} } : v) })} />
             <TextInput aria-label={`Fallback ${i + 1} model`} placeholder="Model" list={`ag-fb-models-${i}`} value={f.model}
               onChange={(e) => set({ fallbacks: spec.fallbacks!.map((v, j) => j === i ? { ...v, model: e.target.value } : v) })} />
             {takesEffort(f.harness) && <select
               aria-label={`Fallback ${i + 1} effort`}
-              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+              className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none"
               value={f.harness_options?.effort ?? ""}
               onChange={(e) => set({
                 fallbacks: spec.fallbacks!.map((v, j) => {
@@ -359,12 +359,12 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
       </SectionCard>
 
       <Card title="Harness options" bodyClassName="flex flex-col gap-2 px-[18px] py-4">
-        <p className="text-xs text-fg-tertiary">Passed only to the matching harness. Use for settings that have no shared equivalent.</p>
+        <p className="text-12 text-fg-tertiary">Passed only to the matching harness. Use for settings that have no shared equivalent.</p>
         {Object.entries(spec.harness_options).flatMap(([h, opts]) =>
           Object.entries(opts).map(([k, v]) => (
             <div key={`${h}.${k}`} className="flex items-center gap-2">
               <span className="w-[92px] flex-none"><MonoChip variant="outline">{h}</MonoChip></span>
-              <span className="w-44 flex-none truncate font-mono text-xs">{k}</span>
+              <span className="w-44 flex-none truncate font-mono text-12">{k}</span>
               <TextInput
                 aria-label={`${h} ${k}`}
                 value={v}

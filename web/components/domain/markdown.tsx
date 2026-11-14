@@ -129,7 +129,7 @@ export function Markdown({ children, className, anchors, codeBlocks, visualBlock
           }
         }
         return (
-        <pre className="overflow-x-auto rounded-lg border border-border bg-surface-sunken p-3 font-mono text-xs leading-relaxed [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0">
+        <pre className="overflow-x-auto rounded-lg border border-border bg-surface-sunken p-3 font-mono text-12 leading-relaxed [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0">
           {children}
         </pre>
         );

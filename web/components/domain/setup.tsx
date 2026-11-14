@@ -137,7 +137,7 @@ export function SetupChecklist({ className }: { className?: string }) {
         </span>
         <div className="flex flex-1 flex-col">
           <span className="font-semibold">You’re set up</span>
-          <span className="text-[13px] text-fg-secondary">All {steps.length} steps done. Agents can run.</span>
+          <span className="text-13 text-fg-secondary">All {steps.length} steps done. Agents can run.</span>
         </div>
         <Button variant="outline" onClick={() => setStoredFlag("local", dismissedKey(workspace))}>
           Dismiss
@@ -151,7 +151,7 @@ export function SetupChecklist({ className }: { className?: string }) {
     <section aria-labelledby="setup-title" className={cx("rounded-xl border border-border bg-surface", className)}>
       <div className="flex flex-col gap-2 px-[18px] pb-3 pt-3.5">
         <h2 id="setup-title" className="type-heading">Get set up</h2>
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-13 text-fg-secondary">
           {done} of {steps.length} done · ticks update as you finish each step
         </p>
         <ProgressBar value={done / steps.length} color="var(--state-done)" label={`${done} of ${steps.length} setup steps done`} />
@@ -163,15 +163,15 @@ export function SetupChecklist({ className }: { className?: string }) {
             <li key={s.key} className="flex flex-wrap items-center gap-3 border-t border-border-row px-[18px] py-2.5">
               <StepMark done={s.done} next={isNext} />
               <div className="flex min-w-0 flex-[1_1_240px] flex-col">
-                <span className={cx("text-[13px]", s.done ? "text-fg-secondary line-through" : "font-medium", isNext && "font-semibold")}>{s.label}</span>
-                <span className={cx("text-[11.5px]", !s.done && s.key === "secret" ? "text-pill-human-fg" : "text-fg-tertiary")}>{s.detail}</span>
+                <span className={cx("text-13", s.done ? "text-fg-secondary line-through" : "font-medium", isNext && "font-semibold")}>{s.label}</span>
+                <span className={cx("text-12", !s.done && s.key === "secret" ? "text-pill-human-fg" : "text-fg-tertiary")}>{s.detail}</span>
               </div>
               {isNext ? (
                 <ButtonLink href={s.href} variant="primary">
                   {s.link} →
                 </ButtonLink>
               ) : (
-                <Link href={s.href} className={cx("text-[12.5px]", s.done ? "text-fg-secondary hover:text-accent" : "text-accent")}>
+                <Link href={s.href} className={cx("text-13", s.done ? "text-fg-secondary hover:text-accent" : "text-accent")}>
                   {s.link} →
                 </Link>
               )}
@@ -188,10 +188,10 @@ export function SetupChecklist({ className }: { className?: string }) {
 /** Why nothing can start right now, with a link to fix it. Shown next to New chat / Start chat. */
 export function NoHarnessNote({ health }: { health: HarnessHealth }) {
   if (health.checking) {
-    return <p role="status" className="text-xs text-fg-secondary">Checking available models… This updates automatically.</p>;
+    return <p role="status" className="text-12 text-fg-secondary">Checking available models… This updates automatically.</p>;
   }
   return (
-    <p role="status" className="text-xs text-pill-human-fg">
+    <p role="status" className="text-12 text-pill-human-fg">
       No harness is available
       {health.secrets.length ? `: add ${orList(health.secrets)}.` : health.reasons.length ? `: ${health.reasons.join(" · ")}.` : "."}{" "}
       <Link href="/settings#secrets" className="text-accent hover:underline">

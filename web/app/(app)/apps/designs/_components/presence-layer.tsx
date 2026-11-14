@@ -33,7 +33,7 @@ export function PresenceLayer({ name, nodes, camera, busy }: { name: string; nod
       ))}
       {/* Page coordinates under the camera, so the glide animates the persona's moves and not the person's pans. */}
       <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.z})`}>
-        <g data-testid="persona-cursor" className="motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out" style={{ transform: `translate(${at.x + at.w}px, ${at.y + at.h}px)` }}>
+        <g data-testid="persona-cursor" className="motion-safe:transition-transform motion-safe:duration-(--motion-slow) motion-safe:ease-out" style={{ transform: `translate(${at.x + at.w}px, ${at.y + at.h}px)` }}>
           <g transform={`scale(${1 / camera.z}) translate(4 4)`}>
             <path d="M0 0L0 14L4 10.5L7 17L9.5 16L6.5 9.5L12 9.5Z" fill={PRESENCE} stroke="#0C0B12" strokeWidth={1} />
             <rect x={12} y={14} width={name.length * 6.5 + 14} height={18} rx={9} fill={PRESENCE} />

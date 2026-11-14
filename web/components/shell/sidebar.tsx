@@ -27,7 +27,7 @@ function NavLink({ href, active, label, children }: { href: string; active: bool
       aria-label={label}
       title={label}
       className={cx(
-        "flex h-[30px] items-center gap-2.5 rounded-sm text-[13px] font-medium",
+        "flex h-[30px] items-center gap-2.5 rounded-sm text-13 font-medium",
         label ? "relative justify-center px-0" : "px-2",
         active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
       )}
@@ -42,7 +42,7 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
   if (!kind || n <= 0) return null;
   if (kind === "runs") {
     return (
-      <span className="flex items-center gap-[6px] text-xs text-fg-tertiary">
+      <span className="flex items-center gap-[6px] text-12 text-fg-tertiary">
         <span aria-hidden className="size-1.5 rounded-full bg-state-done" />
         {n} running
       </span>
@@ -56,7 +56,7 @@ function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, num
     );
   }
   return (
-    <span className="font-mono text-xs text-pill-human-fg" title={`${n} suggested edits to review`}>
+    <span className="font-mono text-12 text-pill-human-fg" title={`${n} suggested edits to review`}>
       {n}
       <span className="sr-only"> suggested edits to review</span>
     </span>
@@ -129,7 +129,7 @@ function MenuSettings({ active, settingsNeedYou, rail }: { active: (href: string
 function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, number>; active: (href: string) => boolean; onNewSpace: () => void }) {
   return (
     <div role="group" aria-label="Work" className="flex flex-col gap-px">
-      <span aria-hidden className="px-2 pb-1 text-xs font-medium text-fg-tertiary">Work</span>
+      <span aria-hidden className="px-2 pb-1 text-12 font-medium text-fg-tertiary">Work</span>
       {WORK_ITEMS.map((n) => (
         <NavLink key={n.href} href={n.href} active={active(n.href)}>
           <Icon name={n.icon} />
@@ -212,7 +212,7 @@ export function Sidebar() {
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
               <Mark />
-              <span className="text-[14px] font-semibold tracking-[-0.01em]">Vesper</span>
+              <span className="text-14 font-semibold tracking-[-0.01em]">Vesper</span>
             </span>
             <div className="flex items-center gap-0.5">
               <MenuSettings active={navActive} settingsNeedYou={settingsNeedYou} />

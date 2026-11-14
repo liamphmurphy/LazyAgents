@@ -54,7 +54,7 @@ function PersonaTag({ id }: { id: string }) {
 
 function Meta({ m }: { m: Memory }) {
   return (
-    <p className="text-xs text-fg-tertiary">
+    <p className="text-12 text-fg-tertiary">
       {m.space_id && (
         <>
           <span className="text-fg-secondary" data-testid="memory-space">{m.space_name ?? "A space"}’s memory</span>
@@ -78,7 +78,7 @@ function Tags({ tags }: { tags: string[] }) {
   return (
     <ul className="flex flex-wrap gap-1" aria-label="Tags">
       {tags.map((t) => (
-        <li key={t} className="rounded-full bg-selected px-2 py-px text-[11px] text-fg-secondary">
+        <li key={t} className="rounded-full bg-selected px-2 py-px text-11 text-fg-secondary">
           {t}
         </li>
       ))}
@@ -86,7 +86,7 @@ function Tags({ tags }: { tags: string[] }) {
   );
 }
 
-const label = "text-[12.5px] font-medium text-fg-2";
+const label = "text-13 font-medium text-fg-2";
 
 function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDeleted: () => void }) {
   const update = useUpdateMemory();
@@ -121,7 +121,7 @@ function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDel
             id={`${id}-type`}
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none"
+            className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none"
           >
             {(m.persona_id ? PERSONA_MEMORY_TYPES : MEMORY_TYPES).map((t) => (
               <option key={t} value={t}>
@@ -137,7 +137,7 @@ function Editor({ m, onDone, onDeleted }: { m: Memory; onDone: () => void; onDel
       </div>
       <Meta m={m} />
       {err && (
-        <p role="alert" className="text-xs text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(err)}
         </p>
       )}
@@ -164,7 +164,7 @@ function Row({ m, editing, onEdit, onDone }: { m: Memory; editing: boolean; onEd
     <li className="group flex min-w-0 gap-2 rounded-xl border border-border bg-surface p-3.5 hover:bg-hover" data-testid="memory-row">
       <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
         <span className="type-heading text-fg">{m.title}</span>
-        {m.summary && <span className="text-xs text-fg-secondary">{m.summary}</span>}
+        {m.summary && <span className="text-12 text-fg-secondary">{m.summary}</span>}
         <Tags tags={m.tags} />
         <Meta m={m} />
       </button>
@@ -216,7 +216,7 @@ function Page({
   return (
     <>
       {offset === 0 && rows.length === 0 && (
-        <p className="col-span-full px-1 py-6 text-center text-[13px] text-fg-secondary">
+        <p className="col-span-full px-1 py-6 text-center text-13 text-fg-secondary">
           {q || type ? "No memories match." : whose ? "Nothing remembered here yet." : "Nothing remembered yet. The assistant saves useful things as you talk and tells you when it does."}
         </p>
       )}
@@ -263,19 +263,19 @@ export function ExportMenu() {
   }
   return (
     <details className="relative">
-      <summary className="inline-flex h-[30px] cursor-pointer list-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[12.5px] text-fg hover:bg-hover">
+      <summary className="inline-flex h-[30px] cursor-pointer list-none items-center gap-1.5 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-13 text-fg hover:bg-hover">
         <Icon name="download" size={14} />
         Export
         <Icon name="chev" size={12} />
       </summary>
       <div className="absolute right-0 z-10 mt-1 flex w-44 flex-col rounded-md border border-border-strong bg-surface p-1 shadow-lg">
-        <button type="button" disabled={busy} className="rounded px-2 py-1.5 text-left text-[13px] hover:bg-hover" onClick={() => run("json")}>
+        <button type="button" disabled={busy} className="rounded px-2 py-1.5 text-left text-13 hover:bg-hover" onClick={() => run("json")}>
           JSON (all entries)
         </button>
-        <button type="button" disabled={busy} className="rounded px-2 py-1.5 text-left text-[13px] hover:bg-hover" onClick={() => run("md")}>
+        <button type="button" disabled={busy} className="rounded px-2 py-1.5 text-left text-13 hover:bg-hover" onClick={() => run("md")}>
           Markdown (all entries)
         </button>
-        {err && <p role="alert" className="px-2 py-1 text-xs text-pill-blocked-fg">{err}</p>}
+        {err && <p role="alert" className="px-2 py-1 text-12 text-pill-blocked-fg">{err}</p>}
       </div>
     </details>
   );
@@ -291,13 +291,13 @@ export function ImportView({ onClose }: { onClose: () => void }) {
   if (result)
     return (
       <div className="flex flex-col gap-3" data-testid="memory-import-result">
-        <p className="text-[13px] text-fg">
+        <p className="text-13 text-fg">
           Added {result.created}, updated {result.updated}
         </p>
         {result.failed.length > 0 && (
           <div className="flex flex-col gap-1">
-            <p className="text-xs text-pill-blocked-fg">{result.failed.length} couldn’t be saved:</p>
-            <ul className="flex flex-col gap-0.5 text-xs text-fg-secondary">
+            <p className="text-12 text-pill-blocked-fg">{result.failed.length} couldn’t be saved:</p>
+            <ul className="flex flex-col gap-0.5 text-12 text-fg-secondary">
               {result.failed.map((f) => (
                 <li key={f.index}>
                   {f.title} — {f.error}
@@ -313,40 +313,40 @@ export function ImportView({ onClose }: { onClose: () => void }) {
     );
   return (
     <section aria-label="Import memories" className="flex flex-col gap-3">
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-13 text-fg-secondary">
         Bring over what another assistant already knows about you. Nothing is saved until you confirm.
       </p>
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <p className="flex-1 text-[13px] text-fg">1. Copy this prompt into ChatGPT, Claude or another assistant</p>
+          <p className="flex-1 text-13 text-fg">1. Copy this prompt into ChatGPT, Claude or another assistant</p>
           <CopyButton text={IMPORT_PROMPT} label="Copy prompt" />
         </div>
         <pre
           tabIndex={0}
           aria-label="Prompt to copy"
-          className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-2 font-mono text-[11px] text-fg-secondary"
+          className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-2 font-mono text-11 text-fg-secondary"
         >
           {IMPORT_PROMPT}
         </pre>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="memory-import-text" className="text-[13px] text-fg">
+        <label htmlFor="memory-import-text" className="text-13 text-fg">
           2. Paste its reply
         </label>
         <TextArea id="memory-import-text" rows={6} value={text} placeholder="Paste the whole reply, including the code block" onChange={(e) => setText(e.target.value)} />
       </div>
       <div aria-live="polite" className="flex flex-col gap-1">
         {parsed.error && (
-          <p role="alert" className="text-xs text-pill-blocked-fg">
+          <p role="alert" className="text-12 text-pill-blocked-fg">
             {parsed.error}
           </p>
         )}
         {!parsed.error && text.trim() && (
           <>
-            <p className="text-[13px] text-fg">Found {n} {n === 1 ? "memory" : "memories"}</p>
-            {parsed.skipped > 0 && <p className="text-xs text-fg-tertiary">{parsed.skipped} skipped (retired or missing a title).</p>}
+            <p className="text-13 text-fg">Found {n} {n === 1 ? "memory" : "memories"}</p>
+            {parsed.skipped > 0 && <p className="text-12 text-fg-tertiary">{parsed.skipped} skipped (retired or missing a title).</p>}
             {n > 0 && (
-              <ul aria-label="Memories found" className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-fg-secondary">
+              <ul aria-label="Memories found" className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-12 text-fg-secondary">
                 {parsed.entries.map((e, i) => (
                   <li key={i}>
                     {e.title} <span className="text-fg-tertiary">· {typeLabel(e.type)}</span>
@@ -358,7 +358,7 @@ export function ImportView({ onClose }: { onClose: () => void }) {
         )}
       </div>
       {imp.isError && (
-        <p role="alert" className="text-xs text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {errorText(imp.error)}
         </p>
       )}
@@ -386,7 +386,7 @@ function DeleteAll({ total }: { total?: number }) {
     );
   return (
     <div role="group" aria-label="Confirm delete everything" className="flex flex-wrap items-center gap-2 rounded-md border border-border-strong p-2">
-      <span className="flex-1 text-xs text-fg">Forget all {total} memories? This can’t be undone.</span>
+      <span className="flex-1 text-12 text-fg">Forget all {total} memories? This can’t be undone.</span>
       <Button
         variant="primary"
         className="bg-state-blocked"
@@ -398,7 +398,7 @@ function DeleteAll({ total }: { total?: number }) {
       <Button variant="outline" onClick={() => setAsking(false)}>
         Cancel
       </Button>
-      {wipe.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(wipe.error)}</p>}
+      {wipe.isError && <p role="alert" className="basis-full text-12 text-pill-blocked-fg">{errorText(wipe.error)}</p>}
     </div>
   );
 }
@@ -408,7 +408,7 @@ function Focused({ id, onDone }: { id: string; onDone: () => void }) {
   const m = useMemory(id);
   if (m.isError)
     return (
-      <p className="rounded-xl border border-border p-3 text-[13px] text-fg-secondary">
+      <p className="rounded-xl border border-border p-3 text-13 text-fg-secondary">
         That memory is no longer saved.
       </p>
     );
@@ -454,7 +454,7 @@ export function MemorySection({ whose, heading, focus }: { whose: string; headin
               setType(t);
               setPages(1);
             }}
-            className={cx("rounded-md px-2.5 py-1 text-xs", type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
+            className={cx("rounded-md px-2.5 py-1 text-12", type === t ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")}
           >
             {t ? typeLabel(t) : "All"}
           </button>
@@ -479,7 +479,7 @@ export function MemorySection({ whose, heading, focus }: { whose: string; headin
       </div>
       <div className="mt-4 flex flex-col items-start gap-2 border-t border-border-subtle pt-3">
         {!whose && <DeleteAll total={count.data?.total} />}
-        <p className="text-xs text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
+        <p className="text-12 text-fg-tertiary">Private to you. Never shared with the team wiki. Secrets and tokens are never saved.</p>
       </div>
     </div>
   );

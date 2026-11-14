@@ -10,6 +10,7 @@ import { useCanvasPanel } from "@/lib/use-canvas-panel";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
+import { LoadingText } from "@/components/ui/loading";
 
 /**
  * A design in a chat's transcript (docs/design/designs-from-chat.svg): a live thumbnail
@@ -52,7 +53,7 @@ export function DesignCard({ id, title }: { id: string; title: string }) {
           <Skeleton className="h-full w-full opacity-40" />
         )}
         {pending > 0 && (
-          <span data-testid="design-card-review" className="absolute right-2 top-2 rounded-full bg-pill-review-bg px-2 py-0.5 text-[11px] font-medium text-pill-review-fg">
+          <span data-testid="design-card-review" className="absolute right-2 top-2 rounded-full bg-pill-review-bg px-2 py-0.5 text-11 font-medium text-pill-review-fg">
             {pending} to review
           </span>
         )}
@@ -62,9 +63,9 @@ export function DesignCard({ id, title }: { id: string; title: string }) {
           <Icon name="designs" size={14} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Design</span>
-          <span className="truncate text-[13px] font-semibold text-fg">{name}</span>
-          <span data-testid="design-card-counts" className="truncate text-[11.5px] text-fg-tertiary">{body ? designCounts(body) : ref.isError ? "Couldn’t load this design" : "Loading…"}</span>
+          <span className="text-10 font-semibold uppercase tracking-[0.06em] text-fg-tertiary">Design</span>
+          <span className="truncate text-13 font-semibold text-fg">{name}</span>
+          <span data-testid="design-card-counts" className="truncate text-12 text-fg-tertiary">{body ? designCounts(body) : ref.isError ? "Couldn’t load this design" : <LoadingText />}</span>
         </span>
         <Button variant="secondary" disabled={!body} onClick={() => router.push(`/present/designs/${id}`)}>
           Present

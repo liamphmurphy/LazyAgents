@@ -167,9 +167,9 @@ test("saved views are created, edited, renamed and deleted from the sidebar", as
   await input.press("Enter");
   await expect(views.getByRole("link", { name: "UX triage" })).toBeVisible();
 
-  page.once("dialog", (d) => d.accept());
   await views.getByRole("button", { name: "UX triage view actions" }).click();
   await page.getByRole("menuitem", { name: "Delete view" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete view" }).click();
   await expect(views.getByRole("link", { name: "UX triage" })).toHaveCount(0);
   await expect(page).not.toHaveURL(/sv=/);
   expect(api.savedViews.map((v) => v.name)).toEqual(["Blocked"]);

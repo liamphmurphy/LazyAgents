@@ -30,17 +30,17 @@ export function MemoryTab({ handle, memory }: { handle: string; memory: AgentSpe
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="font-mono text-[13px]">{prefix}</span>
+        <span className="font-mono text-13">{prefix}</span>
         {tree.data && (
-          <span className="text-xs text-fg-tertiary">
+          <span className="text-12 text-fg-tertiary">
             {pages.length} page{pages.length === 1 ? "" : "s"}
           </span>
         )}
-        <Link href={wikiHref(index)} className="ml-auto text-xs text-accent hover:underline">
+        <Link href={wikiHref(index)} className="ml-auto text-12 text-accent hover:underline">
           Open in wiki →
         </Link>
       </div>
-      <p className="text-xs text-fg-secondary">
+      <p className="text-12 text-fg-secondary">
         {m.enabled ? (
           <>
             Each run starts with <b className="font-medium">{INJECT[m.inject]}</b>, up to <b className="font-medium">{m.max_tokens.toLocaleString()} tokens</b>.{" "}
@@ -70,7 +70,7 @@ export function MemoryTab({ handle, memory }: { handle: string; memory: AgentSpe
                 <Link href={wikiHref(p.path)} className="flex items-center gap-3 px-[18px] py-2.5 hover:bg-row-hover">
                   <Icon name="wiki" size={14} className="flex-none text-fg-tertiary" />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="flex items-center gap-2 text-[13px] font-medium">
+                    <span className="flex items-center gap-2 text-13 font-medium">
                       <span className="truncate">{p.title}</span>
                       {p.path === index && <Flag tone="neutral">index</Flag>}
                       {!p.published && <Flag tone="human">suggestion only</Flag>}
@@ -80,9 +80,9 @@ export function MemoryTab({ handle, memory }: { handle: string; memory: AgentSpe
                         </Flag>
                       )}
                     </span>
-                    <span className="truncate font-mono text-[11px] text-fg-tertiary">{p.path}</span>
+                    <span className="truncate font-mono text-11 text-fg-tertiary">{p.path}</span>
                   </span>
-                  <span className="flex-none text-xs text-fg-tertiary">
+                  <span className="flex-none text-12 text-fg-tertiary">
                     {p.author.name} · {ago(p.updated_at)}
                   </span>
                 </Link>
@@ -91,7 +91,7 @@ export function MemoryTab({ handle, memory }: { handle: string; memory: AgentSpe
           </ul>
         </Card>
       )}
-      <p className="text-xs text-fg-tertiary">
+      <p className="text-12 text-fg-tertiary">
         The agent can always write here. Pages elsewhere follow <code className="inline">wiki:write</code>: with Approval they arrive as suggestions.
       </p>
     </div>

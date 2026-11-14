@@ -18,6 +18,7 @@ import { ContextPanel, ContextSection as Section, useContextPanel } from "@/comp
 import { Icon } from "@/components/ui/icon";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { CostValue } from "./run-thread";
+import { LoadingLines } from "@/components/ui/loading";
 
 type RunDetail = Schemas["RunDetail"];
 
@@ -28,7 +29,7 @@ export const useRunContextPanel = () => useContextPanel(CONTEXT_KEY);
 
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+    <div className="flex items-baseline justify-between gap-3 text-13">
       <dt className="flex-none text-fg-tertiary">{k}</dt>
       <dd className="min-w-0 truncate text-right text-fg-2">{children}</dd>
     </div>
@@ -45,16 +46,16 @@ function TicketSection({ ticketKey, run }: { ticketKey: string; run: RunDetail["
     <>
       <Section title="Ticket">
         {!t ? (
-          <p className="text-xs text-fg-tertiary">{ticket.isError ? "Couldn’t load the ticket." : "Loading…"}</p>
+          ticket.isError ? <p className="text-12 text-fg-tertiary">Couldn’t load the ticket.</p> : <LoadingLines />
         ) : (
           <>
-            <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="text-[13px] text-fg hover:underline">
-              <span className="font-mono text-xs text-fg-secondary">{t.key}</span> {t.title}
+            <Link href={`/tickets/${encodeURIComponent(t.key)}`} className="text-13 text-fg hover:underline">
+              <span className="font-mono text-12 text-fg-secondary">{t.key}</span> {t.title}
             </Link>
-            <p className="text-xs text-fg-tertiary">{t.status.replace("_", " ")} · {t.priority}</p>
+            <p className="text-12 text-fg-tertiary">{t.status.replace("_", " ")} · {t.priority}</p>
             {t.epic && (
               <div className="flex flex-col gap-1">
-                <p className="flex items-baseline justify-between gap-2 text-xs">
+                <p className="flex items-baseline justify-between gap-2 text-12">
                   <Link href={`/epics/${t.epic.id}`} className="truncate text-fg-2 hover:underline">{t.epic.name}</Link>
                   {epic && <span className="flex-none font-mono text-fg-tertiary">{epic.counts.done}/{epic.counts.total} done</span>}
                 </p>
@@ -72,7 +73,7 @@ function TicketSection({ ticketKey, run }: { ticketKey: string; run: RunDetail["
         <Section title="Acceptance criteria" aside={`${done}/${t.criteria.length}`}>
           <ol className="flex flex-col gap-1.5">
             {[...t.criteria].sort((a, b) => a.position - b.position).map((c) => (
-              <li key={c.id} className="flex gap-2 text-[12.5px]">
+              <li key={c.id} className="flex gap-2 text-13">
                 <span aria-hidden className={cx("mt-px grid size-3.5 flex-none place-items-center rounded-[4px] border", c.done ? "border-state-done bg-state-done text-on-accent" : "border-border-strong")}>
                   {c.done && <Icon name="check" size={10} strokeWidth={2.4} />}
                 </span>
@@ -97,10 +98,10 @@ function CodeSection({ branch, pr, runPr }: { branch?: string; pr?: Schemas["Pul
   return (
     <Section title="Code">
       <dl className="flex flex-col gap-1">
-        {branch && <Fact k="Branch"><span className="font-mono text-[11.5px]" title={branch}>{branch}</span></Fact>}
+        {branch && <Fact k="Branch"><span className="font-mono text-12" title={branch}>{branch}</span></Fact>}
         {pr && (pr.additions != null || pr.deletions != null) && (
           <Fact k="Diff">
-            <span className="font-mono text-[11.5px]"><span className="text-state-done">+{pr.additions ?? 0}</span> <span className="text-pill-blocked-fg">−{pr.deletions ?? 0}</span></span>
+            <span className="font-mono text-12"><span className="text-state-done">+{pr.additions ?? 0}</span> <span className="text-pill-blocked-fg">−{pr.deletions ?? 0}</span></span>
           </Fact>
         )}
         {number && (
@@ -128,14 +129,14 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
       <Section title="Run">
         <dl className="flex flex-col gap-1">
           <Fact k="Purpose">{PURPOSE_LABEL[run.purpose] ?? run.purpose}</Fact>
-          <Fact k="Model"><span className="font-mono text-[11.5px]">{run.model}</span></Fact>
-          <Fact k="Harness"><span className="font-mono text-[11.5px]">{run.harness}</span> · {run.mode}</Fact>
+          <Fact k="Model"><span className="font-mono text-12">{run.model}</span></Fact>
+          <Fact k="Harness"><span className="font-mono text-12">{run.harness}</span> · {run.mode}</Fact>
           <Fact k="Started"><span title={absoluteTime(run.started_at)}>{ago(run.started_at)}</span></Fact>
-          <Fact k="Elapsed"><span className="font-mono text-[11.5px]">{duration(run.started_at, run.ended_at)}</span></Fact>
-          <Fact k="Cost"><span className="font-mono text-[11.5px]"><CostValue d={d} /></span></Fact>
-          <Fact k="Tokens"><span className="font-mono text-[11.5px]">{compact(run.input_tokens + run.output_tokens)} · {run.tool_calls} tool calls</span></Fact>
-          <Fact k="Sub runs"><span className="font-mono text-[11.5px]">{run.child_count ?? d.child_runs.length}</span></Fact>
-          <Fact k="Runner slot"><span className="font-mono text-[11.5px]">{slot ? [slot.runner, slot.backend].filter(Boolean).join(" · ") : run.mode === "unmanaged" ? "none (unmanaged)" : "–"}</span></Fact>
+          <Fact k="Elapsed"><span className="font-mono text-12">{duration(run.started_at, run.ended_at)}</span></Fact>
+          <Fact k="Cost"><span className="font-mono text-12"><CostValue d={d} /></span></Fact>
+          <Fact k="Tokens"><span className="font-mono text-12">{compact(run.input_tokens + run.output_tokens)} · {run.tool_calls} tool calls</span></Fact>
+          <Fact k="Sub runs"><span className="font-mono text-12">{run.child_count ?? d.child_runs.length}</span></Fact>
+          <Fact k="Runner slot"><span className="font-mono text-12">{slot ? [slot.runner, slot.backend].filter(Boolean).join(" · ") : run.mode === "unmanaged" ? "none (unmanaged)" : "–"}</span></Fact>
           {run.dispatched_by && <Fact k="Dispatched by">{run.dispatched_by.name}</Fact>}
         </dl>
         {run.workspace_path && <WorkspaceFolderChip path={run.workspace_path} />}
@@ -146,7 +147,7 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
           {view("graph", "Graph", "graph")}
           {view("files", "Files", "folder")}
         </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-12">
           <Link href={`/settings/runner?run_id=${run.id}`} className="text-accent hover:underline">Environment</Link>
           {lastLog && <a href={`/api/v1/runs/${run.id}/turns/${lastLog.seq}/log`} className="text-accent hover:underline">Download raw log</a>}
         </div>

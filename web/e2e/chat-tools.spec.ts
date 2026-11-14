@@ -48,8 +48,8 @@ test("Retry asks first, and only the newest reply offers it", async ({ page }) =
   await say(page, "second");
   await expect(page.getByTestId("assistant-message")).toHaveCount(2);
   await expect(page.getByTestId("assistant-message").first().getByRole("button", { name: "Retry" })).toHaveCount(0);
-  page.on("dialog", (d) => d.accept());
   await page.getByTestId("assistant-message").last().getByRole("button", { name: "Retry" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("assistant-message").last()).toContainText("Redone: second");
 });
 

@@ -17,9 +17,9 @@ import { Button } from "@/components/ui/button";
 type Edit = (fn: (d: Design) => Design, key?: string) => void;
 
 const section = "border-b border-border-subtle px-4 py-3";
-const label = "mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
-const field = "flex h-[28px] min-w-0 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-[12.5px] text-fg focus-within:border-accent";
-const small = "h-[28px] rounded-md border border-border px-2.5 text-[12.5px] text-fg hover:bg-hover disabled:opacity-50";
+const label = "mb-2 text-11 font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
+const field = "flex h-[28px] min-w-0 items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2 text-13 text-fg focus-within:border-accent";
+const small = "h-[28px] rounded-md border border-border px-2.5 text-13 text-fg hover:bg-hover disabled:opacity-50";
 const TICKET = /^[A-Z][A-Z0-9]{0,9}-[0-9]{1,9}$/;
 
 // ---------- components ----------
@@ -33,7 +33,7 @@ export function ComponentSection({ design, node, readOnly, onEdit, onSelect }: {
         <button type="button" className={small} disabled={readOnly} onClick={() => onEdit((d) => createComponent(d, node.id) ?? d)}>
           ◇ Create component
         </button>
-        <p className="mt-2 text-[12px] text-fg-tertiary">Instances follow every edit to it, and keep their own text, fill and visibility.</p>
+        <p className="mt-2 text-12 text-fg-tertiary">Instances follow every edit to it, and keep their own text, fill and visibility.</p>
       </section>
     );
   if (node.type === "component") {
@@ -41,7 +41,7 @@ export function ComponentSection({ design, node, readOnly, onEdit, onSelect }: {
     return (
       <section className={section} aria-label="Component">
         <h3 className={label}>Component</h3>
-        <p className="mb-2 text-[12px] text-fg-secondary">{count === 1 ? "1 instance" : `${count} instances`}</p>
+        <p className="mb-2 text-12 text-fg-secondary">{count === 1 ? "1 instance" : `${count} instances`}</p>
         <button
           type="button"
           className={small}
@@ -90,7 +90,7 @@ function InstanceSection({ design, node, readOnly, onEdit, onSelect }: { design:
     <section className={section} aria-label="Instance">
       <div className="flex items-center justify-between">
         <h3 className={label}>Instance</h3>
-        <button type="button" className="mb-2 text-[12px] text-accent hover:underline" onClick={() => onSelect([node.component])}>
+        <button type="button" className="mb-2 text-12 text-accent hover:underline" onClick={() => onSelect([node.component])}>
           Go to {main?.name ?? "component"}
         </button>
       </div>
@@ -99,9 +99,9 @@ function InstanceSection({ design, node, readOnly, onEdit, onSelect }: { design:
           const ov = node.overrides?.[k.id] ?? {};
           return (
             <div key={k.id} className="flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-2 text-[12px] text-fg-2">
+              <div className="flex items-center justify-between gap-2 text-12 text-fg-2">
                 <span className="truncate">{k.name}</span>
-                <label className="flex items-center gap-1 text-[11.5px] text-fg-tertiary">
+                <label className="flex items-center gap-1 text-12 text-fg-tertiary">
                   <input type="checkbox" aria-label={`Show ${k.name}`} disabled={readOnly} checked={ov.visible !== false} onChange={(e) => onEdit((d) => setOverride(d, node.id, k.id, { visible: e.target.checked ? undefined : false }), `${node.id}:${k.id}:visible`)} />
                   Show
                 </label>
@@ -120,7 +120,7 @@ function InstanceSection({ design, node, readOnly, onEdit, onSelect }: { design:
               )}
               {k.type !== "text" && k.type !== "group" && (
                 <label className={field}>
-                  <span className="text-[11px] text-fg-tertiary">Fill</span>
+                  <span className="text-11 text-fg-tertiary">Fill</span>
                   <input
                     aria-label={`${k.name} fill`}
                     disabled={readOnly}
@@ -138,7 +138,7 @@ function InstanceSection({ design, node, readOnly, onEdit, onSelect }: { design:
             </div>
           );
         })}
-        {!kids.length && <p className="text-[12px] text-fg-tertiary">The component has no layers to override.</p>}
+        {!kids.length && <p className="text-12 text-fg-tertiary">The component has no layers to override.</p>}
         <button type="button" className={cx(small, "self-start")} disabled={readOnly} onClick={() => onEdit((d) => detach(d, node.id) ?? d)}>
           Detach instance
         </button>
@@ -152,8 +152,8 @@ function InstanceSection({ design, node, readOnly, onEdit, onSelect }: { design:
 function TicketChip({ k, onRemove, readOnly }: { k: string; onRemove: () => void; readOnly: boolean }) {
   const t = useTicket(k);
   return (
-    <li className="flex items-center gap-2 text-[12.5px]">
-      <a href={`/tickets/${k}`} className="font-mono text-[12px] text-accent hover:underline">{k}</a>
+    <li className="flex items-center gap-2 text-13">
+      <a href={`/tickets/${k}`} className="font-mono text-12 text-accent hover:underline">{k}</a>
       <span className="min-w-0 flex-1 truncate text-fg-secondary">{t.data?.title ?? (t.error ? "not found" : "")}</span>
       {!readOnly && (
         <button type="button" aria-label={`Unlink ${k}`} className="grid size-5 place-items-center rounded text-fg-tertiary hover:bg-hover" onClick={onRemove}>
@@ -216,15 +216,15 @@ export function SendToTicket({ node, readOnly, onEdit }: { node: DesignNode; rea
           }}
         >
           <label className={cx(field, "flex-1")}>
-            <input aria-label="Ticket key" className="w-full bg-transparent font-mono text-[12px] outline-none" placeholder="PAY-214" value={key} onChange={(e) => setKey(e.target.value)} />
+            <input aria-label="Ticket key" className="w-full bg-transparent font-mono text-12 outline-none" placeholder="PAY-214" value={key} onChange={(e) => setKey(e.target.value)} />
           </label>
           <button type="submit" className={small} disabled={busy || !key.trim()}>
             Send
           </button>
         </form>
       )}
-      {error && <p role="alert" className="mt-1.5 text-[12px] text-pill-blocked-fg">{error}</p>}
-      <p className="mt-2 text-[12px] text-fg-tertiary">Runs on a linked ticket get this frame as a PNG and its Inspect output.</p>
+      {error && <p role="alert" className="mt-1.5 text-12 text-pill-blocked-fg">{error}</p>}
+      <p className="mt-2 text-12 text-fg-tertiary">Runs on a linked ticket get this frame as a PNG and its Inspect output.</p>
     </section>
   );
 }
@@ -246,23 +246,23 @@ export function InspectPanel({ design, selected }: { design: Design; selected: s
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }, [design, id, target]);
-  if (!result) return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">Select one layer, usually a frame, to see it as code.</p>;
-  if ("error" in result) return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">{result.error}</p>;
+  if (!result) return <p className="px-4 py-6 text-13 text-fg-tertiary">Select one layer, usually a frame, to see it as code.</p>;
+  if ("error" in result) return <p className="px-4 py-6 text-13 text-fg-tertiary">{result.error}</p>;
   return (
     <div className="pb-6" data-testid="design-inspect">
       <div className={section}>
         <div className="flex gap-1 rounded-md border border-border p-0.5" role="radiogroup" aria-label="Code">
           {INSPECT_TARGETS.map((t) => (
-            <button key={t} type="button" role="radio" aria-checked={t === target} className={cx("h-[26px] flex-1 rounded-md px-1.5 text-[12px]", t === target ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")} onClick={() => setTarget(t)}>
+            <button key={t} type="button" role="radio" aria-checked={t === target} className={cx("h-[26px] flex-1 rounded-md px-1.5 text-12", t === target ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover")} onClick={() => setTarget(t)}>
               {TARGET_LABEL[t]}
             </button>
           ))}
         </div>
         <div className="relative mt-2">
-          <pre data-testid="design-inspect-code" className="max-h-[320px] overflow-auto rounded-md bg-surface-sunken p-2 font-mono text-[11px] leading-[1.5] text-fg-2">{result.code}</pre>
+          <pre data-testid="design-inspect-code" className="max-h-[320px] overflow-auto rounded-md bg-surface-sunken p-2 font-mono text-11 leading-[1.5] text-fg-2">{result.code}</pre>
           <button
             type="button"
-            className="absolute right-1.5 top-1.5 rounded bg-surface-raised px-1.5 py-0.5 text-[11px] text-fg-secondary shadow hover:text-fg"
+            className="absolute right-1.5 top-1.5 rounded bg-surface-raised px-1.5 py-0.5 text-11 text-fg-secondary shadow hover:text-fg"
             onClick={() => void navigator.clipboard?.writeText(result.code).then(() => {
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
@@ -271,15 +271,15 @@ export function InspectPanel({ design, selected }: { design: Design; selected: s
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        {result.truncated && <p className="mt-1 text-[12px] text-fg-tertiary">Large selection: only the first layers are written out.</p>}
+        {result.truncated && <p className="mt-1 text-12 text-fg-tertiary">Large selection: only the first layers are written out.</p>}
       </div>
       <section className={section} aria-label="Box and spacing">
         <h3 className={label}>Box and spacing</h3>
-        <p className="text-[12px] text-fg-2">
+        <p className="text-12 text-fg-2">
           {result.box.w} × {result.box.h} px · {result.mode}
         </p>
         {result.spacing && (
-          <p className="mt-1 text-[12px] text-fg-secondary">
+          <p className="mt-1 text-12 text-fg-secondary">
             {result.spacing.direction}, gap {result.spacing.gap}, padding {result.spacing.padding.join(" ")}, align {result.spacing.align}, justify {result.spacing.justify}
           </p>
         )}
@@ -289,7 +289,7 @@ export function InspectPanel({ design, selected }: { design: Design; selected: s
           <h3 className={label}>Tokens</h3>
           <ul className="flex flex-col gap-1">
             {result.tokens.map((t) => (
-              <li key={t.name} className="flex items-center gap-2 text-[12px]" title={t.used_for.join(", ")}>
+              <li key={t.name} className="flex items-center gap-2 text-12" title={t.used_for.join(", ")}>
                 <span aria-hidden className="size-3 flex-none rounded-sm border border-border" style={{ background: t.value ?? "transparent" }} />
                 <span className="min-w-0 flex-1 truncate font-mono text-fg-2">--{t.name}</span>
                 <span className="font-mono text-fg-tertiary">{t.value ?? "missing"}</span>
@@ -301,7 +301,7 @@ export function InspectPanel({ design, selected }: { design: Design; selected: s
       {result.type.length > 0 && (
         <section className={section} aria-label="Type">
           <h3 className={label}>Type</h3>
-          <ul className="flex flex-col gap-1 text-[12px] text-fg-2">
+          <ul className="flex flex-col gap-1 text-12 text-fg-2">
             {result.type.map((t, i) => (
               <li key={i} className="truncate" title={t.text}>
                 Inter {t.size}/{t.line_height} · {t.weight}
@@ -314,7 +314,7 @@ export function InspectPanel({ design, selected }: { design: Design; selected: s
       {result.assets.length > 0 && (
         <section className={section} aria-label="Images">
           <h3 className={label}>Images</h3>
-          <ul className="flex flex-col gap-1 text-[12px] text-fg-2">
+          <ul className="flex flex-col gap-1 text-12 text-fg-2">
             {result.assets.map((a) => (
               <li key={a.id}>
                 {a.id} · {a.w}×{a.h} {a.mime.replace("image/", "")}
@@ -346,19 +346,19 @@ export function TokensSyncBadge({ design, readOnly, onEdit }: { design: Design; 
         type="button"
         data-testid="tokens-sync-badge"
         disabled={readOnly}
-        className="h-[26px] rounded-full border border-pill-human-fg/40 bg-pill-human-bg px-2.5 text-[12px] text-pill-human-fg disabled:opacity-50"
+        className="h-[26px] rounded-full border border-pill-human-fg/40 bg-pill-human-bg px-2.5 text-12 text-pill-human-fg disabled:opacity-50"
         title="The Dusk tokens in tokens.css changed since this design's copy was taken. The design keeps its colours until you sync."
         onClick={() => (missing.length ? setOpen((o) => !o) : sync())}
       >
         tokens.css changed, sync?
       </button>
       {open && (
-        <div role="dialog" aria-label="Sync tokens" className="absolute right-0 top-8 z-40 w-[300px] rounded-lg border border-border-float bg-surface-raised p-3 text-[12.5px] shadow-[var(--shadow-float)]">
+        <div role="dialog" aria-label="Sync tokens" className="absolute right-0 top-8 z-40 w-[300px] rounded-lg border border-border-float bg-surface-raised p-3 text-13 shadow-[var(--shadow-float)]">
           <p className="mb-2 text-fg">These tokens are gone from tokens.css. Pick a replacement, or keep the colour as it is.</p>
           <ul className="mb-3 flex flex-col gap-2">
             {missing.map((m) => (
               <li key={m.token} className="flex flex-col gap-1">
-                <span className="font-mono text-[12px] text-fg-2">
+                <span className="font-mono text-12 text-fg-2">
                   --{m.token} <span className="text-fg-tertiary">({m.nodes.length} {m.nodes.length === 1 ? "layer" : "layers"})</span>
                 </span>
                 <select aria-label={`Replace ${m.token}`} className={field} value={choice[m.token] ?? ""} onChange={(e) => setChoice((c) => ({ ...c, [m.token]: e.target.value }))}>

@@ -30,7 +30,7 @@ export function MockupViewer({ title, source }: { title: string; source: string 
         <ZoomControl value={zoom} onChange={setZoom} />
       </div>
       {source == null ? (
-        <p className="text-[13px] text-fg-tertiary">Loading mockup…</p>
+        <p className="text-13 text-fg-tertiary">Loading mockup…</p>
       ) : (
         <MockupImage source={source} alt={title} zoom={zoom} className="max-h-[75vh]" />
       )}
@@ -66,9 +66,9 @@ export function MockupReviewBanner({ a, versionId, isOld }: { a: Artifact; versi
     <section aria-label="Mockup review" className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <ReviewChip state={state} />
-        <span className="font-mono text-xs text-fg-tertiary">{v.label}</span>
+        <span className="font-mono text-12 text-fg-tertiary">{v.label}</span>
         {review?.reviewed_by && (
-          <span className="flex items-center gap-1.5 text-[12.5px] text-fg-secondary">
+          <span className="flex items-center gap-1.5 text-13 text-fg-secondary">
             <HumanAvatar name={review.reviewed_by.name} initials={review.reviewed_by.initials} color={review.reviewed_by.avatar_color} src={review.reviewed_by.avatar_url} size={18} label={false} />
             {review.reviewed_by.name}
             {review.reviewed_at && (
@@ -89,9 +89,9 @@ export function MockupReviewBanner({ a, versionId, isOld }: { a: Artifact; versi
           </div>
         )}
       </div>
-      {review?.note && <p className="whitespace-pre-line text-[13px] text-fg-2">“{review.note}”</p>}
-      {isOld && <p className="text-xs text-fg-tertiary">Only the current version can be reviewed.</p>}
-      {state === "pending" && !isOld && <p className="text-xs text-fg-tertiary">Agents that need an approved mockup wait for this review.</p>}
+      {review?.note && <p className="whitespace-pre-line text-13 text-fg-2">“{review.note}”</p>}
+      {isOld && <p className="text-12 text-fg-tertiary">Only the current version can be reviewed.</p>}
+      {state === "pending" && !isOld && <p className="text-12 text-fg-tertiary">Agents that need an approved mockup wait for this review.</p>}
       {asking && !isOld && (
         <div className="flex flex-col gap-2">
           <Field label="What needs to change?" htmlFor="review-note">
@@ -108,7 +108,7 @@ export function MockupReviewBanner({ a, versionId, isOld }: { a: Artifact; versi
         </div>
       )}
       {mut.isError && (
-        <p role="alert" className="text-xs text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           {mut.error.message}
         </p>
       )}

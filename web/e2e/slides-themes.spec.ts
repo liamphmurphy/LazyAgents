@@ -139,9 +139,9 @@ test("customise, save, apply, rename and delete a theme", async ({ page }) => {
   expect(theme()).toMatchObject({ name: "Acme 2026", colors: { accent: "#E4572E" } });
 
   // Deleting it leaves the deck's copy alone.
-  page.once("dialog", (d) => void d.accept());
   await themeMenu(page).click();
   await page.getByRole("menuitem", { name: "Delete Acme 2026" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete theme" }).click();
   await expect.poll(() => themes.length).toBe(0);
   await themeMenu(page).click();
   await expect(page.getByRole("menuitem", { name: "Acme 2026", exact: true })).toHaveCount(0);

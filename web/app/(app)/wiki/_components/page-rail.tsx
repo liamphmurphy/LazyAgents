@@ -17,7 +17,7 @@ import { hoverShow } from "@/lib/reveal";
 export function PanelSection({ title, count, action, children, icon }: { title: string; count?: number; action?: ReactNode; children: ReactNode; icon?: "graph" }) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-[12.5px] text-fg-tertiary">
+      <h2 className="flex items-center gap-1.5 text-13 text-fg-tertiary">
         {icon && <Icon name={icon} size={13} />}
         {title}
         {count !== undefined && count > 0 && <span className="font-mono">{count}</span>}
@@ -28,7 +28,7 @@ export function PanelSection({ title, count, action, children, icon }: { title: 
   );
 }
 
-const Empty = ({ children }: { children: ReactNode }) => <p className="text-xs text-fg-tertiary">{children}</p>;
+const Empty = ({ children }: { children: ReactNode }) => <p className="text-12 text-fg-tertiary">{children}</p>;
 
 function Rows() {
   return (
@@ -57,7 +57,7 @@ export function TagsSection({ topic, tags }: { topic: string; tags: string[] }) 
           {topic && (
             <Link
               href={patternIndexHref({ topic })}
-              className="inline-flex h-[22px] items-center rounded-full bg-pill-human-bg px-2.5 text-[11.5px] text-pill-human-fg hover:underline"
+              className="inline-flex h-[22px] items-center rounded-full bg-pill-human-bg px-2.5 text-12 text-pill-human-fg hover:underline"
               title={`Patterns in ${topic}`}
             >
               {topic}
@@ -67,7 +67,7 @@ export function TagsSection({ topic, tags }: { topic: string; tags: string[] }) 
             <Link
               key={t}
               href={patternIndexHref({ tag: t })}
-              className="inline-flex h-[22px] items-center rounded-full border border-border px-2.5 font-mono text-[11px] text-fg-secondary hover:bg-hover hover:text-fg"
+              className="inline-flex h-[22px] items-center rounded-full border border-border px-2.5 font-mono text-11 text-fg-secondary hover:bg-hover hover:text-fg"
               title={`Patterns tagged #${t}`}
             >
               #{t}
@@ -123,8 +123,8 @@ export function LinkedTickets({ page }: { page: Artifact }) {
         <ul className="flex flex-col gap-1">
           {list.map((t) => (
             <li key={t.key}>
-              <Link href={`/tickets/${t.key}`} title={t.how} className="flex min-h-[26px] items-center gap-2 rounded-sm text-[13px] hover:bg-hover">
-                <span className="flex-none font-mono text-[11.5px] text-fg-tertiary">{t.key}</span>
+              <Link href={`/tickets/${t.key}`} title={t.how} className="flex min-h-[26px] items-center gap-2 rounded-sm text-13 hover:bg-hover">
+                <span className="flex-none font-mono text-12 text-fg-tertiary">{t.key}</span>
                 <span className="min-w-0 flex-1 truncate">{t.title}</span>
                 {t.status && t.status in STATUS_TONE && (
                   <SmallPill tone={STATUS_TONE[t.status as TicketStatus]}>{STATUS_LABEL[t.status as TicketStatus]}</SmallPill>
@@ -154,7 +154,7 @@ export function CitedBy({ id }: { id: string }) {
   const unlinkedReads = (data?.unlinked ?? []).reduce((n, r) => n + r.reads, 0);
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-[12.5px] text-fg-tertiary">
+      <h2 className="text-13 text-fg-tertiary">
         Cited by {summary && <span className="text-fg-2">{summary}</span>}
       </h2>
       {isError ? (
@@ -168,7 +168,7 @@ export function CitedBy({ id }: { id: string }) {
               {shown.map((c) => {
                 const chat = c.purpose === "chat";
                 return (
-                  <li key={c.run_id} className="flex items-center gap-2 text-[12.5px]">
+                  <li key={c.run_id} className="flex items-center gap-2 text-13">
                     {chat ? (
                       <Icon name="msg" size={14} className="flex-none text-fg-secondary" />
                     ) : (
@@ -189,14 +189,14 @@ export function CitedBy({ id }: { id: string }) {
                         )
                       ) : (
                         <>
-                          <Link href={`/runs/${c.run_id}`} className="font-mono text-[11.5px] text-accent hover:underline">
+                          <Link href={`/runs/${c.run_id}`} className="font-mono text-12 text-accent hover:underline">
                             {c.ticket_key ?? (c.purpose === "planning" ? "Planning" : "Run")}
                           </Link>{" "}
                           <span className="text-fg-2">{c.agent.handle}</span>
                         </>
                       )}
                     </span>
-                    <span className="flex-none text-[11.5px] text-fg-tertiary" title={`Last read ${absoluteTime(c.last_read_at)}`}>
+                    <span className="flex-none text-12 text-fg-tertiary" title={`Last read ${absoluteTime(c.last_read_at)}`}>
                       {reads(c.reads)} · {timelineTime(c.last_read_at)}
                     </span>
                   </li>
@@ -205,7 +205,7 @@ export function CitedBy({ id }: { id: string }) {
             </ul>
           )}
           {data.citations.length > 4 && (
-            <button type="button" className="self-start text-xs text-accent hover:underline" onClick={() => setAll(!all)}>
+            <button type="button" className="self-start text-12 text-accent hover:underline" onClick={() => setAll(!all)}>
               {all ? "Show fewer" : `Show all ${data.citations.length}`}
             </button>
           )}
@@ -251,7 +251,7 @@ export function History({ page }: { page: Artifact }) {
       count={vs.length}
       action={
         vs.length > 1 ? (
-          <Link href={compareHref(path, vs[1].label, vs[0].label)} className="text-xs text-accent hover:underline">
+          <Link href={compareHref(path, vs[1].label, vs[0].label)} className="text-12 text-accent hover:underline">
             Compare…
           </Link>
         ) : undefined
@@ -261,19 +261,19 @@ export function History({ page }: { page: Artifact }) {
         {shown.map((v, i) => {
           const next = i > 0 ? vs[i - 1] : undefined;
           return (
-            <li key={v.id} className={cx("group flex min-h-[26px] items-center gap-2 rounded-sm px-1.5 -mx-1.5 text-xs text-fg-secondary", next && "hover:bg-hover")}>
+            <li key={v.id} className={cx("group flex min-h-[26px] items-center gap-2 rounded-sm px-1.5 -mx-1.5 text-12 text-fg-secondary", next && "hover:bg-hover")}>
               <span className="flex-none font-mono text-fg-2">{v.label}</span>
               <span className="min-w-0 flex-1 truncate" title={v.note || undefined}>
                 {v.created_by.name}
                 {v.note && ` · ${v.note}`}
               </span>
               {i === 0 ? (
-                <span className="flex-none rounded-full bg-hover px-1.5 text-[10.5px] text-fg-secondary">current</span>
+                <span className="flex-none rounded-full bg-hover px-1.5 text-11 text-fg-secondary">current</span>
               ) : (
                 next && (
                   <Link
                     href={compareHref(path, v.label, next.label)}
-                    className={cx("flex-none rounded-[5px] bg-pill-human-bg px-1.5 text-[11px] text-pill-human-fg opacity-80 hover:underline focus-visible:opacity-100", hoverShow())}
+                    className={cx("flex-none rounded-[5px] bg-pill-human-bg px-1.5 text-11 text-pill-human-fg opacity-80 hover:underline focus-visible:opacity-100", hoverShow())}
                     aria-label={`Diff ${v.label} to ${next.label}`}
                   >
                     Diff → {next.label}
@@ -289,7 +289,7 @@ export function History({ page }: { page: Artifact }) {
       </ol>
       {vs.length === 1 && <Empty>Only one version so far.</Empty>}
       {vs.length > 8 && (
-        <button type="button" className="self-start text-xs text-accent hover:underline" onClick={() => setAll(!all)}>
+        <button type="button" className="self-start text-12 text-accent hover:underline" onClick={() => setAll(!all)}>
           {all ? "Show fewer" : `Show all ${vs.length}`}
         </button>
       )}

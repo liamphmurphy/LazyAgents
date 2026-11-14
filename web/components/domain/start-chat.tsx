@@ -32,7 +32,7 @@ export function StartChatButton({ attach, title, project }: { attach: ContextRef
       </Button>
       {noHarness && <NoHarnessNote health={health} />}
       {create.isError && (
-        <span role="alert" className="text-xs text-pill-blocked-fg">
+        <span role="alert" className="text-12 text-pill-blocked-fg">
           {create.error instanceof Error ? create.error.message : "Couldn’t start the chat."}
         </span>
       )}

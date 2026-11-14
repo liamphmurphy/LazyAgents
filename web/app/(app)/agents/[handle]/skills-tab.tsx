@@ -49,14 +49,14 @@ export function SkillsTab({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-[12.5px] text-fg-tertiary">Showing for</span>
+        <span className="text-13 text-fg-tertiary">Showing for</span>
         <ProjectPicker label="Showing skills for" projects={projects} value={project} onChange={onProject} className="w-48" />
-        <span className="text-xs text-fg-tertiary">
+        <span className="text-12 text-fg-tertiary">
           {skills.length} from the agent{p && ` · ${added} added · ${removed} removed`}
         </span>
       </div>
       <Card bodyClassName="p-0">
-        {views.length === 0 && <p className="px-[18px] py-4 text-sm text-fg-tertiary">No skills yet. Add one below.</p>}
+        {views.length === 0 && <p className="px-[18px] py-4 text-14 text-fg-tertiary">No skills yet. Add one below.</p>}
         <ul>
           {views.map(({ skill: k, origin }, idx) => {
             const i = skills.indexOf(k);
@@ -64,22 +64,22 @@ export function SkillsTab({
             const isOpen = editable && open === k.name;
             return (
               <li key={`${origin}-${k.name}`} className={cx(idx > 0 && "border-t border-border-row")}>
-                <div className="flex items-center gap-3 px-[18px] py-2.5 text-[13px]">
+                <div className="flex items-center gap-3 px-[18px] py-2.5 text-13">
                   <Icon name="wiki" size={14} className="text-fg-tertiary" />
                   {editable ? (
                     <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : k.name)} className="flex min-w-0 flex-1 flex-col text-left">
-                      <span className="font-mono text-[12.5px]">{k.name}</span>
-                      <span className="truncate text-xs text-fg-tertiary">{k.description || "No description yet"}</span>
+                      <span className="font-mono text-13">{k.name}</span>
+                      <span className="truncate text-12 text-fg-tertiary">{k.description || "No description yet"}</span>
                     </button>
                   ) : (
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <span className={cx("font-mono text-[12.5px]", origin === "removed" && "text-fg-tertiary line-through")}>{k.name}</span>
-                      <span className="truncate text-xs text-fg-tertiary">{k.description}</span>
+                      <span className={cx("font-mono text-13", origin === "removed" && "text-fg-tertiary line-through")}>{k.name}</span>
+                      <span className="truncate text-12 text-fg-tertiary">{k.description}</span>
                     </div>
                   )}
                   {origin === "agent" && <MonoChip variant="outline">agent</MonoChip>}
-                  {origin === "removed" && <span className="rounded-[5px] bg-pill-blocked-bg px-[7px] py-0.5 text-[11px] text-pill-blocked-fg">removed in {p?.name}</span>}
-                  {origin === "added" && <span className="rounded-[5px] bg-pill-done-bg px-[7px] py-0.5 text-[11px] text-pill-done-fg">added by {p?.name}</span>}
+                  {origin === "removed" && <span className="rounded-[5px] bg-pill-blocked-bg px-[7px] py-0.5 text-11 text-pill-blocked-fg">removed in {p?.name}</span>}
+                  {origin === "added" && <span className="rounded-[5px] bg-pill-done-bg px-[7px] py-0.5 text-11 text-pill-done-fg">added by {p?.name}</span>}
                   {editable && <IconButton icon="trash" label={`Remove skill ${k.name}`} onClick={() => set(skills.filter((_, j) => j !== i))} />}
                 </div>
                 {isOpen && (
@@ -110,10 +110,10 @@ export function SkillsTab({
           <Button type="submit" variant="outline" icon="plus" disabled={!nameOk}>
             Add skill
           </Button>
-          {name && !nameOk && <span className="text-xs text-fg-tertiary">Lowercase letters, digits and -; must be unique.</span>}
+          {name && !nameOk && <span className="text-12 text-fg-tertiary">Lowercase letters, digits and -; must be unique.</span>}
         </form>
       </Card>
-      <p className="text-xs text-fg-tertiary">
+      <p className="text-12 text-fg-tertiary">
         Click a skill to edit its description and instructions (agent skills only). Project additions and removals belong to that project&apos;s override. The agent sees each
         description and loads the full playbook only when a task matches; on Claude Code they are native skills, and Codex and Antigravity read the same playbooks via{" "}
         <code className="inline">AGENTS.md</code>.

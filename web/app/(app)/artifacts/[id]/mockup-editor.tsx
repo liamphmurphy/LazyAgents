@@ -11,6 +11,7 @@ import { Segmented } from "@/components/ui/controls";
 import { MockupImage } from "@/components/domain/mockup";
 import { MockupCanvas, useSourceHistory } from "@/components/domain/mockup-canvas";
 import { ZoomControl } from "./mockup-parts";
+import { confirmAction } from "@/components/ui/confirm";
 
 type Mode = "visual" | "source" | "split";
 const MODES = [
@@ -90,8 +91,8 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
     onDone();
   }
 
-  function cancel() {
-    if (dirty && !window.confirm("Discard your unsaved changes to this mockup?")) return;
+  async function cancel() {
+    if (dirty && !await confirmAction({ title: "Discard your unsaved changes to this mockup?", confirmLabel: "Discard", cancelLabel: "Keep editing" })) return;
     onDone();
   }
 
@@ -117,7 +118,7 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
   );
   const sourcePane = (
     <div className="flex min-h-[320px] flex-col gap-2">
-      <label htmlFor="mockup-source" className="text-[12.5px] font-medium text-fg-2">
+      <label htmlFor="mockup-source" className="text-13 font-medium text-fg-2">
         SVG source <span className="font-normal text-fg-tertiary">· Tab indents, ⌘S saves</span>
       </label>
       <textarea
@@ -145,7 +146,7 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
             void save(false);
           }
         }}
-        className="min-h-[320px] w-full flex-1 resize-none rounded-md border border-border-strong bg-surface-sunken p-3 font-mono text-[12.5px] leading-relaxed text-fg [tab-size:2] focus:border-accent focus:outline-none aria-[invalid=true]:border-pill-blocked-fg"
+        className="min-h-[320px] w-full flex-1 resize-none rounded-md border border-border-strong bg-surface-sunken p-3 font-mono text-13 leading-relaxed text-fg [tab-size:2] focus:border-accent focus:outline-none aria-[invalid=true]:border-pill-blocked-fg"
       />
     </div>
   );
@@ -171,7 +172,7 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
         </div>
       </div>
       {(error || problem) && (
-        <p role="alert" className="border-b border-border-subtle px-6 py-2 text-xs text-pill-blocked-fg">
+        <p role="alert" className="border-b border-border-subtle px-6 py-2 text-12 text-pill-blocked-fg">
           {error ?? problem}
         </p>
       )}
@@ -186,7 +187,7 @@ export function MockupEditor({ a, onDone }: { a: Artifact; onDone: () => void })
           {sourcePane}
           <div className="flex min-h-[320px] min-w-0 flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[12.5px] font-medium text-fg-2">Preview</h2>
+              <h2 className="text-13 font-medium text-fg-2">Preview</h2>
               <ZoomControl value={zoom} onChange={setZoom} />
             </div>
             <MockupImage source={preview} alt={`Preview of ${a.title}`} zoom={zoom} className="min-h-[320px] flex-1" />

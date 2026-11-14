@@ -16,9 +16,9 @@ type Props = {
 };
 
 const section = "border-b border-border-subtle px-4 py-3";
-const label = "mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
-const select = "h-[28px] w-full min-w-0 rounded-md border border-border bg-surface-sunken px-1.5 text-[12.5px] text-fg focus:border-accent disabled:opacity-50";
-const small = "h-[26px] rounded-md border border-border px-2 text-[12px] text-fg hover:bg-hover disabled:opacity-50";
+const label = "mb-2 text-11 font-semibold uppercase tracking-[0.08em] text-fg-tertiary";
+const select = "h-[28px] w-full min-w-0 rounded-md border border-border bg-surface-sunken px-1.5 text-13 text-fg focus:border-accent disabled:opacity-50";
+const small = "h-[26px] rounded-md border border-border px-2 text-12 text-fg hover:bg-hover disabled:opacity-50";
 
 /** One link: trigger (and delay), target frame, transition (and duration), remove. */
 function LinkEditor({ link, frames, broken, readOnly, onEdit, name }: { link: Link; frames: Screen[]; broken: boolean; readOnly: boolean; onEdit: Props["onEdit"]; name: string }) {
@@ -26,7 +26,7 @@ function LinkEditor({ link, frames, broken, readOnly, onEdit, name }: { link: Li
   return (
     <li data-link={link.id} data-broken={broken || undefined} aria-label={`Interaction: ${name}`} className={cx("flex flex-col gap-1.5 rounded-lg border p-2", broken ? "border-pill-blocked-fg/60" : "border-border")}>
       {broken && (
-        <p role="alert" className="text-[12px] text-pill-blocked-fg">
+        <p role="alert" className="text-12 text-pill-blocked-fg">
           Broken link: its target frame was deleted. Choose another frame or remove it; Present skips it.
         </p>
       )}
@@ -36,13 +36,13 @@ function LinkEditor({ link, frames, broken, readOnly, onEdit, name }: { link: Li
         ))}
       </select>
       {link.trigger === "after-delay" && (
-        <label className="flex items-center gap-2 text-[12px] text-fg-secondary">
+        <label className="flex items-center gap-2 text-12 text-fg-secondary">
           Delay
           <input aria-label="Delay (ms)" type="number" min={0} max={60000} step={100} disabled={readOnly} className={cx(select, "w-24")} value={link.delay_ms ?? 0} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && set({ delay_ms: Math.min(60000, Math.max(0, Math.round(e.target.valueAsNumber))) }, "delay")} />
           ms
         </label>
       )}
-      <label className="flex items-center gap-2 text-[12px] text-fg-secondary">
+      <label className="flex items-center gap-2 text-12 text-fg-secondary">
         <span className="w-[46px] flex-none">Go to</span>
         <select aria-label="Target frame" className={select} disabled={readOnly} value={broken ? "" : link.to} onChange={(e) => e.target.value && set({ to: e.target.value }, "to")}>
           {broken && <option value="">Deleted frame</option>}
@@ -51,7 +51,7 @@ function LinkEditor({ link, frames, broken, readOnly, onEdit, name }: { link: Li
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-2 text-[12px] text-fg-secondary">
+      <label className="flex items-center gap-2 text-12 text-fg-secondary">
         <span className="w-[46px] flex-none">Animate</span>
         <select aria-label="Transition" className={select} disabled={readOnly} value={link.transition} onChange={(e) => set({ transition: e.target.value as Link["transition"] }, "transition")}>
           {TRANSITIONS.map((t) => (
@@ -61,7 +61,7 @@ function LinkEditor({ link, frames, broken, readOnly, onEdit, name }: { link: Li
       </label>
       <div className="flex items-center gap-2">
         {link.transition !== "instant" && (
-          <label className="flex items-center gap-2 text-[12px] text-fg-secondary">
+          <label className="flex items-center gap-2 text-12 text-fg-secondary">
             <input aria-label="Duration (ms)" type="number" min={0} max={10000} step={50} disabled={readOnly} className={cx(select, "w-20")} value={link.duration_ms ?? 0} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && set({ duration_ms: Math.min(10000, Math.max(0, Math.round(e.target.valueAsNumber))) }, "duration")} />
             ms
           </label>
@@ -84,7 +84,7 @@ export function PrototypePanel({ design, selected, readOnly, onEdit, onSelect, o
     return n ? labelOf(n) : "Deleted layer";
   };
 
-  if (selected.length > 1) return <p className="px-4 py-6 text-[12.5px] text-fg-tertiary">Select one layer to add an interaction to it.</p>;
+  if (selected.length > 1) return <p className="px-4 py-6 text-13 text-fg-tertiary">Select one layer to add an interaction to it.</p>;
 
   if (selected.length === 1) {
     const id = selected[0];
@@ -116,13 +116,13 @@ export function PrototypePanel({ design, selected, readOnly, onEdit, onSelect, o
               ))}
             </ul>
           ) : (
-            <p className="text-[12.5px] text-fg-tertiary">{frames.length ? `Add an interaction to make “${labelOf(node)}” a hotspot that goes to another frame.` : "Add a frame first: interactions go to a top-level frame."}</p>
+            <p className="text-13 text-fg-tertiary">{frames.length ? `Add an interaction to make “${labelOf(node)}” a hotspot that goes to another frame.` : "Add a frame first: interactions go to a top-level frame."}</p>
           )}
         </section>
         {screen && live.has(screen.id) && (
           <section className={section} aria-label="Flow">
             <h3 className={label}>Flow</h3>
-            <p className="mb-2 text-[12.5px] text-fg-secondary">
+            <p className="mb-2 text-13 text-fg-secondary">
               {screen.name ?? "Frame"} · {incoming} {incoming === 1 ? "link" : "links"} in
             </p>
             <button type="button" className={small} onClick={() => onPresent(screen.id)}>
@@ -138,7 +138,7 @@ export function PrototypePanel({ design, selected, readOnly, onEdit, onSelect, o
     <>
       <section className={section} aria-label="Flow">
         <h3 className={label}>Flow</h3>
-        <p className="mb-2 text-[12.5px] text-fg-secondary">
+        <p className="mb-2 text-13 text-fg-secondary">
           {frames.length} {frames.length === 1 ? "frame" : "frames"} · {design.links.length} {design.links.length === 1 ? "link" : "links"}
           {broken.size > 0 && <span className="text-pill-blocked-fg"> · {broken.size} broken</span>}
         </p>
@@ -152,7 +152,7 @@ export function PrototypePanel({ design, selected, readOnly, onEdit, onSelect, o
           <ul className="flex flex-col gap-1">
             {design.links.map((l) => (
               <li key={l.id} data-link={l.id} data-broken={broken.has(l.id) || undefined} className="flex items-center gap-1">
-                <button type="button" className="min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-[12.5px] text-fg hover:bg-hover" onClick={() => find(design, l.from) && onSelect([l.from])}>
+                <button type="button" className="min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-13 text-fg hover:bg-hover" onClick={() => find(design, l.from) && onSelect([l.from])}>
                   {nameOf(l.from)} → {live.has(l.to) ? nameOf(l.to) : <span className="text-pill-blocked-fg">deleted frame (broken)</span>}
                 </button>
                 <button type="button" aria-label={`Remove link from ${nameOf(l.from)}`} disabled={readOnly} className="grid size-5 place-items-center rounded text-fg-tertiary hover:bg-hover hover:text-fg disabled:opacity-40" onClick={() => onEdit((d) => removeLink(d, l.id))}>
@@ -162,7 +162,7 @@ export function PrototypePanel({ design, selected, readOnly, onEdit, onSelect, o
             ))}
           </ul>
         ) : (
-          <p className="text-[12.5px] text-fg-tertiary">Select a layer and add an interaction to link it to a frame.</p>
+          <p className="text-13 text-fg-tertiary">Select a layer and add an interaction to link it to a frame.</p>
         )}
       </section>
     </>

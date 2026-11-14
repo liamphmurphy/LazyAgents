@@ -8,6 +8,7 @@ import { makeLayout, type LaidPage } from "@/lib/designs/layout";
 import { follow, goBack, hotspotsOf, play, restart, screens, startScreen, transitionFrames, type Player } from "@/lib/designs/prototype";
 import { designAssetHref, LaidNodeSvg, useDesignFonts } from "@/lib/designs/render";
 import { normalize, type Design, type Link } from "@/lib/designs/schema";
+import { Spinner } from "@/components/ui/loading";
 
 type Move = { from: string; transition: Link["transition"]; duration: number; back?: boolean };
 
@@ -256,13 +257,13 @@ export function PresentDesign({ id }: { id: string }) {
       }}
     >
       {error ? (
-        <p role="alert" className="absolute inset-0 grid place-items-center text-[13px] text-[#fff9]">{`Couldn’t open this design: ${error}`}</p>
+        <p role="alert" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">{`Couldn’t open this design: ${error}`}</p>
       ) : ref.isError || head.isError ? (
-        <p role="alert" className="absolute inset-0 grid place-items-center text-[13px] text-[#fff9]">Couldn’t open this design.</p>
+        <p role="alert" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">Couldn’t open this design.</p>
       ) : !design ? (
-        <p role="status" className="absolute inset-0 grid place-items-center text-[13px] text-[#fff9]">Loading…</p>
+        <p role="status" className="absolute inset-0 grid place-items-center"><Spinner size={20} /><span className="sr-only">Loading</span></p>
       ) : !count || !at || !laid ? (
-        <p role="status" className="absolute inset-0 grid place-items-center text-[13px] text-[#fff9]">This design has no frames to present.</p>
+        <p role="status" className="absolute inset-0 grid place-items-center text-13 text-[#fff9]">This design has no frames to present.</p>
       ) : (
         <>
           {leaving && move && (
@@ -282,22 +283,22 @@ export function PresentDesign({ id }: { id: string }) {
         onFocus={wake}
         onClick={(e) => e.stopPropagation()}
       >
-        <button type="button" aria-label="Back" className="grid size-[30px] place-items-center rounded-md text-lg text-fg hover:bg-hover disabled:opacity-40" disabled={!p?.back.length} onClick={back}>‹</button>
-        <span className="min-w-[96px] truncate px-1 text-center text-[13px] text-fg">{frameName(at)}</span>
-        <button type="button" aria-label="Restart" className="grid size-[30px] place-items-center rounded-md text-[15px] text-fg hover:bg-hover" onClick={again}>↺</button>
+        <button type="button" aria-label="Back" className="grid size-[30px] place-items-center rounded-md text-18 text-fg hover:bg-hover disabled:opacity-40" disabled={!p?.back.length} onClick={back}>‹</button>
+        <span className="min-w-[96px] truncate px-1 text-center text-13 text-fg">{frameName(at)}</span>
+        <button type="button" aria-label="Restart" className="grid size-[30px] place-items-center rounded-md text-15 text-fg hover:bg-hover" onClick={again}>↺</button>
         <span aria-hidden className="mx-1 h-5 w-px bg-border-strong" />
-        <button type="button" aria-label="Keyboard shortcuts" aria-expanded={help} className="grid size-[30px] place-items-center rounded-md text-[13px] font-semibold text-fg-secondary hover:bg-hover" onClick={() => setHelp((h) => !h)}>?</button>
-        <button type="button" onClick={exit} className="ml-1 inline-flex h-[30px] items-center gap-2 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] font-medium text-fg hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent">
-          Exit <span className="font-mono text-[10.5px] text-fg-tertiary">esc</span>
+        <button type="button" aria-label="Keyboard shortcuts" aria-expanded={help} className="grid size-[30px] place-items-center rounded-md text-13 font-semibold text-fg-secondary hover:bg-hover" onClick={() => setHelp((h) => !h)}>?</button>
+        <button type="button" onClick={exit} className="ml-1 inline-flex h-[30px] items-center gap-2 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-13 font-medium text-fg hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent">
+          Exit <span className="font-mono text-11 text-fg-tertiary">esc</span>
         </button>
       </div>
       {help && (
         <div role="dialog" aria-label="Keyboard shortcuts" className="absolute right-6 top-6 z-10 w-[300px] rounded-[14px] border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)]" onClick={(e) => e.stopPropagation()}>
-          <p className="mb-2 text-[14px] font-semibold text-fg">Keyboard</p>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <p className="mb-2 text-14 font-semibold text-fg">Keyboard</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-13">
             {[["← Backspace", "Back"], ["R", "Restart from the first frame"], ["H", "Show or hide hotspots"], ["F", "Toggle fullscreen"], ["Esc", "Exit to the editor"], ["?", "Show or hide this"]].map(([k, d]) => (
               <div key={k} className="contents">
-                <dt className="font-mono text-[12px] text-fg-2">{k}</dt>
+                <dt className="font-mono text-12 text-fg-2">{k}</dt>
                 <dd className="text-right text-fg-secondary">{d}</dd>
               </div>
             ))}
@@ -305,7 +306,7 @@ export function PresentDesign({ id }: { id: string }) {
         </div>
       )}
       {toast && (
-        <div role="status" className="absolute left-1/2 top-5 z-10 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg-2 shadow-[var(--shadow-float)]">
+        <div role="status" className="absolute left-1/2 top-5 z-10 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-13 text-fg-2 shadow-[var(--shadow-float)]">
           {toast}
           <button type="button" className="ml-2 text-accent" onClick={() => setToast(undefined)} aria-label="Dismiss">×</button>
         </div>

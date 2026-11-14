@@ -61,7 +61,7 @@ export function StatusSlot({ items }: { items: StatusItem[] }) {
           data-testid="status-slot-more"
           aria-expanded={expanded}
           onClick={() => setOpen(!expanded)}
-          className="flex h-7 w-full items-center gap-1.5 rounded-lg bg-surface-sunken px-3 text-left text-xs text-fg-secondary hover:bg-hover"
+          className="flex h-7 w-full items-center gap-1.5 rounded-lg bg-surface-sunken px-3 text-left text-12 text-fg-secondary hover:bg-hover"
         >
           {expanded ? (
             <span className="font-semibold text-fg">Show less</span>

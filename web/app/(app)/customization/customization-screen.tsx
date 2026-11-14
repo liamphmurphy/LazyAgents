@@ -25,7 +25,7 @@ import { AgentsSection } from "./agents-section";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
 
-const railItem = "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px]";
+const railItem = "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-13";
 
 function RailButton({ on, onClick, lead, testId, children }: { on: boolean; onClick: () => void; lead: ReactNode; testId?: string; children: ReactNode }) {
   return (
@@ -42,7 +42,7 @@ function PlainHeader({ lead, title, detail, actions }: { lead: ReactNode; title:
       {lead}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <h2 className="truncate type-display text-fg">{title}</h2>
-        <p className="text-sm text-fg-secondary">{detail}</p>
+        <p className="text-14 text-fg-secondary">{detail}</p>
       </div>
       {actions}
     </header>
@@ -54,7 +54,7 @@ function RailGroup({ label, detail }: { label: string; detail: string }) {
   return (
     <span className="flex flex-col px-2 pb-1.5 pt-5">
       <span className="type-heading text-fg">{label}</span>
-      <span className="text-xs text-fg-tertiary">{detail}</span>
+      <span className="text-12 text-fg-tertiary">{detail}</span>
     </span>
   );
 }
@@ -102,13 +102,13 @@ export function CustomizationScreen() {
         crumbs={[{ label: "Customization" }]}
         actions={
           <>
-            {total !== undefined && <span className="text-xs text-fg-tertiary">{total} entries</span>}
+            {total !== undefined && <span className="text-12 text-fg-tertiary">{total} entries</span>}
             <button
               type="button"
               aria-pressed={importing}
               onClick={() => setImporting((v) => !v)}
               className={cx(
-                "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-[12.5px] text-fg",
+                "inline-flex h-[30px] items-center gap-1.5 rounded-md border px-3 text-13 text-fg",
                 importing ? "border-accent bg-selected" : "border-btn-secondary-border bg-btn-secondary hover:bg-hover",
               )}
             >
@@ -152,7 +152,7 @@ export function CustomizationScreen() {
                     {p.is_default && <DefaultBadge small />}
                   </RailButton>
                 ))}
-                {personas.length === 0 && <p className="px-2 py-1 text-xs text-fg-secondary">No personas yet. The built-in Assistant is your default.</p>}
+                {personas.length === 0 && <p className="px-2 py-1 text-12 text-fg-secondary">No personas yet. The built-in Assistant is your default.</p>}
                 {all.length < MAX_PERSONAS && (
                   <button type="button" onClick={() => setEditing("new")} className={cx(railItem, "text-accent hover:bg-hover")}>
                     <Icon name="plus" size={16} />
@@ -169,14 +169,14 @@ export function CustomizationScreen() {
               <Link key={a.id} href={`/agents/${a.handle}`} data-testid="agent-row" className={cx(railItem, "text-fg-secondary hover:bg-hover hover:text-fg")}>
                 <AgentAvatar name={a.name} colorIndex={a.color_index} label={false} />
                 <span className="min-w-0 flex-1 truncate">@{a.handle}</span>
-                <span className="text-xs text-fg-tertiary">{a.kind === "sub" ? "sub" : "main"}</span>
+                <span className="text-12 text-fg-tertiary">{a.kind === "sub" ? "sub" : "main"}</span>
               </Link>
             ))}
             {(spaces.data?.spaces.length ?? 0) > 0 && <span className="px-2 pb-1.5 pt-5 type-heading text-fg">Spaces</span>}
             {spaces.data?.spaces.map((sp) => (
               <RailButton key={sp.id} testId="space-memory-row" on={spaceParam === sp.id} onClick={() => pickSpace(sp.id)} lead={<SpaceTile name={sp.name} color={sp.color} size={20} />}>
                 <span className="min-w-0 flex-1 truncate">{sp.name}</span>
-                <span className="text-xs text-fg-tertiary">{sp.memory_count}</span>
+                <span className="text-12 text-fg-tertiary">{sp.memory_count}</span>
               </RailButton>
             ))}
           </nav>

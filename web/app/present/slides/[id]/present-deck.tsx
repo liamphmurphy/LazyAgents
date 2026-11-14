@@ -7,6 +7,7 @@ import { useDeckRef } from "@/lib/api/slides-hooks";
 import { cx } from "@/lib/cx";
 import { assetHref, SlideSvg, useSlideFonts } from "@/lib/slides/render";
 import { parseDeck, slideText, slideTitle } from "@/lib/slides/schema";
+import { Spinner } from "@/components/ui/loading";
 
 /**
  * The saved deck, full screen and in order (mockup 4/6). Keys: → ↓ Space
@@ -125,9 +126,9 @@ export function PresentDeck({ id }: { id: string }) {
       }}
     >
       {!deck ? (
-        <p role="status" className="text-[13px] text-[#fff9]">{ref.isError ? "Couldn’t open this deck." : "Loading…"}</p>
+        <p role="status" className="text-13 text-[#fff9]">{ref.isError ? "Couldn’t open this deck." : <><Spinner size={20} /><span className="sr-only">Loading</span></>}</p>
       ) : !slide ? (
-        <p role="status" className="text-[13px] text-[#fff9]">Every slide in this deck is hidden.</p>
+        <p role="status" className="text-13 text-[#fff9]">Every slide in this deck is hidden.</p>
       ) : (
         <SlideSvg deck={deck} slide={slide} assetUrl={(a) => assetHref(id, a)} fontsReady={fonts} className="max-h-full max-w-full" label={`Slide ${at + 1} of ${shown.length}: ${slideText(slide) || "empty slide"}`} />
       )}
@@ -137,22 +138,22 @@ export function PresentDeck({ id }: { id: string }) {
         className={cx("absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border-float bg-surface-raised/95 px-2 py-1.5 shadow-[var(--shadow-float)] transition-opacity", controls || help ? "opacity-100" : "pointer-events-none opacity-0")}
         onFocus={wake}
       >
-        <button type="button" aria-label="Previous slide" className="grid size-[30px] place-items-center rounded-md text-lg text-fg hover:bg-hover disabled:opacity-40" disabled={at === 0} onClick={() => go(at - 1)}>‹</button>
-        <span className="min-w-[56px] text-center font-mono text-[13px] text-fg">{shown.length ? `${at + 1} / ${shown.length}` : "–"}</span>
-        <button type="button" aria-label="Next slide" className="grid size-[30px] place-items-center rounded-md text-lg text-fg hover:bg-hover disabled:opacity-40" disabled={at >= shown.length - 1} onClick={() => go(at + 1)}>›</button>
+        <button type="button" aria-label="Previous slide" className="grid size-[30px] place-items-center rounded-md text-18 text-fg hover:bg-hover disabled:opacity-40" disabled={at === 0} onClick={() => go(at - 1)}>‹</button>
+        <span className="min-w-[56px] text-center font-mono text-13 text-fg">{shown.length ? `${at + 1} / ${shown.length}` : "–"}</span>
+        <button type="button" aria-label="Next slide" className="grid size-[30px] place-items-center rounded-md text-18 text-fg hover:bg-hover disabled:opacity-40" disabled={at >= shown.length - 1} onClick={() => go(at + 1)}>›</button>
         <span aria-hidden className="mx-1 h-5 w-px bg-border-strong" />
-        <button type="button" aria-label="Keyboard shortcuts" aria-expanded={help} className="grid size-[30px] place-items-center rounded-md text-[13px] font-semibold text-fg-secondary hover:bg-hover" onClick={() => setHelp((h) => !h)}>?</button>
-        <button type="button" onClick={exit} className="ml-1 inline-flex h-[30px] items-center gap-2 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-[13px] font-medium text-fg hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent">
-          Exit <span className="font-mono text-[10.5px] text-fg-tertiary">esc</span>
+        <button type="button" aria-label="Keyboard shortcuts" aria-expanded={help} className="grid size-[30px] place-items-center rounded-md text-13 font-semibold text-fg-secondary hover:bg-hover" onClick={() => setHelp((h) => !h)}>?</button>
+        <button type="button" onClick={exit} className="ml-1 inline-flex h-[30px] items-center gap-2 rounded-md border border-btn-secondary-border bg-btn-secondary px-3 text-13 font-medium text-fg hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent">
+          Exit <span className="font-mono text-11 text-fg-tertiary">esc</span>
         </button>
       </div>
       {help && (
         <div role="dialog" aria-label="Keyboard shortcuts" className="absolute right-6 top-6 w-[300px] rounded-[14px] border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)]">
-          <p className="mb-2 text-[14px] font-semibold text-fg">Keyboard</p>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <p className="mb-2 text-14 font-semibold text-fg">Keyboard</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-13">
             {[["→ ↓ Space PgDn", "Next slide"], ["← ↑ PgUp", "Previous slide"], ["Home / End", "First / last"], ["3 then Enter", "Go to slide 3"], ["F", "Toggle fullscreen"], ["Esc", "Exit to the editor"], ["?", "Show or hide this"]].map(([k, d]) => (
               <div key={k} className="contents">
-                <dt className="font-mono text-[12px] text-fg-2">{k}</dt>
+                <dt className="font-mono text-12 text-fg-2">{k}</dt>
                 <dd className="text-right text-fg-secondary">{d}</dd>
               </div>
             ))}
@@ -160,7 +161,7 @@ export function PresentDeck({ id }: { id: string }) {
         </div>
       )}
       {toast && (
-        <div role="status" className="absolute left-1/2 top-5 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg-2 shadow-[var(--shadow-float)]">
+        <div role="status" className="absolute left-1/2 top-5 -translate-x-1/2 rounded-[10px] border border-border-float bg-surface-raised px-3 py-1.5 text-13 text-fg-2 shadow-[var(--shadow-float)]">
           {toast}
           <button type="button" className="ml-2 text-accent" onClick={() => setToast(undefined)} aria-label="Dismiss">×</button>
         </div>

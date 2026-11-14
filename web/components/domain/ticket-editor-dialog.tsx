@@ -13,13 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Banner, Field, Skeleton, TextArea, TextInput } from "@/components/ui/primitives";
 import { Markdown } from "./markdown";
 import { PRIORITY_NAME, PRIORITY_ORDER, STATUS_NAME } from "./meta";
+import { confirmAction } from "@/components/ui/confirm";
 
 const BOARD_STATUS_ORDER: TicketStatus[] = ["backlog", "todo", "in_progress", "in_review", "done", "canceled"];
-const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg focus:border-accent focus:outline-none";
+const selectClass = "h-[30px] w-full rounded-md border border-border-strong bg-surface px-2 text-13 text-fg focus:border-accent focus:outline-none";
 const iconBtn = "h-7 w-7 rounded px-0 text-center hover:bg-hover disabled:opacity-40";
 
 function FieldError({ id, message }: { id: string; message?: string }) {
-  return message ? <p id={id} role="alert" className="text-xs text-pill-blocked-fg">{message}</p> : null;
+  return message ? <p id={id} role="alert" className="text-12 text-pill-blocked-fg">{message}</p> : null;
 }
 
 /**
@@ -35,7 +36,9 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
 }) {
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [dirty, setDirty] = useState(false);
-  const close = () => { if (!dirty || window.confirm("Discard your unsaved changes?")) onClose(); };
+  const close = async () => {
+    if (!dirty || await confirmAction({ title: "Discard your unsaved changes?", confirmLabel: "Discard", cancelLabel: "Keep editing" })) onClose();
+  };
   const [loaded, setLoaded] = useState<{ ticket: Ticket; nonce: number }>();
   if (detail && !loaded) setLoaded({ ticket: detail, nonce: 0 });
 
@@ -55,7 +58,7 @@ export function TicketEditorDialog({ ticketKey, detail, bootstrap, onClose, onRe
         >
           <div className="border-b border-border-subtle px-[18px] py-3.5">
             <Dialog.Title className="type-heading">Edit <span className="font-mono">{ticketKey}</span></Dialog.Title>
-            <p id="ticket-editor-desc" className="text-[12.5px] text-fg-secondary">Changes are saved when you choose Save changes.</p>
+            <p id="ticket-editor-desc" className="text-13 text-fg-secondary">Changes are saved when you choose Save changes.</p>
           </div>
           {loaded ? (
             <EditorForm
@@ -164,13 +167,13 @@ function EditorForm({ ticket, bootstrap, onClose, onCancel, onDirty, onReload, o
           <Banner tone="blocked" title="This ticket changed by someone else. Your unsaved edits are still shown."
             actions={<><Button type="button" variant="outline" disabled={busy} onClick={() => void reapplyMine()}>Reapply mine</Button><Button type="button" variant="outline" disabled={busy} onClick={() => void reload()}>Reload latest ticket (replaces this draft)</Button></>} />
         )}
-        {errors.general && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{errors.general}</p>}
+        {errors.general && <p role="alert" className="text-13 text-pill-blocked-fg">{errors.general}</p>}
         <Field label="Title" htmlFor="editor-title">
           <TextInput id="editor-title" value={draft.title} aria-invalid={!!err.title} aria-describedby={err.title ? "err-title" : undefined} onChange={(e) => set("title", e.target.value)} />
           <FieldError id="err-title" message={err.title} />
         </Field>
         <Field label="Description · Markdown" htmlFor="editor-description">
-          <div className="flex gap-2 text-xs"><button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>Write</button><button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>Preview</button></div>
+          <div className="flex gap-2 text-12"><button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>Write</button><button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>Preview</button></div>
           {preview ? <Markdown>{draft.description_md || "_Nothing to preview._"}</Markdown> : <TextArea id="editor-description" rows={5} value={draft.description_md} aria-invalid={!!err.description_md} aria-describedby={err.description_md ? "err-description" : undefined} onChange={(e) => set("description_md", e.target.value)} />}
           <FieldError id="err-description" message={err.description_md} />
         </Field>
@@ -198,9 +201,9 @@ function EditorForm({ ticket, bootstrap, onClose, onCancel, onDirty, onReload, o
               </select>
               {draft.estimate_points != null && <Button type="button" variant="ghost" onClick={() => set("estimate_points", null)}>Clear</Button>}
             </div>
-            {ticket.estimated_at && <p className="text-xs text-fg-secondary">Estimated <time dateTime={ticket.estimated_at}>{new Date(ticket.estimated_at).toLocaleString()}</time></p>}
-            {ticket.estimate_rationale && <blockquote className="text-xs italic text-fg-secondary">{ticket.estimate_rationale}</blockquote>}
-            {ticket.estimate && <p className="text-xs text-fg-secondary">Legacy note: {ticket.estimate}</p>}
+            {ticket.estimated_at && <p className="text-12 text-fg-secondary">Estimated <time dateTime={ticket.estimated_at}>{new Date(ticket.estimated_at).toLocaleString()}</time></p>}
+            {ticket.estimate_rationale && <blockquote className="text-12 italic text-fg-secondary">{ticket.estimate_rationale}</blockquote>}
+            {ticket.estimate && <p className="text-12 text-fg-secondary">Legacy note: {ticket.estimate}</p>}
             <FieldError id="err-estimate" message={err.estimate_points} />
           </Field>
           <Field label="Assignee" htmlFor="editor-assignee">
@@ -219,8 +222,8 @@ function EditorForm({ ticket, bootstrap, onClose, onCancel, onDirty, onReload, o
           </Field>
         </div>
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[12.5px] font-medium text-fg-2">Acceptance criteria</legend>
-          {criteria.length === 0 && <p className="text-xs text-fg-tertiary">No acceptance criteria yet.</p>}
+          <legend className="mb-1 text-13 font-medium text-fg-2">Acceptance criteria</legend>
+          {criteria.length === 0 && <p className="text-12 text-fg-tertiary">No acceptance criteria yet.</p>}
           <ol className="flex flex-col gap-1.5">
             {criteria.map((c, i) => (
               <li key={c.uid} className="flex items-center gap-1.5">
@@ -249,7 +252,7 @@ function EditorForm({ ticket, bootstrap, onClose, onCancel, onDirty, onReload, o
 function Footer({ ticketKey, children }: { ticketKey: string; children: ReactNode }) {
   return (
     <div className="flex items-center gap-2 border-t border-border-subtle px-[18px] py-3">
-      <Link href={`/tickets/${encodeURIComponent(ticketKey)}`} className="mr-auto text-[12.5px] text-fg-secondary hover:text-fg">Open full ticket ↗</Link>
+      <Link href={`/tickets/${encodeURIComponent(ticketKey)}`} className="mr-auto text-13 text-fg-secondary hover:text-fg">Open full ticket ↗</Link>
       {children}
     </div>
   );

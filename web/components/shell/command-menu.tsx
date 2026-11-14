@@ -483,7 +483,7 @@ export function CommandMenu() {
             {mode === "projects" ? (
               <button
                 type="button"
-                className="rounded-full border border-border px-2.5 py-0.5 text-[11.5px] font-medium text-fg-secondary transition-colors hover:bg-hover"
+                className="rounded-full border border-border px-2.5 py-0.5 text-12 font-medium text-fg-secondary transition-colors hover:bg-hover"
                 onClick={() => {
                   setMode("root");
                   setQuery("");
@@ -498,7 +498,7 @@ export function CommandMenu() {
                   aria-pressed={scope}
                   aria-label={scope ? `Searching ${project} only; search all projects` : `Searching all projects; search ${project} only`}
                   className={cx(
-                    "rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors",
+                    "rounded-full border px-2.5 py-0.5 text-12 font-medium transition-colors",
                     scope ? "border-transparent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover",
                   )}
                   onClick={() => setScope(!scope)}
@@ -523,7 +523,7 @@ export function CommandMenu() {
                 setActive(0);
               }}
               placeholder={mode === "projects" ? "Switch to project…" : "Search, or try is:ticket status:done…"}
-              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-tertiary max-md:text-[16px]"
+              className="min-w-0 flex-1 bg-transparent text-15 outline-none placeholder:text-fg-tertiary max-md:text-16"
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" && items.length) {
                   e.preventDefault();
@@ -556,7 +556,7 @@ export function CommandMenu() {
                 }
               }}
             />
-            <span role="status" className="flex items-center gap-1.5 text-xs text-fg-tertiary">
+            <span role="status" className="flex items-center gap-1.5 text-12 text-fg-tertiary">
               {pending && <span aria-hidden className="size-1.5 animate-skeleton rounded-full bg-accent" />}
               {pending ? "Searching…" : ""}
             </span>
@@ -574,7 +574,7 @@ export function CommandMenu() {
                   key={token}
                   type="button"
                   aria-label={`Remove filter ${token}`}
-                  className="rounded-full border border-transparent bg-accent-soft px-2.5 py-0.5 font-mono text-xs text-accent transition-colors hover:border-accent"
+                  className="rounded-full border border-transparent bg-accent-soft px-2.5 py-0.5 font-mono text-12 text-accent transition-colors hover:border-accent"
                   onClick={() => {
                     setQuery(removeToken(query, token));
                     inputRef.current?.focus();
@@ -587,25 +587,25 @@ export function CommandMenu() {
           )}
           <div className="scroll-py-2 overflow-y-auto overscroll-contain p-2 max-md:min-h-0 max-md:flex-1">
             {search.isError && (
-              <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
+              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
                 Search failed. Try again.
               </p>
             )}
             {(createChat.isError || askChat.isError) && (
-              <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
+              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
                 Couldn’t start the chat.
               </p>
             )}
             {actionFailed && (
-              <p role="alert" className="p-3 text-xs text-pill-blocked-fg">
+              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
                 That action didn’t go through. Try again.
               </p>
             )}
             {searchText && !pending && hits.length === 0 && !key && (
-              <p className="px-3 py-8 text-center text-sm text-fg-tertiary">No results for “{query.trim()}”.</p>
+              <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No results for “{query.trim()}”.</p>
             )}
             {mode === "projects" && items.length === 0 && (
-              <p className="px-3 py-8 text-center text-sm text-fg-tertiary">No project matches “{query}”.</p>
+              <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No project matches “{query}”.</p>
             )}
             <div id="command-results" role="listbox" aria-label="Results" aria-busy={pending} className={cx(pending && "opacity-60")}>
               {groups.map((g) => (
@@ -613,7 +613,7 @@ export function CommandMenu() {
                   <div
                     id={`command-group-${g.name.replace(/\s+/g, "-")}`}
                     role="presentation"
-                    className="px-3 pb-1.5 pt-3 text-[11px] font-medium tracking-wide text-fg-tertiary"
+                    className="px-3 pb-1.5 pt-3 text-11 font-medium tracking-wide text-fg-tertiary"
                   >
                     {g.name}
                   </div>
@@ -626,7 +626,7 @@ export function CommandMenu() {
                       onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
                       onMouseMove={() => setActive(i)}
                       className={cx(
-                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors duration-100",
+                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-14 transition-colors duration-(--motion-fast)",
                         i === index ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
                       )}
                     >
@@ -634,7 +634,7 @@ export function CommandMenu() {
                       <span
                         aria-hidden
                         className={cx(
-                          "grid size-6 flex-none place-items-center rounded-md border text-[12px] transition-colors duration-100",
+                          "grid size-6 flex-none place-items-center rounded-md border text-12 transition-colors duration-(--motion-fast)",
                           i === index ? "border-transparent bg-accent-soft text-accent" : "border-border-subtle bg-surface-sunken text-fg-tertiary",
                         )}
                       >
@@ -645,7 +645,7 @@ export function CommandMenu() {
                           <Match text={item.title} query={mode === "projects" ? query : title} />
                         </span>
                         {item.snippet && (
-                          <span className="block truncate text-xs text-fg-tertiary">
+                          <span className="block truncate text-12 text-fg-tertiary">
                             <Parts parts={snippetParts(item.snippet)} />
                           </span>
                         )}
@@ -654,7 +654,7 @@ export function CommandMenu() {
                         (isShortcut(item.meta) ? (
                           <Kbd>{item.meta}</Kbd>
                         ) : (
-                          <span className="max-w-[40%] flex-none truncate font-mono text-[11.5px] text-fg-tertiary">{item.meta}</span>
+                          <span className="max-w-[40%] flex-none truncate font-mono text-12 text-fg-tertiary">{item.meta}</span>
                         ))}
                     </div>
                   ))}
@@ -662,7 +662,7 @@ export function CommandMenu() {
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-[11.5px] text-fg-tertiary max-md:hidden">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-12 text-fg-tertiary max-md:hidden">
             {(mode === "projects" ? PROJECT_KEYS : ROOT_KEYS).map(([keys, what]) => (
               <span key={what} className="flex items-center gap-1.5">
                 <Kbd>{keys}</Kbd>

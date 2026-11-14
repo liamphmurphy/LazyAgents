@@ -60,7 +60,7 @@ const TOOLS: { tool: Tool | "image"; label: string; key: string; glyph: string }
 ];
 /** The beside-chat panel's cut-down toolbar (docs/design/designs-from-chat.svg). */
 const BESIDE_TOOLS = new Set<Tool | "image">(["select", "frame", "rect", "line", "text"]);
-const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
+const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
 const TOOL_KEYS: Record<string, Tool> = { v: "select", h: "hand", f: "frame", a: "frame", r: "rect", o: "ellipse", l: "line", p: "pen", t: "text", s: "sticky", c: "connector" };
 
 async function prepareImage(file: File): Promise<Blob> {
@@ -778,24 +778,24 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   ) : chat?.archived ? (
     <Banner tone="human" title="This design’s chat is archived">Restore the chat to edit the design.</Banner>
   ) : notice || uploading ? (
-    <p role={notice ? "alert" : "status"} className={cx("pointer-events-auto self-start rounded-md bg-surface px-2 py-1 text-[12px] shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>
+    <p role={notice ? "alert" : "status"} className={cx("pointer-events-auto self-start rounded-md bg-surface px-2 py-1 text-12 shadow", notice ? "text-pill-blocked-fg" : "text-fg-secondary")}>{notice ?? "Uploading image…"}</p>
   ) : paused ? (
-    <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-[12.5px] text-fg-secondary shadow-[var(--shadow-float)]">
+    <div role="status" data-testid="persona-paused" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-border-float bg-surface-raised px-3 py-1 text-13 text-fg-secondary shadow-[var(--shadow-float)]">
       {persona}’s edits are paused
-      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-12" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: false })}>Resume</Button>
     </div>
   ) : arrival && !reviewing ? (
-    <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
+    <div role="status" data-testid="design-arrival" className="pointer-events-auto flex items-center gap-2 self-start rounded-md bg-surface-raised px-3 py-1.5 text-13 text-fg shadow-[var(--shadow-float)]">
       {arrival.text}
-      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px] text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
-      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-12 text-accent" onClick={() => (travel(true), setArrival(undefined))}>Undo</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-12" aria-label="Dismiss" onClick={() => setArrival(undefined)}>✕</Button>
     </div>
   ) : presence ? (
-    <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-[12.5px] text-fg shadow-[var(--shadow-float)]">
-      <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-[10px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
+    <div role="status" data-testid="persona-chip" className="pointer-events-auto flex items-center gap-2 self-start rounded-full border border-[#3FC1B0] bg-surface-raised py-1 pl-1 pr-2 text-13 text-fg shadow-[var(--shadow-float)]">
+      <span aria-hidden className="grid size-5 place-items-center rounded-full bg-[#3FC1B024] text-10 font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>
       {persona} is editing
-      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
-      <Button variant="ghost" className="h-[22px] px-1.5 text-[12px]" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-12" aria-pressed={follow} onClick={() => setFollow((f) => !f)}>Follow</Button>
+      <Button variant="ghost" className="h-[22px] px-1.5 text-12" disabled={settings.isPending} onClick={() => settings.mutate({ persona_paused: true })}>Pause</Button>
     </div>
   ) : null;
 
@@ -844,7 +844,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
               title={`${t.label} (${t.key})`}
               aria-pressed={t.tool !== "image" ? tool === t.tool : undefined}
               disabled={readOnly && t.tool !== "select" && t.tool !== "hand"}
-              className={cx("grid size-[32px] place-items-center rounded-lg text-[15px] disabled:opacity-40", tool === t.tool ? "bg-accent text-fg-on-accent" : "text-fg-2 hover:bg-hover")}
+              className={cx("grid size-[32px] place-items-center rounded-lg text-15 disabled:opacity-40", tool === t.tool ? "bg-accent text-fg-on-accent" : "text-fg-2 hover:bg-hover")}
               onClick={() => (t.tool === "image" ? fileInput.current?.click() : setTool(t.tool))}
             >
               {t.glyph}
@@ -859,7 +859,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
                 data-testid="design-pause"
                 disabled={settings.isPending || !ref.data}
                 title={paused ? `Let ${persona} change this design again` : `Stop ${persona}’s changes to this design from applying or being suggested`}
-                className={cx("flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium hover:bg-hover disabled:opacity-50", paused ? "text-accent" : "text-fg-secondary")}
+                className={cx("flex h-[32px] items-center gap-1.5 rounded-lg px-3 text-13 font-medium hover:bg-hover disabled:opacity-50", paused ? "text-accent" : "text-fg-secondary")}
                 onClick={() => settings.mutate({ persona_paused: !paused })}
               >
                 {paused ? "Resume" : "Pause"}
@@ -867,7 +867,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
             </>
           )}
         </div>
-        <div className="pointer-events-auto col-start-3 mb-1 flex items-center gap-1 justify-self-end rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-[12px] text-fg-secondary shadow-[var(--shadow-float)]">
+        <div className="pointer-events-auto col-start-3 mb-1 flex items-center gap-1 justify-self-end rounded-lg border border-border-float bg-surface-raised px-1 py-0.5 text-12 text-fg-secondary shadow-[var(--shadow-float)]">
           <button type="button" aria-label="Zoom out" className="grid size-6 place-items-center rounded hover:bg-hover" onClick={() => zoomBy(0.8)}>−</button>
           <button type="button" aria-label="Zoom to fit (⇧1)" data-testid="design-zoom" className="min-w-[44px] rounded px-1 hover:bg-hover" onClick={zoomToFit}>
             {Math.round((camera?.z ?? 1) * 100)}%
@@ -888,11 +888,11 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
       <div ref={root} data-design-beside={id} className="flex h-full min-h-0 flex-col">
         <div className="flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-4">
           <Icon name="designs" size={16} className="flex-none text-accent" />
-          <h2 className="min-w-0 truncate text-[14px] font-semibold text-fg">{title}</h2>
-          <span className="flex-none truncate text-[12px] text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}{reviewing ? " · Reviewing" : ""}</span>
+          <h2 className="min-w-0 truncate text-14 font-semibold text-fg">{title}</h2>
+          <span className="flex-none truncate text-12 text-fg-tertiary">Design{page ? ` · ${page.name}` : ""}{reviewing ? " · Reviewing" : ""}</span>
           <span className="flex-1" />
-          {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-[9px] font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
-          {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-[11.5px]", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
+          {presence && <span title={`${persona} is working on it`} aria-label={`${persona} is working on it`} className="grid size-5 flex-none place-items-center rounded-full border border-[#3FC1B0] bg-[#3FC1B024] text-10 font-bold text-[#3FC1B0]">{persona.slice(0, 1).toUpperCase()}</span>}
+          {doc && <span data-testid="design-save-state" title={saveState.message} className={cx("flex-none text-12", saveState.s === "error" || saveState.s === "conflict" ? "text-pill-blocked-fg" : "text-fg-tertiary")}>{SAVE_LABEL[saveState.s]}</span>}
           {proposalCount > 0 && !reviewing && (
             // Compact: the panel sheet's bottom bar has the Review.
             <Button variant="approve" className="max-md:hidden" title={`Review ${suggestions} here`} onClick={() => setReviewing(true)}>
@@ -932,7 +932,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
         aria-label="Design title"
         maxLength={200}
         defaultValue={title}
-        className="h-[26px] w-[240px] rounded-md border border-accent bg-surface px-2 text-[14px] font-semibold text-fg outline-none"
+        className="h-[26px] w-[240px] rounded-md border border-accent bg-surface px-2 text-14 font-semibold text-fg outline-none"
         onBlur={(e) => commitRename(e.currentTarget.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") commitRename(e.currentTarget.value);
@@ -967,7 +967,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
       </span>
     ),
     presence: presence && (
-      <span className="flex items-center gap-1.5 text-[12px] text-fg-tertiary" title={`${persona} is working on it`}>
+      <span className="flex items-center gap-1.5 text-12 text-fg-tertiary" title={`${persona} is working on it`}>
         <PersonaAvatar persona={look} size={22} className="ring-2 ring-[#3FC1B0]" />
         editing
       </span>
@@ -988,8 +988,8 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
           </button>
         </Popover.Trigger>
         <Popover.Portal>
-          <Popover.Content align="end" sideOffset={6} aria-label="More" className={cx(floatPanel, "z-50 flex w-[260px] flex-col gap-2 p-3 text-[12.5px]")}>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Design tokens</span>
+          <Popover.Content align="end" sideOffset={6} aria-label="More" className={cx(floatPanel, "z-50 flex w-[260px] flex-col gap-2 p-3 text-13")}>
+            <span className="text-11 font-medium uppercase tracking-wide text-fg-tertiary">Design tokens</span>
             {design && tokensChanged(design) ? <TokensSyncBadge design={design} readOnly={readOnly} onEdit={apply} /> : <span className="text-fg-secondary">In sync with tokens.css</span>}
           </Popover.Content>
         </Popover.Portal>
@@ -1008,7 +1008,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
               data-testid="direct-edit"
               disabled={!ref.data || settings.isPending}
               title={`Suggests: ${persona}’s edits wait as suggestions you review. Edits directly: they apply at once, and Undo reverts them.`}
-              className="flex h-[26px] items-center gap-1 rounded-full border border-border bg-surface-raised px-3 text-[12px] text-fg hover:bg-hover disabled:opacity-50"
+              className="flex h-[26px] items-center gap-1 rounded-full border border-border bg-surface-raised px-3 text-12 text-fg hover:bg-hover disabled:opacity-50"
             >
               {persona} {direct ? "edits directly" : "suggests changes"} <span aria-hidden className="text-fg-tertiary">▾</span>
             </button>
@@ -1018,11 +1018,11 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
               <DropdownMenu.RadioGroup value={direct ? "direct" : "suggest"} onValueChange={(v) => settings.mutate({ direct_edit: v === "direct" })}>
                 <DropdownMenu.RadioItem value="suggest" className={cx(menuItem, "flex-col items-start")}>
                   <span>{direct ? "" : "✓ "}Suggests changes</span>
-                  <span className="text-[11px] text-fg-tertiary">Edits wait as suggestions you review.</span>
+                  <span className="text-11 text-fg-tertiary">Edits wait as suggestions you review.</span>
                 </DropdownMenu.RadioItem>
                 <DropdownMenu.RadioItem value="direct" className={cx(menuItem, "flex-col items-start")}>
                   <span>{direct ? "✓ " : ""}Edits directly</span>
-                  <span className="text-[11px] text-fg-tertiary">Edits apply at once; Undo reverts them.</span>
+                  <span className="text-11 text-fg-tertiary">Edits apply at once; Undo reverts them.</span>
                 </DropdownMenu.RadioItem>
               </DropdownMenu.RadioGroup>
             </DropdownMenu.Content>
@@ -1030,7 +1030,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
         </DropdownMenu.Root>
       </div>
       {pending && (
-        <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-[12.5px]">
+        <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-13">
           <span className="font-semibold text-fg">
             {pending.ops.length} suggested {pending.ops.length === 1 ? "change" : "changes"}
             {pendingPages.length > 0 && ` · ${pendingPages.join(", ")}`}
@@ -1050,12 +1050,12 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
       id: "review",
       label: "Review",
       icon: "check",
-      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-[11px] text-pill-review-fg">{proposalCount}</span>,
+      badge: <span className="rounded-full bg-pill-review-bg px-1.5 text-11 text-pill-review-fg">{proposalCount}</span>,
       content:
         reviewing && review && shown ? (
           <ReviewPanel review={review} design={shown} chatId={chatId} canvasId={id} seq={doc?.saved.seq ?? 0} persona={persona} error={resolveError} busy={resolving} onFocus={focusChange} onDone={() => void finishReview()} />
         ) : (
-          <div className="flex flex-col items-start gap-3 p-4 text-[13px] text-fg-secondary">
+          <div className="flex flex-col items-start gap-3 p-4 text-13 text-fg-secondary">
             <p>{persona} suggested {suggestions}. Nothing changes until you accept.</p>
             <Button variant="approve" onClick={() => setReviewing(true)}>Start review</Button>
           </div>
@@ -1069,7 +1069,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
       <>
         <div role="tablist" aria-label="Inspector" className="flex flex-none gap-4 border-b border-border-subtle px-4 pt-3">
           {(["Design", "Prototype", "Inspect"] as const).map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={t === tab} onClick={() => setTab(t)} className={cx("-mb-px border-b-2 pb-2 text-[12.5px]", t === tab ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary hover:text-fg")}>
+            <button key={t} type="button" role="tab" aria-selected={t === tab} onClick={() => setTab(t)} className={cx("-mb-px border-b-2 pb-2 text-13", t === tab ? "border-accent font-medium text-fg" : "border-transparent text-fg-tertiary hover:text-fg")}>
               {t}
             </button>
           ))}

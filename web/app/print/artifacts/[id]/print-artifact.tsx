@@ -56,10 +56,10 @@ export function PrintArtifact({ id }: { id: string }) {
   return (
     <div className="min-h-dvh bg-surface text-fg print:bg-transparent">
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-panel px-6 py-2 print:hidden">
-        <Link href={`/artifacts/${id}${isOld && version ? `?version=${version.id}` : ""}`} className="text-[13px] text-fg-secondary hover:text-fg">
+        <Link href={`/artifacts/${id}${isOld && version ? `?version=${version.id}` : ""}`} className="text-13 text-fg-secondary hover:text-fg">
           ← Back to artifact
         </Link>
-        <span className="ml-auto text-xs text-fg-tertiary">Choose “Save as PDF” as the destination.</span>
+        <span className="ml-auto text-12 text-fg-tertiary">Choose “Save as PDF” as the destination.</span>
         <Button variant="primary" icon="printer" disabled={!printable || body == null} onClick={() => window.print()}>
           Print / Save as PDF
         </Button>
@@ -79,10 +79,10 @@ export function PrintArtifact({ id }: { id: string }) {
           <>
             <header className="flex flex-col gap-2 border-b border-border-subtle pb-5">
               {!ownTitle && <h1 className="type-display">{artifactTitle(a)}</h1>}
-              <p className="font-mono text-xs text-fg-tertiary">
+              <p className="font-mono text-12 text-fg-tertiary">
                 {version.label} · {version.created_by.name} · {absoluteTime(version.created_at)}
               </p>
-              {a.summary && <p className="text-sm leading-relaxed text-fg-secondary">{a.summary}</p>}
+              {a.summary && <p className="text-14 leading-relaxed text-fg-secondary">{a.summary}</p>}
             </header>
             <PrintMode.Provider value={true}>
               <Markdown anchors visualBlocks className="type-reading text-fg-2">{body!}</Markdown>

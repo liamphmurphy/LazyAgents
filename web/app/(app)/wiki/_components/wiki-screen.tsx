@@ -34,6 +34,7 @@ import { PageTree, type WikiIndex } from "./page-tree";
 import { PatternsFinder } from "./patterns-finder";
 import { VersionDiff } from "./version-diff";
 import { SuggestionCard } from "./suggestions";
+import { PageHeader } from "@/components/ui/page-header";
 
 function crumbsFor(path: string): Crumb[] {
   const segs = path.split("/");
@@ -110,7 +111,7 @@ export function NewPageDialog({ open, onOpenChange, folder = "" }: { open: boole
           onKeyDown={(e) => e.key === "Enter" && path.trim() && submit()}
         />
       </Field>
-      {create.isError && <p className="text-xs text-pill-blocked-fg">{create.error.message}</p>}
+      {create.isError && <p className="text-12 text-pill-blocked-fg">{create.error.message}</p>}
     </DialogShell>
   );
 }
@@ -139,13 +140,13 @@ function ImportButton() {
         Import vault
       </Button>
       {imp.isSuccess && (
-        <span role="status" className="text-xs text-fg-secondary">
+        <span role="status" className="text-12 text-fg-secondary">
           Imported: {imp.data.created} new, {imp.data.updated} updated, {imp.data.unchanged} unchanged
           {imp.data.skipped.length > 0 && `, ${imp.data.skipped.length} skipped`}
         </span>
       )}
       {imp.isError && (
-        <span role="alert" className="text-xs text-pill-blocked-fg">
+        <span role="alert" className="text-12 text-pill-blocked-fg">
           {imp.error.message}
         </span>
       )}
@@ -169,12 +170,12 @@ function WikiSearch() {
           {(hits.data ?? []).map((h) => (
             <li key={`${h.target.kind}:${h.target.id}`} className="border-b border-border-subtle last:border-0">
               <Link href={h.target.href ?? "#"} className="flex flex-col gap-0.5 px-3.5 py-2.5 hover:bg-row-hover">
-                <span className="flex items-center gap-2 text-[13px] font-medium">
+                <span className="flex items-center gap-2 text-13 font-medium">
                   <TargetMark t={h.target} />
-                  {h.target.display_id && <span className="font-mono text-xs text-fg-tertiary">{h.target.display_id}</span>}
+                  {h.target.display_id && <span className="font-mono text-12 text-fg-tertiary">{h.target.display_id}</span>}
                   <span className="truncate">{h.target.path ?? h.target.title}</span>
                 </span>
-                <span className="line-clamp-2 text-xs text-fg-secondary">
+                <span className="line-clamp-2 text-12 text-fg-secondary">
                   {h.snippet.split(/(«[^»]*»)/).map((part, i) =>
                     part.startsWith("«") ? (
                       <mark key={i} className="rounded-xs bg-pill-human-bg px-0.5 text-fg">
@@ -188,7 +189,7 @@ function WikiSearch() {
               </Link>
             </li>
           ))}
-          {hits.data?.length === 0 && <li className="px-3.5 py-3 text-xs text-fg-tertiary">Nothing matches.</li>}
+          {hits.data?.length === 0 && <li className="px-3.5 py-3 text-12 text-fg-tertiary">Nothing matches.</li>}
         </ul>
       )}
     </section>
@@ -242,14 +243,14 @@ function WikiHome() {
     >
       <div className="flex min-w-0 flex-[999_1_480px] justify-center px-7 py-8 max-sm:px-4">
         <div className="flex w-full max-w-[var(--reading-max)] flex-col gap-7">
-          <div className="flex flex-col gap-1.5">
-            <h1 className="type-display">Wiki</h1>
-            <p className="text-sm text-fg-secondary">
+          <PageHeader
+            title="Wiki"
+            description={<>
               Runbooks, decisions and the context that never fit in a PRD, plus what agents learn while working. Link anything with{" "}
               <code className="inline">[[…]]</code>: pages, documents like <code className="inline">[[ADR-012]]</code>, tickets, epics and{" "}
               <code className="inline">[[@agents]]</code>.
-            </p>
-          </div>
+            </>}
+          />
           <WikiSearch />
           <PatternsFinder />
 
@@ -274,9 +275,9 @@ function WikiHome() {
                       <ApiActorAvatar actor={p.author} />
                       <span className="flex min-w-0 flex-1 flex-col leading-tight">
                         <span className="truncate font-medium">{p.title}</span>
-                        <span className="truncate text-[11.5px] text-fg-tertiary">{p.path}</span>
+                        <span className="truncate text-12 text-fg-tertiary">{p.path}</span>
                       </span>
-                      <span className="text-xs text-fg-tertiary" title={absoluteTime(p.updated_at)}>
+                      <span className="text-12 text-fg-tertiary" title={absoluteTime(p.updated_at)}>
                         {timelineTime(p.updated_at)}
                       </span>
                     </Link>
@@ -301,7 +302,7 @@ function WikiHome() {
           {agents.length > 0 && (
             <section className="flex flex-col gap-2">
               <h2 className="type-heading">Agent memory</h2>
-              <p className="text-[12.5px] text-fg-secondary">
+              <p className="text-13 text-fg-secondary">
                 Each agent keeps notes under <code className="inline">agents/&lt;handle&gt;/</code>. A run starts with the agent&apos;s Memory page and
                 the notes linked to its ticket.
               </p>
@@ -317,7 +318,7 @@ function WikiHome() {
 
           <section className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-5">
             <ImportButton />
-            <span className="text-xs text-fg-tertiary">A zip of .md files, e.g. an Obsidian vault. Pages at the same path are replaced.</span>
+            <span className="text-12 text-fg-tertiary">A zip of .md files, e.g. an Obsidian vault. Pages at the same path are replaced.</span>
           </section>
         </div>
       </div>
@@ -381,7 +382,7 @@ function PageEditor({ page, onDone }: { page: Artifact; onDone: (newPath?: strin
         </Banner>
       )}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-fg-tertiary">
+        <span className="text-12 text-fg-tertiary">
           Saving makes a new version silently. <Kbd>[[</Kbd> links
         </span>
         <div className="flex gap-2">
@@ -494,9 +495,9 @@ function PageView({ path }: { path: string }) {
           ) : (
             <>
               <div className="flex flex-col gap-2">
-                {folder && <span className="text-xs text-fg-tertiary">{folder}</span>}
+                {folder && <span className="text-12 text-fg-tertiary">{folder}</span>}
                 <h1 className="type-display">{page.title}</h1>
-                <span className="flex flex-wrap items-center gap-2 text-xs text-fg-tertiary">
+                <span className="flex flex-wrap items-center gap-2 text-12 text-fg-tertiary">
                   <ApiActorAvatar actor={page.current_version.created_by} />
                   {page.current_version.created_by.name} · {page.current_version.label} ·{" "}
                   <span title={absoluteTime(page.updated_at)}>{timelineTime(page.updated_at)}</span>
@@ -523,7 +524,7 @@ function PageView({ path }: { path: string }) {
                     {withoutTitle(header.body, page.title)}
                   </Markdown>
                 ) : (
-                  <p className="text-sm text-fg-tertiary">
+                  <p className="text-14 text-fg-tertiary">
                     This page is empty.{" "}
                     <button type="button" className="text-accent hover:underline" onClick={() => setEditing(true)}>
                       Write it
@@ -552,12 +553,12 @@ function PageView({ path }: { path: string }) {
                   <li key={s.id}>
                     <a
                       href={`#${s.anchor}`}
-                      className="flex min-h-[26px] items-center gap-2 rounded-sm text-[13px] hover:bg-hover"
+                      className="flex min-h-[26px] items-center gap-2 rounded-sm text-13 hover:bg-hover"
                       style={{ paddingLeft: (s.level - 1) * 12 }}
                       title={s.citations > 0 ? `Cited ${s.citations} times` : undefined}
                     >
                       <span className={cx("flex-1 truncate", s.level === 1 && "font-medium")}>{s.heading}</span>
-                      {s.citations > 0 && <span className="font-mono text-xs text-fg-secondary">{s.citations}</span>}
+                      {s.citations > 0 && <span className="font-mono text-12 text-fg-secondary">{s.citations}</span>}
                     </a>
                   </li>
                 ))}

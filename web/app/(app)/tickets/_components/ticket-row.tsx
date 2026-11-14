@@ -20,7 +20,7 @@ export function CriteriaProgress({ done, total, compact }: { done: number; total
   const pct = Math.round((done / total) * 100);
   return (
     <span className="flex items-center gap-2" title={`${done} of ${total} criteria done`}>
-      <span className="font-mono text-xs text-fg-secondary">
+      <span className="font-mono text-12 text-fg-secondary">
         {done}/{total}
       </span>
       {!compact && (
@@ -39,7 +39,7 @@ export function StateText({ t, needs, className }: { t: TicketSummary; needs?: N
     <span
       data-state-text
       title={s.text}
-      className={cx("truncate text-[12.5px]", s.tone === "human" ? "text-pill-human-fg" : s.tone === "blocked" ? "text-pill-blocked-fg" : "text-fg-tertiary", className)}
+      className={cx("truncate text-13", s.tone === "human" ? "text-pill-human-fg" : s.tone === "blocked" ? "text-pill-blocked-fg" : "text-fg-tertiary", className)}
     >
       {s.text}
     </span>
@@ -50,7 +50,7 @@ export function StateText({ t, needs, className }: { t: TicketSummary; needs?: N
 export function EpicChip({ epic }: { epic?: TicketSummary["epic"] }) {
   if (!epic) return null;
   return (
-    <span title={`Epic: ${epic.name}`} className="inline-flex h-[20px] max-w-[160px] items-center gap-1 rounded-full bg-surface-sunken px-2 text-[11.5px] text-fg-secondary">
+    <span title={`Epic: ${epic.name}`} className="inline-flex h-[20px] max-w-[160px] items-center gap-1 rounded-full bg-surface-sunken px-2 text-12 text-fg-secondary">
       <Icon name="epics" size={11} className="flex-none text-fg-tertiary" />
       <span className="truncate">{epic.name}</span>
     </span>
@@ -124,7 +124,7 @@ export function TicketRow({
         )}
       />
       <StatusGlyph state={t.status} />
-      <span className="w-[72px] flex-none truncate font-mono text-xs text-fg-tertiary">{t.key}</span>
+      <span className="w-[72px] flex-none truncate font-mono text-12 text-fg-tertiary">{t.key}</span>
       <span className="flex min-w-0 flex-1 items-center gap-2">
         {/* Stretched link: the whole row opens the ticket. */}
         <Link href={`/tickets/${t.key}`} className="truncate font-medium text-fg after:absolute after:inset-0 after:rounded-lg hover:text-fg">
@@ -147,11 +147,11 @@ export function TicketRow({
       )}
       <span className="w-8 flex-none text-center">
         {t.estimate_points != null ? (
-          <span className="font-mono text-[11.5px] text-fg-secondary" title={`${t.estimate_points} points`}>
+          <span className="font-mono text-12 text-fg-secondary" title={`${t.estimate_points} points`}>
             {t.estimate_points}
           </span>
         ) : (
-          <span className="font-mono text-[11.5px] text-fg-tertiary" title="Not estimated">–</span>
+          <span className="font-mono text-12 text-fg-tertiary" title="Not estimated">–</span>
         )}
       </span>
       {showEpic && (
@@ -163,13 +163,13 @@ export function TicketRow({
       {needs ? (
         <Link
           href={needs.href}
-          className="relative z-10 inline-flex h-[26px] flex-none items-center rounded-md border border-pill-human-bg px-2.5 text-[12.5px] font-medium text-pill-human-fg hover:bg-pill-human-bg"
+          className="relative z-10 inline-flex h-[26px] flex-none items-center rounded-md border border-pill-human-bg px-2.5 text-13 font-medium text-pill-human-fg hover:bg-pill-human-bg"
           aria-label={`Open what ${t.key} needs`}
         >
           Open
         </Link>
       ) : (
-        <span className="w-[44px] flex-none text-right text-xs text-fg-tertiary" title={new Date(t.updated_at).toLocaleString()}>
+        <span className="w-[44px] flex-none text-right text-12 text-fg-tertiary" title={new Date(t.updated_at).toLocaleString()}>
           {shortAgo(t.updated_at)}
         </span>
       )}
@@ -187,18 +187,18 @@ export function CompactTicketRow({ t, needs }: { t: TicketSummary; needs?: Needs
     <div data-ticket-row={t.key} data-needs-you={needs ? true : undefined} className="relative flex h-[64px] items-center gap-3 px-4 active:bg-row-hover">
       <StatusGlyph state={t.status} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <Link href={`/tickets/${t.key}`} className="truncate text-[15px] font-medium text-fg after:absolute after:inset-0">
+        <Link href={`/tickets/${t.key}`} className="truncate text-15 font-medium text-fg after:absolute after:inset-0">
           <ViewTransition name={`ticket-title-${t.key}`} share="auto" default="none"><span>{t.title}</span></ViewTransition>
         </Link>
-        <span className="flex min-w-0 items-center gap-2 text-xs text-fg-tertiary">
+        <span className="flex min-w-0 items-center gap-2 text-12 text-fg-tertiary">
           <span className="flex-none font-mono">{t.key}</span>
           {t.priority !== "none" && <PriorityGlyph priority={t.priority} />}
           {t.estimate_points != null && <span className="flex-none font-mono" title={`${t.estimate_points} points`}>{t.estimate_points} pts</span>}
-          <StateText t={t} needs={needs} className="min-w-0 text-xs" />
+          <StateText t={t} needs={needs} className="min-w-0 text-12" />
         </span>
       </span>
       {needs ? (
-        <Link href={needs.href} className="relative z-10 inline-flex h-[36px] flex-none items-center rounded-md border border-pill-human-bg px-3 text-[13px] font-medium text-pill-human-fg">
+        <Link href={needs.href} className="relative z-10 inline-flex h-[36px] flex-none items-center rounded-md border border-pill-human-bg px-3 text-13 font-medium text-pill-human-fg">
           Open
         </Link>
       ) : (

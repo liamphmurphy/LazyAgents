@@ -326,7 +326,7 @@ export function TicketsScreen() {
   const chipH = compact ? "h-[32px]" : "h-[26px]";
   const filterBox = (
     <div className={cx("relative flex min-w-0 flex-col", compact ? "w-[260px]" : "w-[340px] max-lg:w-[260px]")}>
-      <label className={`flex ${chipH} items-center gap-1.5 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs text-fg-tertiary focus-within:border-accent`}>
+      <label className={`flex ${chipH} items-center gap-1.5 rounded-md border border-border-strong bg-surface-sunken px-2 text-12 text-fg-tertiary focus-within:border-accent`}>
         <Icon name="search" size={12} />
         <span className="sr-only">Filter tickets</span>
         <input
@@ -343,7 +343,7 @@ export function TicketsScreen() {
         )}
       </label>
       {resolved.unknown.length > 0 && (
-        <span id="ticket-filter-unknown" role="status" className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-md border border-border-float bg-surface-raised px-2 py-1 text-[11.5px] text-pill-blocked-fg shadow-sm">
+        <span id="ticket-filter-unknown" role="status" className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap rounded-md border border-border-float bg-surface-raised px-2 py-1 text-12 text-pill-blocked-fg shadow-sm">
           No match for {resolved.unknown.join(", ")}
         </span>
       )}
@@ -351,7 +351,7 @@ export function TicketsScreen() {
   );
   const filterControls = (
     <>
-      <button type="button" aria-pressed={ready} className={cx(`${chipH} rounded-sm border border-border-strong px-2 text-xs hover:bg-hover`, ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
+      <button type="button" aria-pressed={ready} className={cx(`${chipH} rounded-sm border border-border-strong px-2 text-12 hover:bg-hover`, ready && "bg-selected text-accent")} onClick={() => replaceParams((next) => { if (ready) next.delete("ready"); else { next.set("ready", "true"); next.set("view", "all"); } })}>Ready to dispatch</button>
       {blockedOnly && <FilterChip label="Only" value="Blocked ×" onClick={() => setParam("blocked", null)} title="Clear blocked filter" />}
       {unestimated && <FilterChip label="Only" value="Unestimated ×" onClick={() => setParam("unestimated", null)} title="Clear unestimated filter" />}
       <DropdownMenu.Root>
@@ -359,7 +359,7 @@ export function TicketsScreen() {
           <button
             type="button"
             aria-label={`Group by ${GROUP_NAME[group]}`}
-            className={cx(`inline-flex ${chipH} items-center overflow-hidden rounded-sm border text-xs hover:bg-hover`, group === "status" ? "border-border-strong" : "border-accent/55")}
+            className={cx(`inline-flex ${chipH} items-center overflow-hidden rounded-sm border text-12 hover:bg-hover`, group === "status" ? "border-border-strong" : "border-accent/55")}
           >
             <span className="flex h-full items-center border-r border-border-strong px-2 text-fg-tertiary">Group</span>
             <span className="flex items-center gap-1 px-2 text-fg">
@@ -370,7 +370,7 @@ export function TicketsScreen() {
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[200px]")}>
-            <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-[11.5px] text-fg-tertiary">Group by</DropdownMenu.Label>
+            <DropdownMenu.Label className="px-2 pb-1 pt-1.5 text-12 text-fg-tertiary">Group by</DropdownMenu.Label>
             <DropdownMenu.RadioGroup value={group} onValueChange={(g) => setParam("group", g === "status" ? null : g)}>
               {GROUPS.map((g) => (
                 <DropdownMenu.RadioItem key={g} value={g} className="flex h-[30px] cursor-default select-none items-center rounded-md px-2 outline-none data-[highlighted]:bg-hover">
@@ -466,7 +466,7 @@ export function TicketsScreen() {
               aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}
               className={cx("mb-3", g.needs && "mx-3 rounded-xl border border-border bg-surface-raised py-1 shadow-sm")}
             >
-              <h2 className={cx("flex h-8 items-center gap-2 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary", g.needs ? "px-3" : "px-4")}>
+              <h2 className={cx("flex h-8 items-center gap-2 text-11 font-medium uppercase tracking-[0.06em] text-fg-tertiary", g.needs ? "px-3" : "px-4")}>
                 <GroupLabel g={g} />
                 <span className="font-mono">{g.tickets.length}</span>
                 <span className="flex-1" />
@@ -481,7 +481,7 @@ export function TicketsScreen() {
       ) : (
         <div className="overflow-x-auto pb-32">
           <div className="min-w-[760px] px-3 pt-3">
-            <div className="flex h-7 items-center gap-3 px-3 text-[11.5px] text-fg-tertiary">
+            <div className="flex h-7 items-center gap-3 px-3 text-12 text-fg-tertiary">
               <input
                 type="checkbox"
                 aria-label={allSelected ? "Clear selection" : "Select all tickets"}
@@ -500,7 +500,7 @@ export function TicketsScreen() {
                 aria-label={`${groupLabelText(g)}, ${g.tickets.length}`}
                 className={cx("group/section mb-4", g.needs && "rounded-xl border border-border bg-surface-raised p-1 shadow-sm")}
               >
-                <h2 className="flex h-8 items-center gap-2 px-3 text-[11px] font-medium uppercase tracking-[0.06em] text-fg-tertiary">
+                <h2 className="flex h-8 items-center gap-2 px-3 text-11 font-medium uppercase tracking-[0.06em] text-fg-tertiary">
                   <GroupLabel g={g} />
                   <span className="font-mono">{g.tickets.length}</span>
                   <span className="flex-1" />
@@ -554,7 +554,7 @@ export function TicketsScreen() {
       {selectedKeys.length > 0 && boot.data && (
         <>
           <BulkBar keys={selectedKeys} agents={boot.data.agents} epics={projectEpics} onClear={() => setSelected(new Set())} onApply={applyBulk} saving={each.isPending} />
-          <p aria-hidden className="pointer-events-none fixed bottom-1 left-1/2 z-40 hidden -translate-x-1/2 whitespace-nowrap text-[11.5px] text-fg-tertiary md:block">
+          <p aria-hidden className="pointer-events-none fixed bottom-1 left-1/2 z-40 hidden -translate-x-1/2 whitespace-nowrap text-12 text-fg-tertiary md:block">
             <Kbd>x</Kbd> select · <Kbd>Shift+x</Kbd> range · <Kbd>j</Kbd>/<Kbd>k</Kbd> move · <Kbd>Enter</Kbd> open · <Kbd>Esc</Kbd> clear
           </p>
         </>

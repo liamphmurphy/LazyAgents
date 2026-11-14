@@ -13,7 +13,7 @@ type SpaceRef = Schemas["ChatSpaceRef"];
 /** "Health /" ahead of a space chat's title (mockup 2). */
 export function SpaceBreadcrumb({ space }: { space: SpaceRef }) {
   return (
-    <span className="flex flex-none items-center gap-[8px] text-[13px]">
+    <span className="flex flex-none items-center gap-[8px] text-13">
       <Link href={`/spaces/${space.id}`} className="flex items-center gap-[8px] rounded-md text-fg-secondary hover:text-fg" title={`Open ${space.name}`}>
         <SpaceTile name={space.name} color={space.color} />
         <span className="max-w-[180px] truncate">{space.name}</span>
@@ -23,7 +23,7 @@ export function SpaceBreadcrumb({ space }: { space: SpaceRef }) {
   );
 }
 
-const chip = "inline-flex h-[26px] flex-none items-center rounded-full border px-[12px] text-[12px]";
+const chip = "inline-flex h-[26px] flex-none items-center rounded-full border px-[12px] text-12";
 
 /** What the space gives this chat: its instructions, sources and memory, plus the project (mockup 2). */
 export function SpaceContextChips({ space, chat, disabled }: { space: SpaceRef; chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean }) {

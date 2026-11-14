@@ -26,14 +26,14 @@ export function ConnectorApprovalCards({ chatId, disabled }: { chatId: string; d
         const by = personaLook(a.persona);
         return (
           <div key={a.id} data-testid="connector-approval" className="flex flex-col gap-2 rounded-lg border border-pill-human-fg/35 bg-pill-human-bg px-3 py-2.5">
-            <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-fg">
+            <p className="flex flex-wrap items-center gap-1.5 text-13 text-fg">
               <PersonaAvatar persona={by} size={16} />
               <PersonaName persona={by} />
               <span>wants to use {a.connector_name}</span>
             </p>
             <div className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2">
-              <p className="font-mono text-[12.5px] text-fg-2">{a.tool}</p>
-              {Object.keys(a.arguments).length > 0 && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[12px] text-fg-tertiary">{JSON.stringify(a.arguments, null, 2)}</pre>}
+              <p className="font-mono text-13 text-fg-2">{a.tool}</p>
+              {Object.keys(a.arguments).length > 0 && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-12 text-fg-tertiary">{JSON.stringify(a.arguments, null, 2)}</pre>}
             </div>
             <div className="flex gap-2">
               <Button variant="primary" disabled={busy} onClick={() => decide.mutate({ id: a.id, decision: "allow" })}>Allow once</Button>
@@ -43,7 +43,7 @@ export function ConnectorApprovalCards({ chatId, disabled }: { chatId: string; d
           </div>
         );
       })}
-      {error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{error}</p>}
+      {error && <p role="alert" className="text-13 text-pill-blocked-fg">{error}</p>}
     </>
   );
 }
@@ -62,14 +62,14 @@ export function ConnectorRequests({ chatId, disabled }: { chatId: string; disabl
         const by = personaLook(p.proposed_by);
         return (
           <div key={p.id} data-testid="connector-proposal" className="flex max-w-[min(720px,100%)] flex-col gap-2 rounded-xl border border-border bg-surface px-3.5 py-3">
-            <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-tertiary">
+            <p className="flex flex-wrap items-center gap-1.5 text-12 text-fg-tertiary">
               <PersonaAvatar persona={by} size={16} />
               <PersonaName persona={by} />
               <span>wants to add a connector</span>
             </p>
-            <p className="text-[14px] font-medium text-fg">{p.name}</p>
-            <p className="break-all font-mono text-[12.5px] text-fg-secondary">{p.url}</p>
-            {p.reason && <p className="text-[13px] text-fg-secondary">{p.reason}</p>}
+            <p className="text-14 font-medium text-fg">{p.name}</p>
+            <p className="break-all font-mono text-13 text-fg-secondary">{p.url}</p>
+            {p.reason && <p className="text-13 text-fg-secondary">{p.reason}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" disabled={decline.isPending || !!disabled} onClick={() => decline.mutate(p.id)}>Decline</Button>
               <Button variant="primary" disabled={!!disabled} onClick={() => setReviewing(p)}>Review and connect</Button>
@@ -77,7 +77,7 @@ export function ConnectorRequests({ chatId, disabled }: { chatId: string; disabl
           </div>
         );
       })}
-      {error && <p role="alert" className="text-[12.5px] text-pill-blocked-fg">{error}</p>}
+      {error && <p role="alert" className="text-13 text-pill-blocked-fg">{error}</p>}
       {reviewing && <AddConnectorDialog proposal={reviewing} onClose={() => setReviewing(null)} />}
     </li>
   );

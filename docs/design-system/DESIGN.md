@@ -77,6 +77,17 @@ Mode and palette are independent. See [PALETTES.md](PALETTES.md) for the ten add
 
 The palette is taken from the Vesper mark: a dusk gradient from `--brand-deep` `#2B2366` through `--brand-violet` `#7864D9` to the evening star `--brand-star` `#F2A97E`. Neutrals carry a slight violet tint instead of pure grey, and the accent is the mark's violet lightened for contrast (`#9B8CFF` on `--bg` is about 7:1; `--text-on-accent` `#120F24` on it is about 6.8:1). The brand gradient is for the logo, the welcome glow and persona portraits only. It never fills a control and never stands for a state, so the peach star can't be mistaken for amber.
 
+### Dusk brand layer
+
+The mark's gradient (`--brand-deep` → `--brand-violet` → `--brand-star`) appears only on portraits and decoration, never on a control or as a state's colour, and always beside words that say what's happening (`globals.css`, "The Dusk brand layer"):
+
+* `dusk-aura`: a persona's portrait on the live chat status card while it works. A 2px dusk ring circles it and a violet glow breathes behind it. Off while it waits on you, is quiet or is stopping.
+* `dusk-shimmer`: the status line ("Gwen is thinking…") while it works. A band of starlight crosses the words.
+* `dusk-tile`: `EmptyState`'s icon tile, lit violet from the top-left with the mark's four-point star on its corner.
+* `live-sheen`: a neutral white sheen across a progress bar that's still moving (a ticket run, a run's plan, research). The bar keeps its state colour.
+
+Under reduced motion they hold still: the ring and tile stay, the shimmer becomes plain text, and the sheen goes.
+
 ### Workflow states
 
 | State | Token | Dark | Glyph |
@@ -159,6 +170,10 @@ The v0.1 mockups hard-coded a few component colors. They're now tokens with ligh
 | Mono | JetBrains Mono 11–12.5 | IDs, branches, models, numbers |
 | Metric | Inter 28, 600, −0.02em | KPI tiles |
 
+**Scale.** Every font size in the web app is one of 13 steps, as Tailwind utilities named by their px at the default Text size: `text-10` (glyph badges, micro tags), `text-11`, `text-12` (small, meta), `text-13` (body), `text-14` (reading), `text-15` (chat), `text-16`, `text-18`, `text-20`, `text-22`, `text-26` (display), `text-28` (metric), `text-32`. Tailwind's own sizes (`text-xs`…) and arbitrary sizes (`text-[12.5px]`) are not allowed; `lib/ui-conventions.test.mjs` fails on them. The steps set no line-height. In CSS, write `calc(Npx * var(--type-scale))`.
+
+**Text size.** Settings → Appearance → Text size (Small 0.92×, Default, Large 1.12×, Larger 1.25×) sets `data-text-size` on `<html>` before first paint, which sets `--type-scale`. The scale steps and the `type-*` shorthands (restated in `globals.css`) multiply by it; spacing and control heights don't, so check new fixed-height UI at Larger.
+
 Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline code: mono 12px, padding 1px 5px, radius 4px, `--selected` background, `--border-strong` border.
 
 ### Spacing, radius, sizing
@@ -215,6 +230,10 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 Tables and the ticket list sit in `overflow-x: auto` containers with a min-width (620–920px). Multi-column grids use `repeat(auto-fit/auto-fill, minmax(…))`.
 
 ---
+
+**Index screen header.** Every index screen (Designs, Slides, Learn, Library, Reports, Scheduled, Workflows, Settings and its sub-screens, Setup, Wiki) opens with `PageHeader` from `components/ui/page-header.tsx`: `type-display` title, a 14px secondary description at most 720px wide, primary actions on the right, and an optional row of tabs, switches and pickers under it. Detail screens (a ticket, run, epic, agent or page) and the dense work toolbars (Runs, Tickets) keep their own headers.
+
+**Empty states.** A screen or section with nothing in it uses `EmptyState` (`compact` in trays, cards and panel sections): icon, heading, one line on how things get here, and the action that adds the first one. A one-line hint inside a side panel ("No headings yet.") stays plain tertiary text.
 
 ## 4. Components
 
@@ -438,7 +457,7 @@ A reference sheet for:
 * system banners ("Managed runs are off", "Runner offline");
 * the reconnecting toast.
 
-Every screen uses these patterns rather than a blank page or a spinner.
+Every screen uses these patterns rather than a blank page or a spinner. In code (`components/ui/loading.tsx`): a section or value that's loading is a skeleton shaped like it (`Skeleton`, `LoadingLines`, `LoadingText`), and `Spinner` is only for a button or an inline step that's working. Skeletons stay hidden for their first 150ms so a fast load shows nothing but the content. "Loading…" never appears on screen; it's the screen-reader label. `lib/ui-conventions.test.mjs` enforces both.
 
 ---
 
@@ -464,11 +483,14 @@ Every screen uses these patterns rather than a blank page or a spinner.
   * `⌘K` command menu, `C` new ticket, `⌘↵` submit a composer, `⌘S` save a definition.
   * In the Inbox: `A` approve, `D` deny, `J`/`K` next and previous.
   * Bulk selection is checkbox on hover, then shift-click.
+* Never the browser's `confirm()` or `alert()`. Something cheap to keep (a saved link, a moment) is removed at once with an **Undo** toast (`undoable()` in `lib/toast.ts`): it hides now and the delete runs when the toast goes. Something that can't be taken back (cancelling a run, deleting a secret, discarding unsaved edits, approving many requests) asks first with `await confirmAction({ title, body, confirmLabel })` from `components/ui/confirm.tsx`: a verb on the confirm button, red for destructive, focus on Cancel.
+* Feedback for an action is a toast: `toast()` from `components/ui/toast.tsx` (store in `lib/toast.ts`) from any handler or hook. They stack bottom-centre (at most three, newest last), pause while hovered or focused, and errors stay longer. Inline errors next to a form field stay inline; a toast is for what just happened elsewhere or out of sight.
 * Dialogs trap focus, close on `esc`, and return focus to whatever opened them. The command menu uses `role="combobox"` with a `listbox` of `option`s.
 * Status must never rely on color alone. Glyph shapes differ (dashed, ring, half, three-quarter, filled) and pills always carry text.
 * Small text never goes dimmer than `--text-tertiary`.
 * Motion explains a change; it isn't decoration:
-  * Use the `--motion-*` tokens in `globals.css` and the shared classes (`motion-scrim`, `motion-dialog`, `motion-float`) or the helpers in `components/ui/motion.tsx`. Every Radix overlay animates.
+  * Use the `--motion-*` tokens in `globals.css` and the shared classes (`motion-scrim`, `motion-dialog`, `motion-float`, `motion-toast`) or the helpers in `components/ui/motion.tsx`. Every Radix overlay animates. Durations: `--motion-fast` 120ms (hover, colour; the default for any `transition-*`), `--motion-base` 200ms, `--motion-slow` 320ms, `--motion-exit` 140ms, `--motion-progress` 600ms (a bar filling). Curves: `--motion-ease` (default for `transition-*` and `ease-out`), `--motion-travel` (something moving between places), `--motion-spring`. In Tailwind, `duration-(--motion-base)`; a raw `duration-300` or `cubic-bezier()` fails `lib/ui-conventions.test.mjs`. `el.animate()` can't read a `var()`, which is why `motion.tsx` restates the curve.
+  * Live lists mark rows with `data-enter-key` and call `useEntrances(root)`: a row that arrives later (a new chat in history, something new in Needs you, a chat message) rises in; what's there on first paint or after the whole list is replaced stays still. Status pills and glyphs recolour over `--motion-base` instead of snapping. Every `<details>` opens by height.
   * Frequent actions stay under 150ms, entrances under 320ms, and exits are shorter than entrances. Move only `transform` and `opacity` unless the height or width is the point (`Collapse`, the sidebar).
   * Nothing replays on first paint or polling. Don't animate run logs, tables, keyboard row movement or streaming text.
   * Under `prefers-reduced-motion`, animations that something waits on run for 1ms; the rest are off.

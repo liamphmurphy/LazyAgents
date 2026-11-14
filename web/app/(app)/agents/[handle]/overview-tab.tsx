@@ -70,7 +70,7 @@ export function OverviewTab({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-fg-tertiary">No active runs.</p>
+              <p className="text-14 text-fg-tertiary">No active runs.</p>
             )}
           </Card>
           {detail.agent.kind === "main" && (
@@ -78,10 +78,10 @@ export function OverviewTab({
               {data.queue.length ? (
                 data.queue.map((t) => <WorkRow key={t.id} ticket={t} />)
               ) : (
-                <p className="p-4 text-sm text-fg-tertiary">No assigned tickets are waiting for dispatch.</p>
+                <p className="p-4 text-14 text-fg-tertiary">No assigned tickets are waiting for dispatch.</p>
               )}
               {data.queue_count > data.queue.length && (
-                <Link className="block px-4 py-3 text-xs text-accent" href={`/tickets?view=all&assignee=${handle}`}>
+                <Link className="block px-4 py-3 text-12 text-accent" href={`/tickets?view=all&assignee=${handle}`}>
                   View all assigned tickets →
                 </Link>
               )}
@@ -100,7 +100,7 @@ export function OverviewTab({
         action={
           <span className="flex items-center gap-2">
             {edited && (
-              <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onPreview}>
+              <Button variant="ghost" className="h-7 px-2 text-12" onClick={onPreview}>
                 Preview diff
               </Button>
             )}
@@ -128,15 +128,15 @@ export function OverviewTab({
             onChange={(e) => onChange({ ...draft, spec: { ...draft.spec, instructions: e.target.value } })}
           />
         ) : draft.spec.instructions.trim() ? (
-          <Markdown className="text-[13px]">{draft.spec.instructions}</Markdown>
+          <Markdown className="text-13">{draft.spec.instructions}</Markdown>
         ) : (
-          <p className="text-sm text-fg-tertiary">No instructions yet. Switch to Edit to write them.</p>
+          <p className="text-14 text-fg-tertiary">No instructions yet. Switch to Edit to write them.</p>
         )}
-        <p className="text-xs text-fg-tertiary">
+        <p className="text-12 text-fg-tertiary">
           Written to <code className="inline">AGENTS.md</code> in each run&apos;s workspace; a repo&apos;s own AGENTS.md is kept.
           {project && appendLines > 0 && ` In ${project.name}, the project override appends ${appendLines} line${appendLines === 1 ? "" : "s"}.`}
         </p>
-        <p className="text-xs text-fg-tertiary">Edits join the unsaved changes in the top bar; nothing is saved until you review the diff.</p>
+        <p className="text-12 text-fg-tertiary">Edits join the unsaved changes in the top bar; nothing is saved until you review the diff.</p>
       </Card>
     </div>
   );
@@ -177,7 +177,7 @@ export function ActivityTab({ handle }: { handle: string }) {
     <Card
       title="Recent runs"
       action={
-        <span className="text-xs text-fg-tertiary">
+        <span className="text-12 text-fg-tertiary">
           Cost per run · planning runs are in{" "}
           <Link href="/plans" className="text-accent">
             Plans
@@ -188,9 +188,9 @@ export function ActivityTab({ handle }: { handle: string }) {
     >
       {runs.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] border-collapse text-[13px]">
+          <table className="w-full min-w-[600px] border-collapse text-13">
             <thead>
-              <tr className="text-left text-[12px] text-fg-tertiary">
+              <tr className="text-left text-12 text-fg-tertiary">
                 <th className="px-4 py-2.5 font-normal">Status</th>
                 <th className="px-2 py-2.5 font-normal">Ticket</th>
                 <th className="px-2 py-2.5 font-normal">Started · elapsed</th>
@@ -207,17 +207,17 @@ export function ActivityTab({ handle }: { handle: string }) {
                     </td>
                     <td className="px-2 py-2.5">
                       <Link href={`/runs/${r.id}`} className="flex min-w-0 items-baseline gap-2 after:absolute after:inset-0">
-                        <span className="flex-none font-mono text-xs text-fg-secondary">{r.ticket.key}</span>
+                        <span className="flex-none font-mono text-12 text-fg-secondary">{r.ticket.key}</span>
                         <span className="truncate font-medium">{r.ticket.title}</span>
                       </Link>
-                      <span className="block font-mono text-[11px] text-fg-tertiary">
+                      <span className="block font-mono text-11 text-fg-tertiary">
                         {r.model} · {r.tool_calls} tool{r.tool_calls === 1 ? "" : "s"}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-2 py-2.5 align-top text-xs text-fg-secondary">
+                    <td className="whitespace-nowrap px-2 py-2.5 align-top text-12 text-fg-secondary">
                       {ago(r.started_at)} · {duration(r.started_at, r.ended_at)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right align-top font-mono text-xs">{r.cost_source && r.cost_source !== "unknown" ? runCost(r.cost_usd, r.cost_source) : "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right align-top font-mono text-12">{r.cost_source && r.cost_source !== "unknown" ? runCost(r.cost_usd, r.cost_source) : "—"}</td>
                   </tr>
                 );
               })}
@@ -233,12 +233,12 @@ export function ActivityTab({ handle }: { handle: string }) {
         <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
           Previous
         </Button>
-        <span className="font-mono text-xs text-fg-tertiary">{runs.length ? `${offset + 1}–${offset + runs.length}` : "0 runs"}</span>
+        <span className="font-mono text-12 text-fg-tertiary">{runs.length ? `${offset + 1}–${offset + runs.length}` : "0 runs"}</span>
         <Button disabled={!query.data.has_more} onClick={() => setOffset(offset + PAGE)}>
           Next
         </Button>
       </div>
-      <p className="border-t border-border-subtle px-4 py-2.5 text-xs text-fg-tertiary">
+      <p className="border-t border-border-subtle px-4 py-2.5 text-12 text-fg-tertiary">
         Each row opens the run log. Cost is the harness-reported or priced cost; unpriced runs show &ldquo;—&rdquo;.
       </p>
     </Card>

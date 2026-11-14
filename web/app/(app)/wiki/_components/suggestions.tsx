@@ -35,7 +35,7 @@ function collapse(lines: DiffLine[], ctx = 2): Shown[] {
 export function SuggestionDiff({ s }: { s: WikiSuggestion }) {
   const lines = collapse(diffLines(s.current_body_md, s.body_md));
   return (
-    <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border bg-surface-sunken py-2 font-mono text-xs leading-relaxed">
+    <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border bg-surface-sunken py-2 font-mono text-12 leading-relaxed">
       {lines.map((l, i) =>
         l.op === "skip" ? (
           <div key={i} className="select-none px-3 text-fg-tertiary">
@@ -88,16 +88,16 @@ export function SuggestionCard({ s, showPage }: { s: WikiSuggestion; showPage?: 
                 {" "}
                 to{" "}
                 {s.new_page ? (
-                  <span className="font-mono text-[12.5px]">{s.path}</span>
+                  <span className="font-mono text-13">{s.path}</span>
                 ) : (
-                  <Link href={wikiHref(s.path)} className="font-mono text-[12.5px] underline-offset-2 hover:underline">
+                  <Link href={wikiHref(s.path)} className="font-mono text-13 underline-offset-2 hover:underline">
                     {s.path}
                   </Link>
                 )}
               </>
             )}
           </span>
-          <span className="text-[12.5px] text-fg-secondary">
+          <span className="text-13 text-fg-secondary">
             {s.note || "No note"} · {timelineTime(s.created_at)}
             {s.stale && " · the page changed since; accepting replaces those changes"}
           </span>
@@ -117,7 +117,7 @@ export function SuggestionCard({ s, showPage }: { s: WikiSuggestion; showPage?: 
         </div>
       </div>
       {open && <SuggestionDiff s={s} />}
-      {decide.isError && <p className="text-xs text-pill-blocked-fg">{decide.error.message}</p>}
+      {decide.isError && <p className="text-12 text-pill-blocked-fg">{decide.error.message}</p>}
     </div>
   );
 }

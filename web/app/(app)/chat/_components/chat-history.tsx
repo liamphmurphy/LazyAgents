@@ -16,6 +16,7 @@ import { useHarnessHealth } from "@/components/domain/setup";
 import { RestoreChat } from "./restore";
 import { PersonaAvatar, PersonaAvatarButton, PersonaStack, PersonaStrip, personaLook, usePersonaActivity, usePersonaFilter } from "./persona";
 import { hoverReveal } from "@/lib/reveal";
+import { useEntrances } from "@/components/ui/motion";
 
 type Chat = Schemas["ChatSession"];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -52,7 +53,7 @@ export function NewConversationButton({ id, rail }: { id?: string; rail?: boolea
           "disabled:cursor-not-allowed disabled:opacity-50",
           rail
             ? "grid size-[30px] place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover"
-            : "flex h-[34px] w-full items-center gap-2 rounded-[9px] border border-accent/35 bg-accent-soft px-3 text-[13.5px] font-semibold text-accent hover:brightness-110",
+            : "flex h-[34px] w-full items-center gap-2 rounded-[9px] border border-accent/35 bg-accent-soft px-3 text-14 font-semibold text-accent hover:brightness-110",
         )}
       >
         <Icon name="plus" size={15} strokeWidth={1.7} />
@@ -152,7 +153,7 @@ function RowPersonas({ chat, all }: { chat: Chat; all: boolean }) {
 
 /** When the conversation was last active, right-aligned on its one-line row. */
 function RowAge({ chat }: { chat: Chat }) {
-  return <time dateTime={chat.last_message_at ?? chat.created_at} className="flex-none text-xs text-fg-tertiary">{shortAgo(chat.last_message_at ?? chat.created_at)}</time>;
+  return <time dateTime={chat.last_message_at ?? chat.created_at} className="flex-none text-12 text-fg-tertiary">{shortAgo(chat.last_message_at ?? chat.created_at)}</time>;
 }
 
 /** Trash button that asks first, inline in the row; deleting can't be undone. */
@@ -163,20 +164,20 @@ function DeleteChat({ chat, onDeleted }: { chat: Chat; onDeleted: () => void }) 
   if (!asking) return <IconButton icon="trash" label={`Delete ${label}`} onClick={() => setAsking(true)} />;
   return (
     <div role="group" aria-label={`Confirm delete ${label}`} className="flex basis-full flex-wrap items-center gap-1.5 px-2 pb-1.5">
-      <span className="flex-1 text-xs text-fg">Delete this conversation? This can’t be undone.</span>
+      <span className="flex-1 text-12 text-fg">Delete this conversation? This can’t be undone.</span>
       <Button
         variant="primary"
-        className="!h-6 bg-state-blocked !px-2 !text-xs"
+        className="!h-6 bg-state-blocked !px-2 !text-12"
         disabled={del.isPending}
         // mutateAsync: the row unmounts when the list refetches.
         onClick={() => del.mutateAsync(chat.id).then(onDeleted, () => undefined)}
       >
         Delete
       </Button>
-      <Button variant="outline" className="!h-6 !px-2 !text-xs" onClick={() => setAsking(false)}>
+      <Button variant="outline" className="!h-6 !px-2 !text-12" onClick={() => setAsking(false)}>
         Cancel
       </Button>
-      {del.isError && <p role="alert" className="basis-full text-xs text-pill-blocked-fg">{errorText(del.error)}</p>}
+      {del.isError && <p role="alert" className="basis-full text-12 text-pill-blocked-fg">{errorText(del.error)}</p>}
     </div>
   );
 }
@@ -188,7 +189,7 @@ function ArchivedRow({ chat, active, onDeleted, all }: { chat: Chat; active: boo
       <Link
         href={`/chat/${chat.id}?view=archived`}
         aria-current={active ? "page" : undefined}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-13"
       >
         <RowPersonas chat={chat} all={all} />
         <span className="min-w-0 flex-1 truncate">{chatTitle(chat)}</span>
@@ -215,7 +216,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
     update.mutateAsync({ id: chat.id, patch: { revision: chat.revision, title: t } }).then(() => setEditing(false), () => undefined);
   }
   return (
-    <li className="flex flex-col">
+    <li data-enter-key={chat.id} className="flex flex-col">
       {editing ? (
         <form onSubmit={save} className="flex items-center gap-1 px-1 py-1">
           <TextInput
@@ -234,7 +235,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
           <Link
             href={`/chat/${chat.id}`}
             aria-current={active ? "page" : undefined}
-            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-[13px]"
+            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-13"
           >
             <RowPersonas chat={chat} all={all} />
             <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -249,7 +250,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
               )}
               {mark === "running" && <span className="sr-only"> (running)</span>}
               {mark === "unread" && <span className="sr-only"> (unread)</span>}
-              {chat.state === "failed" && <span className="text-xs text-pill-blocked-fg">Failed</span>}
+              {chat.state === "failed" && <span className="text-12 text-pill-blocked-fg">Failed</span>}
             </span>
             <RowAge chat={chat} />
           </Link>
@@ -269,7 +270,7 @@ function ChatRow({ chat, active, onLeave, all }: { chat: Chat; active: boolean; 
         </div>
       )}
       {update.isError && (
-        <p role="alert" className="px-2 pb-1 text-xs text-pill-blocked-fg">
+        <p role="alert" className="px-2 pb-1 text-12 text-pill-blocked-fg">
           {errorText(update.error)}
         </p>
       )}
@@ -282,7 +283,7 @@ const MATCH = /(\uE000[^\uE001]*\uE001)/;
 /** A search hit's excerpt with its matches marked; the excerpt is only ever text. */
 function Snippet({ text }: { text: string }) {
   return (
-    <span className="line-clamp-2 text-xs text-fg-secondary">
+    <span className="line-clamp-2 text-12 text-fg-secondary">
       {text.split(MATCH).map((part, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-accent-soft px-px text-fg">{part.slice(1, -1)}</mark> : part))}
     </span>
   );
@@ -292,17 +293,17 @@ function Snippet({ text }: { text: string }) {
 function ChatSearchResults({ query, onPick }: { query: string; onPick: () => void }) {
   const results = useChatSearch(query);
   const hits = results.data?.hits ?? [];
-  if (query.trim().length < 2 || results.isPending) return <p className="px-2 py-1.5 text-xs text-fg-tertiary">{query.trim().length < 2 ? "Keep typing…" : "Searching…"}</p>;
-  if (results.isError) return <p role="alert" className="px-2 py-1.5 text-xs text-pill-blocked-fg">{errorText(results.error)}</p>;
-  if (hits.length === 0) return <p className="px-2 py-1.5 text-xs text-fg-tertiary">No messages match.</p>;
+  if (query.trim().length < 2 || results.isPending) return <p className="px-2 py-1.5 text-12 text-fg-tertiary">{query.trim().length < 2 ? "Keep typing…" : "Searching…"}</p>;
+  if (results.isError) return <p role="alert" className="px-2 py-1.5 text-12 text-pill-blocked-fg">{errorText(results.error)}</p>;
+  if (hits.length === 0) return <p className="px-2 py-1.5 text-12 text-fg-tertiary">No messages match.</p>;
   return (
     <ul aria-label="Search results" className="flex flex-col gap-0.5">
       {hits.map((h) => (
         <li key={h.message_id} data-testid="chat-search-hit">
           <Link href={`/chat/${h.chat_id}?message=${h.message_id}`} onClick={onPick} className="flex flex-col gap-0.5 rounded-md px-2 py-1.5 hover:bg-hover">
-            <span className="truncate text-[13px] text-fg">{h.chat_title || "New conversation"}</span>
+            <span className="truncate text-13 text-fg">{h.chat_title || "New conversation"}</span>
             <Snippet text={h.snippet} />
-            <span className="truncate text-xs text-fg-tertiary">{h.role === "user" ? "You" : (h.persona_name ?? "Assistant")}{h.archived ? " · archived" : ""}</span>
+            <span className="truncate text-12 text-fg-tertiary">{h.role === "user" ? "You" : (h.persona_name ?? "Assistant")}{h.archived ? " · archived" : ""}</span>
           </Link>
         </li>
       ))}
@@ -352,9 +353,9 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
   const headingRow = (label: string) => (
     <div className="flex items-center gap-0.5 pb-1 pl-2">
       {finding ? (
-        <TextInput aria-label="Find in chats" placeholder="Find in chats" autoFocus className="h-[26px] min-w-0 flex-1 text-xs" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && stopFinding()} />
+        <TextInput aria-label="Find in chats" placeholder="Find in chats" autoFocus className="h-[26px] min-w-0 flex-1 text-12" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && stopFinding()} />
       ) : (
-        <h3 className="min-w-0 flex-1 truncate text-xs font-medium text-fg-tertiary">{label}</h3>
+        <h3 className="min-w-0 flex-1 truncate text-12 font-medium text-fg-tertiary">{label}</h3>
       )}
       <IconButton icon="search" size={24} label="Find in chats" aria-pressed={finding} onClick={() => (finding ? stopFinding() : setFinding(true))} />
       <IconButton icon="folder" size={24} label="Archived conversations" aria-pressed={view === "archived"} onClick={() => setView(view === "archived" ? "active" : "archived")} />
@@ -363,14 +364,17 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
   const groups = list && view === "active" && !query ? groupByDay(list) : [];
   // While finding, the row stays on top, so the box keeps focus as results replace the days.
   const onTop = finding || groups.length === 0;
+  // A conversation started elsewhere (another tab, a persona) rises in at the top.
+  const nav = useRef<HTMLElement>(null);
+  useEntrances(nav);
   return (
     <aside aria-label="Chat history" className={cx("flex min-h-0 flex-1 flex-col gap-1.5", !fill && "max-[799px]:max-h-64")}>
       {fill && (
-        <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-[44px] w-full !text-[16px]" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <TextInput type="search" aria-label="Search chats" placeholder="Search chats" className="!h-[44px] w-full !text-16" value={query} onChange={(e) => setQuery(e.target.value)} />
       )}
       <PersonaStrip filter={{ ...filter, set: pick }} activity={activity} />
       {between}
-      <nav aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
+      <nav ref={nav} aria-label="Chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
         {onTop && headingRow(view === "archived" ? "Archived" : "Chats")}
         {query ? (
           <ChatSearchResults query={deferredQuery} onPick={() => undefined} />
@@ -384,15 +388,15 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
           </div>
         ) : list.length === 0 ? (
           view === "active" && picked ? (
-            <div className="flex flex-col items-start gap-1 px-2 py-4 text-[13px]">
+            <div className="flex flex-col items-start gap-1 px-2 py-4 text-13">
               <p className="text-fg-secondary">No conversations with {picked.name} yet.</p>
               <button type="button" className="text-accent hover:underline disabled:opacity-50" disabled={create.isPending} onClick={() => startWith(picked.id)}>
                 Start one with {picked.name} →
               </button>
-              {create.isError && <p role="alert" className="text-xs text-pill-blocked-fg">{errorText(create.error)}</p>}
+              {create.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(create.error)}</p>}
             </div>
           ) : (
-            <p className="px-2 py-4 text-[13px] text-fg-secondary">
+            <p className="px-2 py-4 text-13 text-fg-secondary">
               {view === "archived" ? "No archived conversations." : "No conversations yet."}
             </p>
           )
@@ -403,13 +407,13 @@ export function ChatHistory({ id, viewed, between, fill }: { id?: string; viewed
                 <ArchivedRow key={c.id} chat={c} active={c.id === id} all={all} onDeleted={() => leave(c.id)} />
               ))}
             </ul>
-            <p className="px-2 py-3 text-xs text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
+            <p className="px-2 py-3 text-12 text-fg-tertiary">Archived conversations are read-only. Restore one to continue it.</p>
           </>
         ) : (
           <div className="flex flex-col gap-3">
             {groups.map((g, i) => (
               <section key={g.label} aria-label={g.label} className="flex flex-col gap-px">
-                {i === 0 && !onTop ? headingRow(g.label) : <h3 className="px-2 pb-1 text-xs font-medium text-fg-tertiary">{g.label}</h3>}
+                {i === 0 && !onTop ? headingRow(g.label) : <h3 className="px-2 pb-1 text-12 font-medium text-fg-tertiary">{g.label}</h3>}
                 <ul className="flex flex-col gap-px">
                   {g.chats.map((c) => (
                     <ChatRow key={c.id} chat={c} active={c.id === id} all={all} onLeave={() => leave(c.id)} />

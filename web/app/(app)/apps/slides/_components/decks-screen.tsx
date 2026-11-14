@@ -15,9 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { TopBar } from "@/components/shell/topbar";
+import { PageHeader } from "@/components/ui/page-header";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Please try again.");
-const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
+const menuItem = "flex cursor-pointer select-none items-center rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
 
 /**
  * Text that reads like a request rather than a title starts the deck and asks
@@ -83,20 +84,17 @@ export function DecksScreen() {
       <TopBar crumbs={[{ label: "Apps" }, { label: "Slides" }]} />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1000px] flex-col gap-5 px-6 py-6 max-sm:px-4">
-          <div>
-            <h1 className="type-display text-fg">Slides</h1>
-            <p className="mt-1 text-[13px] text-fg-secondary">Decks you build and present with a persona. Each deck keeps its own chat.</p>
-          </div>
+          <PageHeader title="Slides" description="Decks you build and present with a persona. Each deck keeps its own chat." />
           <form onSubmit={start} className="flex flex-wrap gap-2 rounded-xl border border-border-strong bg-surface p-1 pl-3 focus-within:border-accent">
             <input
               aria-label="New deck title or brief"
-              className="min-w-[200px] flex-1 bg-transparent text-[13.5px] text-fg outline-none placeholder:text-fg-tertiary"
+              className="min-w-[200px] flex-1 bg-transparent text-14 text-fg outline-none placeholder:text-fg-tertiary"
               placeholder="Start a deck: give it a title, or describe it and your persona drafts the slides…"
               maxLength={2000}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
-            <label className="flex items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-[12px] text-fg-2 max-sm:order-last max-sm:w-full">
+            <label className="flex items-center gap-2 rounded-md border border-border-strong bg-surface-sunken px-2 text-12 text-fg-2 max-sm:order-last max-sm:w-full">
               <span aria-hidden className="h-3.5 w-5 rounded-[3px] border border-border-strong" style={{ background: THEMES[theme].colors.background }} />
               <span className="sr-only">Theme</span>
               <select aria-label="Theme" className="h-[26px] bg-transparent outline-none" value={theme} onChange={(e) => setTheme(e.target.value as ThemeKey)}>
@@ -111,13 +109,13 @@ export function DecksScreen() {
               {create.isPending ? "Creating…" : "New deck"}
             </Button>
           </form>
-          {create.isError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{errorText(create.error)}</p>}
+          {create.isError && <p role="alert" className="text-12 text-pill-blocked-fg">{errorText(create.error)}</p>}
           <StartChooser value={from} onChange={setFrom} theme={theme} fonts={fonts} />
           {from === "outline" && (
             <form onSubmit={start} className="flex flex-col gap-2 rounded-xl border border-accent bg-surface p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <label htmlFor="deck-outline" className="text-[12px] font-medium text-fg-2">Outline</label>
-                <span className="text-[11.5px] text-fg-tertiary">One slide per top-level line · indented lines become its points</span>
+                <label htmlFor="deck-outline" className="text-12 font-medium text-fg-2">Outline</label>
+                <span className="text-12 text-fg-tertiary">One slide per top-level line · indented lines become its points</span>
               </div>
               <textarea
                 id="deck-outline"
@@ -125,16 +123,16 @@ export function DecksScreen() {
                 rows={6}
                 maxLength={MAX_OUTLINE}
                 placeholder={"Q3 roadmap\nWhy now\n  - churn up 4% in EU\nPlan: three bets"}
-                className="resize-y rounded-md border border-border bg-surface-sunken px-3 py-2 font-mono text-[12.5px] text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
+                className="resize-y rounded-md border border-border bg-surface-sunken px-3 py-2 font-mono text-13 text-fg outline-none placeholder:text-fg-tertiary focus:border-accent"
                 value={outline}
                 onChange={(e) => setOutline(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) start();
                 }}
               />
-              {outlineError && <p role="alert" className="text-[12px] text-pill-blocked-fg">{outlineError}</p>}
+              {outlineError && <p role="alert" className="text-12 text-pill-blocked-fg">{outlineError}</p>}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11.5px] text-fg-secondary">The deck opens with its title slide; your persona drafts the rest as suggestions. Nothing is added until you accept.</p>
+                <p className="text-12 text-fg-secondary">The deck opens with its title slide; your persona drafts the rest as suggestions. Nothing is added until you accept.</p>
                 <Button type="submit" variant="primary" disabled={create.isPending || !outline.trim()}>
                   {create.isPending ? "Creating…" : "✦ Create & draft"}
                 </Button>
@@ -143,8 +141,8 @@ export function DecksScreen() {
           )}
 
           <div className="flex items-baseline justify-between">
-            <h2 className="text-[12.5px] font-medium text-fg-secondary">Recent</h2>
-            <span className="text-[12px] text-fg-tertiary">Sorted by last edited</span>
+            <h2 className="text-13 font-medium text-fg-secondary">Recent</h2>
+            <span className="text-12 text-fg-tertiary">Sorted by last edited</span>
           </div>
           {decks.isError ? (
             <Banner tone="blocked" title="Couldn’t load your decks" actions={<Button onClick={() => void decks.refetch()}>Retry</Button>}>
@@ -215,8 +213,8 @@ function StartChooser({ value, onChange, theme, fonts }: { value: Start; onChang
   return (
     <section aria-labelledby="start-from" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h2 id="start-from" className="text-[12.5px] font-medium text-fg-secondary">Start from</h2>
-        <span className="text-[12px] text-fg-tertiary max-sm:hidden">Previews use the theme you picked</span>
+        <h2 id="start-from" className="text-13 font-medium text-fg-secondary">Start from</h2>
+        <span className="text-12 text-fg-tertiary max-sm:hidden">Previews use the theme you picked</span>
       </div>
       <div ref={group} role="radiogroup" aria-labelledby="start-from" onKeyDown={onKey} className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-2.5">
         {options.map((o) => {
@@ -240,7 +238,7 @@ function StartChooser({ value, onChange, theme, fonts }: { value: Start; onChang
                 {o.deck ? (
                   <SlideSvg deck={{ ...o.deck, theme: THEMES[theme] }} slide={o.deck.slides[0]} assetUrl={() => ""} fontsReady={fonts} className="block aspect-video w-full" label={`${o.label} preview`} />
                 ) : (
-                  <span aria-hidden className="block aspect-video w-full bg-surface-sunken px-2 py-1.5 font-mono text-[10px] leading-[1.45] text-fg-secondary">
+                  <span aria-hidden className="block aspect-video w-full bg-surface-sunken px-2 py-1.5 font-mono text-10 leading-[1.45] text-fg-secondary">
                     • Intro
                     <br />
                     &nbsp;&nbsp;– why now
@@ -248,10 +246,10 @@ function StartChooser({ value, onChange, theme, fonts }: { value: Start; onChang
                   </span>
                 )}
               </span>
-              <span className="mt-2 block truncate text-[12.5px] font-medium text-fg">{o.label}</span>
-              <span className="block text-[11px] text-fg-tertiary">{o.detail}</span>
+              <span className="mt-2 block truncate text-13 font-medium text-fg">{o.label}</span>
+              <span className="block text-11 text-fg-tertiary">{o.detail}</span>
               {on && (
-                <span aria-hidden className="absolute right-3 top-3 grid size-4 place-items-center rounded-full bg-accent text-[10px] text-[#fff]">
+                <span aria-hidden className="absolute right-3 top-3 grid size-4 place-items-center rounded-full bg-accent text-10 text-[#fff]">
                   ✓
                 </span>
               )}
@@ -259,7 +257,7 @@ function StartChooser({ value, onChange, theme, fonts }: { value: Start; onChang
           );
         })}
       </div>
-      {starters.isError && <p className="text-[12px] text-fg-tertiary">Starter decks couldn’t load; you can still start blank or from an outline.</p>}
+      {starters.isError && <p className="text-12 text-fg-tertiary">Starter decks couldn’t load; you can still start blank or from an outline.</p>}
     </section>
   );
 }
@@ -301,8 +299,8 @@ function DeckCard({ d, fonts }: { d: DeckSummary; fonts: boolean }) {
             <span className="block aspect-video w-full bg-[#fff]" />
           )}
         </span>
-        <span className="mt-3 block truncate pr-8 text-[13.5px] font-medium text-fg">{renaming ? " " : d.title}</span>
-        <span className="block text-[12px] text-fg-tertiary">
+        <span className="mt-3 block truncate pr-8 text-14 font-medium text-fg">{renaming ? " " : d.title}</span>
+        <span className="block text-12 text-fg-tertiary">
           Edited {ago(d.updated_at)} · {d.slide_count} {d.slide_count === 1 ? "slide" : "slides"}
         </span>
       </Link>
@@ -318,7 +316,7 @@ function DeckCard({ d, fonts }: { d: DeckSummary; fonts: boolean }) {
             autoFocus
             aria-label="Deck title"
             maxLength={200}
-            className="h-[26px] w-full rounded-md border border-accent bg-surface px-2 text-[13.5px] text-fg outline-none"
+            className="h-[26px] w-full rounded-md border border-accent bg-surface px-2 text-14 text-fg outline-none"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={commitRename}
@@ -352,13 +350,13 @@ function DeckCard({ d, fonts }: { d: DeckSummary; fonts: boolean }) {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      {error && <p role="alert" className="mt-1 text-[12px] text-pill-blocked-fg">{errorText(error)}</p>}
+      {error && <p role="alert" className="mt-1 text-12 text-pill-blocked-fg">{errorText(error)}</p>}
       <Dialog.Root open={confirming} onOpenChange={setConfirming}>
         <Dialog.Portal>
           <Dialog.Overlay className="motion-scrim fixed inset-0 z-40 bg-scrim" />
           <Dialog.Content className="motion-dialog fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100%-32px))] -translate-x-1/2 rounded-xl border border-border-float bg-surface-raised p-4 shadow-[var(--shadow-float)] outline-none">
             <Dialog.Title className="type-heading">Delete “{d.title}”?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-[13px] text-fg-secondary">The deck, its versions, its images and its chat are deleted. This can’t be undone.</Dialog.Description>
+            <Dialog.Description className="mt-2 text-13 text-fg-secondary">The deck, its versions, its images and its chat are deleted. This can’t be undone.</Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
               <Dialog.Close asChild>
                 <Button variant="ghost">Cancel</Button>

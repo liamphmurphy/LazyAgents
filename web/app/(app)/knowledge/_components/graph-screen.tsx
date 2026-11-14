@@ -7,7 +7,7 @@ import { bounds, layoutGraph } from "@/lib/knowledge-graph";
 import { pageHref } from "@/lib/knowledge";
 import { useNetwork } from "@/lib/api/knowledge-hooks";
 import { Icon } from "@/components/ui/icon";
-import { Skeleton } from "@/components/ui/primitives";
+import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import { StatusBar } from "./kit";
 import { useKnowledge, useKnowledgeTab } from "./shell";
 
@@ -78,7 +78,7 @@ export function GraphScreen() {
             <Skeleton className="h-full min-h-[300px] w-full" />
           </div>
         ) : placed.length === 0 ? (
-          <p className="p-8 text-sm text-fg-tertiary">No pages to draw yet.</p>
+          <EmptyState icon="graph" title="No pages to draw yet">Pages and the links between them appear here as you write.</EmptyState>
         ) : (
           <svg
             ref={svg}
@@ -129,26 +129,26 @@ export function GraphScreen() {
             </g>
           </svg>
         )}
-        <div className="absolute right-4 top-4 w-[260px] rounded-xl border border-border-strong bg-surface-raised p-4 text-[13px] shadow-[var(--shadow-float)]">
+        <div className="absolute right-4 top-4 w-[260px] rounded-xl border border-border-strong bg-surface-raised p-4 text-13 shadow-[var(--shadow-float)]">
           <p className="mb-3 flex items-center gap-2 font-semibold text-fg">
             <Icon name="sliders" size={14} /> Filters
           </p>
           <label className="mb-3 flex h-8 items-center gap-2 rounded-md border border-border-subtle bg-surface-sunken px-2.5 text-fg-tertiary">
             <Icon name="search" size={13} />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a page…" aria-label="Find a page" className="flex-1 bg-transparent text-xs text-fg outline-none" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a page…" aria-label="Find a page" className="flex-1 bg-transparent text-12 text-fg outline-none" />
           </label>
           <Toggle label="Orphans" on={orphans} onChange={setOrphans} />
           <Toggle label="Agent knowledge" on={agent} onChange={setAgent} />
-          <p className="mb-2 mt-3 border-t border-border-subtle pt-3 text-xs font-semibold text-fg">Groups</p>
+          <p className="mb-2 mt-3 border-t border-border-subtle pt-3 text-12 font-semibold text-fg">Groups</p>
           <ul className="space-y-1.5">
             {groups.map((g) => (
-              <li key={g.name} className="flex items-center gap-2 text-xs text-fg-2">
+              <li key={g.name} className="flex items-center gap-2 text-12 text-fg-2">
                 <span className="size-2.5 rounded-full" style={{ background: g.color }} />
                 path:{g.name}
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[11px] leading-relaxed text-fg-tertiary">Scroll to zoom, drag to pan. Private pages never show in a run&apos;s graph.</p>
+          <p className="mt-3 text-11 leading-relaxed text-fg-tertiary">Scroll to zoom, drag to pan. Private pages never show in a run&apos;s graph.</p>
         </div>
       </div>
       <StatusBar left={`${placed.length.toLocaleString()} pages · ${edges.length.toLocaleString()} links · ${unresolved} unresolved`} right={agent ? "Including agent knowledge" : "Graph of your knowledge"} />

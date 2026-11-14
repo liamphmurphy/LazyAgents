@@ -107,7 +107,7 @@ function Loaded({ page: p }: { page: Page }) {
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 flex-none items-center gap-2 px-6">
-          <nav aria-label="Folder" className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-tertiary">
+          <nav aria-label="Folder" className="flex min-w-0 flex-1 items-center gap-1.5 text-12 text-fg-tertiary">
             {crumbs.map((c, i) => (
               <span key={i} className="flex min-w-0 items-center gap-1.5">
                 {i > 0 && <span className="text-fg-tertiary/60">/</span>}
@@ -116,8 +116,8 @@ function Loaded({ page: p }: { page: Page }) {
             ))}
           </nav>
           <AudienceMenu audience={p.audience} onChange={(audience) => save.mutate({ audience })} />
-          <button onClick={() => openPanel("history")} className="flex h-[26px] items-center gap-2 rounded-full border border-border bg-surface pl-1.5 pr-3 text-xs font-medium text-fg-secondary hover:border-border-strong">
-            <span className="grid size-4 place-items-center rounded-full bg-[#3FC1B033] text-[9px] font-bold text-[#3FC1B0]">{persona[0]}</span>
+          <button onClick={() => openPanel("history")} className="flex h-[26px] items-center gap-2 rounded-full border border-border bg-surface pl-1.5 pr-3 text-12 font-medium text-fg-secondary hover:border-border-strong">
+            <span className="grid size-4 place-items-center rounded-full bg-[#3FC1B033] text-10 font-bold text-[#3FC1B0]">{persona[0]}</span>
             {modeLabel}
           </button>
           <button
@@ -137,7 +137,7 @@ function Loaded({ page: p }: { page: Page }) {
             <PropertiesBlock properties={p.properties} onChange={setProps} />
             {!!p.properties.query && (
               <div className="mb-8">
-                {query.data ? <QueryTable table={query.data} /> : query.error ? <p className="text-xs text-state-blocked">{query.error.message}</p> : <Skeleton className="h-24 w-full" />}
+                {query.data ? <QueryTable table={query.data} /> : query.error ? <p className="text-12 text-state-blocked">{query.error.message}</p> : <Skeleton className="h-24 w-full" />}
               </div>
             )}
             <ReviewList page={p} direct={p.direct} />
@@ -223,7 +223,7 @@ function TitleField({ title, onRename }: { title: string; onRename: (t: string) 
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       aria-label="Title"
       placeholder="Untitled"
-      className="mb-5 w-full bg-transparent text-[30px] font-bold tracking-[-0.02em] text-fg outline-none placeholder:text-fg-tertiary"
+      className="mb-5 w-full bg-transparent text-28 font-bold tracking-[-0.02em] text-fg outline-none placeholder:text-fg-tertiary"
     />
   );
 }
@@ -246,21 +246,21 @@ function PropertiesBlock({ properties, onChange }: { properties: Page["propertie
   };
   if (!rows.length && !adding)
     return (
-      <button onClick={() => setAdding(true)} className="mb-6 flex items-center gap-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+      <button onClick={() => setAdding(true)} className="mb-6 flex items-center gap-1.5 text-12 text-fg-tertiary hover:text-fg-secondary">
         <Icon name="plus" size={12} /> Add property
       </button>
     );
   return (
     <section aria-label="Properties" className="mb-6 border-b border-border-subtle pb-4">
-      <p className="mb-2 text-xs font-semibold text-fg-tertiary">Properties</p>
+      <p className="mb-2 text-12 font-semibold text-fg-tertiary">Properties</p>
       <dl className="space-y-1">
         {rows.map(([k, v]) => (
           <div key={k} className="group grid grid-cols-[140px_1fr_20px] items-center gap-2 rounded-md py-1 hover:bg-hover/50">
-            <dt className="flex items-center gap-2 text-[13px] text-fg-tertiary">
+            <dt className="flex items-center gap-2 text-13 text-fg-tertiary">
               <Icon name={k === "tags" ? "bookmark" : Array.isArray(v) ? "epics" : "edit"} size={13} />
               {k}
             </dt>
-            <dd className="flex flex-wrap items-center gap-1.5 text-[13px] text-fg-2">
+            <dd className="flex flex-wrap items-center gap-1.5 text-13 text-fg-2">
               {Array.isArray(v) ? v.map((x, i) => (k === "tags" ? <Tag key={i}>#{String(x)}</Tag> : <span key={i}>{String(x)}</span>)) : <PropValue v={v} />}
             </dd>
             <button
@@ -279,21 +279,21 @@ function PropertiesBlock({ properties, onChange }: { properties: Page["propertie
       </dl>
       {adding ? (
         <div className="mt-2 flex items-center gap-2">
-          <input autoFocus value={key} onChange={(e) => setKey(e.target.value)} placeholder="property" aria-label="Property name" className="h-7 w-32 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs text-fg outline-none focus:border-accent" />
+          <input autoFocus value={key} onChange={(e) => setKey(e.target.value)} placeholder="property" aria-label="Property name" className="h-7 w-32 rounded-md border border-border-strong bg-surface-sunken px-2 text-12 text-fg outline-none focus:border-accent" />
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             placeholder={key === "tags" ? "campaign, saltmere" : "value"}
             aria-label="Property value"
-            className="h-7 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 text-xs text-fg outline-none focus:border-accent"
+            className="h-7 flex-1 rounded-md border border-border-strong bg-surface-sunken px-2 text-12 text-fg outline-none focus:border-accent"
           />
-          <button onClick={add} className="text-xs font-medium text-accent">
+          <button onClick={add} className="text-12 font-medium text-accent">
             Add
           </button>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} className="mt-1 flex items-center gap-1.5 text-xs text-fg-tertiary hover:text-fg-secondary">
+        <button onClick={() => setAdding(true)} className="mt-1 flex items-center gap-1.5 text-12 text-fg-tertiary hover:text-fg-secondary">
           <Icon name="plus" size={12} /> Add property
         </button>
       )}
@@ -319,10 +319,10 @@ function Embeds({ page }: { page: Page }) {
   if (!page.embeds.length) return null;
   return (
     <section aria-label="Embeds" className="mt-10 space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Embedded in this page</p>
+      <p className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Embedded in this page</p>
       {page.embeds.map((e) => (
         <figure key={e.ref} className="overflow-hidden rounded-xl border border-border bg-surface">
-          <figcaption className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-xs text-fg-tertiary">
+          <figcaption className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-12 text-fg-tertiary">
             <Icon name={e.kind === "image" || e.content_type?.startsWith("image/") ? "library" : e.kind === "design" ? "designs" : "link"} size={12} />
             <span className="truncate">{e.title ?? e.ref}</span>
             {!e.available && <span className="text-state-human">not found</span>}
@@ -341,7 +341,7 @@ function Embeds({ page }: { page: Page }) {
             ) : e.content_type?.startsWith("audio/") ? (
               <audio src={e.url} controls className="w-full p-3" />
             ) : e.markdown ? (
-              <div className="border-l-2 border-border-strong px-4 py-3 text-sm">
+              <div className="border-l-2 border-border-strong px-4 py-3 text-14">
                 <Markdown>{e.markdown}</Markdown>
               </div>
             ) : null)}
@@ -359,7 +359,7 @@ function AudienceMenu({ audience, onChange }: { audience: Audience; onChange: (a
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "w-[300px] p-2")}>
-          <DropdownMenu.Label className="px-2 pb-2 pt-1 text-[13px] font-semibold">Who can see this page</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-2 pb-2 pt-1 text-13 font-semibold">Who can see this page</DropdownMenu.Label>
           {(Object.keys(AUDIENCE) as Audience[]).map((a) => (
             <DropdownMenu.Item key={a} disabled={a === "agent"} onSelect={() => a !== "agent" && a !== audience && onChange(a)} className={cx(item, a === audience && "bg-selected")}>
               <span className={cx("grid size-7 flex-none place-items-center rounded-lg", AUDIENCE[a].cls)}>
@@ -367,12 +367,12 @@ function AudienceMenu({ audience, onChange }: { audience: Audience; onChange: (a
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold">{AUDIENCE[a].label}</span>
-                <span className="block text-xs text-fg-tertiary">{AUDIENCE[a].detail}</span>
+                <span className="block text-12 text-fg-tertiary">{AUDIENCE[a].detail}</span>
               </span>
               {a === audience && <Icon name="check" size={14} className="text-accent" />}
             </DropdownMenu.Item>
           ))}
-          <p className="px-2 pt-2 text-[11px] text-fg-tertiary">Only you can change this. Agents can&apos;t.</p>
+          <p className="px-2 pt-2 text-11 text-fg-tertiary">Only you can change this. Agents can&apos;t.</p>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

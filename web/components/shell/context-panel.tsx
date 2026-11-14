@@ -48,7 +48,7 @@ export function ContextPanel({ onClose, children }: { onClose: () => void; child
   return (
     <aside aria-label="Context" className="flex w-[320px] flex-none flex-col overflow-y-auto border-l border-border-subtle bg-sidebar/40 max-lg:w-[280px]">
       <div className="flex items-center justify-between px-4 pb-1 pt-3">
-        <span className="text-[13px] font-semibold">Context</span>
+        <span className="text-13 font-semibold">Context</span>
         <button type="button" onClick={onClose} aria-label="Hide context" title="Hide context" className="grid size-7 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg">
           <Icon name="sidebar" size={14} />
         </button>
@@ -61,7 +61,7 @@ export function ContextPanel({ onClose, children }: { onClose: () => void; child
 export function ContextSection({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2 border-b border-border-subtle px-4 py-3.5 last:border-b-0">
-      <h2 className="flex items-center justify-between text-xs font-medium text-fg-tertiary">
+      <h2 className="flex items-center justify-between text-12 font-medium text-fg-tertiary">
         {title}
         {aside && <span className="font-mono">{aside}</span>}
       </h2>

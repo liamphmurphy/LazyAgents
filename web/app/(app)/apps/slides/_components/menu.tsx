@@ -8,10 +8,10 @@ import { parseHex } from "@/lib/slides/edit";
 import { THEME_COLORS, resolveColor, type ColorRef, type Theme } from "@/lib/slides/schema";
 import { floatPanel } from "@/components/domain/pickers";
 
-export const chip = "inline-flex h-7 items-center gap-1 rounded-md border border-border-strong px-2 text-[12.5px] text-fg-2 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 data-[state=open]:bg-hover";
+export const chip = "inline-flex h-7 items-center gap-1 rounded-md border border-border-strong px-2 text-13 text-fg-2 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 data-[state=open]:bg-hover";
 export const on = "border-accent bg-selected text-fg";
-export const item = "flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover";
-export const field = "h-7 min-w-0 flex-1 rounded-md border border-border-strong bg-transparent px-2 text-[12.5px] text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent";
+export const item = "flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-13 text-fg outline-none data-[highlighted]:bg-hover";
+export const field = "h-7 min-w-0 flex-1 rounded-md border border-border-strong bg-transparent px-2 text-13 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent";
 export const menuSep = <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />;
 
 /** Keeps focus where it is (the text being edited) when a button is pressed. */
@@ -75,7 +75,7 @@ export function MenuField<T>({ label, item: itemLabel, placeholder, parse, onApp
           {extra?.(setRaw)}
           <button type="button" className={chip} onClick={apply}>Apply</button>
         </div>
-        {error && <p id={id} role="alert" className="max-w-52 text-[11.5px] text-pill-blocked-fg">{error}</p>}
+        {error && <p id={id} role="alert" className="max-w-52 text-12 text-pill-blocked-fg">{error}</p>}
       </div>
     </>
   );

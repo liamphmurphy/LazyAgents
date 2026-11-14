@@ -61,24 +61,24 @@ function Row({ item, selected, sent, onSelect }: { item: Item; selected: boolean
           </span>
         )}
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-center gap-2 text-[13px]">
-            <span className={cx("flex-none rounded-[4px] px-1.5 py-px text-xs font-medium", PILL[kind.tone])}>{kind.label}</span>
+          <span className="flex min-w-0 items-center gap-2 text-13">
+            <span className={cx("flex-none rounded-[4px] px-1.5 py-px text-12 font-medium", PILL[kind.tone])}>{kind.label}</span>
             {(item.ticket_key || item.project) && (
-              <span className="flex-none font-mono text-xs text-fg-tertiary">{item.ticket_key || item.project}</span>
+              <span className="flex-none font-mono text-12 text-fg-tertiary">{item.ticket_key || item.project}</span>
             )}
             <span className="truncate font-semibold text-fg">{item.title}</span>
           </span>
-          <span className="truncate text-[12.5px] text-fg-tertiary">
+          <span className="truncate text-13 text-fg-tertiary">
             {item.agent && <span className="text-fg-secondary">{item.agent.name} · </span>}
             {item.summary}
           </span>
         </span>
         {sent ? (
-          <span className="flex-none text-xs font-medium text-accent">Sent</span>
+          <span className="flex-none text-12 font-medium text-accent">Sent</span>
         ) : (
           <span
             title={new Date(item.created_at).toLocaleString()}
-            className={cx("flex-none text-xs", longWait(item.created_at) ? "text-pill-human-fg" : "text-fg-tertiary")}
+            className={cx("flex-none text-12", longWait(item.created_at) ? "text-pill-human-fg" : "text-fg-tertiary")}
           >
             {waited(item.created_at)}
           </span>
@@ -100,11 +100,11 @@ export function AllClear({ project, done, onShowDone }: { project: string; done:
         <Icon name="check" size={22} />
       </span>
       <h2 className="type-title text-fg">All clear</h2>
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-13 text-fg-secondary">
         No approvals, questions, mockups, proposals or failed runs need you in {project || "All projects"}.
       </p>
       {done > 0 && (
-        <button type="button" onClick={onShowDone} className="text-[12.5px] text-accent hover:underline">
+        <button type="button" onClick={onShowDone} className="text-13 text-accent hover:underline">
           {done} done · Show done
         </button>
       )}
@@ -112,13 +112,13 @@ export function AllClear({ project, done, onShowDone }: { project: string; done:
         aria-label="Still running"
         className="mt-4 w-full max-w-[580px] overflow-hidden rounded-xl border border-border bg-surface text-left"
       >
-        <h3 className="border-b border-border-subtle bg-surface-sunken px-5 py-2 text-xs font-medium text-fg-secondary">
+        <h3 className="border-b border-border-subtle bg-surface-sunken px-5 py-2 text-12 font-medium text-fg-secondary">
           Still running <span className="font-mono text-fg-tertiary">{running.length}</span>
         </h3>
         {overviews.isPending ? (
           <Skeleton className="m-4 h-8" />
         ) : running.length === 0 ? (
-          <p className="px-5 py-4 text-[13px] text-fg-tertiary">
+          <p className="px-5 py-4 text-13 text-fg-tertiary">
             No runs in progress.{" "}
             <Link href="/tickets?layout=board" className="text-accent hover:underline">
               Dispatch a ready ticket from the Board.
@@ -128,13 +128,13 @@ export function AllClear({ project, done, onShowDone }: { project: string; done:
           <ul>
             {running.map((w) => (
               <li key={w.run_id} className="border-b border-border-subtle last:border-b-0">
-                <Link href={`/runs/${w.run_id}`} className="flex min-h-[44px] items-center gap-3 px-5 py-2 text-[13px] hover:bg-hover">
+                <Link href={`/runs/${w.run_id}`} className="flex min-h-[44px] items-center gap-3 px-5 py-2 text-13 hover:bg-hover">
                   <AgentAvatar name={w.agent.name} colorIndex={w.agent.color_index} label={false} />
-                  <span className="w-28 flex-none truncate font-mono text-xs text-fg-tertiary">{w.ticket.key}</span>
+                  <span className="w-28 flex-none truncate font-mono text-12 text-fg-tertiary">{w.ticket.key}</span>
                   <span className="min-w-0 flex-1 truncate text-fg">
                     {w.ticket.title} <span className="text-fg-tertiary">· {w.agent.name}</span>
                   </span>
-                  <span className="flex-none text-xs text-fg-tertiary">
+                  <span className="flex-none text-12 text-fg-tertiary">
                     {w.state === "queued" ? "queued" : `${w.state.replaceAll("_", " ")} ${duration(w.started_at)}`}
                   </span>
                 </Link>
@@ -142,7 +142,7 @@ export function AllClear({ project, done, onShowDone }: { project: string; done:
             ))}
           </ul>
         )}
-        <Link href="/runs" className="block border-t border-border-subtle px-5 py-2.5 text-[12.5px] text-accent hover:underline">
+        <Link href="/runs" className="block border-t border-border-subtle px-5 py-2.5 text-13 text-accent hover:underline">
           View all runs →
         </Link>
       </section>
@@ -271,7 +271,7 @@ function DesktopInbox() {
             />
             <FilterMenu quiet label="Sort" value={sort} onChange={(v) => setSort(v as Sort)}
               options={[{ value: "oldest", label: "Longest wait first" }, { value: "newest", label: "Newest first" }]} />
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-fg-tertiary">
+            <span className="ml-auto flex items-center gap-1.5 text-12 text-fg-tertiary">
               Project
               <FilterMenu label="Filter project" value={project} onChange={setProject}
                 options={[{ value: "", label: "All" }, ...(bootstrap?.projects ?? []).filter((p) => !p.archived).map((p) => ({ value: p.key, label: p.name }))]} />
@@ -293,7 +293,7 @@ function DesktopInbox() {
             ) : (
               <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
                 <h2 className="type-heading">Nothing done yet</h2>
-                <p className="text-[13px] text-fg-secondary">Items you resolve or mark done appear here until they change again.</p>
+                <p className="text-13 text-fg-secondary">Items you resolve or mark done appear here until they change again.</p>
                 <Button variant="outline" onClick={() => setView("open")}>
                   Show open
                 </Button>
@@ -303,8 +303,8 @@ function DesktopInbox() {
             <div ref={rows} key={`${view}:${project}`} className="relative min-h-0 flex-1 overflow-y-auto">
               {groups.map((g) => (
                 <div key={g.key} role="group" aria-label={g.label}>
-                  <h2 className="flex h-[33px] items-center gap-2 bg-surface-sunken px-5 text-xs font-medium text-fg-secondary">
-                    {g.label} <span className="font-mono text-[11px] text-fg-tertiary">{g.items.length}</span>
+                  <h2 className="flex h-[33px] items-center gap-2 bg-surface-sunken px-5 text-12 font-medium text-fg-secondary">
+                    {g.label} <span className="font-mono text-11 text-fg-tertiary">{g.items.length}</span>
                   </h2>
                   <ul>
                     {g.items.map((i) => (
@@ -315,7 +315,7 @@ function DesktopInbox() {
               ))}
             </div>
           )}
-          <div aria-hidden className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-5 py-2 text-xs text-fg-tertiary md:flex">
+          <div aria-hidden className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-5 py-2 text-12 text-fg-tertiary md:flex">
             <span><Kbd>J</Kbd> <Kbd>K</Kbd> move</span>
             <span><Kbd>A</Kbd> approve</span>
             <span><Kbd>D</Kbd> deny</span>

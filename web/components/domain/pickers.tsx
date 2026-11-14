@@ -11,7 +11,7 @@ import { PRIORITY_NAME, PRIORITY_ORDER, STATUS_NAME, STATUS_ORDER } from "./meta
 
 // Floating UI: raised surface + float border + shadow (DESIGN.md §1).
 export const floatPanel =
-  "motion-float z-50 rounded-xl border border-border-float bg-surface-raised p-1 text-[13px] text-fg shadow-[var(--shadow-float)] outline-none";
+  "motion-float z-50 rounded-xl border border-border-float bg-surface-raised p-1 text-13 text-fg shadow-[var(--shadow-float)] outline-none";
 const item =
   "flex h-8 cursor-default select-none items-center gap-2.5 rounded-md px-2 outline-none data-[highlighted]:bg-hover data-[disabled]:opacity-50";
 
@@ -226,7 +226,7 @@ export function AgentPicker({
                 if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
                 if (e.key === "Enter") { e.preventDefault(); pick(active); }
               }}
-              className="h-10 flex-1 bg-transparent text-[13px] outline-none placeholder:text-fg-tertiary"
+              className="h-10 flex-1 bg-transparent text-13 outline-none placeholder:text-fg-tertiary"
             />
           </div>
           <div id="agent-options" role="listbox" aria-label="Agents" className="max-h-[320px] overflow-y-auto p-1">
@@ -245,14 +245,14 @@ export function AgentPicker({
                   <AgentAvatar name={a.name} colorIndex={a.color_index} size="md" label={false} />
                   <span className="flex min-w-0 flex-1 flex-col leading-tight">
                     <span className="font-medium">{a.name}</span>
-                    <span className="truncate text-[11.5px] text-fg-tertiary">
+                    <span className="truncate text-12 text-fg-tertiary">
                       {a.model} · {a.specialty}
                     </span>
                   </span>
                   {a.id === value ? (
                     <Icon name="check" size={14} className="text-accent" />
                   ) : (
-                    <span className={cx("text-[11.5px]", availability[a.status].cls)}>{availability[a.status].label}</span>
+                    <span className={cx("text-12", availability[a.status].cls)}>{availability[a.status].label}</span>
                   )}
                 </div>
               ) : (
@@ -271,7 +271,7 @@ export function AgentPicker({
               ),
             )}
           </div>
-          <p className="border-t border-border-subtle px-3 py-2 text-[11.5px] text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
+          <p className="border-t border-border-subtle px-3 py-2 text-12 text-fg-tertiary">Assigning queues the ticket. A person dispatches it to start a run.</p>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -403,7 +403,7 @@ export function EstimatePicker({
           }}
           onKeyDown={(e) => move(e, i)}
           className={cx(
-            "h-7 min-w-7 border-l border-border-strong px-1.5 font-mono text-xs first:border-l-0 focus-visible:relative focus-visible:z-10 disabled:opacity-50",
+            "h-7 min-w-7 border-l border-border-strong px-1.5 font-mono text-12 first:border-l-0 focus-visible:relative focus-visible:z-10 disabled:opacity-50",
             i === checked ? "bg-accent text-on-accent" : "text-fg-2 hover:bg-hover",
           )}
         >
@@ -426,7 +426,7 @@ export function FilterMenu({ label, value, options, onChange, quiet }: { label: 
       <DropdownMenu.Trigger asChild>
         <button type="button" aria-label={`${label}: ${current?.label ?? ""}`}
           className={cx(
-            "flex h-8 max-w-56 items-center gap-1.5 rounded-md px-2.5 text-xs hover:bg-hover data-[state=open]:border-accent",
+            "flex h-8 max-w-56 items-center gap-1.5 rounded-md px-2.5 text-12 hover:bg-hover data-[state=open]:border-accent",
             quiet ? "text-fg-secondary hover:text-fg" : "border border-border-strong bg-surface text-fg",
           )}>
           <span className="truncate">{current?.label}</span>
@@ -437,7 +437,7 @@ export function FilterMenu({ label, value, options, onChange, quiet }: { label: 
         <DropdownMenu.Content align="end" sideOffset={6} className={cx(floatPanel, "max-h-80 w-56 overflow-y-auto")}>
           <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
             {options.map((o) => (
-              <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-hover">
+              <DropdownMenu.RadioItem key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 text-13 outline-none data-[highlighted]:bg-hover">
                 <span className="flex-1 truncate">{o.label}</span>
                 <DropdownMenu.ItemIndicator><Icon name="check" size={14} className="text-accent" /></DropdownMenu.ItemIndicator>
               </DropdownMenu.RadioItem>

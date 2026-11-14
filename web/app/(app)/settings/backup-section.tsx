@@ -11,7 +11,7 @@ export function BackupSection() {
   return (
     <Card bodyClassName="flex flex-col gap-4 p-[18px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-[520px] text-[13px] text-fg-secondary">
+        <p className="max-w-[520px] text-13 text-fg-secondary">
           One zip with every table and every stored file: tickets, chats, wiki, artifacts, library, secrets (still encrypted) and settings.
           Large instances take a while to prepare, and the download starts straight away.
         </p>
@@ -19,7 +19,7 @@ export function BackupSection() {
           Export everything
         </ButtonLink>
       </div>
-      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[12.5px] text-fg-tertiary">
+      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-13 text-fg-tertiary">
         <li>The archive holds all your data. Keep it like a database backup.</li>
         <li>
           Sign-in sessions, runner registrations and live playgrounds stay behind: you sign in again on the new machine.

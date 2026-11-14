@@ -15,10 +15,10 @@ export function EditorLayoutDemo() {
         saveState: "Saved",
         actions: [<Button key="share">Share</Button>, <Button key="export" variant="primary">Export</Button>],
       }}
-      left={<p className="p-4 text-[13px] text-fg-secondary">Layers</p>}
+      left={<p className="p-4 text-13 text-fg-secondary">Layers</p>}
       main={
         <div className="grid flex-1 place-items-center gap-3 p-8 text-fg-secondary">
-          <label className="flex items-center gap-2 text-[13px]">
+          <label className="flex items-center gap-2 text-13">
             <input type="checkbox" checked={busy} onChange={(e) => setBusy(e.target.checked)} />
             Persona busy
           </label>
@@ -33,12 +33,12 @@ export function EditorLayoutDemo() {
           unread: true,
           content: (
             <div className="flex flex-1 flex-col justify-end p-3">
-              <textarea aria-label="Message" placeholder="Ask the designer…" className="h-12 rounded-lg border border-border bg-surface p-2 text-[13px]" />
+              <textarea aria-label="Message" placeholder="Ask the designer…" className="h-12 rounded-lg border border-border bg-surface p-2 text-13" />
             </div>
           ),
         },
-        { id: "comments", label: "Comments", icon: "at", content: <p className="p-3 text-[13px]">No comments</p> },
-        { id: "inspect", label: "Inspect", icon: "sliders", content: <p className="p-3 text-[13px]">Nothing selected</p> },
+        { id: "comments", label: "Comments", icon: "at", content: <p className="p-3 text-13">No comments</p> },
+        { id: "inspect", label: "Inspect", icon: "sliders", content: <p className="p-3 text-13">Nothing selected</p> },
       ]}
     />
   );

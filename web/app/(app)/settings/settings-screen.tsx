@@ -19,6 +19,7 @@ import { RepositorySourcesSection } from "./repositories-section";
 import { SecretsSection } from "./secrets-section";
 import { SignInSection, useAuthStatus } from "./sign-in-section";
 import { SetupChecklist } from "@/components/domain/setup";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Health = "ok" | "attention" | "idle" | "unknown";
 
@@ -59,29 +60,27 @@ export function SettingsScreen() {
   if (!mounted) {
     return (
       <div aria-busy className="flex flex-col gap-6">
-        <h1 className="type-display">Settings</h1>
+        <PageHeader title="Settings" />
         <Skeleton className="h-40 max-w-[1020px]" />
       </div>
     );
   }
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="type-display">Settings</h1>
-        <p className="mt-2 text-sm text-fg-secondary">Everything runs depend on. Each section says what breaks when something is missing.</p>
-        <span className="mt-2 flex gap-4 text-sm">
+      <PageHeader title="Settings" description="Everything runs depend on. Each section says what breaks when something is missing.">
+        <span className="flex gap-4 text-14">
           <Link href="/chat?new&setup" className="text-accent hover:underline">Run setup again →</Link>
           <Link href="/setup" className="text-accent hover:underline">Open setup checklist →</Link>
         </span>
-      </div>
+      </PageHeader>
       <SetupChecklist className="max-w-[1020px]" />
-      <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(180px,max-content)_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto lg:sticky lg:top-4 lg:flex-col">
           {nav.map((n) => (
-            <a key={n.id} href={`#${n.id}`} className="flex h-8 flex-none items-center gap-2.5 rounded-md border border-border bg-surface px-3 text-[13px] hover:bg-hover">
+            <a key={n.id} href={`#${n.id}`} className="flex min-h-8 flex-none items-center gap-2.5 rounded-md border border-border bg-surface px-3 text-13 hover:bg-hover">
               <HealthDot health={n.health} />
               <span className="flex-1 whitespace-nowrap">{n.label}</span>
-              {n.badge && <span className="rounded-full bg-pill-human-bg px-1.5 text-[10.5px] text-pill-human-fg">{n.badge}</span>}
+              {n.badge && <span className="rounded-full bg-pill-human-bg px-1.5 text-11 text-pill-human-fg">{n.badge}</span>}
             </a>
           ))}
         </nav>
@@ -150,7 +149,7 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
     <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-6 flex-col gap-3">
       <div>
         <h2 id={`${id}-title`} className="type-title">{title}</h2>
-        {lead && <p className="mt-1 text-sm text-fg-secondary">{lead}</p>}
+        {lead && <p className="mt-1 text-14 text-fg-secondary">{lead}</p>}
       </div>
       {children}
     </section>
@@ -160,8 +159,8 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1 border-t border-border-row px-[18px] py-3 first:border-0 sm:grid-cols-[170px_1fr]">
-      <dt className="text-[12.5px] text-fg-tertiary">{label}</dt>
-      <dd className="text-[13px]">{children}</dd>
+      <dt className="text-13 text-fg-tertiary">{label}</dt>
+      <dd className="text-13">{children}</dd>
     </div>
   );
 }
@@ -188,7 +187,7 @@ function WorkspaceSection() {
     <Card bodyClassName="p-0">
       <dl>
         <Row label="Name">{ws.name}</Row>
-        <Row label="Slug"><span className="font-mono text-[12.5px]">{ws.slug}</span></Row>
+        <Row label="Slug"><span className="font-mono text-13">{ws.slug}</span></Row>
         <Row label="Secret encryption">
           {secrets.isError ? (
             <span className="text-fg-tertiary">Unknown: couldn’t load secrets.</span>
@@ -199,7 +198,7 @@ function WorkspaceSection() {
           ) : (
             <span className="text-pill-human-fg">SECRETS_KEY isn’t set</span>
           )}
-          <span className="mt-1 block text-xs text-fg-tertiary">If missing: secrets are read-only and runs get no harness keys or git credentials.</span>
+          <span className="mt-1 block text-12 text-fg-tertiary">If missing: secrets are read-only and runs get no harness keys or git credentials.</span>
         </Row>
       </dl>
     </Card>
@@ -223,7 +222,7 @@ function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
         onChange={(host_folder_workspaces) => update.mutate({ host_folder_workspaces })}
         label="Keep new checkouts in a folder on this machine"
       />
-      <span className="mt-1 block text-xs text-fg-tertiary">
+      <span className="mt-1 block text-12 text-fg-tertiary">
         {dirs.length > 0 ? (
           <>
             New runs check out into <code className="font-mono">{dirs.join(", ")}/&lt;run&gt;</code>, so you can open the code in your own editor while the agent works. Runs that already have a workspace keep it where it is.
@@ -234,7 +233,7 @@ function HostFoldersSetting({ status }: { status: Schemas["RunnerStatus"] }) {
           </>
         )}
       </span>
-      {update.isError && <span className="mt-1 block text-xs text-pill-blocked-fg">Couldn’t save: {update.error.message}</span>}
+      {update.isError && <span className="mt-1 block text-12 text-pill-blocked-fg">Couldn’t save: {update.error.message}</span>}
     </>
   );
 }
@@ -275,10 +274,10 @@ function RunnerSection() {
         </Card>
       ) : (
         <Card bodyClassName="overflow-x-auto p-0">
-          <table className="w-full min-w-[560px] text-[13px]">
+          <table className="w-full min-w-[560px] text-13">
             <caption className="sr-only">Online runners</caption>
             <thead>
-              <tr className="text-left text-[12.5px] text-fg-tertiary">
+              <tr className="text-left text-13 text-fg-tertiary">
                 <th scope="col" className="px-[18px] py-2.5 font-normal">Runner</th>
                 <th scope="col" className="px-2 py-2.5 font-normal">Backend</th>
                 <th scope="col" className="px-2 py-2.5 font-normal">Slots</th>
@@ -290,12 +289,12 @@ function RunnerSection() {
             <tbody>
               {r.runners.map((x) => (
                 <tr key={x.id} className="border-t border-border-row">
-                  <th scope="row" className="px-[18px] py-2.5 text-left font-mono text-[12.5px] font-normal">{x.id}</th>
-                  <td className="px-2"><span className="rounded-[4px] bg-selected px-1.5 py-px font-mono text-[11px]">{x.backend}</span></td>
+                  <th scope="row" className="px-[18px] py-2.5 text-left font-mono text-13 font-normal">{x.id}</th>
+                  <td className="px-2"><span className="rounded-[4px] bg-selected px-1.5 py-px font-mono text-11">{x.backend}</span></td>
                   <td className="px-2">{x.max_concurrent}</td>
                   <td className="px-2">{x.running}</td>
-                  <td className="px-2 font-mono text-xs text-fg-secondary">{x.version || "–"}</td>
-                  <td className="px-2 text-xs text-pill-done-fg">{ago(x.heartbeat_at)}</td>
+                  <td className="px-2 font-mono text-12 text-fg-secondary">{x.version || "–"}</td>
+                  <td className="px-2 text-12 text-pill-done-fg">{ago(x.heartbeat_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -305,14 +304,14 @@ function RunnerSection() {
       <Card bodyClassName="p-0">
         <dl>
           <Row label="Backend">
-            <span className="font-mono text-[12px] text-fg-secondary">RUNNER_BACKEND = {current(backends)}</span>
-            <span className="mt-1 block text-xs text-fg-tertiary">
+            <span className="font-mono text-12 text-fg-secondary">RUNNER_BACKEND = {current(backends)}</span>
+            <span className="mt-1 block text-12 text-fg-tertiary">
               docker runs each harness in a container that only receives the secrets its scopes allow. fake runs stand-in harnesses on the runner’s machine, for tests and playgrounds.
             </span>
           </Row>
           <Row label="Slots">
-            <span className="font-mono text-[12px] text-fg-secondary">RUNNER_MAX_CONCURRENT = {current(slots)}</span>
-            <span className="mt-1 block text-xs text-fg-tertiary">
+            <span className="font-mono text-12 text-fg-secondary">RUNNER_MAX_CONCURRENT = {current(slots)}</span>
+            <span className="mt-1 block text-12 text-fg-tertiary">
               How many runs one runner executes at once (1–32). Extra dispatched runs wait in the queue until a slot frees up.
             </span>
           </Row>
@@ -320,7 +319,7 @@ function RunnerSection() {
             <HostFoldersSetting status={r} />
           </Row>
           <Row label="Per agent">
-            <span className="text-[12.5px] text-fg-secondary">
+            <span className="text-13 text-fg-secondary">
               Each agent also caps its own parallel runs (max concurrency). Change it on the agent’s page.{" "}
               <Link href="/customization?who=agents" className="text-accent">Agents →</Link>
             </span>
@@ -335,10 +334,10 @@ function RunnerSection() {
 function Stat({ label, value, of }: { label: string; value: number; of?: number }) {
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      <div className="text-xs text-fg-tertiary">{label}</div>
-      <div className="mt-1 text-2xl font-bold">
+      <div className="text-12 text-fg-tertiary">{label}</div>
+      <div className="mt-1 text-26 font-bold">
         {value}
-        {of !== undefined && <span className="text-sm font-normal text-fg-tertiary"> of {of}</span>}
+        {of !== undefined && <span className="text-14 font-normal text-fg-tertiary"> of {of}</span>}
       </div>
     </div>
   );
@@ -347,10 +346,10 @@ function Stat({ label, value, of }: { label: string; value: number; of?: number 
 function ProjectOverridesSection() {
   const boot = useBootstrap();
   return <Card>
-    <p className="text-sm text-fg-secondary">Add skills to extend an agent’s defaults, or remove skills to stop injecting them for a project. With no override, the project uses the agent definition as is. Changes apply to new runs; active runs keep their saved snapshot.</p>
-    <p className="mt-2 text-sm text-fg-secondary">Open an agent’s Skills tab to inspect its skills. In Project overrides, choose Add or an existing project to edit skill additions and removals.</p>
+    <p className="text-14 text-fg-secondary">Add skills to extend an agent’s defaults, or remove skills to stop injecting them for a project. With no override, the project uses the agent definition as is. Changes apply to new runs; active runs keep their saved snapshot.</p>
+    <p className="mt-2 text-14 text-fg-secondary">Open an agent’s Skills tab to inspect its skills. In Project overrides, choose Add or an existing project to edit skill additions and removals.</p>
     {boot.isPending && <div aria-label="Loading project override editors" className="mt-4"><Skeleton className="h-16" /></div>}
     {boot.isError && <Banner tone="blocked" title="Couldn’t load project override editors" actions={<Button variant="outline" onClick={() => void boot.refetch()}>Retry</Button>}>Agent and project details are unavailable.</Banner>}
-    {boot.data && (!boot.data.projects.length || !boot.data.agents.length ? <p className="mt-4 text-sm text-fg-tertiary">No project overrides available yet. Create a project and an agent first; until then agents use their default skills.</p> : <ul className="mt-4 flex flex-col gap-2">{boot.data.agents.map((agent) => <li key={agent.id}><Link href={`/agents/${agent.handle}?tab=skills#overrides`} className="text-sm text-accent">Manage {agent.name} project skills →</Link></li>)}</ul>)}
+    {boot.data && (!boot.data.projects.length || !boot.data.agents.length ? <p className="mt-4 text-14 text-fg-tertiary">No project overrides available yet. Create a project and an agent first; until then agents use their default skills.</p> : <ul className="mt-4 flex flex-col gap-2">{boot.data.agents.map((agent) => <li key={agent.id}><Link href={`/agents/${agent.handle}?tab=skills#overrides`} className="text-14 text-accent">Manage {agent.name} project skills →</Link></li>)}</ul>)}
   </Card>;
 }

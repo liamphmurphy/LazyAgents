@@ -238,7 +238,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   const context: ConversationContext = {
     hidden: true,
     composer: (
-      <div className="flex flex-wrap gap-1.5 text-xs text-fg-secondary" aria-label="Knowledge context">
+      <div className="flex flex-wrap gap-1.5 text-12 text-fg-secondary" aria-label="Knowledge context">
         {page && <span className="max-w-full truncate rounded-md border border-border bg-surface px-2 py-1" title={page.path ?? page.title}>Viewing: {page.title}</span>}
         {!page && screen && <span className="rounded-md border border-border bg-surface px-2 py-1">On: {screen}</span>}
         {folders.map((f) => (
@@ -282,7 +282,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   if (loadingPage) return <div className="p-4"><Skeleton className="h-4 w-2/3" /></div>;
   if (id) return (
     <div ref={host} className="flex min-h-0 flex-1 flex-col">
-      {attach.error && <p role="alert" className="p-2 text-xs text-state-blocked">Couldn’t link this chat to the page. <button className="underline" onClick={() => attach.mutate(id)}>Retry</button></p>}
+      {attach.error && <p role="alert" className="p-2 text-12 text-state-blocked">Couldn’t link this chat to the page. <button className="underline" onClick={() => attach.mutate(id)}>Retry</button></p>}
       <Conversation key={id} id={id} onNew={start} onReplace={selectChat} context={context} actions={switcher} />
     </div>
   );
@@ -292,13 +292,13 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <Icon name="msg" size={22} className="text-fg-tertiary" />
       {context.composer}
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-13 text-fg-secondary">
         {page ? "Talk to a persona about this page. It can read it, link it and edit it with you." : "Talk to a persona about your notes. It can search, link and write pages with you."}
       </p>
       <Button variant="primary" disabled={create.isPending} onClick={start}>
         {page ? "Start a chat about this page" : "Start a chat"}
       </Button>
-      {create.error && <p className="text-xs text-state-blocked">{create.error.message}</p>}
+      {create.error && <p className="text-12 text-state-blocked">{create.error.message}</p>}
     </div>
     </div>
   );

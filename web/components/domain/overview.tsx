@@ -70,12 +70,12 @@ export function AgentStack({ agents }: { agents: Schemas["AgentRef"][] }) {
         </Link>
       ))}
       {agents.length > 6 && (
-        <span className="pl-3 font-mono text-xs text-fg-tertiary">
+        <span className="pl-3 font-mono text-12 text-fg-tertiary">
           +{agents.length - 6}
         </span>
       )}
       {agents.length === 0 && (
-        <span className="text-xs text-fg-tertiary">No agents</span>
+        <span className="text-12 text-fg-tertiary">No agents</span>
       )}
     </div>
   );
@@ -106,10 +106,10 @@ export function WorkRow({ ticket }: { ticket: Schemas["WorkTicket"] }) {
       className="flex min-h-11 items-center gap-3 border-t border-border-row px-4 py-2 hover:bg-row-hover"
     >
       <StatusGlyph state={ticket.status} />
-      <span className="shrink-0 font-mono text-xs text-fg-tertiary">
+      <span className="shrink-0 font-mono text-12 text-fg-tertiary">
         {ticket.key}
       </span>
-      <span className="min-w-0 truncate text-[13px] font-medium">
+      <span className="min-w-0 truncate text-13 font-medium">
         {ticket.title}
       </span>
     </Link>
@@ -133,15 +133,15 @@ export function Assignment({
       )}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-mono text-xs text-fg-secondary">
+        <span className="font-mono text-12 text-fg-secondary">
           {work.ticket.key}
         </span>
-        <span className="ml-auto text-xs text-fg-tertiary">
+        <span className="ml-auto text-12 text-fg-tertiary">
           {work.state.replaceAll("_", " ")}
           {total > 0 && ` · step ${work.step_position || done}/${total}`}
         </span>
       </div>
-      <span className="line-clamp-2 text-[13px] text-fg-2">
+      <span className="line-clamp-2 text-13 text-fg-2">
         {work.step || work.ticket.title}
       </span>
       {total > 0 && (
@@ -159,7 +159,7 @@ export function Assignment({
           />
         </span>
       )}
-      <span className="truncate font-mono text-[10.5px] text-fg-tertiary">
+      <span className="truncate font-mono text-11 text-fg-tertiary">
         {work.harness} · {work.model}
       </span>
     </Link>
@@ -168,8 +168,8 @@ export function Assignment({
 
 export function PlanningAssignment({ work }: { work: Schemas["PlanningWork"] }) {
   return <Link href={`/plans?id=${work.id}`} className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken p-3 hover:border-border-hover">
-    <span className="flex justify-between gap-2 text-xs text-fg-tertiary"><span>Planning</span><span>{work.state}</span></span>
-    <span className="line-clamp-2 text-[13px] text-fg-2">{work.goal}</span>
-    <span className="font-mono text-[10.5px] text-fg-tertiary">{work.harness} · {work.model}</span>
+    <span className="flex justify-between gap-2 text-12 text-fg-tertiary"><span>Planning</span><span>{work.state}</span></span>
+    <span className="line-clamp-2 text-13 text-fg-2">{work.goal}</span>
+    <span className="font-mono text-11 text-fg-tertiary">{work.harness} · {work.model}</span>
   </Link>;
 }

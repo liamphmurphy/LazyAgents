@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/primitives";
 import { Content, TopBar } from "@/components/shell/topbar";
 import { checkRepoURL } from "@/lib/repo-url";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Project = Schemas["Project"];
 const errorText = (e: unknown) =>
@@ -161,7 +162,7 @@ function ProjectForm({
         </Banner>
       )}
       {save.error && (
-        <p role="alert" className="text-sm text-pill-blocked-fg">
+        <p role="alert" className="text-14 text-pill-blocked-fg">
           {errorText(save.error)}
         </p>
       )}
@@ -183,7 +184,7 @@ function ProjectForm({
         )}
       </div>
       {project && !project.archived && (
-        <p className="text-xs text-fg-tertiary">
+        <p className="text-12 text-fg-tertiary">
           Archiving preserves history and removes the project from active work.
           Finish or cancel queued and active runs first.
         </p>
@@ -227,7 +228,7 @@ export function ProjectsSection() {
         </Button>
       </div>
       {notice && (
-        <p role="status" className="text-sm text-pill-done-fg">
+        <p role="status" className="text-14 text-pill-done-fg">
           {notice}
         </p>
       )}
@@ -274,7 +275,7 @@ export function ProjectsSection() {
                 style={{ background: p.color }}
               />
               {p.name}
-              <span className="font-mono text-xs text-fg-tertiary">
+              <span className="font-mono text-12 text-fg-tertiary">
                 {p.key}
               </span>
             </span>
@@ -295,8 +296,8 @@ export function ProjectsSection() {
               onDone={done}
             />
           ) : (
-            <div className="space-y-2 text-sm">
-              <p className="flex flex-wrap items-center gap-2 break-all font-mono text-xs text-fg-secondary">
+            <div className="space-y-2 text-14">
+              <p className="flex flex-wrap items-center gap-2 break-all font-mono text-12 text-fg-secondary">
                 {p.repo_url || "No repository configured: runs start empty and can’t push"} ·{" "}
                 {p.default_branch}
                 {p.repo_url && <RepoKind url={p.repo_url} />}
@@ -318,7 +319,7 @@ export function ProjectsSection() {
 function RepoKind({ url }: { url: string }) {
   const ssh = url.startsWith("git@") || url.startsWith("ssh://");
   return (
-    <span className="rounded-[4px] bg-selected px-1.5 py-px font-sans text-[10.5px] text-fg-secondary">
+    <span className="rounded-[4px] bg-selected px-1.5 py-px font-sans text-11 text-fg-secondary">
       {ssh ? "SSH" : "HTTPS (legacy)"}
     </span>
   );
@@ -335,14 +336,11 @@ export function ProjectsScreen() {
       />
       <Content>
         <div className="max-w-[900px] space-y-5">
-          <h1 className="type-display">Projects & repositories</h1>
-          <p className="text-sm text-fg-secondary">
-            Manage where your agents work. One project maps to one GitHub
-            repository.
-          </p>
-          <ButtonLink href="/settings#secrets" variant="outline">
-            Provider credentials
-          </ButtonLink>
+          <PageHeader
+            title="Projects & repositories"
+            description="Manage where your agents work. One project maps to one GitHub repository."
+            actions={<ButtonLink href="/settings#secrets" variant="outline">Provider credentials</ButtonLink>}
+          />
           <ProjectsSection />
         </div>
       </Content>

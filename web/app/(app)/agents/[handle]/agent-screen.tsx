@@ -55,13 +55,13 @@ function ResolvedPanel({ detail, projects, project, onProject }: { detail: Agent
   return (
     <section className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-[13px] font-semibold">Resolved for</h2>
+        <h2 className="text-13 font-semibold">Resolved for</h2>
         <ProjectPicker label="Resolved for" projects={projects} value={project} onChange={onProject} className="min-w-0 flex-1" />
       </div>
       {!r.data ? (
         <Skeleton className="h-24" />
       ) : (
-        <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-[12.5px]">
+        <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-13">
           <dt className="text-fg-tertiary">Harness</dt>
           <dd className="flex items-center gap-1.5"><MonoChip>{r.data.harness}</MonoChip>{fromProject("harness")}</dd>
           <dt className="text-fg-tertiary">Model</dt>
@@ -73,19 +73,19 @@ function ResolvedPanel({ detail, projects, project, onProject }: { detail: Agent
           </dd>
           <dt className="text-fg-tertiary">MCP</dt>
           <dd className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate font-mono text-xs">{["lazyagents", ...r.data.mcp_servers.map((m) => m.name)].join(", ")}</span>
+            <span className="truncate font-mono text-12">{["lazyagents", ...r.data.mcp_servers.map((m) => m.name)].join(", ")}</span>
             {fromProject("mcp_servers")}
           </dd>
           <dt className="text-fg-tertiary">Approval</dt>
           <dd className="flex flex-wrap gap-1">
             {r.data.scopes.filter((s) => s.mode === "requires_approval").map((s) => (
-              <span key={s.scope} className="rounded-[5px] bg-pill-human-bg px-1.5 py-0.5 font-mono text-[11px] text-pill-human-fg">{s.scope}</span>
+              <span key={s.scope} className="rounded-[5px] bg-pill-human-bg px-1.5 py-0.5 font-mono text-11 text-pill-human-fg">{s.scope}</span>
             ))}
           </dd>
           <dt className="text-fg-tertiary">Denied</dt>
           <dd className="flex flex-wrap gap-1">
             {r.data.scopes.filter((s) => s.mode === "denied").map((s) => (
-              <span key={s.scope} className="rounded-[5px] bg-pill-blocked-bg px-1.5 py-0.5 font-mono text-[11px] text-pill-blocked-fg">
+              <span key={s.scope} className="rounded-[5px] bg-pill-blocked-bg px-1.5 py-0.5 font-mono text-11 text-pill-blocked-fg">
                 {s.scope}
                 {s.source === "project" && " ·p"}
               </span>
@@ -93,7 +93,7 @@ function ResolvedPanel({ detail, projects, project, onProject }: { detail: Agent
           </dd>
         </dl>
       )}
-      <p className="text-[11.5px] text-fg-tertiary">Each run stores a snapshot of this, so editing {detail.agent.name} never changes a run in progress.</p>
+      <p className="text-12 text-fg-tertiary">Each run stores a snapshot of this, so editing {detail.agent.name} never changes a run in progress.</p>
     </section>
   );
 }
@@ -104,11 +104,11 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
   return (
     <section className="flex flex-col gap-1">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-[12.5px] text-fg-tertiary">Project overrides</h2>
+        <h2 className="text-13 text-fg-tertiary">Project overrides</h2>
         {without.length > 0 && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <Button variant="ghost" icon="plus" className="h-7 px-2 text-xs text-fg-secondary">Add</Button>
+              <Button variant="ghost" icon="plus" className="h-7 px-2 text-12 text-fg-secondary">Add</Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content align="end" sideOffset={4} className={cx(floatPanel, "w-56")}>
@@ -125,26 +125,26 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
       </div>
       {detail.overrides.map((o) => (
         <button key={o.project.key} type="button" onClick={() => onEdit(o.project.key)} className="flex flex-col gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-hover">
-          <span className="flex items-center gap-2 text-[13px] font-medium">
+          <span className="flex items-center gap-2 text-13 font-medium">
             <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: o.project.color }} />
             {o.project.name}
-            <span className="ml-auto font-mono text-[11px] font-normal text-fg-tertiary">
+            <span className="ml-auto font-mono text-11 font-normal text-fg-tertiary">
               {o.changes.length} change{o.changes.length === 1 ? "" : "s"}
             </span>
           </span>
           {o.changes.map((c) => (
-            <span key={c} className="truncate pl-[18px] text-xs text-fg-secondary">{c}</span>
+            <span key={c} className="truncate pl-[18px] text-12 text-fg-secondary">{c}</span>
           ))}
         </button>
       ))}
       {without.slice(0, 2).map((p) => (
         <div key={p.key} className="flex flex-col gap-0.5 px-3 py-2">
-          <span className="flex items-center gap-2 text-[13px]">
+          <span className="flex items-center gap-2 text-13">
             <span aria-hidden className="size-2.5 rounded-[3px]" style={{ background: p.color }} />
             {p.name}
             <span className="ml-auto text-fg-tertiary">–</span>
           </span>
-          <span className="pl-[18px] text-xs text-fg-tertiary">Uses the agent definition as is</span>
+          <span className="pl-[18px] text-12 text-fg-tertiary">Uses the agent definition as is</span>
         </div>
       ))}
     </section>
@@ -228,7 +228,7 @@ export function AgentScreen({ handle }: { handle: string }) {
           detail && (
             <>
               {dirty && (
-                <span className="flex items-center gap-1.5 text-[12.5px] text-pill-human-fg">
+                <span className="flex items-center gap-1.5 text-13 text-pill-human-fg">
                   <span aria-hidden className="size-1.5 rounded-full bg-state-human" /> {changes} unsaved change{changes === 1 ? "" : "s"}
                 </span>
               )}
@@ -255,7 +255,7 @@ export function AgentScreen({ handle }: { handle: string }) {
                   <h1 className="type-display">{detail.agent.name}</h1>
                   <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
-                <span className="text-[13px] text-fg-secondary">
+                <span className="text-13 text-fg-secondary">
                   {detail.agent.kind === "sub" ? "Sub agent" : detail.agent.kind === "assistant" ? "Personal Assistant (managed by Vesper)" : "Main"}
                   {detail.agent.role && ` · ${detail.agent.role}`} · definition <b className="font-mono font-medium text-fg">v{detail.definition.version}</b>
                   {detail.definition.created_by && ` saved by ${detail.definition.created_by.name}`} {ago(detail.definition.created_at)}
@@ -302,13 +302,13 @@ export function AgentScreen({ handle }: { handle: string }) {
               </div>
               <ResolvedPanel detail={detail} projects={projects} project={project} onProject={setPicked} />
               <section className="flex flex-col gap-1">
-                <h2 className="px-1 text-[12.5px] text-fg-tertiary">Versions</h2>
+                <h2 className="px-1 text-13 text-fg-tertiary">Versions</h2>
                 <ol>
                   {detail.versions.map((v) => (
-                    <li key={v.id} className="flex items-baseline gap-3 px-1 py-1.5 text-[13px]">
-                      <span className="w-6 font-mono text-xs text-fg-secondary">v{v.version}</span>
+                    <li key={v.id} className="flex items-baseline gap-3 px-1 py-1.5 text-13">
+                      <span className="w-6 font-mono text-12 text-fg-secondary">v{v.version}</span>
                       <span className="flex-1 truncate" title={v.note}>{v.note || "—"}</span>
-                      <span className="text-xs text-fg-tertiary">{timelineTime(v.created_at)}</span>
+                      <span className="text-12 text-fg-tertiary">{timelineTime(v.created_at)}</span>
                     </li>
                   ))}
                 </ol>

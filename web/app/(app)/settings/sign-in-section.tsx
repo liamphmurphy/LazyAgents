@@ -19,10 +19,10 @@ export function SignInSection() {
   const status = useAuthStatus();
   const qc = useQueryClient();
   if (status.isPending) return <Skeleton className="h-24 w-full" />;
-  if (status.isError) return <p className="text-[13px] text-fg-secondary">Couldn&apos;t load sign-in settings.</p>;
+  if (status.isError) return <p className="text-13 text-fg-secondary">Couldn&apos;t load sign-in settings.</p>;
   if (status.data.password_set) {
     return (
-      <Card className="p-4 text-[13px] text-fg-2">
+      <Card className="p-4 text-13 text-fg-2">
         Other devices sign in with your username and password. Forgot it? Run <code className="font-mono">make signin</code> where
         Vesper runs for a one-time link.
       </Card>
@@ -30,7 +30,7 @@ export function SignInSection() {
   }
   return (
     <Card className="flex max-w-[400px] flex-col gap-3 p-4">
-      <p className="text-[13px] text-fg-2">
+      <p className="text-13 text-fg-2">
         This browser was signed in with a link. Choose a username and password to sign in from other devices without a terminal.
       </p>
       <OwnerCredentialsForm action="setup" submitLabel="Save password" onDone={() => qc.invalidateQueries({ queryKey: authStatusKey })} />

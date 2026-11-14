@@ -9,6 +9,26 @@
   --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Settings → Text size (lib/palettes.ts TEXT_SIZES) sets data-text-size on <html> before first
+   paint. Every type token and text-* step multiplies by --type-scale. The type tokens are
+   restated here rather than in tokens.css, whose hash Designs pins: a font change there would
+   flag every saved design's tokens as changed. Sizes and line-heights match tokens.css. */
+:root {
+  --type-scale: 1;
+  --text-display: 600 calc(26px * var(--type-scale))/1.2 var(--font-sans);
+  --text-title:   600 calc(19px * var(--type-scale))/1.3 var(--font-sans);
+  --text-heading: 600 calc(14px * var(--type-scale))/1.45 var(--font-sans);
+  --text-body:    400 calc(13px * var(--type-scale))/1.45 var(--font-sans);
+  --text-reading: 400 calc(14px * var(--type-scale))/1.65 var(--font-sans);
+  --text-chat:    400 calc(15px * var(--type-scale))/1.6 var(--font-sans);
+  --text-small:   400 calc(12px * var(--type-scale))/1.45 var(--font-sans);
+  --text-micro:   600 calc(10px * var(--type-scale))/1.2 var(--font-sans);
+  --text-mono:    400 calc(12px * var(--type-scale))/1.45 var(--font-mono);
+}
+:root[data-text-size="small"]  { --type-scale: 0.92; }
+:root[data-text-size="large"]  { --type-scale: 1.12; }
+:root[data-text-size="larger"] { --type-scale: 1.25; }
+
 /*
  * Tokens → Tailwind. Only design tokens exist as utilities: the default
  * palette is cleared so off-system colors can't creep in.
@@ -102,6 +122,25 @@
   --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* The type scale (DESIGN.md §2 Typography): text-10 … text-32, named by their px size at the
+     default Text size. Every step follows --type-scale, so Settings → Text size grows the whole
+     UI's text at once. Tailwind's sizes are cleared so a size off the scale can't creep in, and
+     no step sets a line-height, so text keeps the one it inherits. */
+  --text-*: initial;
+  --text-10: calc(10px * var(--type-scale));
+  --text-11: calc(11px * var(--type-scale));
+  --text-12: calc(12px * var(--type-scale));
+  --text-13: calc(13px * var(--type-scale));
+  --text-14: calc(14px * var(--type-scale));
+  --text-15: calc(15px * var(--type-scale));
+  --text-16: calc(16px * var(--type-scale));
+  --text-18: calc(18px * var(--type-scale));
+  --text-20: calc(20px * var(--type-scale));
+  --text-22: calc(22px * var(--type-scale));
+  --text-26: calc(26px * var(--type-scale));
+  --text-28: calc(28px * var(--type-scale));
+  --text-32: calc(32px * var(--type-scale));
+
   /* Same values as tokens.css; Tailwind's defaults are replaced. */
   --radius-*: initial;
   --radius-xs: 4px;
@@ -113,6 +152,11 @@
   --radius-full: 999px;
 
   --shadow-float: var(--shadow-float);
+
+  /* transition-* and ease-out use the motion tokens (DESIGN.md §6); durations are duration-(--motion-*). */
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--motion-ease);
+  --ease-out: var(--motion-ease);
 }
 
 /* Type scale as utilities: each sets the full font shorthand from tokens. */
@@ -154,7 +198,7 @@
   .prose-code code,
   code.inline {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: calc(12px * var(--type-scale));
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--selected);
@@ -167,10 +211,14 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+/* Skeletons wait 150ms before showing, so a fast load goes straight to content with no flash. */
+@keyframes skeleton-wait {
+  from, to { visibility: hidden; }
+}
 @utility animate-skeleton {
-  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  animation: skeleton-wait 150ms, skeleton-pulse 1.6s ease-in-out 150ms infinite;
   @media (prefers-reduced-motion: reduce) {
-    animation: none;
+    animation: skeleton-wait 150ms;
   }
 }
 
@@ -384,7 +432,7 @@
  * agent, the agent bumps as it lands, then the cover fades to reveal the run card.
  */
 .handoff { animation: handoff-cover 2.8s ease-in both; }
-.handoff-chip { animation: handoff-chip 2.8s cubic-bezier(0.5, 0, 0.2, 1) both; }
+.handoff-chip { animation: handoff-chip 2.8s var(--motion-travel) both; }
 .handoff-agent { animation: handoff-agent 2.8s ease-out both; }
 @keyframes handoff-cover { 0% { opacity: 0; } 8%, 78% { opacity: 1; } 100% { opacity: 0; } }
 /* Travels by its left edge from the track's start to its end, ending flush with it. */
@@ -411,7 +459,7 @@
 .handoff-lane-more { animation: handoff-fade-in 0.5s ease-out var(--lane-delay, 0ms) both; }
 .handoff-packet {
   offset-rotate: 0deg;
-  animation: handoff-packet 0.7s cubic-bezier(0.5, 0, 0.2, 1) calc(var(--lane-delay, 0ms) + 0.15s) both;
+  animation: handoff-packet 0.7s var(--motion-travel) calc(var(--lane-delay, 0ms) + 0.15s) both;
 }
 .handoff-land { animation: handoff-land 0.3s ease-out calc(var(--lane-delay, 0ms) + 0.8s) both; }
 .handoff-key { animation: handoff-key 0.3s ease-out calc(var(--lane-delay, 0ms) + 0.8s) both; }
@@ -430,7 +478,7 @@
   .handoff-packet { display: none; }
 }
 
-.scene-pull { animation: scene-pull 3.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite both; }
+.scene-pull { animation: scene-pull 3.6s var(--motion-ease) infinite both; }
 @keyframes scene-pull {
   0% { transform: translateX(var(--from-x)); opacity: 0; }
   10% { opacity: 1; }
@@ -872,7 +920,11 @@
   --motion-base: 200ms;
   --motion-slow: 320ms;
   --motion-exit: 140ms;
+  /* A bar or meter filling to a new value: the change is the point, so it takes its time. */
+  --motion-progress: 600ms;
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Something travelling from one place to another (a handoff, a packet): eases in and out. */
+  --motion-travel: cubic-bezier(0.5, 0, 0.2, 1);
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .motion-scrim[data-state="open"] { animation: motion-fade-in var(--motion-base) ease-out both; }
@@ -895,6 +947,9 @@
 .motion-pop, .motion-pop-child svg { animation: motion-pop 220ms var(--motion-spring) both; }
 .motion-rise { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
 .motion-page { animation: motion-fade-in var(--motion-fast) ease-out; }
+/* Toasts (components/ui/toast.tsx) rise in; leaving ones fade before the store drops them. */
+.motion-toast[data-state="open"] { animation: motion-rise var(--motion-base) var(--motion-ease) both; }
+.motion-toast[data-state="closed"] { animation: motion-fade-out var(--motion-exit) ease-in both; }
 /* The menu's Apps flyout: slides out of its row, then its tiles follow in reading order (--i). */
 .motion-flyout { transform-origin: var(--radix-popper-transform-origin); }
 .motion-flyout[data-state="open"] { animation: motion-flyout-in var(--motion-base) var(--motion-ease) both; }
@@ -911,14 +966,14 @@
 @starting-style {
   .motion-collapse[data-open="true"] { grid-template-rows: 0fr; }
 }
-/* Native <details>; browsers without these features just snap open. */
-.motion-details { interpolate-size: allow-keywords; }
-.motion-details::details-content {
+/* Every native <details> opens by height; browsers without these features just snap open. */
+details { interpolate-size: allow-keywords; }
+details::details-content {
   height: 0;
   overflow: clip;
   transition: height var(--motion-base) var(--motion-ease), content-visibility var(--motion-base) allow-discrete;
 }
-.motion-details[open]::details-content { height: auto; }
+details[open]::details-content { height: auto; }
 
 /* On while a user toggle plays, so restoring the expanded menu on load doesn't animate. */
 @media (min-width: 800px) and (prefers-reduced-motion: no-preference) {
@@ -958,23 +1013,97 @@
   .motion-pop,
   .motion-pop-child svg,
   .motion-rise,
+  .motion-toast,
   .motion-slide,
   .motion-page { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .motion-flyout[data-state="open"] { animation-name: motion-fade-in !important; }
   .motion-flyout[data-state="open"] .motion-tile { animation: none !important; }
   .motion-collapse,
-  .motion-details::details-content { transition-duration: 1ms !important; }
+  details::details-content { transition-duration: 1ms !important; }
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none !important; }
 }
 
+/*
+ * The Dusk brand layer: the mark's gradient (--brand-*) on portraits and decoration only, never
+ * on a control or as the colour of a state (tokens.css). Each piece sits beside words that
+ * already say what's happening, so none of it carries meaning on its own.
+ */
+
+/* A persona's portrait while it works: the mark's dusk light circling it, breathing softly. */
+.dusk-aura { position: relative; isolation: isolate; display: inline-grid; border-radius: 999px; }
+.dusk-aura::before,
+.dusk-aura::after { content: ""; position: absolute; border-radius: 999px; pointer-events: none; z-index: -1; }
+.dusk-aura::before {
+  inset: -3px;
+  background: conic-gradient(var(--brand-deep), var(--brand-violet), var(--brand-star), var(--brand-violet), var(--brand-deep));
+  /* Only a 2px ring shows; the mask is round, so it can turn without its edge moving. */
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  animation: dusk-turn 3.2s linear infinite;
+}
+.dusk-aura::after {
+  inset: -7px;
+  z-index: -2;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--brand-violet) 38%, transparent), transparent);
+  animation: dusk-breathe 2.4s ease-in-out infinite;
+}
+@keyframes dusk-turn { to { transform: rotate(1turn); } }
+@keyframes dusk-breathe { 50% { opacity: 0.45; transform: scale(0.92); } }
+
+/* "Gwen is thinking…": a band of starlight crosses the words, left to right. */
+.dusk-shimmer {
+  background: linear-gradient(100deg, var(--text) 42%, color-mix(in srgb, var(--brand-star) 75%, var(--text)) 50%, var(--text) 58%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: dusk-shimmer 2.6s linear infinite;
+}
+@keyframes dusk-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* A live progress bar: a neutral sheen says it's still moving. Its colour stays the state's. */
+.live-sheen { position: relative; overflow: hidden; }
+.live-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.38), transparent);
+  transform: translateX(-100%);
+  animation: live-sheen 1.8s var(--motion-ease) infinite;
+}
+@keyframes live-sheen { to { transform: translateX(100%); } }
+
+/* EmptyState's icon tile: lit from the top-left in dusk violet, with the mark's star on its corner. */
+.dusk-tile {
+  position: relative;
+  border-color: color-mix(in srgb, var(--brand-violet) 42%, var(--border-strong));
+  background: radial-gradient(130% 130% at 25% 0%, color-mix(in srgb, var(--brand-violet) 24%, var(--surface)), var(--surface) 72%);
+  color: color-mix(in srgb, var(--brand-violet) 55%, var(--text));
+}
+.dusk-tile::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  background: var(--brand-star);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+}
+
+/* Still, not gone: the ring, the words and the bars stay, they just don't move. */
+@media (prefers-reduced-motion: reduce) {
+  .dusk-aura::before, .dusk-aura::after, .live-sheen::after { animation: none; }
+  .live-sheen::after { display: none; }
+  .dusk-shimmer { animation: none; background: none; color: inherit; }
+}
+
 /* The New Learning Module dialog (new-module-guide.tsx). */
 .guide-stage { --guide-shift: 32px; }
 .guide-stage[data-direction="back"] { --guide-shift: -32px; }
-.guide-step-enter { animation: guide-step-in 340ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both; }
+.guide-step-enter { animation: guide-step-in 340ms var(--motion-ease) 110ms both; }
 .guide-step-leave { animation: guide-step-out 150ms ease-in both; }
-.guide-step-enter .guide-stagger > * { animation: guide-rise 380ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both; }
+.guide-step-enter .guide-stagger > * { animation: guide-rise 380ms var(--motion-ease) 110ms both; }
 .guide-step-enter .guide-stagger > :nth-child(2) { animation-delay: 165ms; }
 .guide-step-enter .guide-stagger > :nth-child(3) { animation-delay: 220ms; }
 .guide-step-enter .guide-stagger > :nth-child(4) { animation-delay: 275ms; }
@@ -1003,33 +1132,33 @@
 .harness-character[data-harness="claude-code"] { --character-color: #F2A97E; }
 .harness-character[data-harness="codex"] { --character-color: #B09AEF; }
 .harness-character[data-harness="antigravity"] { --character-color: #78BFDE; }
-.harness-name { display: block; font-size: 10px; line-height: 13px; color: var(--text-secondary); }
+.harness-name { display: block; font-size: calc(10px * var(--type-scale)); line-height: 1.3; color: var(--text-secondary); }
 .harness-working-dot { position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--state-done); }
 .harness-footer[data-rail="true"] { width: calc(100% + var(--spacing) * 3); margin: 0 calc(var(--spacing) * -1.5); padding: 6px 5px; }
 .harness-footer[data-rail="true"] .harness-characters { height: auto; flex-direction: column; gap: 4px; }
 .harness-footer[data-rail="true"] .harness-button { width: 34px; height: 36px; }
 .harness-footer[data-rail="true"] .harness-character { width: 24px; height: 24px; }
-.harness-footer[data-rail="true"] .harness-name { font-size: 8px; line-height: 10px; }
+.harness-footer[data-rail="true"] .harness-name { font-size: 8px; line-height: 10px; } /* fixed: the rail is a fixed-width column */
 .harness-footer[data-rail="true"] .harness-working-dot { width: 3px; height: 3px; top: 3px; right: 2px; }
 .harness-bubble { z-index: 50; width: 236px; max-width: calc(100vw - 16px); padding: 12px 14px 10px; border: 1px solid var(--border-float); border-radius: 12px; background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-float); outline: none; transform-origin: var(--radix-popover-content-transform-origin); }
-.harness-bubble[data-state="open"] { animation: harness-bubble-open 160ms cubic-bezier(.2,.8,.2,1); }
+.harness-bubble[data-state="open"] { animation: harness-bubble-open 160ms var(--motion-ease); }
 .harness-bubble[data-state="closed"] { animation: harness-bubble-close 100ms ease-in; }
 @keyframes harness-bubble-open { from { opacity: 0; transform: scale(.94); } }
 @keyframes harness-bubble-close { to { opacity: 0; transform: scale(.96); } }
 .harness-bubble-arrow { fill: var(--surface-raised); }
 .harness-usage-heading { display: flex; align-items: baseline; gap: 6px; }
-.harness-usage-heading h3 { font-size: 12px; font-weight: 500; }
-.harness-usage-value { margin-left: auto; font-size: 18px; letter-spacing: -.6px; color: var(--text); }
+.harness-usage-heading h3 { font-size: calc(12px * var(--type-scale)); font-weight: 500; }
+.harness-usage-value { margin-left: auto; font-size: calc(18px * var(--type-scale)); letter-spacing: -.6px; color: var(--text); }
 .harness-usage-row[data-tone="warn"] .harness-usage-value { color: var(--pill-human-fg); }
 .harness-usage-row[data-tone="limited"] .harness-usage-value, .harness-usage-row[data-tone="limited"] .harness-usage-sub { color: var(--pill-blocked-fg); }
 .harness-usage-track { height: 4px; margin: 7px 0 8px; overflow: hidden; border-radius: 5px; background: var(--surface-sunken); }
-.harness-usage-track i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.harness-usage-track i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width var(--motion-progress) var(--motion-ease); }
 .harness-usage-row[data-tone="warn"] .harness-usage-track i { background: var(--pill-human-fg); }
 .harness-usage-row[data-tone="limited"] .harness-usage-track i { background: var(--pill-blocked-fg); }
 .harness-usage-track[data-unavailable="true"] { background: repeating-linear-gradient(90deg,var(--text-tertiary) 0 2px,transparent 2px 7px); }
-.harness-usage-meta { display: flex; justify-content: space-between; gap: 5px; color: var(--text-secondary); font-size: 10px; }
-.harness-usage-sub { margin-top: 5px; color: var(--text-tertiary); font-size: 11px; }
-.harness-bubble-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-size: 10.5px; color: var(--text-secondary); }
+.harness-usage-meta { display: flex; justify-content: space-between; gap: 5px; color: var(--text-secondary); font-size: calc(10px * var(--type-scale)); }
+.harness-usage-sub { margin-top: 5px; color: var(--text-tertiary); font-size: calc(11px * var(--type-scale)); }
+.harness-bubble-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-size: calc(11px * var(--type-scale)); color: var(--text-secondary); }
 .harness-bubble-footer a:hover { color: var(--text); }
 .harness-character .body, .harness-character .eyes, .harness-character .legs, .harness-character .orbit, .harness-character .exhaust, .harness-character .shadow { transform-box: view-box; transform-origin: 32px 34px; }
 .harness-character .eyes { animation: harness-blink 6s infinite; }
@@ -1135,27 +1264,25 @@
 .fin-row > * { min-height: 0; overflow: hidden; }
 .fin-row[data-leaving="true"] { grid-template-rows: 0fr; opacity: 0; transform: translateX(24px); }
 .fin-step { animation: motion-rise 380ms var(--motion-ease) both; }
-.fin-toast { animation: fin-toast 280ms var(--motion-ease) both; }
 .fin-progress { animation: fin-progress 1100ms ease-in-out infinite alternate; }
 @keyframes fin-grow { from { transform: scaleY(0); } }
 @keyframes fin-fill { from { transform: scaleX(0); } }
 @keyframes fin-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-@keyframes fin-toast { from { opacity: 0; transform: translateY(16px); } }
 @keyframes fin-progress { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .fin-bar, .fin-fill, .fin-spark, .fin-spark-dot, .fin-step, .fin-toast { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .fin-bar, .fin-fill, .fin-spark, .fin-spark-dot, .fin-step { animation-duration: 1ms !important; animation-delay: 0ms !important; }
   .fin-row { transition-duration: 1ms !important; }
   .fin-progress { animation: none; transform: none; width: 100%; opacity: 0.6; }
 }
 
 /* The Docs app's page: the editor's content, styled like a written document. */
 @layer components {
-  .doc-page .ProseMirror { outline: none; color: var(--text-2); font-size: 15.5px; line-height: 1.7; min-height: 50vh; }
+  .doc-page .ProseMirror { outline: none; color: var(--text-2); font-size: calc(15.5px * var(--type-scale)); line-height: 1.7; min-height: 50vh; }
   .doc-page .ProseMirror > * + * { margin-top: 0.75em; }
-  .doc-page .ProseMirror h1 { font: 600 30px/1.2 Georgia, "Times New Roman", serif; letter-spacing: -0.01em; color: var(--text); margin: 0 0 0.5em; }
-  .doc-page .ProseMirror h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-top: 1.4em; }
-  .doc-page .ProseMirror h3 { font-size: 16.5px; font-weight: 600; color: var(--text); margin-top: 1.2em; }
+  .doc-page .ProseMirror h1 { font: 600 calc(30px * var(--type-scale))/1.2 Georgia, "Times New Roman", serif; letter-spacing: -0.01em; color: var(--text); margin: 0 0 0.5em; }
+  .doc-page .ProseMirror h2 { font-size: calc(20px * var(--type-scale)); font-weight: 600; color: var(--text); margin-top: 1.4em; }
+  .doc-page .ProseMirror h3 { font-size: calc(16.5px * var(--type-scale)); font-weight: 600; color: var(--text); margin-top: 1.2em; }
   .doc-page .ProseMirror h4, .doc-page .ProseMirror h5, .doc-page .ProseMirror h6 { font-weight: 600; color: var(--text); }
   .doc-page .ProseMirror ul { list-style: disc; padding-left: 1.4em; }
   .doc-page .ProseMirror ol { list-style: decimal; padding-left: 1.4em; }
@@ -1167,11 +1294,11 @@
   .doc-page .ProseMirror blockquote { border-left: 3px solid var(--border-strong); padding-left: 1em; color: var(--text-secondary); }
   .doc-page .ProseMirror a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .doc-page .ProseMirror code { font-family: var(--font-mono); font-size: 0.86em; padding: 1px 5px; border-radius: 4px; background: var(--selected); border: 1px solid var(--border-strong); }
-  .doc-page .ProseMirror pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.55; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  .doc-page .ProseMirror pre { font-family: var(--font-mono); font-size: calc(13px * var(--type-scale)); line-height: 1.55; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
   .doc-page .ProseMirror pre code { background: none; border: 0; padding: 0; font-size: inherit; }
   .doc-page .ProseMirror hr { border: 0; border-top: 1px solid var(--border-strong); margin: 1.6em 0; }
   .doc-page .ProseMirror hr.ProseMirror-selectednode { border-top-color: var(--accent); }
-  .doc-page .ProseMirror table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .doc-page .ProseMirror table { border-collapse: collapse; width: 100%; font-size: calc(14px * var(--type-scale)); }
   .doc-page .ProseMirror th, .doc-page .ProseMirror td { border: 1px solid var(--border-strong); padding: 6px 10px; vertical-align: top; text-align: left; }
   .doc-page .ProseMirror th { background: var(--surface-sunken); font-weight: 600; color: var(--text); }
   .doc-page .ProseMirror .selectedCell { background: var(--accent-soft); }
@@ -1197,8 +1324,8 @@
 .wizard-badge { animation: wizard-badge 350ms var(--motion-ease) both; }
 .wizard-shimmer { background: linear-gradient(90deg, var(--track) 25%, color-mix(in srgb, var(--accent) 22%, var(--track)) 50%, var(--track) 75%); background-size: 200% 100%; animation: wizard-shimmer 1.2s linear infinite; }
 .wizard-stagger > * { animation: wizard-bullet 300ms var(--motion-ease) both; animation-delay: calc(60ms + var(--i, 0) * 140ms); }
-.wizard-photo { animation: wizard-photo 450ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-.wizard-progress { transition: width 600ms cubic-bezier(0.3, 1.3, 0.5, 1); }
+.wizard-photo { animation: wizard-photo 450ms var(--motion-spring) both; }
+.wizard-progress { transition: width var(--motion-progress) var(--motion-spring); }
 .wizard-row .wizard-dot { border-color: var(--border-strong); transition: background-color 350ms, border-color 350ms, box-shadow 350ms; }
 .wizard-row .wizard-dot svg { opacity: 0; transition: opacity 300ms; }
 .wizard-row[data-state="current"] .wizard-dot { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

@@ -15,6 +15,7 @@ import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Kbd, TextArea } from "@/components/ui/primitives";
 import { shortcutBlocked } from "@/components/shell/shortcuts";
+import { confirmAction } from "@/components/ui/confirm";
 
 /** The ActionBox carries this id; the Graph view focuses it from a pending gate. */
 export const ACTION_BOX_ID = "run-action-box";
@@ -25,7 +26,7 @@ type P = Record<string, unknown>;
 
 /** Cancel always asks first: it ends the run and discards its workspace session. */
 export function confirmCancel(agent: string) {
-  return window.confirm(`Cancel ${agent}'s run? It stops now and can't be resumed.`);
+  return confirmAction({ title: `Cancel ${agent}'s run?`, body: "It stops now and can't be resumed.", confirmLabel: "Cancel run", cancelLabel: "Keep running" });
 }
 
 /** Sends a reply to a run waiting on `human_reply`: a ticket comment mentioning the agent. */
@@ -61,10 +62,10 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
   const { comment, body, setBody, sent, again, submit } = useReply(run, lastSeq);
   return (
     <>
-      <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
-      {question && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg-2">{question}</p>}
+      <p className="text-12 font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
+      {question && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-14 leading-relaxed text-fg-2">{question}</p>}
       {sent ? (
-        <p role="status" className="flex items-center gap-3 text-[13px] text-fg-secondary">
+        <p role="status" className="flex items-center gap-3 text-13 text-fg-secondary">
           Sent. Resuming {run.agent.name}…
           <Button variant="outline" onClick={again}>Reply again</Button>
         </p>
@@ -90,7 +91,7 @@ function ReplyBox({ run, question, lastSeq }: { run: Run; question: string | nul
             </Banner>
           )}
           <div className="flex items-center justify-end gap-3">
-            <span className="text-xs text-fg-tertiary pointer-coarse:hidden">
+            <span className="text-12 text-fg-tertiary pointer-coarse:hidden">
               <kbd className="font-mono">⌘↵</kbd> to send
             </span>
             <Button variant="approve" disabled={!body.trim() || comment.isPending} onClick={submit}>
@@ -138,7 +139,7 @@ export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Ru
   /** No server call grants a scope for the rest of a run, so this approves every request the run has open now. */
   const approveAll = async () => {
     if (pending || approvals.length < 2) return;
-    if (!window.confirm(`Approve all ${approvals.length} requests from ${run.agent.name} for this run?`)) return;
+    if (!await confirmAction({ title: `Approve all ${approvals.length} requests from ${run.agent.name}?`, body: "Each one is approved for this run only.", confirmLabel: "Approve all", tone: "neutral" })) return;
     setBusy(true);
     let failed = false;
     // Keep going past one that fails (say, decided elsewhere meanwhile); decide.error shows the last failure.
@@ -175,17 +176,17 @@ export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Ru
   if (!approval) return null;
   return (
     <>
-      <p className="flex flex-wrap items-center gap-2 text-xs font-medium text-pill-human-fg">
+      <p className="flex flex-wrap items-center gap-2 text-12 font-medium text-pill-human-fg">
         {run.agent.name} needs a decision <MonoChip>{approval.scope}</MonoChip>
         {approvals.length > 1 && <span className="font-normal text-fg-tertiary">1 of {approvals.length}</span>}
       </p>
-      <p className="text-[13.5px] font-medium text-fg">{approval.action_summary}</p>
-      {approval.risk_summary && <p className="text-[13px] text-fg-secondary">{approval.risk_summary}</p>}
+      <p className="text-14 font-medium text-fg">{approval.action_summary}</p>
+      {approval.risk_summary && <p className="text-13 text-fg-secondary">{approval.risk_summary}</p>}
       {preview && (
         <div>
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 font-mono text-[11.5px] leading-relaxed text-fg-2">{shown}{long && !more ? "…" : ""}</pre>
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 font-mono text-12 leading-relaxed text-fg-2">{shown}{long && !more ? "…" : ""}</pre>
           {long && (
-            <button type="button" aria-expanded={more} onClick={() => setMore(!more)} className="mt-1 text-xs text-accent hover:underline">
+            <button type="button" aria-expanded={more} onClick={() => setMore(!more)} className="mt-1 text-12 text-accent hover:underline">
               {more ? "less" : "more"}
             </button>
           )}
@@ -229,7 +230,7 @@ export function ApprovalBox({ run, approvals: open, keys, onDecided }: { run: Ru
       {!denying && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {keys && (
-            <span className="mr-auto flex items-center gap-2 text-xs text-fg-tertiary pointer-coarse:hidden">
+            <span className="mr-auto flex items-center gap-2 text-12 text-fg-tertiary pointer-coarse:hidden">
               <span><Kbd>A</Kbd> approve</span>
               {approvals.length > 1 && <span><Kbd>⇧A</Kbd> all</span>}
               <span><Kbd>D</Kbd> deny</span>
@@ -261,7 +262,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
       icon="x"
       className="text-pill-blocked-fg"
       disabled={control.isPending}
-      onClick={() => { if (confirmCancel(run.agent.name)) control.mutate("cancel"); }}
+      onClick={async () => { if (await confirmCancel(run.agent.name)) control.mutate("cancel"); }}
     >
       Cancel run
     </Button>
@@ -272,14 +273,14 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
   if (run.state === "queued") {
     body = (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-fg-2">Waiting for a runner slot. It starts when one is free.</p>
+        <p className="text-13 text-fg-2">Waiting for a runner slot. It starts when one is free.</p>
         {cancel}
       </div>
     );
   } else if (run.state === "paused") {
     body = (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-fg-2"><span className="font-medium text-pill-human-fg">Paused.</span> Nothing runs until it is resumed.</p>
+        <p className="text-13 text-fg-2"><span className="font-medium text-pill-human-fg">Paused.</span> Nothing runs until it is resumed.</p>
         <span className="flex gap-2">
           <Button variant="approve" icon="play" disabled={control.isPending} onClick={() => control.mutate("resume")}>Resume</Button>
           {cancel}
@@ -290,7 +291,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
     const at = run.hold_until ? new Date(run.hold_until).toLocaleString() : "soon";
     body = (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-fg-2">
+        <p className="text-13 text-fg-2">
           <span className="font-medium text-fg">Out of provider usage.</span>{" "}
           {run.hold_reset_known ? `It resumes after the limit resets at ${at}.` : `The reset time is unknown, so it tries again at ${at}.`}
         </p>
@@ -303,13 +304,13 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
   } else if (run.state === "waiting") {
     switch (run.wait_reason) {
       case "approval":
-        body = pending.length ? <ApprovalBox run={run} approvals={pending} keys={keys} onDecided={onDecided} /> : <p className="text-[13px] text-fg-2">Waiting for an approval decision.</p>;
+        body = pending.length ? <ApprovalBox run={run} approvals={pending} keys={keys} onDecided={onDecided} /> : <p className="text-13 text-fg-2">Waiting for an approval decision.</p>;
         break;
       case "human_reply":
         if (run.purpose === "planning") {
-          body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/plans"}>Open the plan</Link></p>;
+          body = <p className="text-13 text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/plans"}>Open the plan</Link></p>;
         } else if (run.purpose === "chat") {
-          body = <p className="text-[13px] text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/chat"}>Open chat</Link></p>;
+          body = <p className="text-13 text-fg-2">{run.agent.name} is waiting for your reply. <Link className="text-accent hover:underline" href={workHref(run) ?? "/chat"}>Open chat</Link></p>;
         } else if (!compact && !inThread) {
           body = <ReplyBox run={run} question={latestQuestion(d.events)} lastSeq={d.events.at(-1)?.seq ?? 0} />;
         }
@@ -317,7 +318,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
       case "mockup_review":
         body = (
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] text-fg-2">Waiting for a mockup review. The next turn starts when a person reviews it.</p>
+            <p className="text-13 text-fg-2">Waiting for a mockup review. The next turn starts when a person reviews it.</p>
             <span className="flex gap-2">
               {run.ticket_key && <ButtonLink variant="primary" href={`/tickets/${encodeURIComponent(run.ticket_key)}`}>Review mockup</ButtonLink>}
               {cancel}
@@ -328,12 +329,12 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
       case "delegation":
         body = (
           <div className="flex flex-col gap-2">
-            <p className="text-[13px] font-medium text-fg-2">
+            <p className="text-13 font-medium text-fg-2">
               Waiting for {liveChildren.length} sub agent{liveChildren.length === 1 ? "" : "s"}
             </p>
             <ul className="flex flex-col gap-1">
               {liveChildren.map((c) => (
-                <li key={c.id} className="flex items-center gap-2 text-[13px]">
+                <li key={c.id} className="flex items-center gap-2 text-13">
                   <AgentAvatar name={c.agent.name} colorIndex={c.agent.color_index} label={false} />
                   <Link href={`/runs/${c.id}`} className="font-medium text-accent hover:underline">{c.agent.name} ↗</Link>
                   <StatusPill run={c} />
@@ -347,7 +348,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
       default:
         body = (
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] text-fg-2">Waiting for {run.agent.name}.</p>
+            <p className="text-13 text-fg-2">Waiting for {run.agent.name}.</p>
             {cancel}
           </div>
         );
@@ -371,7 +372,7 @@ export function ActionBox({ d, compact, inThread, keys, onDecided }: { d: RunDet
 function RailCard({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
     <section aria-label={title} className="rounded-xl border border-border bg-surface p-3.5">
-      <h2 className="mb-2 flex items-center justify-between text-xs font-medium text-fg-tertiary">
+      <h2 className="mb-2 flex items-center justify-between text-12 font-medium text-fg-tertiary">
         {title}
         {aside && <span className="font-mono">{aside}</span>}
       </h2>
@@ -389,10 +390,10 @@ function PlanCard({ run }: { run: Run }) {
     <RailCard title="Plan" aside={`${done} / ${run.plan.length}`}>
       <ol className="flex flex-col gap-1.5">
         {run.plan.map((s) => (
-          <li key={s.position} className="flex gap-2 text-[13px]">
+          <li key={s.position} className="flex gap-2 text-13">
             <span aria-hidden className={cx("w-3 flex-none text-center", s.state === "done" && "text-state-done", s.state === "failed" && "text-pill-blocked-fg", s.state === "current" && "text-accent")}>{STEP_MARK[s.state]}</span>
             <span className={cx("min-w-0 flex-1", s.state === "done" ? "text-fg-secondary" : "text-fg-2")}>{s.text}</span>
-            <span className="flex-none font-mono text-[11px] text-fg-tertiary">{s.state.replace("_", " ")}</span>
+            <span className="flex-none font-mono text-11 text-fg-tertiary">{s.state.replace("_", " ")}</span>
           </li>
         ))}
       </ol>
@@ -405,14 +406,14 @@ function TreeNode({ run, label, depth, kids }: { run: Run; label?: string; depth
     <li>
       <div className={cx("flex items-start gap-2 py-1.5", depth > 0 && "ml-4 border-l border-border-subtle pl-3")}>
         <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} />
-        <div className="flex min-w-0 flex-col text-[13px] leading-tight">
+        <div className="flex min-w-0 flex-col text-13 leading-tight">
           <span className="flex flex-wrap items-center gap-2">
             {label ? <span className="font-medium">{run.agent.name} <span className="font-normal text-fg-tertiary">({label})</span></span> : (
               <Link href={`/runs/${run.id}`} className="font-medium text-accent hover:underline">{run.agent.name} ↗</Link>
             )}
             <StatusPill run={run} />
           </span>
-          <span className="font-mono text-[11px] text-fg-tertiary">
+          <span className="font-mono text-11 text-fg-tertiary">
             {run.model} · {duration(run.started_at, run.ended_at)} · {runCost(run.cost_usd, run.cost_source)}
           </span>
         </div>
@@ -442,9 +443,9 @@ function DelegatedTree({ d, grandchildren }: { d: RunDetail; grandchildren: (Run
 
 function Row({ k, v, sub }: { k: ReactNode; v: ReactNode; sub?: ReactNode }) {
   return (
-    <li className="flex items-baseline justify-between gap-3 text-[12.5px]">
+    <li className="flex items-baseline justify-between gap-3 text-13">
       <span className="min-w-0 truncate text-fg-2">{k}</span>
-      <span className="flex-none font-mono text-[11.5px] text-fg-secondary">{v}{sub && <span className="ml-2 text-fg-tertiary">{sub}</span>}</span>
+      <span className="flex-none font-mono text-12 text-fg-secondary">{v}{sub && <span className="ml-2 text-fg-tertiary">{sub}</span>}</span>
     </li>
   );
 }
@@ -460,7 +461,7 @@ function UsageCard({ d, grandchildren }: { d: RunDetail; grandchildren: (Run[] |
     <RailCard title="Usage">
       <div className="flex flex-col gap-3">
         <div>
-          <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">By turn</h3>
+          <h3 className="mb-1 text-11 font-medium uppercase tracking-wide text-fg-tertiary">By turn</h3>
           <ul className="flex flex-col gap-1">
             {d.turns.map((t) => {
               const u = (t.usage ?? {}) as P;
@@ -480,11 +481,11 @@ function UsageCard({ d, grandchildren }: { d: RunDetail; grandchildren: (Run[] |
                 sub={sub.unpriced ? `≥ $${sub.cost.toFixed(2)}` : `$${sub.cost.toFixed(2)}`}
               />
             )}
-            {d.turns.length === 0 && d.child_runs.length === 0 && <li className="text-xs text-fg-tertiary">No turns yet.</li>}
+            {d.turns.length === 0 && d.child_runs.length === 0 && <li className="text-12 text-fg-tertiary">No turns yet.</li>}
           </ul>
         </div>
         <div>
-          <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">By model</h3>
+          <h3 className="mb-1 text-11 font-medium uppercase tracking-wide text-fg-tertiary">By model</h3>
           <ul className="flex flex-col gap-1">
             {models.map((m) => (
               <Row key={m.model} k={m.model} v={`${m.runs} run${m.runs === 1 ? "" : "s"}`} sub={m.unpriced ? `≥ $${m.cost.toFixed(2)}` : `$${m.cost.toFixed(2)}`} />
@@ -492,15 +493,15 @@ function UsageCard({ d, grandchildren }: { d: RunDetail; grandchildren: (Run[] |
           </ul>
         </div>
         <div>
-          <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Cache share</h3>
+          <h3 className="mb-1 text-11 font-medium uppercase tracking-wide text-fg-tertiary">Cache share</h3>
           {share === null ? (
-            <p className="text-xs text-fg-tertiary">Cache breakdown unavailable.</p>
+            <p className="text-12 text-fg-tertiary">Cache breakdown unavailable.</p>
           ) : (
             <div className="flex items-center gap-2">
               <div role="img" aria-label={`${Math.round(share * 100)}% of input served from cache`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                 <div className="h-full bg-accent" style={{ width: `${share * 100}%` }} />
               </div>
-              <span className="font-mono text-[11.5px] text-fg-secondary">{Math.round(share * 100)}%</span>
+              <span className="font-mono text-12 text-fg-secondary">{Math.round(share * 100)}%</span>
             </div>
           )}
         </div>
@@ -532,14 +533,14 @@ export function ReplyComposer({ run, lastSeq }: { run: Run; lastSeq: number }) {
       }}
       className="flex flex-none flex-col gap-2 border-t border-border-subtle bg-bg px-3 pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))]"
     >
-      <p className="text-xs font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
+      <p className="text-12 font-medium text-pill-human-fg">{run.agent.name} is waiting for your reply</p>
       {comment.isError && (
         <Banner tone="blocked" title="Couldn't send the reply">
           {comment.error.message}
         </Banner>
       )}
       {sent ? (
-        <p role="status" className="flex items-center justify-between gap-3 text-[13px] text-fg-secondary">
+        <p role="status" className="flex items-center justify-between gap-3 text-13 text-fg-secondary">
           Sent. Resuming {run.agent.name}…
           <Button variant="outline" className="h-[44px]" onClick={again}>Reply again</Button>
         </p>
@@ -552,7 +553,7 @@ export function ReplyComposer({ run, lastSeq }: { run: Run; lastSeq: number }) {
             rows={1}
             placeholder={`Reply to ${run.agent.name}`}
             onChange={(e) => setBody(e.target.value)}
-            className="max-h-32 min-h-[44px] flex-1 text-[16px]"
+            className="max-h-32 min-h-[44px] flex-1 text-16"
           />
           <Button type="submit" variant="approve" className="h-[44px]" disabled={!body.trim() || comment.isPending}>
             {comment.isPending ? "Sending…" : "Send"}

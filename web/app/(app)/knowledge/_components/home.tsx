@@ -54,27 +54,27 @@ export function KnowledgeHome() {
       {/* relative: the rows' sr-only labels are absolutely placed, and would otherwise escape this scroller and stretch the page. */}
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[760px] px-6 pb-12 pt-14">
-          <h1 className="text-[28px] font-bold tracking-[-0.02em] text-fg">
+          <h1 className="text-28 font-bold tracking-[-0.02em] text-fg">
             {greeting(today)}
             {/* Only once on the client: the name comes from data the server render doesn't have. */}
             {today && name ? `, ${name}` : ""}
           </h1>
-          <p className="mt-1 text-sm text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <p className="mt-1 text-14 text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}</p>
 
           {!agent && (
             <section aria-label="Needs you" className="mt-8">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Needs you</h2>
+              <h2 className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Needs you</h2>
               {!loaded ? (
                 <Skeleton className="mt-2 h-[84px] w-full" />
               ) : waiting.length === 0 ? (
-                <p className="mt-2 text-[13px] text-fg-tertiary">Nothing to review or file.</p>
+                <p className="mt-2 text-13 text-fg-tertiary">Nothing to review or file.</p>
               ) : (
                 <div className="mt-2 grid gap-2.5 sm:grid-cols-3">
                   {waiting.map((n) => (
                     <button key={n.key} onClick={n.go} className={cx("flex flex-col items-start rounded-xl border bg-surface p-3.5 text-left hover:bg-hover", n.hot ? "border-accent/40" : "border-border")}>
-                      <span className={cx("text-[22px] font-bold leading-none", n.hot ? "text-accent" : "text-fg")}>{n.count}{n.more ? "+" : ""}</span>
-                      <span className="mt-1.5 text-[13px] text-fg">{n.label}</span>
-                      <span className="mt-1 text-xs font-medium text-accent">{n.action} →</span>
+                      <span className={cx("text-22 font-bold leading-none", n.hot ? "text-accent" : "text-fg")}>{n.count}{n.more ? "+" : ""}</span>
+                      <span className="mt-1.5 text-13 text-fg">{n.label}</span>
+                      <span className="mt-1 text-12 font-medium text-accent">{n.action} →</span>
                     </button>
                   ))}
                 </div>
@@ -84,12 +84,12 @@ export function KnowledgeHome() {
 
           {latest && (
             <section aria-label="Pick up where you left off" className="mt-8">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pick up where you left off</h2>
+              <h2 className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pick up where you left off</h2>
               <Link href={pageHref(latest.id, latest.title)} className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-surface p-4 hover:bg-hover">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-fg">{displayTitle(latest)}</span>
-                  <span className="mt-0.5 block truncate text-xs text-fg-secondary">{latest.summary || "Empty page"}</span>
-                  <span className="mt-0.5 block text-[11px] text-fg-tertiary">{folderOf(latest.path)} · edited {ago(latest.updated_at)}</span>
+                  <span className="block truncate text-14 font-semibold text-fg">{displayTitle(latest)}</span>
+                  <span className="mt-0.5 block truncate text-12 text-fg-secondary">{latest.summary || "Empty page"}</span>
+                  <span className="mt-0.5 block text-11 text-fg-tertiary">{folderOf(latest.path)} · edited {ago(latest.updated_at)}</span>
                 </span>
                 <Icon name="chevr" size={14} className="flex-none text-accent" />
               </Link>
@@ -97,8 +97,8 @@ export function KnowledgeHome() {
           )}
 
           <div className="mt-8 flex items-baseline justify-between">
-            <h2 className="text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Recent</h2>
-            <button onClick={k.openSwitcher} className="text-xs font-medium text-accent hover:underline">
+            <h2 className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Recent</h2>
+            <button onClick={k.openSwitcher} className="text-12 font-medium text-accent hover:underline">
               Find a page
             </button>
           </div>
@@ -114,13 +114,13 @@ export function KnowledgeHome() {
                 <Link href={pageHref(r.id, r.title)} className="grid grid-cols-[20px_1fr_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-hover">
                   <Icon name={r.properties?.query ? "board" : "artifacts"} size={14} className="text-fg-tertiary" />
                   <span className="min-w-0">
-                    <span className={cx("block truncate text-sm font-medium", isUntitled(r) ? "italic text-fg-secondary" : "text-fg")}>{displayTitle(r)}</span>
-                    <span className="block truncate text-xs text-fg-tertiary">
+                    <span className={cx("block truncate text-14 font-medium", isUntitled(r) ? "italic text-fg-secondary" : "text-fg")}>{displayTitle(r)}</span>
+                    <span className="block truncate text-12 text-fg-tertiary">
                       {folderOf(r.path)}
                       {r.summary && !isUntitled(r) ? ` · ${r.summary}` : !r.summary ? " · empty" : ""}
                     </span>
                   </span>
-                  <span className="flex items-center gap-1.5 text-xs text-fg-tertiary" title={AUDIENCE[r.audience].label}>
+                  <span className="flex items-center gap-1.5 text-12 text-fg-tertiary" title={AUDIENCE[r.audience].label}>
                     <Icon name={AUDIENCE[r.audience].icon} size={12} />
                     <span className="sr-only">{AUDIENCE[r.audience].label} · </span>
                     {ago(r.updated_at)}
@@ -128,10 +128,10 @@ export function KnowledgeHome() {
                 </Link>
               </li>
             ))}
-            {recent.data && recent.data.rows.length === 0 && <li className="py-6 text-center text-[13px] text-fg-tertiary">No pages yet. Capture a thought with ⌥⌘N or import your Obsidian vault from the explorer.</li>}
+            {recent.data && recent.data.rows.length === 0 && <li className="py-6 text-center text-13 text-fg-tertiary">No pages yet. Capture a thought with ⌥⌘N or import your Obsidian vault from the explorer.</li>}
           </ul>
 
-          <p className="mt-8 text-center text-xs text-fg-tertiary">
+          <p className="mt-8 text-center text-12 text-fg-tertiary">
             <Kbd>⌘D</Kbd> today · <Kbd>⌘O</Kbd> go to page · <Kbd>⌥⌘N</Kbd> capture · <Kbd>⌘J</Kbd> ask a persona
           </p>
         </div>

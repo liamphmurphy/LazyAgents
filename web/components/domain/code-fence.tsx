@@ -19,7 +19,7 @@ export function CodeFence({ code, info }: { code: string; info?: string }) {
   const toks = useHighlighted([shown], lang, true)?.[0];
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-sunken" data-testid="code-fence">
-      <div className="flex items-center justify-between border-b border-border-row px-3 py-1 text-xs text-fg-tertiary">
+      <div className="flex items-center justify-between border-b border-border-row px-3 py-1 text-12 text-fg-tertiary">
         <span className="font-mono">{label}</span>
         <button
           type="button"
@@ -35,7 +35,7 @@ export function CodeFence({ code, info }: { code: string; info?: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
+      <pre className="overflow-x-auto p-3 font-mono text-12 leading-relaxed">
         {/* Not an inline chip: reset the .prose-code `code` styles (border, background, padding, size, colour),
             which otherwise draw as empty pills around the first and last lines. */}
         <code className="block rounded-none border-0 bg-transparent p-0 text-[length:inherit] text-fg">
@@ -57,7 +57,7 @@ export function CodeFence({ code, info }: { code: string; info?: string }) {
         <button
           type="button"
           aria-expanded={expanded}
-          className="w-full border-t border-border-row px-3 py-1 text-left text-xs text-fg-secondary hover:text-fg"
+          className="w-full border-t border-border-row px-3 py-1 text-left text-12 text-fg-secondary hover:text-fg"
           onClick={() => setExpanded((e) => !e)}
         >
           {expanded ? "Show less" : `Show ${lines.length - FENCE_COLLAPSE_LINES} more lines`}

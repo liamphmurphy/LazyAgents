@@ -14,8 +14,8 @@ type BoardEpic = Schemas["BoardEpic"];
 type Criterion = Schemas["EpicCriterion"];
 
 const STATUS_LABEL: Record<Schemas["EpicStatus"], string> = { open: "Open", done: "Done" };
-const inputClass = "h-8 min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg";
-const rowButton = "rounded px-1.5 py-0.5 text-[11px] text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40";
+const inputClass = "h-8 min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 text-12 text-fg";
+const rowButton = "rounded px-1.5 py-0.5 text-11 text-fg-secondary hover:bg-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : "Request failed. Try again.");
 
@@ -49,14 +49,14 @@ export function EpicCompletion({ summary, stacked }: { summary: BoardEpic; stack
   return (
     <div className={stacked ? "grid gap-5" : "grid gap-5 md:grid-cols-2"}>
       <div className="min-w-0 space-y-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-12">
           <span className="text-fg-secondary">Status: <span ref={statusRef} className="inline-block font-medium text-fg">{STATUS_LABEL[epic.status]}</span></span>
           <span className="text-fg-tertiary">{epic.tickets_total} tickets, {epic.tickets_open} open</span>
         </div>
         <Progress label="Points" done={epic.points_done} total={epic.points_total} value={`${epic.points_done} / ${epic.points_total} pts done`} />
         <Progress label="Criteria" done={epic.criteria_done} total={epic.criteria_total} value={`${epic.criteria_done} / ${epic.criteria_total} met`} />
         <div className="flex flex-wrap items-start gap-3">
-          {!closed && (gated || !criteria.length) && <section aria-label="Done blockers" className="min-w-0 flex-1 space-y-1.5 rounded-md border border-border-strong bg-surface-sunken p-3 text-xs">
+          {!closed && (gated || !criteria.length) && <section aria-label="Done blockers" className="min-w-0 flex-1 space-y-1.5 rounded-md border border-border-strong bg-surface-sunken p-3 text-12">
             <p className="font-semibold text-fg">Can&apos;t mark done yet</p>
             {!criteria.length && <p className="text-fg-secondary">Add acceptance criteria before marking done.</p>}
             {blockers.open_tickets.length > 0 && <div>
@@ -69,21 +69,21 @@ export function EpicCompletion({ summary, stacked }: { summary: BoardEpic; stack
               <ul aria-label="Unchecked criteria" className="list-none">{(unchecked.length ? unchecked.map((c) => `${c.position}. ${c.text}`) : blockers.unchecked_criteria.map(String)).map((t) => <li key={t}>{t}</li>)}</ul>
             </div>}
           </section>}
-          {!closed && !gated && criteria.length > 0 && <p className="flex-1 text-xs text-fg-tertiary">Ready to mark done</p>}
+          {!closed && !gated && criteria.length > 0 && <p className="flex-1 text-12 text-fg-tertiary">Ready to mark done</p>}
           {closed
             ? <Button variant="outline" disabled={status.isPending} onClick={() => changeStatus("open")}>{status.isPending ? "Reopening…" : "Reopen epic"}</Button>
             : <Button variant="primary" disabled={!ready || status.isPending} onClick={() => changeStatus("done")}
                 title={ready ? undefined : "Close the open tickets and check every criterion first"}>{status.isPending ? "Saving…" : "Mark epic done"}</Button>}
         </div>
         <FinalReview summary={summary} />
-        {statusError && <p role="alert" className="text-xs text-pill-blocked-fg">{statusError}</p>}
-        {blocked && <div role="alert" aria-label="Epic cannot be marked done" className="space-y-2 rounded-md border border-state-blocked bg-surface p-3 text-xs">
+        {statusError && <p role="alert" className="text-12 text-pill-blocked-fg">{statusError}</p>}
+        {blocked && <div role="alert" aria-label="Epic cannot be marked done" className="space-y-2 rounded-md border border-state-blocked bg-surface p-3 text-12">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold text-fg">Epic cannot be marked done</p>
               <p className="text-fg-secondary">Something changed since this page loaded. Epic remains {STATUS_LABEL[epic.status]}.</p>
             </div>
-            <button type="button" aria-label="Dismiss completion error" onClick={() => setBlocked(undefined)} className="text-base leading-none">×</button>
+            <button type="button" aria-label="Dismiss completion error" onClick={() => setBlocked(undefined)} className="text-16 leading-none">×</button>
           </div>
           <p className="text-fg-tertiary">{blocked}</p>
           <p className="text-fg-secondary">The blockers above are refreshed from the server.</p>
@@ -104,7 +104,7 @@ function FinalReview({ summary }: { summary: BoardEpic }) {
     create.mutateAsync().catch((e: unknown) => setError(`Couldn't add final review: ${message(e)}`));
   }
   return (
-    <section aria-label="Final review" className="space-y-1.5 text-xs">
+    <section aria-label="Final review" className="space-y-1.5 text-12">
       <h2 className="font-semibold text-fg-secondary">Final review</h2>
       {review ? <>
         <p className="flex min-w-0 flex-wrap items-center gap-x-2">
@@ -156,8 +156,8 @@ function CriteriaEditor({ criteria, closed, mutations }: {
 
   return (
     <section aria-label="Final acceptance criteria" className="min-w-0">
-      <h2 className="mb-2 text-xs font-semibold text-fg-secondary">Final acceptance criteria</h2>
-      {criteria.length ? <ol className="space-y-1.5 text-xs">
+      <h2 className="mb-2 text-12 font-semibold text-fg-secondary">Final acceptance criteria</h2>
+      {criteria.length ? <ol className="space-y-1.5 text-12">
         {criteria.map((c, i) => {
           const pending = busy === c.id;
           const locked = closed || !!busy;
@@ -180,7 +180,7 @@ function CriteriaEditor({ criteria, closed, mutations }: {
             </form> : <>
               <span className={cx("min-w-0 flex-1 break-words", c.done && "text-fg-secondary")}>
                 {c.position}. {c.text}
-                {c.done && (c.checked_by || c.checked_at) && <span className="block text-[11px] text-fg-tertiary" title={c.checked_at ? absoluteTime(c.checked_at) : undefined}>
+                {c.done && (c.checked_by || c.checked_at) && <span className="block text-11 text-fg-tertiary" title={c.checked_at ? absoluteTime(c.checked_at) : undefined}>
                   Checked{c.checked_by && ` by ${c.checked_by.name}`}{c.checked_at && ` ${ago(c.checked_at)}`}
                 </span>}
               </span>
@@ -197,10 +197,10 @@ function CriteriaEditor({ criteria, closed, mutations }: {
             </>}
           </li>;
         })}
-      </ol> : <p className="text-xs text-fg-secondary">Add final acceptance criteria before this epic can be marked done.</p>}
+      </ol> : <p className="text-12 text-fg-secondary">Add final acceptance criteria before this epic can be marked done.</p>}
       {busy && <p role="status" className="sr-only">Saving criteria…</p>}
-      {error && <p role="alert" className="mt-2 text-xs text-pill-blocked-fg">{error}</p>}
-      {closed ? <p className="mt-2 text-xs text-fg-tertiary">Reopen the epic to edit its criteria.</p>
+      {error && <p role="alert" className="mt-2 text-12 text-pill-blocked-fg">{error}</p>}
+      {closed ? <p className="mt-2 text-12 text-fg-tertiary">Reopen the epic to edit its criteria.</p>
         : <form onSubmit={add} className="mt-3 flex flex-wrap gap-2">
           <input aria-label="New acceptance criterion" placeholder="Add a final acceptance criterion…" value={draft} maxLength={1000}
             onChange={(e) => setDraft(e.target.value)} className={inputClass} />
@@ -211,7 +211,7 @@ function CriteriaEditor({ criteria, closed, mutations }: {
 }
 
 function Progress({ label, done, total, value }: { label: string; done: number; total: number; value: string }) {
-  return <div className="flex items-center gap-3 text-xs">
+  return <div className="flex items-center gap-3 text-12">
     <span className="w-11 text-fg-secondary">{label}</span>
     <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={done} aria-valuetext={value} className="h-2 max-w-64 flex-1 overflow-hidden rounded-full bg-surface-sunken">
       <div className="h-full rounded-full bg-accent" style={{ width: `${total ? Math.min(100, done / total * 100) : 0}%` }} />

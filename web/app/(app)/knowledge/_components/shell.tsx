@@ -240,7 +240,7 @@ function TabStrip({ tabs, active, onClose }: { tabs: Tab[]; active?: string; onC
             role="tab"
             aria-selected={on}
             className={cx(
-              "group relative -mb-px flex h-[34px] max-w-[220px] flex-none items-center gap-2 rounded-t-lg pl-3 pr-1.5 text-xs font-medium",
+              "group relative -mb-px flex h-[34px] max-w-[220px] flex-none items-center gap-2 rounded-t-lg pl-3 pr-1.5 text-12 font-medium",
               on ? "border-x border-t border-border-subtle bg-bg text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg-secondary",
             )}
           >
@@ -478,7 +478,7 @@ function Explorer({ pathname }: { pathname: string }) {
   return (
     <aside aria-label="Knowledge explorer" className="hidden w-[272px] flex-none flex-col border-r border-border-subtle bg-sidebar md:flex">
       <div className="flex h-10 flex-none items-center gap-1 px-3">
-        <span className="flex-1 text-sm font-semibold text-fg">Knowledge</span>
+        <span className="flex-1 text-14 font-semibold text-fg">Knowledge</span>
         <ExplorerButton icon="edit" label="New page" onClick={newPage} />
         <ExplorerButton icon="graph" label="Graph view" href="/knowledge/graph" />
         <ExplorerButton icon="link" label="Keep notes connected" href="/knowledge/connect" />
@@ -496,7 +496,7 @@ function Explorer({ pathname }: { pathname: string }) {
             role="radio"
             aria-checked={k.view === v}
             onClick={() => k.setView(v)}
-            className={cx("flex items-center justify-center gap-1.5 whitespace-nowrap rounded text-xs font-medium", v === "yours" ? "w-[72px] flex-none" : "flex-1", k.view === v ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}
+            className={cx("flex items-center justify-center gap-1.5 whitespace-nowrap rounded text-12 font-medium", v === "yours" ? "w-[72px] flex-none" : "flex-1", k.view === v ? "bg-selected text-fg" : "text-fg-tertiary hover:text-fg-secondary")}
           >
             {icon && <Icon name={icon} size={12} />}
             {label}
@@ -505,7 +505,7 @@ function Explorer({ pathname }: { pathname: string }) {
       </div>
       <button
         onClick={k.openSwitcher}
-        className="mx-3 mt-2.5 flex h-[30px] flex-none items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-left text-xs text-fg-tertiary hover:border-border-strong"
+        className="mx-3 mt-2.5 flex h-[30px] flex-none items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-left text-12 text-fg-tertiary hover:border-border-strong"
       >
         <Icon name="search" size={13} />
         <span className="flex-1 truncate">Search pages and #tags</span>
@@ -519,12 +519,12 @@ function Explorer({ pathname }: { pathname: string }) {
             ))}
           </div>
         ) : tree.count === 0 ? (
-          <p className="px-2 py-3 text-xs leading-relaxed text-fg-tertiary">{agent ? "No agent knowledge yet. Runs write their memory and proposed patterns here." : "No pages yet. Create one, capture a thought, or import your Obsidian vault."}</p>
+          <p className="px-2 py-3 text-12 leading-relaxed text-fg-tertiary">{agent ? "No agent knowledge yet. Runs write their memory and proposed patterns here." : "No pages yet. Create one, capture a thought, or import your Obsidian vault."}</p>
         ) : (
           <ExplorerMenu entries={blankMenu} className="min-h-full">
             {pinned.length > 0 && (
               <section aria-label="Pinned" className="mb-3">
-                <h3 className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pinned</h3>
+                <h3 className="px-2 pb-1 text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Pinned</h3>
                 <ul className="space-y-px">
                   {pinned.map((p) => (
                     <li key={p.id}>
@@ -534,7 +534,7 @@ function Explorer({ pathname }: { pathname: string }) {
                     </li>
                   ))}
                 </ul>
-                <h3 className="px-2 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.06em] text-fg-tertiary">Folders</h3>
+                <h3 className="px-2 pb-1 pt-3 text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Folders</h3>
               </section>
             )}
             <FolderItems folder={tree} depth={0} open={open} toggle={toggle} activeId={activeId} actions={actions} />
@@ -542,17 +542,17 @@ function Explorer({ pathname }: { pathname: string }) {
         )}
       </nav>
       <div className="flex-none border-t border-border-subtle px-2 py-2">
-        <button onClick={k.openToday} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium text-fg-2 hover:bg-hover">
+        <button onClick={k.openToday} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-13 font-medium text-fg-2 hover:bg-hover">
           <Icon name="clock" size={14} className="text-fg-secondary" />
           Today
-          <span className="text-xs font-normal text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</span>
+          <span className="text-12 font-normal text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</span>
         </button>
-        <button onClick={k.openCapture} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium text-fg-2 hover:bg-hover">
+        <button onClick={k.openCapture} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-13 font-medium text-fg-2 hover:bg-hover">
           <Icon name="inbox" size={14} className="text-fg-secondary" />
           Quick capture
           <Kbd className="ml-auto">⌥⌘N</Kbd>
         </button>
-        <button onClick={k.openImport} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium text-fg-2 hover:bg-hover">
+        <button onClick={k.openImport} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-13 font-medium text-fg-2 hover:bg-hover">
           <Icon name="upload" size={14} className="text-fg-secondary" />
           Import Obsidian vault
         </button>
@@ -627,12 +627,12 @@ function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folde
                 <button
                   onClick={() => toggle(f.path)}
                   style={{ paddingLeft: 6 + depth * 16 }}
-                  className="flex h-[26px] w-full items-center gap-1.5 rounded-md pr-2 text-[13px] font-medium text-fg-2 hover:bg-hover"
+                  className="flex h-[26px] w-full items-center gap-1.5 rounded-md pr-2 text-13 font-medium text-fg-2 hover:bg-hover"
                 >
                   <Icon name={isOpen ? "chev" : "chevr"} size={12} className="text-fg-tertiary" />
                   <Icon name={depth === 0 && f.name === "Inbox" ? "inbox" : "folder"} size={14} className="text-fg-secondary" />
                   <span className="min-w-0 flex-1 truncate text-left">{f.name}</span>
-                  {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{f.count}</span>}
+                  {((depth === 0 && f.name === "Inbox") || f.name === "Proposed") && <span className="rounded-full bg-accent-soft px-1.5 text-10 font-semibold text-accent">{f.count}</span>}
                 </button>
               </ExplorerMenu>
             )}
@@ -660,7 +660,7 @@ function FolderItems({ folder, depth, open, toggle, activeId, actions }: { folde
       ))}
       {hidden > 0 && (
         <li>
-          <button onClick={() => setAll(true)} style={{ paddingLeft: 24 + depth * 16 }} className="flex h-[26px] w-full items-center rounded-md pr-2 text-left text-[12px] text-fg-tertiary hover:bg-hover hover:text-fg-secondary">
+          <button onClick={() => setAll(true)} style={{ paddingLeft: 24 + depth * 16 }} className="flex h-[26px] w-full items-center rounded-md pr-2 text-left text-12 text-fg-tertiary hover:bg-hover hover:text-fg-secondary">
             + {hidden} more
           </button>
         </li>
@@ -676,14 +676,14 @@ function TreeLink({ href, icon, label, depth, active, badge, dot }: { href: stri
       style={{ paddingLeft: 24 + depth * 16 }}
       aria-current={active ? "page" : undefined}
       className={cx(
-        "relative flex h-[26px] items-center gap-1.5 rounded-md pr-2 text-[13px]",
+        "relative flex h-[26px] items-center gap-1.5 rounded-md pr-2 text-13",
         active ? "bg-selected font-medium text-fg before:absolute before:left-0 before:top-1.5 before:h-3.5 before:w-0.5 before:rounded before:bg-accent" : "text-fg-secondary hover:bg-hover",
       )}
     >
       <Icon name={icon} size={13} className={active ? "text-accent" : "text-fg-tertiary"} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {dot && <span title="Persona changes to review" className="size-1.5 rounded-full bg-state-human" />}
-      {badge !== undefined && <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">{badge}</span>}
+      {badge !== undefined && <span className="rounded-full bg-accent-soft px-1.5 text-10 font-semibold text-accent">{badge}</span>}
     </Link>
   );
 }
