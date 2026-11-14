@@ -29,6 +29,7 @@ type PageQuery struct {
 	Orphans      bool                 `json:"orphans,omitempty"`
 	Unresolved   bool                 `json:"unresolved,omitempty"`
 	IncludeAgent bool                 `json:"include_agent,omitempty"`
+	Kind         string               `json:"kind,omitempty"` // document, deck or design (see PageKind); empty keeps every kind
 	Limit        int                  `json:"limit,omitempty"`
 	Offset       int                  `json:"offset,omitempty"`
 }
@@ -72,6 +73,11 @@ func QueryPages(ctx context.Context, q *store.Queries, ws uuid.UUID, in PageQuer
 	}
 	in.Limit = min(200, in.Limit)
 	in.Offset = max(0, in.Offset)
+	switch in.Kind {
+	case "", "document", "deck", "design":
+	default:
+		return out, apperr.Invalid("kind", "kind is document, deck or design")
+	}
 	if in.LinksTo != nil {
 		if _, err := q.GetArtifact(ctx, store.GetArtifactParams{ID: *in.LinksTo, WorkspaceID: ws, Viewer: pageview.From(ctx).UserID}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -88,7 +94,7 @@ func QueryPages(ctx context.Context, q *store.Queries, ws uuid.UUID, in PageQuer
 	if err != nil {
 		return out, err
 	}
-	rows, err := q.QueryPages(ctx, store.QueryPagesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: in.IncludeAgent || pageview.From(ctx).IncludeAgent, Audience: in.Audience, Folder: strings.Trim(in.Folder, "/"), TextQuery: in.Text, Tag: strings.TrimPrefix(in.Tag, "#"), Properties: props, AfterDate: in.After, BeforeDate: in.Before, LinksTo: in.LinksTo, Orphans: in.Orphans, UnresolvedOnly: in.Unresolved, PageLimit: int32(in.Limit + 1), PageOffset: int32(in.Offset)})
+	rows, err := q.QueryPages(ctx, store.QueryPagesParams{WorkspaceID: ws, Viewer: pageview.From(ctx).UserID, IncludeAgent: in.IncludeAgent || pageview.From(ctx).IncludeAgent, Audience: in.Audience, Folder: strings.Trim(in.Folder, "/"), TextQuery: in.Text, Tag: strings.TrimPrefix(in.Tag, "#"), Properties: props, AfterDate: in.After, BeforeDate: in.Before, LinksTo: in.LinksTo, Orphans: in.Orphans, UnresolvedOnly: in.Unresolved, PageKind: in.Kind, PageLimit: int32(in.Limit + 1), PageOffset: int32(in.Offset)})
 	if err != nil {
 		return out, err
 	}
