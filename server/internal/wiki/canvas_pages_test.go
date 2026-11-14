@@ -118,6 +118,15 @@ func TestRenamingADeckRenamesItsPageAndDeletingThePageDeletesTheDeck(t *testing.
 		t.Errorf("after rename: %q at %q", renamed.Title, deref(renamed.Path))
 	}
 
+	// Retitling the page in Knowledge retitles the deck, so neither undoes the other later.
+	if _, err := e.svc.Pool.Exec(e.ctx, `UPDATE artifacts SET title = 'Q4 board update' WHERE id = $1`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	var deckTitle string
+	if err := e.svc.Pool.QueryRow(e.ctx, `SELECT title FROM chat_canvases WHERE id = $1`, deck.ID).Scan(&deckTitle); err != nil || deckTitle != "Q4 board update" {
+		t.Errorf("deck title after the page's = %q (%v)", deckTitle, err)
+	}
+
 	// Ensuring a page twice (the backfill, then a later insert) still leaves one.
 	if _, err := e.svc.Pool.Exec(e.ctx, `SELECT ensure_canvas_page($1)`, deck.ID); err != nil {
 		t.Fatal(err)

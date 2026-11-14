@@ -66,6 +66,15 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- A page renamed in Knowledge (a rename sets its title from its path) renames its deck or design,
+-- so the next rename of either doesn't undo the other. Each trigger stops when the titles match.
+CREATE FUNCTION canvas_page_title_to_canvas() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE chat_canvases SET title = left(NEW.title, 200), updated_at = now()
+   WHERE id = NEW.canvas_id AND title IS DISTINCT FROM left(NEW.title, 200) AND length(NEW.title) > 0;
+  RETURN NEW;
+END $$;
+
 -- Deleting the page deletes the deck or design it is: the two are one thing in Knowledge.
 CREATE FUNCTION canvas_page_on_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -78,6 +87,8 @@ CREATE TRIGGER chat_canvases_page AFTER INSERT ON chat_canvases
   FOR EACH ROW WHEN (NEW.kind IN ('deck', 'design')) EXECUTE FUNCTION canvas_page_on_insert();
 CREATE TRIGGER chat_canvases_page_title AFTER UPDATE OF title ON chat_canvases
   FOR EACH ROW WHEN (NEW.title IS DISTINCT FROM OLD.title) EXECUTE FUNCTION canvas_page_on_rename();
+CREATE TRIGGER artifacts_canvas_title AFTER UPDATE OF title ON artifacts
+  FOR EACH ROW WHEN (OLD.canvas_id IS NOT NULL AND NEW.title IS DISTINCT FROM OLD.title) EXECUTE FUNCTION canvas_page_title_to_canvas();
 CREATE TRIGGER artifacts_canvas_delete AFTER DELETE ON artifacts
   FOR EACH ROW WHEN (OLD.canvas_id IS NOT NULL) EXECUTE FUNCTION canvas_page_on_delete();
 
@@ -94,9 +105,11 @@ END $$;
 
 -- +goose Down
 DROP TRIGGER artifacts_canvas_delete ON artifacts;
+DROP TRIGGER artifacts_canvas_title ON artifacts;
 DROP TRIGGER chat_canvases_page_title ON chat_canvases;
 DROP TRIGGER chat_canvases_page ON chat_canvases;
 DROP FUNCTION canvas_page_on_delete();
+DROP FUNCTION canvas_page_title_to_canvas();
 DROP FUNCTION canvas_page_on_rename();
 DROP FUNCTION canvas_page_on_insert();
 DROP FUNCTION ensure_canvas_page(uuid);
