@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import { RunEntry } from "../../work/run-entry";
+import { RunLogScreen } from "./run-log";
 
 async function Loader({ params }: { params: PageProps<"/runs/[id]">["params"] }) {
   const { id } = await params;
-  return <RunEntry id={id} />;
+  return <RunLogScreen id={id} />;
 }
 
 export default function RunPage({ params }: PageProps<"/runs/[id]">) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { TicketStatus } from "@/lib/api/client";
 import {
   useBootstrap,
@@ -55,7 +55,16 @@ export function WorkScreen() {
       ? scope.project?.key
       : undefined;
   const agent = params.get("agent") || undefined;
-  const search = params.get("q") ?? "";
+  // The box keeps its own value: reading it back from the URL each keystroke
+  // dropped characters typed before Next re-rendered the new search params.
+  const urlSearch = params.get("q") ?? "";
+  const [search, setSearch] = useState(urlSearch);
+  const [seenUrlSearch, setSeenUrlSearch] = useState(urlSearch);
+  if (urlSearch !== seenUrlSearch) {
+    // Back/Forward or a saved view changed ?q=: follow it.
+    setSeenUrlSearch(urlSearch);
+    setSearch(urlSearch);
+  }
   const tickets = useTickets({
     project,
     assignee: agent,
@@ -197,7 +206,10 @@ export function WorkScreen() {
         aria-label="Search work"
         placeholder="/  Search work…"
         value={search}
-        onChange={(e) => updateWorkUrl({ q: e.target.value || null }, true)}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          updateWorkUrl({ q: e.target.value || null }, true);
+        }}
       />
       <div className="work-filters">
         <FilterMenu

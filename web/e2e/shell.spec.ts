@@ -27,7 +27,7 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   const layouts = page.getByRole("navigation", { name: "Tickets layout" });
   await expect(layouts.getByRole("link")).toHaveText(["List", "Board", "Epics"]);
   await expect(layouts.locator('[aria-current="page"]')).toHaveText("Board");
-  await expect(nav(page).locator('[aria-current="page"]')).toHaveAccessibleName("Tickets");
+  await expect(nav(page).locator('[aria-current="page"]')).toHaveAccessibleName("Work");
 
   await switcher(page).click();
   // Radix names the menu after its trigger.
@@ -77,7 +77,7 @@ test("one column switches areas; a screen's own list takes the place of Chats", 
   // The areas, then Apps; Inbox left the menu: the Needs you button opens the tray instead.
   const areas = page.getByRole("list", { name: "Areas" });
   const names = await areas.getByRole("link").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
-  expect(names).toEqual(["Chat", "Runs", "Tickets", "Knowledge"]);
+  expect(names).toEqual(["Chat", "Work", "Knowledge"]);
   await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
   await expect(menu.getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
   await expect(menu.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
@@ -132,7 +132,7 @@ test("the Chat area brings back the Chats list, and the mark collapses the colum
   // The strip keeps the same fixed items wherever you go.
   await page.goto("/settings");
   await expect(menu).not.toHaveAttribute("data-expanded");
-  await expect(page.getByRole("list", { name: "Areas" }).getByRole("link")).toHaveCount(4);
+  await expect(page.getByRole("list", { name: "Areas" }).getByRole("link")).toHaveCount(3);
   await menu.getByRole("button", { name: "Expand sidebar" }).click();
   await expect(menu).toHaveAttribute("data-expanded");
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.column-collapsed"))).toBeNull();
@@ -203,9 +203,9 @@ test("Needs you and Runs nav counts refresh on live updates", async ({ page }) =
   const api = await installBoardApi(page);
   await page.goto("/tickets?layout=board&project=WEB");
   const inbox = page.getByRole("button", { name: /^Needs you/ });
-  const runs = nav(page).getByRole("link", { name: /^Runs/ });
+  const runs = nav(page).getByRole("link", { name: /^Work/ });
   await expect(inbox).toHaveAccessibleName("Needs you, nothing waiting");
-  await expect(runs).toHaveAccessibleName("Runs");
+  await expect(runs).toHaveAccessibleName("Work");
   // Unread Updates never reach the badge: only needs_you counts.
   api.counts.inbox = 5;
   api.counts.needs_you = 2;
@@ -213,11 +213,11 @@ test("Needs you and Runs nav counts refresh on live updates", async ({ page }) =
   api.runner.live = 1;
   await api.emit("run.started");
   await expect(inbox).toHaveAccessibleName("Needs you, 2 waiting");
-  await expect(runs).toHaveAccessibleName(/^Runs\s*1\s*running$/);
+  await expect(runs).toHaveAccessibleName(/^Work\s*1\s*running$/);
   expect(api.unhandled).toEqual([]);
 });
 
-test("Runs lists live work and marks the nav item current", async ({ page }) => {
+test("Work lists live runs and marks the nav item current", async ({ page }) => {
   const api = await installBoardApi(page);
   api.runner.busy = 1;
   const agent = { id: "agent-builder", name: "Builder", handle: "builder", color_index: 0 };
@@ -229,9 +229,9 @@ test("Runs lists live work and marks the nav item current", async ({ page }) => 
   await page.route("**/api/v1/runs?*", (route) => route.fulfill({ json: { runs: listed, has_more: false } }));
   await page.route("**/api/v1/runs/11111111-1111-4111-8111-111111111111?*", (route) => route.fulfill({ json: { run: listed[0], child_runs: [], turns: [], approvals: [], events: [] } }));
   await page.goto("/runs");
-  // /runs opens the first live run beside the list.
-  await expect(page).toHaveURL(/\/runs\/11111111-1111-4111-8111-111111111111$/);
-  await expect(page.getByRole("list", { name: "Areas" }).locator('[aria-current="page"]')).toHaveAccessibleName(/^Runs/);
+  // /runs opens Work's Activity with the first live run beside the list.
+  await expect(page).toHaveURL(/\/work\?view=activity$/);
+  await expect(page.getByRole("list", { name: "Areas" }).locator('[aria-current="page"]')).toHaveAccessibleName(/^Work/);
   const list = page.getByRole("complementary", { name: "Runs" });
   await expect(list.getByRole("status")).toContainText("1 busy · 0 queued · 3 slots");
   const running = list.getByRole("region", { name: "Running" });

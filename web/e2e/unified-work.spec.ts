@@ -133,13 +133,21 @@ for (const compact of [false, true]) {
     expect(await log.evaluate((el) => el.scrollTop)).toBeLessThan(5);
     if (!compact) {
       const nav = page.getByRole("navigation", { name: "Work", exact: true });
-      await nav.getByRole("button", { name: "Tickets", exact: true }).click();
+      await page
+        .locator(".work-run-links")
+        .getByRole("button", { name: "WEB-1 ↗" })
+        .click();
+      await pane.getByRole("button", { name: "Focus ticket →" }).click();
       await expect(
         page.getByRole("region", { name: "Focused work" }),
       ).toBeVisible();
       await expect(input).toHaveValue("Keep my filters and reply draft.");
       await page.screenshot({ path: info.outputPath("04-focused-ticket.png") });
-      await nav.getByRole("button", { name: "Epics", exact: true }).click();
+      await page
+        .getByRole("region", { name: "Focused work" })
+        .getByRole("button", { name: /^Kanban board/ })
+        .first()
+        .click();
       await expect(
         page
           .getByRole("region", { name: "Focused work" })
@@ -155,28 +163,19 @@ for (const compact of [false, true]) {
   });
 }
 
-test("legacy links open Work, board stays available, and filters survive view changes", async ({
+test("legacy Runs links open Work, and Tickets and Epics open the full screens", async ({
   page,
 }) => {
   await installWork(page);
-  await page.goto("/runs/work-run?project=WEB&agent=builder");
-  await expect(page).toHaveURL(/\/work\?.*run=work-run/);
+  await page.goto("/runs?project=WEB");
+  await expect(page).toHaveURL(/\/work\?.*project=WEB/);
   const nav = page.getByRole("navigation", { name: "Work", exact: true });
-  await nav.getByRole("button", { name: "Tickets", exact: true }).click();
-  await nav.getByRole("textbox", { name: "Search work" }).fill("modal");
-  await nav.getByRole("button", { name: "Board", exact: true }).click();
-  await expect(
-    page
-      .getByRole("region", { name: "Focused work" })
-      .getByText("Build ticket modal", { exact: true })
-      .first(),
-  ).toBeVisible();
-  await nav.getByRole("button", { name: "Epics", exact: true }).click();
-  await nav.getByRole("button", { name: "Tickets", exact: true }).click();
-  await expect(nav.getByRole("textbox", { name: "Search work" })).toHaveValue(
-    "modal",
-  );
-  await expect(page).toHaveURL(/project=WEB&agent=builder/);
+  await nav.getByRole("link", { name: "Tickets", exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\?project=WEB$/);
+  await page.goto("/work?view=tickets&layout=board&project=WEB");
+  await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
+  await page.goto("/work?view=epics&project=WEB");
+  await expect(page).toHaveURL(/\/tickets\?layout=epics&project=WEB$/);
 });
 
 test("saved filters retain the run, and a previous attempt opens within Work", async ({

@@ -245,7 +245,7 @@ export function RunList({ selected, fill, embedded = false, search: workSearch }
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // The tray's "Open all" lands on /runs#needs-you: bring the group into view once it's there.
+  // The tray's "Open all" lands on /work#needs-you: bring the group into view once it's there.
   // Also on a path change: Open all from /runs/X goes to /runs, which opens a run with the hash kept.
   const hasNeeds = data.shownNeeds.length > 0;
   const path = usePathname();
@@ -260,6 +260,12 @@ export function RunList({ selected, fill, embedded = false, search: workSearch }
       aria-label="Runs"
       className={cx("flex min-h-0 flex-1 flex-col gap-2", fill ? "px-2 pt-safe" : "px-1.5")}
     >
+      {embedded && (
+        <div className="flex flex-col gap-2 px-1">
+          <StatusLine project={data.project} />
+          <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} />
+        </div>
+      )}
       {!embedded && <div className="flex flex-col gap-2 px-1">
         <div className="flex items-center gap-2 px-1.5">
           <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-13")}>Runs</h1>

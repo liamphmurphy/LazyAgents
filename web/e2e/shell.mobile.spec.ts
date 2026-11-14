@@ -3,13 +3,13 @@ import { installBoardApi } from "./mock-board-api";
 
 // VESPER-9: the compact shell (project "mobile", 390×844) has a bottom tab bar instead of the sidebar.
 const bar = (page: Page) => page.getByRole("navigation", { name: "Primary" });
-const TABS = ["Chat", "Runs", "Tickets", "More"];
+const TABS = ["Chat", "Work", "More"];
 
 test("the tab bar replaces the sidebar and switches between its tabs", async ({ page }) => {
   await installBoardApi(page);
   await page.goto("/inbox");
   // Needs you is the second tab, a button that opens the tray rather than a link.
-  await expect(bar(page).locator("a, button")).toHaveText(["Chat", "Needs you", "Runs", "Tickets", "More"]);
+  await expect(bar(page).locator("a, button")).toHaveText(["Chat", "Needs you", "Work", "More"]);
   await expect(bar(page).getByRole("link")).toHaveText(TABS);
   await expect(page.getByRole("complementary", { name: "Main menu" })).toHaveCount(0);
 
@@ -21,7 +21,7 @@ test("the tab bar replaces the sidebar and switches between its tabs", async ({ 
     expect(tab!.height).toBeGreaterThanOrEqual(44);
   }
 
-  const routes: Record<string, RegExp> = { Chat: /\/chat/, Runs: /\/runs/, Tickets: /\/tickets/, More: /\/more$/ };
+  const routes: Record<string, RegExp> = { Chat: /\/chat/, Work: /\/work/, More: /\/more$/ };
   for (const name of [...TABS.slice(1), TABS[0]]) {
     await bar(page).getByRole("link", { name: new RegExp(`^${name}`) }).click();
     await expect(page).toHaveURL(routes[name]);
@@ -38,7 +38,7 @@ test("the Needs you badge and Runs dot follow the nav counts", async ({ page }) 
   await page.goto("/more");
   await expect(bar(page).getByRole("button", { name: "Needs you, 3 waiting" })).toBeVisible();
   await expect(bar(page).getByTestId("tab-badge")).toHaveText("3");
-  await expect(bar(page).getByRole("link", { name: "Runs 2 running" }).getByTestId("tab-dot")).toBeVisible();
+  await expect(bar(page).getByRole("link", { name: "Work 2 running" }).getByTestId("tab-dot")).toBeVisible();
 });
 
 test("ticket and run detail screens hide the tab bar", async ({ page }) => {

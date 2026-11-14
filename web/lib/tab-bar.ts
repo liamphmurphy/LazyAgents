@@ -25,7 +25,7 @@ export function currentTab(pathname: string): Tab["key"] {
 
 /** Detail screens (a run, a ticket, the ticket composer) take the whole screen and have their own way back. */
 export function hidesTabBar(pathname: string): boolean {
-  return pathname === "/work" || /^\/(runs|tickets)\/[^/]+/.test(pathname);
+  return /^\/(runs|tickets)\/[^/]+/.test(pathname);
 }
 
 const BADGE_WORD: Partial<Record<NavBadge, string>> = { inbox: "waiting", runs: "running" };

@@ -174,8 +174,7 @@ export function Sidebar() {
   const settingsNeedYou = counts.settings > 0;
   const newSpace = () => setCreatingSpace(true);
   if (readingFocus) return null;
-  const work = pathname === "/work";
-  const harness = appearance.showHarnessActivity !== false && !work;
+  const harness = appearance.showHarnessActivity !== false;
 
   if (collapsed) {
     return (
@@ -199,7 +198,7 @@ export function Sidebar() {
   return (
     <aside aria-label="Main menu" data-expanded className={cx(NAVIGATOR_WIDTH, "flex flex-none flex-col border-r border-border-subtle bg-sidebar min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh")}>
       <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col">
-        {work ? <div className="flex h-[42px] flex-none items-center gap-2 border-b border-border-subtle px-3"><MarkButton collapsed={false} onToggle={() => setCollapsed(true)} /><span className="text-14 font-semibold">Vesper</span></div> : <div className="flex flex-none flex-col gap-2 px-3 pt-3">
+        <div className="flex flex-none flex-col gap-2 px-3 pt-3">
           <div className="flex items-center gap-1.5">
             <MarkButton collapsed={false} onToggle={() => setCollapsed(true)} />
             <span className="text-14 font-semibold tracking-[-0.01em] text-fg">Vesper</span>
@@ -208,8 +207,7 @@ export function Sidebar() {
           <NeedsYou variant="pill" count={counts.inbox} />
           <Areas vertical={false} counts={counts} onNewSpace={newSpace} />
         </div>
-        }
-        {!work && <div aria-hidden className="mx-3 my-2 h-px flex-none bg-border-subtle" />}
+        <div aria-hidden className="mx-3 my-2 h-px flex-none bg-border-subtle" />
         {/* The area's list: Chats unless the screen puts its own here (NavigatorPortal). */}
         <div ref={setNavigatorSlot} data-navigator-slot className="flex min-h-0 flex-1 flex-col">
           {!claimed && <ChatsList viewed={viewed} />}
@@ -219,7 +217,6 @@ export function Sidebar() {
             <HarnessFooter layout="row" />
           </div>
         )}
-        {work && <div className="mx-4 flex flex-col gap-4 border-t border-border-subtle py-4 text-12 text-fg-secondary"><div className="flex gap-6"><Link href="/">Home</Link><Link href="/chat">Chat</Link><Link href="/work" aria-current="page">Work</Link></div><div className="flex gap-6"><Link href="/knowledge">Knowledge</Link><Link href="/library">Library</Link></div></div>}
         <FootLinks collapsed={false} settingsNeedYou={settingsNeedYou} />
       </nav>
       <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />

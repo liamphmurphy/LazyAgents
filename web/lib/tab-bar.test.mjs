@@ -27,6 +27,7 @@ test("run and ticket detail screens hide the bar; their lists keep it", () => {
   assert.equal(hidesTabBar("/tickets/new"), true);
   assert.equal(hidesTabBar("/runs"), false);
   assert.equal(hidesTabBar("/tickets"), false);
+  assert.equal(hidesTabBar("/work"), false);
   assert.equal(hidesTabBar("/chat/abc"), false);
 });
 
