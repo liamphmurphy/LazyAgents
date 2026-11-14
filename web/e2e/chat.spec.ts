@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { AGENTS, catalog, installChatApi, openEmptyChat, persona } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi, openEmptyChat, persona, composerOption } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -254,7 +254,7 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   await expect(chips(page)).toHaveCount(2);
 
   // "Add context" opens the same picker.
-  await page.getByRole("button", { name: "Add context" }).click();
+  await (await composerOption(page, "context")).getByRole("button", { name: "Add context" }).click();
   await page.getByRole("combobox", { name: "Search pages, artifacts and tickets" }).fill("Q3");
   await page.getByRole("option", { name: /Q3 report/ }).click();
   await expect(chips(page)).toHaveCount(3);
@@ -383,8 +383,9 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
 test("Temporary on the Welcome makes the chat temporary", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?new");
-  await page.getByRole("button", { name: "Temporary", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await (await composerOption(page, "temporary")).getByRole("button", { name: "Temporary", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("composer-modes").getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("combobox", { name: "Message" }).fill("off the record");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
@@ -400,7 +401,8 @@ test("the Welcome's box is a chat's: model and effort, / commands, @ mentions an
   // Before a pick a new chat routes its model automatically, from the agents' harness, at automatic effort.
   await expect(picker(page)).toHaveAccessibleName("Model and effort for the next message: Claude Code, automatic model, Automatic effort");
   await expect(picker(page)).toHaveText("Auto");
-  await expect(page.getByRole("button", { name: "Add context" })).toBeVisible();
+  await expect(await composerOption(page, "context")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("composer-hints")).toContainText("/ commands");
 
   await box.pressSequentially("/");

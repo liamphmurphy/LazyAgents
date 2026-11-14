@@ -56,7 +56,7 @@ export function RepositoryPicker({ value, pending, onPick, disabled, error, sign
   const queued = pending ? ` → ${repoShortName(pending)} (next turn)` : "";
   const matching = (repos.data ?? []).filter((r) => r.name.toLowerCase().includes(text.trim().toLowerCase())).slice(0, 50);
 
-  return <div className="relative" data-testid="repository-picker">
+  return <div className="relative min-w-0" data-testid="repository-picker">
     <Popover.Root open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
       <Popover.Trigger asChild>
         <button type="button" disabled={disabled} aria-label={`Repository: ${value ? repoShortName(value) : "none chosen"}${queued}`} title="The repository this chat works in" className={composerPill(open)}>

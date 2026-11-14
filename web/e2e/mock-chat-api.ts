@@ -1212,3 +1212,13 @@ export function frameSvg(kind: string, idx: number): string {
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06061a"/><stop offset="1" stop-color="#46104f"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><circle cx="480" cy="68" r="28" fill="#cdd0f0" opacity=".85"/>${towers}<rect y="280" width="640" height="80" fill="#0f0f1c"/><ellipse cx="${220 + idx / 4}" cy="250" rx="46" ry="14" fill="#0a0910"/><circle cx="${266 + idx / 4}" cy="236" r="13" fill="#0a0910"/><text x="12" y="350" fill="#8b8b94" font-family="monospace" font-size="12">${kind} ${idx}</text></svg>`;
 }
+
+/**
+ * One option's row in the composer's + menu (the desktop popover), opening the menu if it's closed.
+ * The row holds the option's own control, e.g. Research's toggle or the repository picker.
+ */
+export async function composerOption(page: Page, option: string) {
+  const menu = page.getByTestId("composer-menu");
+  if (!(await menu.isVisible())) await page.getByTestId("composer-controls").getByRole("button", { name: "Composer options" }).click();
+  return menu.locator(`[data-option="${option}"]`);
+}

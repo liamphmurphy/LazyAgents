@@ -921,6 +921,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     model: modelSummary,
     project: c.space ? undefined : { name: boot.data?.projects.find((p) => p.key === c.project)?.name },
   });
+  const canCode = !!(c.speaker ?? c.persona)?.capabilities?.code;
+  const repoPicker = canCode && (
+    <RepositoryPicker
+      value={c.repo_url}
+      pending={c.pending_repo_url}
+      onPick={(r) => selectRepo.mutate(r)}
+      disabled={c.archived || selectRepo.isPending}
+      error={selectRepo.error}
+      signal={repoSignal}
+      personaName={speaker.name}
+      personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
+    />
+  );
   return (
     <Tooltip.Provider delayDuration={200}>
       <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
@@ -939,7 +952,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             onRestored={restored}
           />
         ) : (
-        <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
+        <div data-testid="chat-header" className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
           <ChatTitleMenu
@@ -950,6 +963,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             onCommitEmail={() => setCommitPickerOpen((o) => !o)}
           />
           <span className="flex-1" />
+          {repoPicker && <span className="flex min-w-0 max-w-[40%] flex-shrink">{repoPicker}</span>}
           <ChatRunsPill chatId={c.id} />
           {!dockActivity && (
             <span className="flex-none">
@@ -1305,18 +1319,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               }
               options={composerList}
               controls={{
-                repository: (
-                  <RepositoryPicker
-                    value={c.repo_url}
-                    pending={c.pending_repo_url}
-                    onPick={(r) => selectRepo.mutate(r)}
-                    disabled={c.archived || selectRepo.isPending}
-                    error={selectRepo.error}
-                    signal={repoSignal}
-                    personaName={speaker.name}
-                    personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
-                  />
-                ),
+                // The desktop header holds it; the compact + sheet lists it.
+                repository: compact && repoPicker,
                 persona: <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />,
                 "send-mode": (
                   <SendModeSwitch
@@ -1343,7 +1347,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                   />
                 ),
                 // The desktop composer leaves this to the header; the compact + sheet lists it too.
-                project: !c.space && <ChatProjectPicker chat={c} disabled={running} />,
+                project: compact && !c.space && <ChatProjectPicker chat={c} disabled={running} />,
               }}
               actions={
                 running && (
