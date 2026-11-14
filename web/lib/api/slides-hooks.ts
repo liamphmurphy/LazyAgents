@@ -35,6 +35,11 @@ export const slideKeys = {
   starters: ["slide-starters"] as const,
 };
 
+/** The person's decks with a first-slide cover each: the Decks start page draws its cards from them. */
+export function useDecks() {
+  return useQuery({ queryKey: slideKeys.list, queryFn: () => unwrap(api.GET("/slides")), select: (d) => d.decks });
+}
+
 /** One deck with the chat it lives in (the same endpoint Docs uses). */
 export function useDeckRef(id: string) {
   return useQuery({ queryKey: slideKeys.one(id), queryFn: () => unwrap(api.GET("/canvases/{canvasId}", { params: { path: { canvasId: id } } })) });

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/pageview"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 	"github.com/liamphmurphy/vesper/server/internal/wiki"
@@ -164,5 +165,34 @@ func TestKnowledgeQueriesSayWhatAPageHolds(t *testing.T) {
 	}
 	if kinds["Designs/Checkout flow"] != "design" || kinds[*note.Note.Path] != "document" {
 		t.Errorf("kinds = %v", kinds)
+	}
+}
+
+func TestKnowledgeQueriesNarrowToOneKind(t *testing.T) {
+	e := setup(t)
+	chat := e.chat(t)
+	e.canvas(t, chat.ID, "deck", "Q4 review")
+	e.canvas(t, chat.ID, "design", "Checkout flow")
+	note := e.save(t, "Product/Onboarding brief", "Calm first five minutes.")
+	ctx := pageview.Person(e.ctx, e.me.ID)
+	for kind, want := range map[string]string{"deck": "Slides/Q4 review", "design": "Designs/Checkout flow", "document": *note.Note.Path} {
+		table, err := wiki.QueryPages(ctx, e.q, e.ws, wiki.PageQuery{Kind: kind, Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, r := range table.Rows {
+			found = found || r.Path == want
+			if r.Kind != kind {
+				t.Errorf("kind=%s returned %s, a %s", kind, r.Path, r.Kind)
+			}
+		}
+		if !found {
+			t.Errorf("kind=%s left out %s", kind, want)
+		}
+	}
+	var invalid *apperr.ValidationError
+	if _, err := wiki.QueryPages(ctx, e.q, e.ws, wiki.PageQuery{Kind: "slides"}); !errors.As(err, &invalid) || invalid.Field != "kind" {
+		t.Errorf("an unknown kind should be refused as invalid, got %v", err)
 	}
 }

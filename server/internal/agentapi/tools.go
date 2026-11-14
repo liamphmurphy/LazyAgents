@@ -1229,7 +1229,7 @@ var Tools = []Tool{
 	define("librarian_pass", "Propose links for a folder/tag or all pages, and report orphans and unresolved links. Always creates suggestions; suitable for an existing scheduled task whose final result goes to Needs you.", librarianPass),
 	define("daily_note", "Open the person's daily Knowledge note; create it from a template on first use. Imported daily notes are reused.", dailyNote),
 	define("import_vault", "Start an Obsidian vault dry run from a chat attachment. Never confirms the import; the person reviews the report.", importVault),
-	define("list_pages", "Find pages by folder, tag, property, date or audience. Returns summaries and version IDs; read only the sections you need.", listPages),
+	define("list_pages", "Find pages by folder, tag, property, date, audience or kind (document, deck or design). Returns summaries and version IDs; read only the sections you need.", listPages),
 	define("page_outline", "Page headings, properties, current version ID and link/review counts, without its body.", pageOutline),
 	define("patch_page", "Change a page with 1–100 anchored text replacements against base_version, each with a reason. In a person's chat the page's persona controls decide: a direct page applies them at once for review afterwards, a review-first page keeps them as a suggestion, a paused page refuses. Elsewhere they are always suggestions.", patchPage),
 	define("set_properties", "Change property/tag/alias values against base_version, under the same page controls as patch_page. Null deletes a key. Cannot change audience.", setProperties),

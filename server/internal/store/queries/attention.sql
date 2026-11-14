@@ -119,49 +119,72 @@ INSERT INTO inbox_reads (user_id,item_id) VALUES ($1,$2)
 ON CONFLICT (user_id,item_id) DO UPDATE SET read_at=clock_timestamp();
 
 -- name: SearchAttentionTargets :many
--- Best matches first, at most 8 per kind so many chats or agents can't crowd
--- epics out. Partial words and typos match through trigrams. Personas,
--- memories, Library items and workflows are private and belong to no project.
+-- Best matches first, at most per_kind of each kind so many chats or agents
+-- can't crowd epics out; total is how many of that kind matched before the
+-- cut. only_kind narrows to one kind. Partial words and typos match through
+-- trigrams. detail is the hit's context line (a chat's persona, a canvas's
+-- chat) and at when it last changed. Personas, memories, Library items,
+-- workflows, spaces, courses, scheduled tasks and canvases are private; of
+-- those only spaces belong to a project.
 WITH needle AS (SELECT lower(replace(sqlc.arg(q)::text,'@','')) AS q)
-SELECT kind,id,title,href,status,score::float8 AS score FROM (
-SELECT *, row_number() OVER (PARTITION BY kind ORDER BY score DESC,id DESC) AS n FROM (
+SELECT kind,id,title,href,status,detail,at,score::float8 AS score,total::int AS total FROM (
+SELECT *, row_number() OVER (PARTITION BY kind ORDER BY score DESC,id DESC) AS n, count(*) OVER (PARTITION BY kind) AS total FROM (
 SELECT c.*, greatest(word_similarity(needle.q,lower(c.haystack)),similarity(needle.q,lower(c.haystack))) AS score
 FROM needle CROSS JOIN LATERAL (
- SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href,''::text AS status,e.name AS haystack
+ SELECT 'epic'::text AS kind,e.id,e.name AS title,('/epics?epic='||e.id)::text AS href,''::text AS status,p.key::text AS detail,e.updated_at::timestamptz AS at,e.name AS haystack
  FROM epics e JOIN projects p ON p.id=e.project_id
  WHERE e.workspace_id=sqlc.arg(workspace_id)
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
- SELECT 'agent',a.id,a.name,'/agents/'||a.handle,'',a.name||' '||a.handle
+ SELECT 'agent',a.id,a.name,'/agents/'||a.handle,'','@'||a.handle,a.updated_at,a.name||' '||a.handle
  FROM agents a WHERE a.workspace_id=sqlc.arg(workspace_id) AND a.archived_at IS NULL
  AND (sqlc.narg(project)::text IS NULL OR EXISTS (
  SELECT 1 FROM tickets t JOIN projects p ON p.id=t.project_id WHERE t.assignee_agent_id=a.id AND p.key=sqlc.narg(project)))
  UNION ALL
  -- Chats are private: only the asking user's, unarchived, matched by title.
- SELECT 'chat',c.id,c.title,'/chat/'||c.id,'',c.title
- FROM chat_sessions c LEFT JOIN projects p ON p.id=c.project_id
+ SELECT 'chat',c.id,c.title,'/chat/'||c.id,'',coalesce(pe.name,''),coalesce(c.last_message_at,c.updated_at),c.title
+ FROM chat_sessions c LEFT JOIN projects p ON p.id=c.project_id LEFT JOIN personas pe ON pe.id=c.persona_id
  WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden
  AND NOT EXISTS (SELECT 1 FROM chat_spaces sp WHERE sp.id=c.space_id AND sp.app IS NOT NULL)
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
  -- Ticket runs only: chat and workflow runs have their own pages.
- SELECT 'run',r.id,t.key||' · '||a.name,'/runs/'||r.id,r.state,t.key||' '||t.title||' '||a.name
+ SELECT 'run',r.id,t.key||' · '||a.name,'/runs/'||r.id,r.state,t.title,r.updated_at,t.key||' '||t.title||' '||a.name
  FROM runs r JOIN tickets t ON t.id=r.ticket_id JOIN agents a ON a.id=r.agent_id JOIN projects p ON p.id=t.project_id
  WHERE r.workspace_id=sqlc.arg(workspace_id)
  AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
  UNION ALL
- SELECT 'workflow',w.id,w.name,'/workflows/'||w.id,'',w.name
+ SELECT 'workflow',w.id,w.name,'/workflows/'||w.id,'','',w.updated_at,w.name
  FROM workflows w WHERE w.workspace_id=sqlc.arg(workspace_id) AND w.user_id=sqlc.arg(user_id)
  UNION ALL
- SELECT 'persona',pe.id,pe.name,'/customization','',pe.name
+ SELECT 'persona',pe.id,pe.name,'/customization?who='||pe.id,'','',pe.updated_at,pe.name
  FROM personas pe WHERE pe.workspace_id=sqlc.arg(workspace_id) AND pe.user_id=sqlc.arg(user_id)
  UNION ALL
- SELECT 'memory',m.id,m.title,'/customization','',m.title||' '||m.summary
+ SELECT 'memory',m.id,m.title,'/customization?id='||m.id,'',m.summary,m.updated_at,m.title||' '||m.summary
  FROM memories m WHERE m.workspace_id=sqlc.arg(workspace_id) AND m.user_id=sqlc.arg(user_id) AND m.superseded_by IS NULL
  UNION ALL
- SELECT 'library',l.id,l.title,'/library','',l.title
+ -- The Library's tab for each kind (library-screen.tsx KINDS), opened on the item.
+ SELECT 'library',l.id,l.title,'/library?tab='||CASE l.kind WHEN 'audio' THEN 'audio' ELSE l.kind||'s' END||'&item='||l.id,'',l.kind,l.created_at,l.title
  FROM library_items l WHERE l.workspace_id=sqlc.arg(workspace_id) AND l.user_id=sqlc.arg(user_id)
+ UNION ALL
+ -- A space that tracks work is found by its project's key too.
+ SELECT 'space',sp.id,sp.name,'/spaces/'||sp.id,'',coalesce(p.key,''),sp.updated_at,sp.name||' '||coalesce(p.key,'')
+ FROM chat_spaces sp LEFT JOIN projects p ON p.space_id=sp.id
+ WHERE sp.workspace_id=sqlc.arg(workspace_id) AND sp.user_id=sqlc.arg(user_id) AND sp.app IS NULL
+ AND (sqlc.narg(project)::text IS NULL OR p.key=sqlc.narg(project))
+ UNION ALL
+ SELECT 'course',lc.id,lc.topic,'/learn/'||lc.id,lc.state,lc.goal,coalesce(lc.ready_at,lc.created_at),lc.topic
+ FROM learning_courses lc WHERE lc.workspace_id=sqlc.arg(workspace_id) AND lc.user_id=sqlc.arg(user_id)
+ UNION ALL
+ SELECT 'scheduled',st.id,st.name,'/scheduled','',st.frequency,st.updated_at,st.name
+ FROM scheduled_tasks st WHERE st.workspace_id=sqlc.arg(workspace_id) AND st.user_id=sqlc.arg(user_id)
+ UNION ALL
+ -- Text and SVG canvases live in their chat; decks and designs are pages already.
+ SELECT 'canvas',cv.id,cv.title,'/chat/'||cv.session_id||'?canvas='||cv.id||'&canvas_view=full','',coalesce(nullif(c.title,''),'Untitled chat'),cv.updated_at,cv.title
+ FROM chat_canvases cv JOIN chat_sessions c ON c.id=cv.session_id
+ WHERE c.workspace_id=sqlc.arg(workspace_id) AND c.created_by=sqlc.arg(user_id) AND NOT c.archived AND NOT c.hidden AND cv.kind IN ('text','svg')
 ) c
-WHERE lower(c.haystack) LIKE '%'||needle.q||'%' OR word_similarity(needle.q,lower(c.haystack))>=0.3
+WHERE (sqlc.narg(only_kind)::text IS NULL OR c.kind=sqlc.narg(only_kind))
+AND (lower(c.haystack) LIKE '%'||needle.q||'%' OR word_similarity(needle.q,lower(c.haystack))>=0.3)
 ) matches
-) results WHERE n<=8 ORDER BY score DESC,kind,title,id LIMIT 40;
+) results WHERE n<=sqlc.arg(per_kind)::int ORDER BY score DESC,kind,title,id LIMIT sqlc.arg(lim);

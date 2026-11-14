@@ -1,73 +1,100 @@
 "use client";
 
-import { Dialog } from "radix-ui";
+import { Dialog, Popover } from "radix-ui";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { Schemas } from "@/lib/api/client";
 import { hasLiveRun, useArtifact, useAskChat, useBootstrap, useChats, useControlRun, useCreateChat, useDecideApproval, useInbox, useLiveRuns, useSearch, useTicket, useUpdateTicket, useWikiPage } from "@/lib/api/hooks";
-import { IconButton } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { useQueryClient } from "@tanstack/react-query";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
 import { artifactTitle } from "@/components/domain/artifacts";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
-import { useCompact } from "@/lib/viewport";
-import { attachQuery, type ContextRef } from "@/lib/chat-context";
+import { shortAgo } from "@/lib/format";
+import { approvalId, KIND as INBOX_KIND } from "@/lib/inbox";
+import { attachQuery, chipFromTarget, type ContextRef } from "@/lib/chat-context";
 import {
+  CHIP_TYPES,
+  KIND_JUMPS,
+  MORE_TYPES,
+  RECENT_KEY,
+  TYPE,
+  TYPES,
   appMatches,
+  bestOf,
+  facets,
+  groupChats,
   linkFromTarget,
   matchParts,
   matchesWords,
   pageContext,
   parseFilters,
   parseRecent,
-  passesFilters,
   personaMatches,
-  promoteTop,
   projectOfKey,
   pushRecent,
+  rankGroups,
   removeToken,
+  searchKind,
   snippetParts,
-  sortByGroup,
+  stepChip,
   ticketKeyFrom,
-  type PaletteGroup,
-  RECENT_KEY,
+  typeCounts,
+  typeOf,
+  type ChatMatch,
+  type MessageMatch,
   type PaletteLink,
+  type TypeKey,
 } from "@/lib/command-palette";
 import { APP_ITEMS, NAV_GROUPS, TOOL_ITEMS, projectSection, switchHref, withProject } from "@/lib/project-scope";
+import { CommandPreview, statusLabel, statusTone, type Preview, type PreviewAction } from "./command-preview";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
-
-const GLYPH: Partial<Record<PaletteGroup, string>> = {
-  Tickets: "◇",
-  Pages: "▤",
-  Artifacts: "▦",
-  Chats: "◌",
-  Epics: "◆",
-  Runs: "▶",
-  Workflows: "⇢",
-  Personas: "☺",
-  Memories: "✧",
-  Library: "▣",
-  "Needs you": "!",
-  Running: "▶",
-  Continue: "◌",
-  "Jump to": "↵",
-  "Start a chat": "☺",
-  Apps: "⊞",
-  "Switch space": "⇄",
+const TYPE_ICON: Record<TypeKey, IconName> = {
+  ticket: "tickets",
+  page: "wiki",
+  chat: "msg",
+  people: "users",
+  run: "play",
+  epic: "epics",
+  memory: "bookmark",
+  canvas: "edit",
+  course: "learn",
+  space: "folder",
+  workflow: "branch",
+  library: "library",
+  scheduled: "clock",
+  artifact: "artifacts",
+  app: "dashboard",
 };
 
-type Item = {
+/** A recent entry's icon, from the group label it was stored under. */
+const LABEL_ICON: Record<string, IconName> = {
+  ...Object.fromEntries(TYPES.map((t) => [t.label, TYPE_ICON[t.key]])),
+  Agents: "users",
+  Personas: "users",
+};
+
+/** In the All list, each type shows this many before "+ N more". */
+const PER_GROUP = 3;
+
+type Row = {
   id: string;
   title: string;
+  /** The second line. */
+  sub?: ReactNode;
+  /** Right-hand: a time or a status. */
   meta?: string;
-  group: PaletteGroup;
-  glyph?: string;
+  /** Right-hand: a one-key shortcut, drawn as a key. */
+  shortcut?: string;
+  metaClass?: string;
+  icon: IconName;
+  tone?: "human" | "run";
   /** Navigates (and is remembered as recent when `recent` is set). */
   href?: string;
   recent?: PaletteLink;
   perform?: () => void;
-  snippet?: string;
   score?: number;
   /** Takes the query as its input, so it stays offered whatever was typed. */
   fallback?: boolean;
@@ -75,15 +102,21 @@ type Item = {
   onDemand?: boolean;
   /** Matched here rather than by the server, so ↵ may take it while a search is still on its way. */
   local?: boolean;
+  /** Whether to mark the query's words in the title. */
+  mark?: boolean;
+  type?: TypeKey;
+  preview?: Preview;
+  /** ⌥↵: a new chat with this attached. */
+  attach?: { ref: ContextRef; label: string };
+  chat?: ChatMatch;
+  message?: MessageMatch;
+  /** The "+ N more" row: ↵ opens that type. */
+  moreOf?: TypeKey;
+  facet?: string;
 };
 
-const MARK = "rounded-[3px] bg-accent-soft text-fg underline decoration-accent decoration-2 underline-offset-4";
+type Section = { key: string; label?: string; count?: number; tone?: "human"; rows: Row[] };
 
-const ROOT_KEYS = [["↑↓", "navigate"], ["↵", "open"], ["⌘↵", "new tab"], ["Tab", "space scope"], [">", "commands"], ["is: status:", "filters"]] as const;
-const PROJECT_KEYS = [["↑↓", "navigate"], ["↵", "switch"], ["⌫", "back"], ["Esc", "close"]] as const;
-
-/** A single-key shortcut ("C", "?") reads as a key; anything longer is context. */
-const isShortcut = (meta: string) => [...meta].length <= 2;
 const STATUSES = [
   ["backlog", "Backlog"],
   ["todo", "Todo"],
@@ -92,16 +125,22 @@ const STATUSES = [
   ["done", "Done"],
 ] as const;
 
-function Parts({ parts }: { parts: { text: string; match: boolean }[] }) {
+const MARK = "font-bold text-accent";
+
+function Parts({ parts, className = MARK }: { parts: { text: string; match: boolean }[]; className?: string }) {
   return (
     <>
-      {parts.map((p, i) => (p.match ? <span key={i} className={MARK}>{p.text}</span> : <span key={i}>{p.text}</span>))}
+      {parts.map((p, i) =>
+        p.match ? (
+          <span key={i} className={className}>
+            {p.text}
+          </span>
+        ) : (
+          <span key={i}>{p.text}</span>
+        ),
+      )}
     </>
   );
-}
-
-function Match({ text, query }: { text: string; query: string }) {
-  return <Parts parts={matchParts(text, query)} />;
 }
 
 /** Waits for typing to pause before searching (the server ranks; nothing is filtered client-side). */
@@ -114,9 +153,110 @@ function useDebounced(value: string, ms: number) {
   return v;
 }
 
+type Hit = Schemas["SearchHit"];
+
+/** A /search hit as a row of its type (chats are folded first, by groupChats). */
+function hitRow(h: Hit, type: TypeKey): Row | undefined {
+  const t = h.target;
+  const link = linkFromTarget(t);
+  if (!link) return undefined;
+  const at = h.updated_at ? shortAgo(h.updated_at) : undefined;
+  const base: Row = { id: `${type}-${link.id}`, title: t.title, href: link.href, recent: link, icon: TYPE_ICON[type], score: h.score, mark: true, type, meta: at };
+  const chip = chipFromTarget(t);
+  const attach = chip ? { ref: chip.ref, label: chip.label } : undefined;
+  switch (type) {
+    case "ticket":
+      return {
+        ...base,
+        sub: [t.display_id, h.detail ?? "unassigned"].join(" · "),
+        meta: t.status ? statusLabel(t.status) : undefined,
+        metaClass: statusTone(t.status),
+        preview: { kind: "ticket", key: t.display_id ?? "", title: t.title },
+        attach,
+        facet: t.status,
+      };
+    case "page": {
+      const folder = h.detail ?? "";
+      // A page found by its words rather than its name shows where they are.
+      const sub: ReactNode = foundInBody(h.snippet, t.title) ? (
+        <>
+          {folder ? `${folder} · ` : ""}“…<Parts parts={snippetParts(h.snippet)} className="font-bold text-fg-secondary" />…”
+        </>
+      ) : (
+        [folder, "page"].filter(Boolean).join(" · ")
+      );
+      return { ...base, sub, preview: { kind: "page", id: t.id ?? "", path: t.path ?? "", title: t.title }, attach, facet: folder || undefined };
+    }
+    case "canvas":
+      return { ...base, sub: [h.detail, "canvas"].filter(Boolean).join(" · "), attach: t.id ? { ref: { kind: "canvas", id: t.id }, label: t.title } : undefined, preview: item(type, h) };
+    case "people":
+      return { ...base, sub: t.kind === "agent" ? [h.detail, "agent"].filter(Boolean).join(" · ") : "persona", preview: item(type, h) };
+    case "run":
+      return { ...base, sub: h.detail, meta: t.status?.replaceAll("_", " "), metaClass: t.status === "failed" ? "text-state-blocked" : undefined, preview: item(type, h), facet: t.status };
+    case "course":
+      return { ...base, sub: [t.status, "course"].filter(Boolean).join(" · "), preview: item(type, h) };
+    default:
+      return { ...base, sub: [h.detail, type === "artifact" ? t.artifact_type : t.kind].filter(Boolean).join(" · ") || undefined, attach: type === "artifact" ? attach : undefined, preview: item(type, h) };
+  }
+}
+
+/** A page hit whose marked snippet words aren't in its title was found by its body. */
+function foundInBody(snippet: string, title: string): boolean {
+  const marked = [...snippet.matchAll(/«([^»]*)»/g)].map((m) => m[1].toLowerCase());
+  return marked.length > 0 && !marked.some((w) => title.toLowerCase().includes(w));
+}
+
+function item(type: TypeKey, h: Hit): Preview {
+  const label = h.target.kind === "agent" ? "Agent" : h.target.kind === "persona" ? "Persona" : TYPE[type].label.replace(/s$/, "");
+  return { kind: "item", label, title: h.target.title, detail: h.detail ?? h.target.status?.replaceAll("_", " "), at: h.updated_at };
+}
+
+function chatRow(c: ChatMatch, expanded: boolean): Row {
+  const n = c.messages.length;
+  const matched = n ? `${n} ${n === 1 ? "message matches" : "messages match"}` : "chat";
+  return {
+    id: `chat-${c.id}`,
+    title: c.title,
+    sub: (
+      <>
+        {[c.persona, matched].filter(Boolean).join(" · ")}
+        {n > 0 && <span aria-hidden className="ml-1.5 max-md:hidden">{expanded ? "↓" : "→"}</span>}
+      </>
+    ),
+    meta: c.at ? shortAgo(c.at) : undefined,
+    href: c.href,
+    recent: { id: c.id, title: c.title, meta: "chat", href: c.href, kind: "Chats" },
+    icon: "msg",
+    score: c.score,
+    mark: c.titled,
+    type: "chat",
+    chat: c,
+    preview: { kind: "chat", chat: c },
+    facet: c.persona,
+  };
+}
+
+function messageRows(c: ChatMatch): Row[] {
+  return c.messages.map((m) => ({
+    id: `message-${m.id}`,
+    title: [m.author || "Message", m.at && new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })].filter(Boolean).join(" · "),
+    sub: (
+      <>
+        …<Parts parts={snippetParts(m.snippet)} className="font-bold text-fg-secondary" />…
+      </>
+    ),
+    href: m.href,
+    icon: "msg",
+    type: "chat" as const,
+    chat: c,
+    message: m,
+    preview: { kind: "message" as const, chat: c, message: m },
+  }));
+}
+
 export function CommandMenu() {
   const router = useRouter();
-  const compact = useCompact();
+  const qc = useQueryClient();
   const pathname = usePathname();
   const boot = useBootstrap();
   const createChat = useCreateChat();
@@ -131,6 +271,12 @@ export function CommandMenu() {
   const [active, setActive] = useState(0);
   const [recent, setRecent] = useState<PaletteLink[]>([]);
   const [actionFailed, setActionFailed] = useState(false);
+  // The type picked from the chip row (or More); a typed is: token wins over it.
+  const [chip, setChip] = useState<TypeKey>();
+  const [facet, setFacet] = useState<string>();
+  const [expanded, setExpanded] = useState<string>();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreActive, setMoreActive] = useState(0);
   const returnFocus = useRef<HTMLElement | null>(null);
   const rememberedRef = useRef(remembered);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -138,11 +284,20 @@ export function CommandMenu() {
   const commands = query.startsWith(">");
   const filters = parseFilters(commands ? "" : query);
   const title = commands ? query.replace(/^>\s*/, "").trim() : filters.text;
-  const searchText = mode === "root" && !commands ? filters.text : "";
+  const typed = filters.types;
+  // The types on show: typed is: tokens, else the chip, else everything.
+  const shownTypes: TypeKey[] | undefined = typed.length ? typed : chip ? [chip] : undefined;
+  const oneType = shownTypes?.length === 1 ? shownTypes[0] : undefined;
+  const root = mode === "root" && !commands;
+  const searchText = root ? filters.text : "";
   const text = useDebounced(searchText, 150);
-  const search = useSearch(open ? text : "", scope ? project : undefined);
+  const scoped = scope ? project : undefined;
+  const all = useSearch(open ? text : "", scoped);
+  const kind = searchKind(oneType);
+  const one = useSearch(open ? text : "", scoped, kind, !!kind);
+  const shown = kind ? one : all;
   // Until the answer for exactly this text arrives, the rows on screen are stale.
-  const pending = !!searchText && (text !== searchText || search.isLoading || search.isPlaceholderData);
+  const pending = !!searchText && (text !== searchText || shown.isLoading || shown.isPlaceholderData);
 
   // What the page is about (only fetched while open; the page usually has it cached).
   const ctx = pageContext(pathname);
@@ -153,14 +308,14 @@ export function CommandMenu() {
   const updateTicket = useUpdateTicket(ticketKey);
   const controlRun = useControlRun(ticketKey);
   const decideApproval = useDecideApproval(ticketKey);
-  let attach: { ref: ContextRef; label: string; project?: string } | undefined;
-  if (ctx?.kind === "ticket") attach = { ref: { kind: "ticket", key: ctx.key }, label: ctx.key, project: projectOfKey(ctx.key) };
+  let attachHere: { ref: ContextRef; label: string; project?: string } | undefined;
+  if (ctx?.kind === "ticket") attachHere = { ref: { kind: "ticket", key: ctx.key }, label: ctx.key, project: projectOfKey(ctx.key) };
   const doc = ctx?.kind === "artifact" ? artifact.data : ctx?.kind === "wiki" ? wiki.data : undefined;
-  if (doc) attach = { ref: { kind: doc.type === "note" ? "page" : "artifact", id: doc.id }, label: artifactTitle(doc), project: doc.project?.key };
+  if (doc) attachHere = { ref: { kind: doc.type === "note" ? "page" : "artifact", id: doc.id }, label: artifactTitle(doc), project: doc.project?.key };
 
   const projects = (boot.data?.projects ?? []).filter((p) => !p.archived);
   // Where actions happen: the page's project, then the URL's, then the remembered one.
-  const actionProject = attach?.project ?? project ?? remembered ?? projects[0]?.key;
+  const actionProject = attachHere?.project ?? project ?? remembered ?? projects[0]?.key;
 
   // The opening list: what's waiting on you, what's moving, where you left off.
   const idle = open && mode === "root" && !query.trim();
@@ -183,23 +338,53 @@ export function CommandMenu() {
     setOpen(true);
   };
 
-  const go = (item: Item, newTab = false) => {
-    if (newTab && item.href) {
-      window.open(item.href, "_blank", "noopener");
+  const remember = (link: PaletteLink) => {
+    const next = pushRecent(recent, link);
+    setRecent(next);
+    try {
+      window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      /* storage full or disabled: recents are a nicety */
+    }
+  };
+
+  /** Shows one type (undefined: All), dropping typed is: tokens so the chip is what filters. */
+  const pickType = (next: TypeKey | undefined) => {
+    let q = query;
+    for (const token of filters.tokens) if (/^(is|in):/i.test(token)) q = removeToken(q, token);
+    // @ and # are typed types too.
+    q = q.replace(/^\s*[@#]\s*/, "");
+    setQuery(q);
+    setChip(next);
+    setFacet(undefined);
+    setExpanded(undefined);
+    setMoreOpen(false);
+    setActive(0);
+    inputRef.current?.focus();
+  };
+
+  const go = (row: Row, newTab = false) => {
+    if (row.moreOf) {
+      pickType(row.moreOf);
+      return;
+    }
+    if (newTab && row.href) {
+      window.open(row.href, "_blank", "noopener");
       return;
     }
     close(false);
-    if (item.recent) {
-      const next = pushRecent(recent, item.recent);
-      setRecent(next);
-      try {
-        window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-      } catch {
-        /* storage full or disabled: recents are a nicety */
-      }
-    }
-    if (item.perform) item.perform();
-    else if (item.href) router.push(item.href);
+    if (row.recent) remember(row.recent);
+    if (row.perform) row.perform();
+    else if (row.href) router.push(row.href);
+  };
+
+  /** ⌥↵: a new chat with the row attached, as "New chat with … attached" does for the page you're on. */
+  const attachToChat = (row: Row) => {
+    const a = row.attach;
+    if (!a) return;
+    close(false);
+    if (row.recent) remember(row.recent);
+    createChat.mutate({}, { onSuccess: (c) => router.push(`/chat/${c.id}?${attachQuery(undefined, a.ref, a.label)}`), onError: () => setOpen(true) });
   };
 
   const switchTo = (key: string) => {
@@ -208,82 +393,148 @@ export function CommandMenu() {
     if (href) router.push(href);
   };
 
-  const projectItems: Item[] = projects
+  const projectRows: Row[] = projects
     .map((p) => ({
       id: `project-${p.key}`,
       title: `${p.key} · ${p.name}`,
       meta: p.key === actionProject ? "current" : undefined,
-      group: "Switch space" as const,
+      icon: "folder" as const,
       perform: () => switchTo(p.key),
     }))
     .filter((i) => matchesWords(i.title, mode === "projects" ? query : title.replace(/^(switch|project|space)\b\s*/i, "")));
 
-  const key = mode === "root" && !commands ? ticketKeyFrom(query, actionProject) : undefined;
-  const jump: Item[] = key
-    ? [{ id: `jump-${key}`, title: `Open ${key}`, meta: `/tickets/${key}`, group: "Jump to", href: `/tickets/${key}`,
-        recent: { id: `jump-${key}`, title: key, meta: key, href: `/tickets/${key}`, kind: "Tickets" } }]
+  const key = root ? ticketKeyFrom(query.replace(/^#\s*/, ""), actionProject) : undefined;
+  const jump: Row[] = key
+    ? [{ id: `jump-${key}`, title: `Open ${key}`, sub: `/tickets/${key}`, icon: "tickets", href: `/tickets/${key}`, local: true,
+        recent: { id: `jump-${key}`, title: key, meta: key, href: `/tickets/${key}`, kind: "Tickets" },
+        preview: { kind: "ticket", key, title: key }, attach: { ref: { kind: "ticket", key }, label: key } }]
     : [];
 
   // Typing a persona's name offers a new chat with them first; an app's name, the app.
   // Matched here, from lists the shell already has, so they don't wait on the search.
-  const offers = (group: PaletteGroup) => !commands && mode === "root" && (!filters.groups.length || filters.groups.includes(group));
-  const chatWith: Item[] = offers("Personas")
+  const offers = (type: TypeKey) => root && (!shownTypes || shownTypes.includes(type));
+  const chatWith: Row[] = offers("people")
     ? personaMatches(personas.data?.personas ?? [], filters.text).map((p) => ({
         id: `chat-with-${p.id}`,
         title: `Chat with ${p.name}`,
-        meta: "new chat",
-        group: "Start a chat" as const,
-        glyph: GLYPH["Start a chat"],
+        sub: "new chat",
+        icon: "msg" as const,
         href: `/chat?new&persona=${encodeURIComponent(p.id)}`,
         local: true,
+        mark: true,
       }))
     : [];
-  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
+  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...KIND_JUMPS.map((i) => ({ ...i, kind: "in Knowledge" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
   // is:app on its own lists every app.
-  const appsWanted = filters.text ? appMatches(appsMenu, filters.text) : filters.groups.includes("Apps") ? appsMenu : [];
-  const apps: Item[] = offers("Apps")
+  const appsWanted = filters.text ? appMatches(appsMenu, filters.text) : oneType === "app" ? appsMenu : [];
+  const apps: Row[] = offers("app")
     ? appsWanted.map((a) => ({
         id: `app-${a.href}`,
         title: a.label,
-        meta: a.kind,
-        group: "Apps" as const,
-        glyph: GLYPH.Apps,
+        sub: a.kind,
+        icon: TYPE_ICON.app,
         href: withProject(a.href, remembered),
         recent: { id: `app-${a.href}`, title: a.label, meta: a.kind, href: withProject(a.href, remembered), kind: "Apps" },
         local: true,
+        mark: true,
+        type: "app" as const,
       }))
     : [];
-  // The best local match leads; the server's best hit is lifted only when nothing here matched.
-  const local = [...chatWith, ...apps].map((item, i) => (i === 0 ? { ...item, group: "Top result" as const } : item));
 
-  const ranked: Item[] = searchText
-    ? sortByGroup(
-        (search.data ?? []).flatMap((h) => {
-          const link = linkFromTarget(h.target);
-          if (!link) return [];
-          const group = link.kind as PaletteGroup;
-          if (!passesFilters({ group, status: link.status }, filters)) return [];
-          const meta = [link.meta, link.status?.replaceAll("_", " ")].filter(Boolean).join(" · ");
-          return [{ id: link.id, title: link.title, meta, group, glyph: GLYPH[group], href: link.href, recent: link, snippet: h.snippet, score: h.score }];
-        }),
-      )
+  // Server hits by type; chats folded so a chat's matching messages sit under it.
+  const hits = searchText ? (shown.data?.hits ?? []) : [];
+  const byType = new Map<TypeKey, Row[]>();
+  const add = (type: TypeKey, row: Row) => byType.set(type, [...(byType.get(type) ?? []), row]);
+  for (const c of groupChats(hits)) add("chat", chatRow(c, expanded === c.id));
+  for (const h of hits) {
+    const type = typeOf(h.target);
+    if (type === "chat" || (shownTypes && !shownTypes.includes(type))) continue;
+    if (filters.status && type === "ticket" && h.target.status !== filters.status) continue;
+    const row = hitRow(h, type);
+    if (row) add(type, row);
+  }
+  if (apps.length) byType.set("app", apps);
+
+  const counts = typeCounts(all.data?.counts);
+  if (apps.length) counts.app = apps.length;
+  const total = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0);
+
+  const withMessages = (rows: Row[]) => rows.flatMap((r) => (r.chat && !r.message && expanded === r.chat.id ? [r, ...messageRows(r.chat)] : [r]));
+
+  // The result sections: one type in full (with its facets), or every type capped and ranked.
+  let resultSections: Section[] = [];
+  let facetValues: { value: string; count: number }[] = [];
+  let oneTotal = 0;
+  let oneShown = 0;
+  if (searchText && oneType) {
+    const rows = byType.get(oneType) ?? [];
+    facetValues = oneType === "ticket" || oneType === "page" || oneType === "chat" || oneType === "run" ? facets(rows.map((r) => r.facet)) : [];
+    const kept = facet ? rows.filter((r) => r.facet === facet) : rows;
+    oneShown = kept.length;
+    oneTotal = facet ? kept.length : Math.max(counts[oneType] ?? 0, rows.length);
+    resultSections = [{ key: oneType, rows: withMessages(kept) }];
+  } else if (searchText) {
+    const groups = rankGroups(
+      [...byType].filter(([type]) => !shownTypes || shownTypes.includes(type)).map(([type, items]) => ({ type, items })),
+      shownTypes ? Number.POSITIVE_INFINITY : PER_GROUP + 1,
+      counts,
+    );
+    // The best local match leads; otherwise the server's best hit, lifted out of its group.
+    const local = [...chatWith, ...apps];
+    const top = local[0] ?? bestOf(groups.flatMap((g) => g.items));
+    resultSections = [
+      ...(top ? [{ key: "top", label: "Top result", rows: withMessages([top]) }] : []),
+      ...groups.flatMap((g): Section[] => {
+        const rest = g.items.filter((r) => r !== top).slice(0, shownTypes ? undefined : PER_GROUP);
+        if (!rest.length) return [];
+        const more = g.total - rest.length - (g.items.includes(top!) ? 1 : 0);
+        const moreRow: Row[] =
+          more > 0 && !shownTypes
+            ? [{ id: `more-${g.type}`, title: `+ ${more} more ${TYPE[g.type].noun}`, icon: TYPE_ICON[g.type], moreOf: g.type, meta: CHIP_TYPES.includes(g.type) ? `Tab to ${TYPE[g.type].label}` : `${TYPE[g.type].token}` }]
+            : [];
+        return [{ key: g.type, label: TYPE[g.type].label, count: g.total, rows: [...withMessages(rest), ...moreRow] }];
+      }),
+    ];
+    // Persona offers beyond the first.
+    if (chatWith.length > 1 && top === chatWith[0]) resultSections.splice(1, 0, { key: "start", label: "Start a chat", rows: chatWith.slice(1) });
+  }
+
+  const recentRows: Row[] = idle
+    ? recent.map((r) => ({ id: `recent-${r.href}`, title: r.title, sub: r.meta, icon: LABEL_ICON[r.kind] ?? "history", href: r.href, recent: r }))
     : [];
-  const hits = local.length ? ranked : promoteTop(ranked);
-
-  const recentItems: Item[] =
-    mode === "root" && !query.trim()
-      ? recent.map((r) => ({ id: `recent-${r.href}`, title: r.title, meta: r.meta, group: "Recent", glyph: GLYPH[r.kind as PaletteGroup], href: r.href, recent: r }))
-      : [];
-
-  const needsYou: Item[] = idle
-    ? (inbox.data ?? []).filter((i) => !i.resolved).slice(0, 3).map((i) => ({ id: `inbox-${i.id}`, title: i.title, meta: i.ticket_key || i.project, group: "Needs you" as const, href: i.href }))
-    : [];
-  const running: Item[] = idle
-    ? (liveRuns.data?.runs ?? []).slice(0, 3).map((r) => ({ id: `live-${r.id}`, title: r.ticket_key ?? r.agent.name, meta: r.state, group: "Running" as const, href: `/runs/${r.id}` }))
+  const inboxItems = idle ? (inbox.data ?? []).filter((i) => !i.resolved && i.needs_you) : [];
+  const needsYou: Row[] = inboxItems.slice(0, 3).map((i) => ({
+    id: `inbox-${i.id}`,
+    title: i.title,
+    sub: [i.agent?.name ?? i.ticket_key ?? i.project, (INBOX_KIND[i.kind]?.label ?? i.kind).toLowerCase()].filter(Boolean).join(" · "),
+    meta: shortAgo(i.created_at),
+    icon: "alert" as const,
+    tone: "human" as const,
+    href: i.href,
+    preview: { kind: "inbox" as const, item: i },
+  }));
+  const running: Row[] = idle
+    ? (liveRuns.data?.runs ?? []).slice(0, 3).map((r) => ({
+        id: `live-${r.id}`,
+        title: [r.ticket_key, r.work_title].filter(Boolean).join(" ") || r.agent.name,
+        sub: [r.agent.name, r.state.replaceAll("_", " ")].join(" · "),
+        icon: "play" as const,
+        tone: "run" as const,
+        href: `/runs/${r.id}`,
+        preview: { kind: "item" as const, label: r.ticket_key ? `Run · ${r.ticket_key}` : "Run", title: r.work_title ?? r.ticket_key ?? r.agent.name, detail: `${r.agent.name} · ${r.state.replaceAll("_", " ")}` },
+      }))
     : [];
   const lastChat = idle ? chats.data?.chats[0] : undefined;
-  const resume: Item[] = lastChat
-    ? [{ id: `continue-${lastChat.id}`, title: lastChat.title || "Untitled chat", meta: "last chat", group: "Continue", href: `/chat/${lastChat.id}` }]
+  const resume: Row[] = lastChat
+    ? [{
+        id: `continue-${lastChat.id}`,
+        title: lastChat.title || "Untitled chat",
+        sub: [lastChat.persona?.name, "chat"].filter(Boolean).join(" · "),
+        meta: shortAgo(lastChat.last_message_at ?? lastChat.updated_at),
+        icon: "msg",
+        href: `/chat/${lastChat.id}`,
+        preview: { kind: "chat", chat: { id: lastChat.id, title: lastChat.title || "Untitled chat", href: `/chat/${lastChat.id}`, persona: lastChat.persona?.name, at: lastChat.last_message_at ?? lastChat.updated_at, score: 0, titled: true, messages: [] } },
+      }]
     : [];
 
   const withQuery = (base: string, params: Record<string, string | undefined>) => {
@@ -292,13 +543,12 @@ export function CommandMenu() {
     const s = q.toString();
     return s ? `${base}?${s}` : base;
   };
-  const actions: Item[] = [
+  const actions: Row[] = [
     {
       id: "new-ticket",
       title: title ? `New ticket: ${title}` : "New ticket",
-      meta: "C",
-      glyph: "＋",
-      group: "Actions",
+      shortcut: "C",
+      icon: "plus",
       fallback: true,
       href: withQuery("/tickets/new", { title: title || undefined, project: actionProject }),
     },
@@ -306,9 +556,8 @@ export function CommandMenu() {
       ? [{
           id: "ask",
           title: `Ask: ${title}`,
-          meta: "new chat",
-          glyph: "✉",
-          group: "Actions" as const,
+          sub: "new chat",
+          icon: "msg" as const,
           fallback: true,
           perform: () =>
             askChat.mutate(
@@ -319,15 +568,14 @@ export function CommandMenu() {
       : []),
     {
       id: "new-chat",
-      title: attach ? `New chat with ${attach.label} attached` : "New chat",
-      glyph: "◌",
-      group: "Actions",
+      title: attachHere ? `New chat with ${attachHere.label} attached` : "New chat",
+      icon: "msg",
       perform: () => {
-        const p = attach?.project;
+        const p = attachHere?.project;
         createChat.mutate(
           p ? { project: p } : {},
           {
-            onSuccess: (c) => router.push(attach ? `/chat/${c.id}?${attachQuery(p, attach.ref, attach.label)}` : `/chat/${c.id}`),
+            onSuccess: (c) => router.push(attachHere ? `/chat/${c.id}?${attachQuery(p, attachHere.ref, attachHere.label)}` : `/chat/${c.id}`),
             // Reopen so the alert below explains what happened.
             onError: () => setOpen(true),
           },
@@ -337,8 +585,7 @@ export function CommandMenu() {
     {
       id: "plan",
       title: title ? `Start planning: ${title}` : "Start planning",
-      glyph: "✦",
-      group: "Actions",
+      icon: "bulb",
       fallback: true,
       href: withQuery("/plans", {
         project: actionProject,
@@ -349,8 +596,7 @@ export function CommandMenu() {
     {
       id: "switch",
       title: "Switch space…",
-      glyph: "⇄",
-      group: "Actions",
+      icon: "folder",
       perform: () => {
         // Stay open on the project list instead of navigating.
         setMode("projects");
@@ -360,14 +606,13 @@ export function CommandMenu() {
       },
     },
     ...(ctx?.kind === "ticket" && ticket.data?.run
-      ? [{ id: "run", title: `Go to run for ${ctx.key}`, glyph: "▶", group: "Actions" as const, meta: ticket.data.run.state, href: `/runs/${ticket.data.run.id}` }]
+      ? [{ id: "run", title: `Go to run for ${ctx.key}`, icon: "play" as const, meta: ticket.data.run.state, href: `/runs/${ticket.data.run.id}` }]
       : []),
     ...(ctx?.kind === "ticket" && ticket.data && hasLiveRun(ticket.data) && ticket.data.run
       ? [{
           id: "cancel-run",
           title: `Cancel run for ${ctx.key}`,
-          glyph: "■",
-          group: "Actions" as const,
+          icon: "x" as const,
           onDemand: true,
           perform: () => controlRun.mutate({ id: ticket.data!.run!.id, action: "cancel" }, { onError: failed }),
         }]
@@ -376,8 +621,7 @@ export function CommandMenu() {
       ? STATUSES.filter(([s]) => s !== ticket.data!.status).map(([status, label]) => ({
           id: `status-${status}`,
           title: `Set status: ${label}`,
-          glyph: "◇",
-          group: "Actions" as const,
+          icon: "tickets" as const,
           onDemand: true,
           perform: () => updateTicket.mutate({ status, revision: ticket.data!.revision }, { onError: failed }),
         }))
@@ -386,8 +630,7 @@ export function CommandMenu() {
       ? ticket.data.approvals.filter((a) => a.state === "pending").map((a) => ({
           id: `approve-${a.id}`,
           title: `Approve: ${a.action_summary}`,
-          glyph: "✓",
-          group: "Actions" as const,
+          icon: "check" as const,
           onDemand: true,
           perform: () => decideApproval.mutate({ id: a.id, decision: "approve" }, { onError: failed }),
         }))
@@ -395,46 +638,94 @@ export function CommandMenu() {
     {
       id: "copy-link",
       title: "Copy link to this page",
-      glyph: "⧉",
-      group: "Actions",
+      icon: "link",
       onDemand: true,
       perform: () => void navigator.clipboard.writeText(window.location.href).catch(failed),
     },
     {
       id: "shortcuts",
       title: "Keyboard shortcuts",
-      meta: "?",
-      glyph: "⌨",
-      group: "Actions",
+      shortcut: "?",
+      icon: "key",
       perform: () => window.dispatchEvent(new Event("la:shortcuts")),
     },
   ];
   const shownActions = actions.filter((a) => {
     if (commands) return matchesWords(a.title, title);
+    if (oneType) return false;
     if (title) return a.fallback || matchesWords(a.title, title);
     return !a.onDemand;
   });
 
   // Same item set as the sidebar (lib/project-scope.ts), scoped to the remembered project.
-  const goTo: Item[] = NAV_GROUPS.flatMap((g) =>
+  const goTo: Row[] = NAV_GROUPS.flatMap((g) =>
     g.items.map((i) => ({
       id: `nav-${i.href}`,
       title: `Go to ${i.label}`,
-      meta: g.label,
+      sub: g.label,
+      icon: "compass" as const,
       href: withProject(i.href, remembered),
-      group: "Go to" as const,
     })),
   )
-    .filter((i) => (title ? matchesWords(i.title, title) : commands))
+    .filter((i) => !oneType && (title ? matchesWords(i.title, title) : commands))
     // An app already offered above isn't offered again here.
     .filter((i) => !apps.some((a) => a.href === i.href));
 
-  const items: Item[] =
+  const sections: Section[] =
     mode === "projects"
-      ? projectItems
-      : [...needsYou, ...running, ...resume, ...recentItems, ...jump, ...local, ...hits, ...shownActions, ...(commands && title ? projectItems : []), ...goTo];
-  const index = Math.max(0, Math.min(active, items.length - 1));
-  const activeId = items.length ? `command-${index}` : undefined;
+      ? [{ key: "projects", label: "Switch space", rows: projectRows }]
+      : [
+          { key: "needs", label: "Needs you", count: inboxItems.length || undefined, tone: "human" as const, rows: needsYou },
+          { key: "running", label: "Running", rows: running },
+          { key: "continue", label: "Continue", rows: resume },
+          { key: "recent", label: "Recent", rows: recentRows },
+          { key: "jump", label: "Jump to", rows: jump },
+          ...resultSections,
+          { key: "actions", label: "Actions", rows: shownActions },
+          ...(commands && title ? [{ key: "projects", label: "Switch space", rows: projectRows }] : []),
+          { key: "goto", label: "Go to", rows: goTo },
+        ].filter((s) => s.rows.length > 0);
+  const rows = sections.flatMap((s) => s.rows);
+  const index = Math.max(0, Math.min(active, rows.length - 1));
+  const selected = rows[index];
+  const activeId = rows.length ? `command-${index}` : undefined;
+
+  // The types under More: those with hits first (with counts), then the rest.
+  const moreWith = MORE_TYPES.filter((t) => (counts[t] ?? 0) > 0);
+  const moreWithout = MORE_TYPES.filter((t) => !(counts[t] ?? 0));
+  const moreChoices = searchText ? moreWith : MORE_TYPES;
+  const moreType = oneType && MORE_TYPES.includes(oneType) ? oneType : undefined;
+
+  // The approval in the preview, decided with ⌥A / ⌥D (bare A and D would type into the search).
+  const approval = selected?.preview?.kind === "inbox" && selected.preview.item.kind === "approval" ? selected.preview.item : undefined;
+  const decide = useDecideApproval(approval?.ticket_key ?? "");
+  const decideSelected = (decision: "approve" | "deny") => {
+    const id = approval && approvalId(approval.id);
+    if (!id || decide.isPending) return;
+    decide.mutate(
+      { id, decision },
+      {
+        onSuccess: () => {
+          void qc.invalidateQueries({ queryKey: ["inbox"] });
+          void qc.invalidateQueries({ queryKey: ["bootstrap"] });
+        },
+        onError: failed,
+      },
+    );
+  };
+  const previewActions: PreviewAction[] = !selected
+    ? []
+    : approval
+      ? [
+          { label: "Approve", keys: "⌥A", tone: "approve", run: () => decideSelected("approve") },
+          { label: "Deny", keys: "⌥D", run: () => decideSelected("deny") },
+        ]
+      : [
+          ...(selected.href || selected.perform || selected.moreOf
+            ? [{ label: selected.message ? "Jump to message" : selected.moreOf ? `Show ${TYPE[selected.moreOf].label}` : selected.perform && !selected.href ? "Run" : "Open", keys: "↵", run: () => go(selected) }]
+            : []),
+          ...(selected.attach ? [{ label: "Attach to new chat", keys: "⌥↵", run: () => attachToChat(selected) }] : []),
+        ];
 
   // Entering or leaving the project list keeps typing in the input.
   useEffect(() => {
@@ -464,6 +755,10 @@ export function CommandMenu() {
       setQuery("");
       setMode("root");
       setActive(0);
+      setChip(undefined);
+      setFacet(undefined);
+      setExpanded(undefined);
+      setMoreOpen(false);
       let stored: string | null = null;
       try {
         stored = window.localStorage.getItem(RECENT_KEY);
@@ -487,23 +782,213 @@ export function CommandMenu() {
     };
   }, []);
 
-  // Groups render as role=group inside the listbox; options keep one flat index for ↑↓.
-  const groups: { name: PaletteGroup; items: { item: Item; i: number }[] }[] = [];
-  items.forEach((item, i) => {
-    const last = groups[groups.length - 1];
-    if (last?.name === item.group) last.items.push({ item, i });
-    else groups.push({ name: item.group, items: [{ item, i }] });
-  });
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (moreOpen) {
+      const n = moreChoices.length;
+      if (e.key === "ArrowDown" && n) {
+        e.preventDefault();
+        setMoreActive((moreActive + 1) % n);
+      } else if (e.key === "ArrowUp" && n) {
+        e.preventDefault();
+        setMoreActive((moreActive + n - 1) % n);
+      } else if (e.key === "Enter" && moreChoices[moreActive]) {
+        e.preventDefault();
+        pickType(moreChoices[moreActive]);
+      } else if (e.key === "Escape") {
+        // Closes the menu, not the palette.
+        e.preventDefault();
+        e.stopPropagation();
+        setMoreOpen(false);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown" && rows.length) {
+      e.preventDefault();
+      setActive((index + 1) % rows.length);
+    }
+    if (e.key === "ArrowUp" && rows.length) {
+      e.preventDefault();
+      setActive((index + rows.length - 1) % rows.length);
+    }
+    if (e.key === "Home" && rows.length) {
+      e.preventDefault();
+      setActive(0);
+    }
+    if (e.key === "End" && rows.length) {
+      e.preventDefault();
+      setActive(rows.length - 1);
+    }
+    const atEnd = e.currentTarget.selectionStart === e.currentTarget.value.length;
+    if (e.key === "ArrowRight" && atEnd && selected?.chat && !selected.message && selected.chat.messages.length && expanded !== selected.chat.id) {
+      e.preventDefault();
+      setExpanded(selected.chat.id);
+    }
+    if (e.key === "ArrowLeft" && selected?.chat && (selected.message || expanded === selected.chat.id)) {
+      e.preventDefault();
+      const chatId = selected.chat.id;
+      setExpanded(undefined);
+      // Back onto the chat's own row.
+      const at = rows.findIndex((r) => r.chat?.id === chatId && !r.message);
+      if (at >= 0) setActive(at);
+    }
+    if (e.altKey && approval && (e.code === "KeyA" || e.code === "KeyD")) {
+      e.preventDefault();
+      decideSelected(e.code === "KeyA" ? "approve" : "deny");
+      return;
+    }
+    // While results are stale, ↵ must not fall through to an action or an old hit.
+    if (e.key === "Enter" && selected && (!pending || selected.local || selected.moreOf || jump.includes(selected))) {
+      e.preventDefault();
+      if (e.altKey) attachToChat(selected);
+      else go(selected, e.metaKey || e.ctrlKey);
+    }
+    if (e.key === "Backspace" && mode === "projects" && !query) {
+      e.preventDefault();
+      setMode("root");
+    }
+    if (e.key === "Tab" && mode === "root" && !commands) {
+      e.preventDefault();
+      pickType(stepChip(oneType, e.shiftKey));
+    }
+  };
+
+  const hints: [string, string][] =
+    mode === "projects"
+      ? [["↑↓", "move"], ["↵", "switch"], ["⌫", "back"], ["esc", "close"]]
+      : moreOpen
+        ? [["↑↓", "move"], ["↵", "show this type"], ["esc", "close menu"]]
+        : commands
+          ? [["↑↓", "move"], ["↵", "run"], ["esc", "close"]]
+          : selected?.message
+            ? [["↑↓", "move"], ["↵", "jump to message"], ["←", "collapse"], ["⌘↵", "new tab"]]
+            : approval
+              ? [["↑↓", "move"], ["⌥A", "approve"], ["⌥D", "deny"], ["Tab", "next type"], ["⌘↵", "new tab"]]
+              : !searchText
+                ? [["↑↓", "move"], ["↵", "open"], ["Tab", "next type"], ["⌘↵", "new tab"], ["@", "people"], ["#", "tickets"], [">", "commands"]]
+                : oneType
+                  ? [["↑↓", "move"], ["↵", "open"], ["Tab", "next type"], ["⇧Tab", "back to All"], ["⌥↵", "attach to chat"], ["⌘↵", "new tab"]]
+                  : [["↑↓", "move"], ["↵", "open"], ["→", "expand chat"], ["Tab", "next type"], ["⌥↵", "attach to chat"], ["⌘↵", "new tab"]];
+
+  const chipClass = (on: boolean, empty: boolean) =>
+    cx(
+      "inline-flex h-[26px] flex-none items-center gap-1 rounded-full border px-3 text-12 transition-colors",
+      on ? "border-accent bg-accent-soft font-semibold text-fg" : empty ? "border-border text-fg-tertiary/70 hover:bg-hover" : "border-border-strong text-fg-secondary hover:bg-hover",
+    );
+  const count = (n: number | undefined, on: boolean) => (searchText && n ? <span className={cx("font-normal", on ? "text-fg-secondary" : "text-fg-tertiary")}>{n}</span> : null);
+
+  // An element, not a component: it reads the palette's state as it renders.
+  const moreMenu = (
+    <div role="listbox" aria-label="More types">
+      <div className="px-2 pb-1 pt-1.5 text-11 font-semibold uppercase tracking-wide text-fg-tertiary">{searchText ? "With results" : "Types"}</div>
+      {moreChoices.length === 0 && <p className="px-2 py-1.5 text-13 text-fg-tertiary">Nothing else matched.</p>}
+      {moreChoices.map((t, i) => (
+        <div
+          key={t}
+          role="option"
+          aria-selected={i === moreActive}
+          onMouseDown={(e) => e.preventDefault()}
+          onMouseMove={() => setMoreActive(i)}
+          onClick={() => pickType(t)}
+          className={cx("flex h-[30px] cursor-pointer items-center gap-2 rounded-lg px-2 text-13", i === moreActive ? "bg-selected text-fg" : "text-fg-secondary")}
+        >
+          <span className="flex-1">
+            {TYPE[t].label} {searchText && <span className="text-fg-tertiary">{counts[t]}</span>}
+          </span>
+          <span className="font-mono text-11 text-fg-tertiary">{TYPE[t].token}</span>
+        </div>
+      ))}
+      {searchText && moreWithout.length > 0 && (
+        <div className="mt-1.5 border-t border-border px-2 pb-1 pt-2.5">
+          <div className="pb-1 text-11 font-semibold uppercase tracking-wide text-fg-tertiary">No results</div>
+          <p className="text-12 leading-relaxed text-fg-tertiary/80">{moreWithout.map((t) => TYPE[t].label).join(" · ")}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const chipRow = root && (
+    <div className="flex flex-none items-center gap-2 border-b border-border px-4 py-2.5 max-md:overflow-x-auto max-md:[scrollbar-width:none]">
+      <div role="toolbar" aria-label="Search types" className="flex items-center gap-2">
+        <button type="button" aria-pressed={!oneType} onMouseDown={(e) => e.preventDefault()} onClick={() => pickType(undefined)} className={chipClass(!oneType, false)}>
+          All {count(total, !oneType)}
+        </button>
+        {CHIP_TYPES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={oneType === t}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => pickType(t)}
+            className={chipClass(oneType === t, !!searchText && !pending && !counts[t])}
+          >
+            {TYPE[t].label} {count(counts[t], oneType === t)}
+          </button>
+        ))}
+        <Popover.Root open={moreOpen} onOpenChange={setMoreOpen}>
+          <Popover.Anchor asChild>
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={moreOpen}
+              aria-pressed={!!moreType}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setMoreOpen(!moreOpen);
+                setMoreActive(0);
+              }}
+              className={chipClass(!!moreType || moreOpen, false)}
+            >
+              {moreType ? (
+                <>
+                  {TYPE[moreType].label} {count(counts[moreType], true)}
+                </>
+              ) : (
+                <>More {searchText && moreWith.length ? <span className="font-normal text-fg-tertiary">{moreWith.length}</span> : "+"}</>
+              )}
+            </button>
+          </Popover.Anchor>
+          <Popover.Portal>
+            <Popover.Content
+              align="start"
+              sideOffset={6}
+              // Typing stays in the search box; ↑↓ ↵ and esc there drive the menu.
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              // Focus belongs in the search box, which drives this menu; only a click elsewhere closes it.
+              onFocusOutside={(e) => e.preventDefault()}
+              className="z-[60] w-[280px] rounded-xl border border-border-float bg-surface-raised p-1.5 shadow-2xl"
+            >
+              {moreMenu}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+      {project && (
+        <button
+          type="button"
+          aria-pressed={scope}
+          aria-label={scope ? `Searching ${project} only; search all spaces` : `Searching all spaces; search ${project} only`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setScope(!scope)}
+          className={cx(chipClass(scope, false), "ml-auto max-md:ml-0")}
+        >
+          {scope ? project : "All spaces"}
+        </button>
+      )}
+    </div>
+  );
+
+  const showPreview = root && rows.length > 0;
 
   return (
     <Dialog.Root open={open} onOpenChange={close}>
       <Dialog.Portal>
         <Dialog.Overlay className="motion-scrim fixed inset-0 z-50 bg-scrim backdrop-blur-[3px]" />
         <Dialog.Content
-          className="motion-dialog-fast fixed left-1/2 top-[15vh] z-50 flex max-h-[70vh] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-2xl max-md:inset-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:rounded-none max-md:border-0 max-md:px-safe max-md:pt-safe max-md:pb-safe"
+          className="motion-dialog-fast fixed left-1/2 top-[12vh] z-50 flex h-[min(560px,calc(100dvh-12vh-24px))] w-[880px] max-w-[calc(100vw-24px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border-float bg-surface-raised shadow-2xl max-md:inset-0 max-md:h-dvh max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:rounded-none max-md:border-0 max-md:px-safe max-md:pt-safe max-md:pb-safe"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
-            // The input, not the scope toggle that comes first.
+            // The input, not the first chip.
             e.preventDefault();
             inputRef.current?.focus();
           }}
@@ -519,97 +1004,58 @@ export function CommandMenu() {
           {/* A hairline of the theme's accent along the top edge: the palette's only ornament. */}
           <div aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent opacity-70" />
           <Dialog.Title className="sr-only">{mode === "projects" ? "Switch space" : "Search and commands"}</Dialog.Title>
-          <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5 max-md:pr-1.5 max-md:py-1.5">
-            <Icon name="search" size={16} className="flex-none text-fg-tertiary" />
-            {mode === "projects" ? (
-              <button
-                type="button"
-                className="rounded-full border border-border px-2.5 py-0.5 text-12 font-medium text-fg-secondary transition-colors hover:bg-hover"
-                onClick={() => {
-                  setMode("root");
-                  setQuery("");
-                }}
-              >
-                ← Back
-              </button>
-            ) : (
-              project && (
+          <div className="flex h-14 flex-none items-center gap-3 border-b border-border px-5 max-md:h-auto max-md:border-0 max-md:px-3 max-md:pb-1 max-md:pt-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3 max-md:h-11 max-md:rounded-xl max-md:bg-surface-sunken max-md:px-3">
+              <Icon name="search" size={16} className="flex-none text-fg-tertiary" />
+              {mode === "projects" && (
                 <button
                   type="button"
-                  aria-pressed={scope}
-                  aria-label={scope ? `Searching ${project} only; search all spaces` : `Searching all spaces; search ${project} only`}
-                  className={cx(
-                    "rounded-full border px-2.5 py-0.5 text-12 font-medium transition-colors",
-                    scope ? "border-transparent bg-accent-soft text-accent" : "border-border text-fg-secondary hover:bg-hover",
-                  )}
-                  onClick={() => setScope(!scope)}
+                  className="rounded-full border border-border px-2.5 py-0.5 text-12 font-medium text-fg-secondary transition-colors hover:bg-hover"
+                  onClick={() => {
+                    setMode("root");
+                    setQuery("");
+                  }}
                 >
-                  {scope ? project : "All spaces"}
+                  ← Back
                 </button>
-              )
-            )}
-            <input
-              ref={inputRef}
-              autoComplete="off"
-              spellCheck={false}
-              role="combobox"
-              aria-label={mode === "projects" ? "Switch to space" : "Search everything"}
-              aria-expanded={items.length > 0}
-              aria-autocomplete="list"
-              aria-controls="command-results"
-              aria-activedescendant={activeId}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              placeholder={mode === "projects" ? "Switch to space…" : "Search, or try is:ticket status:done…"}
-              className="min-w-0 flex-1 bg-transparent text-15 outline-none placeholder:text-fg-tertiary max-md:text-16"
-              onKeyDown={(e) => {
-                if (e.key === "ArrowDown" && items.length) {
-                  e.preventDefault();
-                  setActive((index + 1) % items.length);
-                }
-                if (e.key === "ArrowUp" && items.length) {
-                  e.preventDefault();
-                  setActive((index + items.length - 1) % items.length);
-                }
-                if (e.key === "Home" && items.length) {
-                  e.preventDefault();
+              )}
+              <input
+                ref={inputRef}
+                autoComplete="off"
+                spellCheck={false}
+                role="combobox"
+                aria-label={mode === "projects" ? "Switch to space" : "Search everything"}
+                aria-expanded={rows.length > 0}
+                aria-autocomplete="list"
+                aria-controls="command-results"
+                aria-activedescendant={activeId}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
                   setActive(0);
-                }
-                if (e.key === "End" && items.length) {
-                  e.preventDefault();
-                  setActive(items.length - 1);
-                }
-                // While results are stale, ↵ must not fall through to an action or an old hit.
-                if (e.key === "Enter" && items[index] && (!pending || items[index].local || items[index].group === "Jump to")) {
-                  e.preventDefault();
-                  go(items[index], e.metaKey || e.ctrlKey);
-                }
-                if (e.key === "Backspace" && mode === "projects" && !query) {
-                  e.preventDefault();
-                  setMode("root");
-                }
-                if (e.key === "Tab" && project && mode === "root") {
-                  e.preventDefault();
-                  setScope(!scope);
-                }
-              }}
-            />
-            <span role="status" className="flex items-center gap-1.5 text-12 text-fg-tertiary">
-              {pending && <span aria-hidden className="size-1.5 animate-skeleton rounded-full bg-accent" />}
-              {pending ? "Searching…" : ""}
-            </span>
+                  setExpanded(undefined);
+                }}
+                placeholder={mode === "projects" ? "Switch to space…" : "Search everything, or type @ people  # tickets  > commands"}
+                className="min-w-0 flex-1 bg-transparent text-16 outline-none placeholder:text-fg-tertiary focus-visible:!outline-none"
+                onKeyDown={onKeyDown}
+              />
+              <span role="status" className="flex flex-none items-center gap-1.5 text-12 text-fg-tertiary">
+                {pending && <span aria-hidden className="size-1.5 animate-skeleton rounded-full bg-accent" />}
+                {pending ? "Searching…" : ""}
+              </span>
+            </div>
             <span aria-hidden className="max-md:hidden">
               <Kbd>esc</Kbd>
             </span>
             <Dialog.Close asChild>
-              <IconButton icon="x" label="Close search" size={compact ? 44 : 28} />
+              <button type="button" className="hidden h-11 flex-none px-1 text-15 text-accent max-md:block">
+                Cancel
+              </button>
             </Dialog.Close>
           </div>
-          {mode === "root" && filters.tokens.length > 0 && (
-            <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
+          {chipRow}
+          {root && filters.tokens.length > 0 && (
+            <div className="flex flex-none flex-wrap gap-1 border-b border-border px-4 py-2">
               {filters.tokens.map((token) => (
                 <button
                   key={token}
@@ -626,87 +1072,97 @@ export function CommandMenu() {
               ))}
             </div>
           )}
-          <div className="scroll-py-2 overflow-y-auto overscroll-contain p-2 max-md:min-h-0 max-md:flex-1">
-            {search.isError && (
-              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
-                Search failed. Try again.
-              </p>
-            )}
-            {(createChat.isError || askChat.isError) && (
-              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
-                Couldn’t start the chat.
-              </p>
-            )}
-            {actionFailed && (
-              <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
-                That action didn’t go through. Try again.
-              </p>
-            )}
-            {searchText && !pending && hits.length === 0 && local.length === 0 && !key && (
-              <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No results for “{query.trim()}”.</p>
-            )}
-            {mode === "projects" && items.length === 0 && (
-              <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No project matches “{query}”.</p>
-            )}
-            <div id="command-results" role="listbox" aria-label="Results" aria-busy={pending} className={cx(pending && "opacity-60")}>
-              {groups.map((g) => (
-                <div key={g.name} role="group" aria-labelledby={`command-group-${g.name.replace(/\s+/g, "-")}`}>
-                  <div
-                    id={`command-group-${g.name.replace(/\s+/g, "-")}`}
-                    role="presentation"
-                    className="px-3 pb-1.5 pt-3 text-11 font-medium tracking-wide text-fg-tertiary"
-                  >
-                    {g.name}
-                  </div>
-                  {g.items.map(({ item, i }) => (
-                    <div
-                      key={`${item.group}-${item.id}`}
-                      id={`command-${i}`}
-                      role="option"
-                      aria-selected={i === index}
-                      onClick={(e) => go(item, e.metaKey || e.ctrlKey)}
-                      onMouseMove={() => setActive(i)}
+          <div className="flex min-h-0 flex-1">
+            <div
+              className={cx(
+                "scroll-py-2 overflow-y-auto overflow-x-hidden overscroll-contain px-2 pb-2 transition-opacity",
+                showPreview ? "w-[500px] flex-none max-[919px]:w-full max-[919px]:flex-1" : "flex-1",
+                moreOpen && "opacity-40",
+              )}
+            >
+              {(all.isError || one.isError) && (
+                <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
+                  Search failed. Try again.
+                </p>
+              )}
+              {(createChat.isError || askChat.isError) && (
+                <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
+                  Couldn’t start the chat.
+                </p>
+              )}
+              {actionFailed && (
+                <p role="alert" className="p-3 text-12 text-pill-blocked-fg">
+                  That action didn’t go through. Try again.
+                </p>
+              )}
+              {searchText && oneType && facetValues.length > 0 && (
+                <div role="group" aria-label={`Filter ${TYPE[oneType].noun}`} className="flex flex-wrap gap-1.5 px-2 pb-1 pt-2.5">
+                  {[{ value: undefined, label: oneType === "ticket" || oneType === "run" ? "Any status" : oneType === "page" ? "Any folder" : "Anyone" }, ...facetValues.slice(0, 6).map((f) => ({ value: f.value, label: `${oneType === "ticket" ? statusLabel(f.value) : f.value} ${f.count}` }))].map((f) => (
+                    <button
+                      key={f.value ?? "any"}
+                      type="button"
+                      aria-pressed={facet === f.value}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setFacet(f.value);
+                        setActive(0);
+                      }}
                       className={cx(
-                        "relative flex min-h-[40px] w-full cursor-pointer max-md:min-h-[44px] items-center gap-3 rounded-lg px-3 text-left text-14 transition-colors duration-(--motion-fast)",
-                        i === index ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover",
+                        "h-[22px] rounded-md border px-2 text-11 transition-colors",
+                        facet === f.value ? "border-transparent bg-border-strong font-semibold text-fg" : "border-border text-fg-secondary hover:bg-hover",
                       )}
                     >
-                      {i === index && <span aria-hidden className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full bg-accent" />}
-                      <span
-                        aria-hidden
-                        className={cx(
-                          "grid size-6 flex-none place-items-center rounded-md border text-12 transition-colors duration-(--motion-fast)",
-                          i === index ? "border-transparent bg-accent-soft text-accent" : "border-border-subtle bg-surface-sunken text-fg-tertiary",
-                        )}
-                      >
-                        {item.glyph ?? GLYPH[item.group] ?? ""}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="block truncate">
-                          <Match text={item.title} query={mode === "projects" ? query : title} />
-                        </span>
-                        {item.snippet && (
-                          <span className="block truncate text-12 text-fg-tertiary">
-                            <Parts parts={snippetParts(item.snippet)} />
-                          </span>
-                        )}
-                      </span>
-                      {item.meta &&
-                        (isShortcut(item.meta) ? (
-                          <Kbd>{item.meta}</Kbd>
-                        ) : (
-                          <span className="max-w-[40%] flex-none truncate font-mono text-12 text-fg-tertiary">{item.meta}</span>
-                        ))}
-                    </div>
+                      {f.label}
+                    </button>
                   ))}
                 </div>
-              ))}
+              )}
+              {searchText && !pending && resultSections.length === 0 && jump.length === 0 && (
+                <p className="px-3 py-8 text-center text-14 text-fg-tertiary">
+                  {oneType ? `No ${TYPE[oneType].noun} match “${filters.text}”.` : `No results for “${query.trim()}”.`}
+                </p>
+              )}
+              {mode === "projects" && rows.length === 0 && <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No project matches “{query}”.</p>}
+              <div id="command-results" role="listbox" aria-label="Results" aria-busy={pending} className={cx(pending && "opacity-60")}>
+                {sections.map((s) => {
+                  const labelId = `command-group-${s.key}`;
+                  return (
+                    <div key={s.key} role="group" aria-labelledby={s.label ? labelId : undefined} aria-label={s.label ? undefined : TYPE[s.key as TypeKey]?.label}>
+                      {s.label && (
+                        <div
+                          id={labelId}
+                          role="presentation"
+                          className={cx("px-3 pb-1.5 pt-3 text-11 font-semibold uppercase tracking-wide", s.tone === "human" ? "text-state-human" : "text-fg-tertiary")}
+                        >
+                          {s.label}
+                          {s.count ? ` · ${s.count}` : ""}
+                        </div>
+                      )}
+                      {s.rows.map((row) => {
+                        const i = rows.indexOf(row);
+                        return <RowView key={row.id} row={row} i={i} on={i === index} query={title} expanded={!!row.chat && expanded === row.chat.id} onPick={go} onHover={setActive} onToggle={(id) => setExpanded(expanded === id ? undefined : id)} />;
+                      })}
+                    </div>
+                  );
+                })}
+                {searchText && oneType && oneTotal > oneShown && (
+                  <p className="px-3 py-3 text-12 text-fg-tertiary">
+                    {oneShown} of {oneTotal}
+                    {oneShown < 50 ? " · scroll for more" : " · add words to narrow it"}
+                  </p>
+                )}
+              </div>
             </div>
+            {showPreview && (
+              <div className="flex min-w-0 flex-1 border-l border-border max-[919px]:hidden">
+                <CommandPreview preview={selected?.preview} query={title} actions={previewActions} />
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border bg-surface-sunken px-4 py-2 text-12 text-fg-tertiary max-md:hidden">
-            {(mode === "projects" ? PROJECT_KEYS : ROOT_KEYS).map(([keys, what]) => (
-              <span key={what} className="flex items-center gap-1.5">
-                <Kbd>{keys}</Kbd>
+          <div className="flex h-10 flex-none items-center gap-x-5 overflow-hidden border-t border-border bg-surface-sunken px-5 text-12 text-fg-tertiary max-md:hidden">
+            {hints.map(([keys, what]) => (
+              <span key={what} className="flex flex-none items-center gap-1.5 whitespace-nowrap">
+                <span className="text-fg-secondary">{keys}</span>
                 {what}
               </span>
             ))}
@@ -714,5 +1170,102 @@ export function CommandMenu() {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function RowView({
+  row,
+  i,
+  on,
+  query,
+  expanded,
+  onPick,
+  onHover,
+  onToggle,
+}: {
+  row: Row;
+  i: number;
+  on: boolean;
+  query: string;
+  expanded: boolean;
+  onPick: (row: Row, newTab?: boolean) => void;
+  onHover: (i: number) => void;
+  onToggle: (chatId: string) => void;
+}) {
+  const child = !!row.message;
+  return (
+    <div
+      id={`command-${i}`}
+      role="option"
+      aria-selected={on}
+      aria-expanded={row.chat && !row.message && row.chat.messages.length ? expanded : undefined}
+      onClick={(e) => onPick(row, e.metaKey || e.ctrlKey)}
+      onMouseMove={() => onHover(i)}
+      className={cx(
+        "relative flex cursor-pointer items-center gap-3 rounded-lg text-left transition-colors duration-(--motion-fast)",
+        // A message sits indented under its chat; full width plus the indent would scroll the list sideways.
+        row.moreOf ? "min-h-8 px-3" : child ? "ml-6 min-h-[42px] border-l border-border pl-3 pr-3" : "min-h-11 w-full px-3 py-1",
+        on ? "bg-selected" : "hover:bg-hover",
+      )}
+    >
+      {on && <span aria-hidden className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full bg-accent" />}
+      {!child &&
+        (row.moreOf ? (
+          <span aria-hidden className="size-7 flex-none" />
+        ) : (
+          <span
+            aria-hidden
+            className={cx(
+              "grid size-7 flex-none place-items-center rounded-md transition-colors duration-(--motion-fast)",
+              row.tone === "human"
+                ? "bg-pill-human-bg text-state-human"
+                : row.tone === "run"
+                  ? "bg-surface-sunken text-state-progress"
+                  : on
+                    ? "bg-accent-soft text-accent"
+                    : "bg-surface-sunken text-fg-secondary",
+            )}
+          >
+            <Icon name={row.icon} size={14} />
+          </span>
+        ))}
+      <span className="min-w-0 flex-1">
+        <span className={cx("block truncate", row.moreOf ? "text-12 font-semibold text-accent" : child ? "text-12 font-semibold text-fg-secondary" : "text-14", !row.moreOf && !child && (on ? "text-fg" : "text-fg-secondary"))}>
+          {row.mark ? <Parts parts={matchParts(row.title, query)} /> : row.title}
+        </span>
+        {row.sub && <span className={cx("block truncate text-fg-tertiary", child ? "text-12" : "text-12")}>{row.sub}</span>}
+      </span>
+      {row.chat && !row.message && row.chat.messages.length > 0 && (
+        <button
+          type="button"
+          aria-label={expanded ? "Hide matching messages" : "Show matching messages"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(row.chat!.id);
+          }}
+          className="hidden size-8 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover max-md:grid"
+        >
+          <Icon name={expanded ? "chev" : "chevr"} size={14} />
+        </button>
+      )}
+      {row.shortcut ? (
+        <Kbd>{row.shortcut}</Kbd>
+      ) : (
+        row.meta && (
+          // On a phone a chat with matching messages shows its chevron there instead.
+          <span
+            className={cx(
+              "max-w-[40%] flex-none truncate text-12",
+              row.metaClass ?? "text-fg-tertiary",
+              // A phone has no Tab key, and its chats with matching messages show a chevron there instead.
+              (row.moreOf || (row.chat && !row.message && row.chat.messages.length > 0)) && "max-md:hidden",
+            )}
+          >
+            {row.meta}
+          </span>
+        )
+      )}
+    </div>
   );
 }

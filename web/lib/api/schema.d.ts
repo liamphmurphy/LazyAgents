@@ -223,7 +223,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories and Library */
+        /**
+         * Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories, Library, spaces, courses, scheduled tasks and canvases
+         * @description At most 8 hits of each type, or up to 50 of one type when kind is set. counts holds how many
+         *     of each type matched before that cut (chats: those matched by title plus those with matching
+         *     messages among the message hits returned). A message hit is a chat target whose anchor is the
+         *     message's id.
+         */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -6952,10 +6958,10 @@ export interface components {
         /** @description What a [[link]] points at, with enough to render it */
         LinkTarget: {
             /**
-             * @description chat, run, workflow, persona, memory and library only appear in GET /search hits
+             * @description chat, run, workflow, persona, memory, library, space, course, scheduled and canvas only appear in GET /search hits
              * @enum {string}
              */
-            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "run" | "workflow" | "persona" | "memory" | "library" | "unresolved";
+            kind: "artifact" | "section" | "ticket" | "epic" | "agent" | "comment" | "chat" | "run" | "workflow" | "persona" | "memory" | "library" | "space" | "course" | "scheduled" | "canvas" | "unresolved";
             /** Format: uuid */
             id?: string;
             anchor?: string;
@@ -7002,7 +7008,19 @@ export interface components {
             /** @description Matches are wrapped in « » */
             snippet: string;
             score: number;
+            /** @description Context for a second line: a ticket's assignee, a chat's persona, a message's author (You for the person), a canvas's chat */
+            detail?: string;
+            /**
+             * Format: date-time
+             * @description When the hit last changed (a message: when it was sent)
+             */
+            updated_at?: string;
         };
+        /**
+         * @description A palette type (the is: filter), as GET /search counts and narrows them
+         * @enum {string}
+         */
+        SearchType: "ticket" | "page" | "artifact" | "chat" | "agent" | "epic" | "run" | "workflow" | "persona" | "memory" | "library" | "space" | "course" | "scheduled" | "canvas";
         WikiPattern: {
             title: string;
             path: string;
@@ -9815,6 +9833,8 @@ export interface operations {
                 include_agent?: components["parameters"]["IncludeAgent"];
                 q: string;
                 project?: string;
+                /** @description Only this type, with a higher cap */
+                kind?: components["schemas"]["SearchType"];
             };
             header?: never;
             path?: never;
@@ -9830,6 +9850,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         hits: components["schemas"]["SearchHit"][];
+                        /** @description Matches per SearchType, before the per-type cut; types with none are left out */
+                        counts: {
+                            [key: string]: number;
+                        };
                     };
                 };
             };

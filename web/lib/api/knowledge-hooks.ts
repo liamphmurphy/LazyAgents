@@ -43,6 +43,7 @@ export type PageQuery = {
   orphans?: boolean;
   unresolved?: boolean;
   include_agent?: boolean;
+  kind?: PageKind;
   limit?: number;
   offset?: number;
 };
