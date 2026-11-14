@@ -58,7 +58,7 @@ import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
-import { CodeChanges } from "./code-changes";
+import { ReplyCodeChanges } from "./code-panel";
 import { SentChips } from "./context-chips";
 import { MessageActionsContext, MessageToolbar, ThreadLink, type MessageActions } from "./message-toolbar";
 import { Sources } from "./sources";
@@ -92,6 +92,7 @@ import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
 import { TicketChangeRequests } from "./ticket-change-requests";
+import { PushRequests } from "./push-requests";
 import { ChatTitleMenu } from "./title-menu";
 import { ChatCostChip } from "@/components/domain/cost-chip";
 import { unavailableReason } from "@/lib/setup";
@@ -237,7 +238,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
       </div>
       {!mine && videos?.length ? <VideoRendererNotes videos={videos} /> : null}
       {mine ? <SentAttachments attachments={m.attachments} /> : <ReplyAttachments attachments={m.attachments} />}
-      {!mine && <CodeChanges changes={m.code_changes} />}
+      {!mine && <ReplyCodeChanges changes={m.code_changes} />}
       {mine && <SentChips chips={(m.context_refs ?? []).map((r) => {
         const chip = chipFromRef(r, names);
         // A design's selection rides along with every message sent from the editor.
@@ -1227,6 +1228,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
               <ConnectorRequests chatId={c.id} disabled={c.archived} />
               <SecretRequests chatId={c.id} disabled={c.archived} />
               <TicketChangeRequests chatId={c.id} disabled={c.archived} />
+              <PushRequests chatId={c.id} disabled={c.archived} />
               {pending && selection && (
                 <Divider testId="pending-switch">
                   {selection.auto

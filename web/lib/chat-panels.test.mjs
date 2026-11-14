@@ -177,3 +177,13 @@ test("a chat's linked items: its context tickets and pages, newest first, then i
     { kind: "run", id: RUN },
   ]);
 });
+
+test("the Code panel opens and closes with its own param", () => {
+  const q = switchPanel(new URLSearchParams("dock=1"), "code");
+  assert.equal(q.get("code"), "open");
+  assert.deepEqual(openPanels(q, []), ["code"]);
+  assert.equal(activePanel(q, ["code"]), "code");
+  const closed = closePanel(q, "code");
+  assert.equal(closed.get("code"), null);
+  assert.deepEqual(openPanels(closed, []), []);
+});

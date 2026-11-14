@@ -313,7 +313,7 @@ tickets where the space does. A space that doesn't track work keeps "New tickets
 space's work. Renaming or recoloring a space renames its work and the other way round; a space
 can't be deleted while it tracks work, and stops tracking only while its work has no tickets.
 
-**One actor: personas.** Agents and personas are one thing, a persona (migration 00133). Any
+**One actor: personas.** Agents and personas are one thing, a persona (migration 00134). Any
 persona chats; what else it does is one choice on its profile's Work section: *Chat only*, *Takes
 tickets* (it can be assigned tickets and runs them) or *Helps on runs* (another persona's run can
 hand it part of the work; it can't hold tickets). A persona that works has a work record, the

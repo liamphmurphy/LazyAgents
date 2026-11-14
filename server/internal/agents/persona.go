@@ -37,7 +37,7 @@ func NearestHue(color string) int {
 
 // GivePersona makes the persona of a work record created outside one (the seed, POST
 // /agents), owned by owner, with the record's id and name ("Name 2"… when the owner already
-// has a persona by that name). Agents and personas are one actor (migration 00133).
+// has a persona by that name). Agents and personas are one actor (migration 00134).
 func GivePersona(ctx context.Context, q *store.Queries, a store.Agent, owner uuid.UUID) error {
 	name := a.Name
 	for n := 2; ; n++ {

@@ -18,10 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { CanvasDock, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
+import { useCodeReview } from "@/lib/api/code-review-hooks";
+import { CodePanel } from "./code-panel";
 import { DesignPanel, useOpenNewDesigns } from "./design-panel";
 import { ThreadPanel } from "./thread-panel";
 
-const LABELS: Record<DockTabId, string> = { design: "Design", canvas: "Canvas", playground: "Playground", thread: "Thread", item: "Linked", activity: "Activity" };
+const LABELS: Record<DockTabId, string> = { design: "Design", canvas: "Canvas", playground: "Playground", code: "Code", thread: "Thread", item: "Linked", activity: "Activity" };
 
 /** Which of a chat's panels are open and which a sheet shows, with the moves between them (lib/chat-panels). */
 export function useChatPanels(chatId: string, live: boolean) {
@@ -31,6 +33,7 @@ export function useChatPanels(chatId: string, live: boolean) {
   const canvases = useChatCanvases(chatId, live).data?.canvases ?? [];
   const designIds = canvases.filter((c) => c.kind === "design").map((c) => c.id);
   const hasPlayground = !!useChatPlayground(chatId).data;
+  const hasCode = (useCodeReview(chatId).data?.repositories.length ?? 0) > 0;
   const open = openPanels(search, designIds);
   const go = (q: URLSearchParams) => router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   const q = () => new URLSearchParams(search.toString());
@@ -38,7 +41,7 @@ export function useChatPanels(chatId: string, live: boolean) {
     open,
     active: activePanel(search, open),
     /** The panels there's something to show in, for the compact header's Panels button. */
-    available: PANELS.filter((p) => (p === "design" ? designIds.length > 0 : p === "canvas" ? canvases.length > 0 : hasPlayground)),
+    available: PANELS.filter((p) => (p === "design" ? designIds.length > 0 : p === "canvas" ? canvases.length > 0 : p === "code" ? hasCode : hasPlayground)),
     /** Whether the compact sheet is dismissed (the panels stay open); switchTo shows it again. */
     hidden: sheetHidden(search),
     hide: () => go(hideSheet(q())),
@@ -69,7 +72,7 @@ export function ChatPanelHost({ chatId, live, readOnly, agent, activity, layout 
   return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} />;
 }
 
-const ICONS: Record<DockTabId, IconName> = { design: "designs", canvas: "artifacts", playground: "play", thread: "branch", item: "link", activity: "history" };
+const ICONS: Record<DockTabId, IconName> = { design: "designs", canvas: "artifacts", playground: "play", code: "code", thread: "branch", item: "link", activity: "history" };
 
 /**
  * Which tabs changed since they last showed: a tab is unread once its `sig` moves on from what it
@@ -97,6 +100,7 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
   const canvases = useChatCanvases(chatId, live).data?.canvases;
   const pg = useChatPlayground(chatId).data;
   const chat = useChat(chatId).data;
+  const code = useCodeReview(chatId).data?.repositories;
   const { open } = panels;
   const [hidden, setHidden] = useState(false);
   const state: DockState = { open: dockOpen(search, open), tab: dockTab(search, open), hidden };
@@ -170,6 +174,7 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
       design: open.includes("design") ? sigOf(designId) : undefined,
       canvas: open.includes("canvas") ? sigOf(canvasId) : undefined,
       playground: pg && open.includes("playground") ? `${pg.state}:${pg.action ?? ""}:${pg.data_reset_at ?? ""}` : undefined,
+      code: code && open.includes("code") ? code.map((r) => `${r.head_sha}:${r.updated_at}`).join(",") : undefined,
       activity: chat ? `${chat.state}:${chat.current_run_id ?? ""}` : undefined,
     },
     state.open && !hidden ? (state.tab as DockTabId) : undefined,
@@ -183,9 +188,10 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
     design: <DesignPanel chatId={chatId} live={live} />,
     canvas: <CanvasDock chatId={chatId} live={live} readOnly={readOnly} agent={agent} />,
     playground: <PlaygroundPanel chatId={chatId} />,
+    code: <CodePanel chatId={chatId} />,
     activity,
   };
-  const busy: Partial<Record<DockTabId, boolean>> = { design: designBusy, playground: pgBusy, activity: live };
+  const busy: Partial<Record<DockTabId, boolean>> = { design: designBusy, playground: pgBusy, code: !!code?.some((r) => r.live), activity: live };
   const tabs: DockTab[] = [...open, ...(thread ? ["thread" as const] : []), ...(item ? ["item" as const] : []), "activity" as const].map((id) => ({
     id,
     label: LABELS[id],
@@ -307,6 +313,7 @@ function PanelSheet({ chatId, live, readOnly, agent, panels }: { chatId: string;
           {p === "design" && <DesignPanel chatId={chatId} live={live} />}
           {p === "canvas" && <CanvasFullscreen chatId={chatId} live={live} readOnly={readOnly} agent={agent} inline />}
           {p === "playground" && <PlaygroundPanel chatId={chatId} sheet />}
+          {p === "code" && <CodePanel chatId={chatId} />}
         </div>
       ))}
       {bar && (

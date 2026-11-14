@@ -14,7 +14,7 @@ func TestPersonasDoTheWorkMigration(t *testing.T) {
 	ctx := t.Context()
 	sqlDB := stdlib.OpenDBFromPool(f.pool)
 	defer sqlDB.Close()
-	if err := goose.DownToContext(ctx, sqlDB, ".", 132); err != nil {
+	if err := goose.DownToContext(ctx, sqlDB, ".", 133); err != nil {
 		t.Fatal(err)
 	}
 	// A later user doesn't own them: the workspace's first person does.
@@ -82,7 +82,7 @@ func TestPersonasDoTheWorkMigration(t *testing.T) {
 	}
 
 	// Down keeps the personas (they're ordinary chat personas to older code) and drops the flag.
-	if err := goose.DownToContext(ctx, sqlDB, ".", 132); err != nil {
+	if err := goose.DownToContext(ctx, sqlDB, ".", 133); err != nil {
 		t.Fatal(err)
 	}
 	var n int

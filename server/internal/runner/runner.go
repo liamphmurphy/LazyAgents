@@ -40,6 +40,7 @@ type Config struct {
 	ID            string        // unique per runner process
 	MaxConcurrent int           // processes at once (RUNNER_MAX_CONCURRENT)
 	MCPURL        string        // Vesper's /mcp as turns reach it
+	GitHubAPIURL  string        // GitHub's REST API for shipping approved pushes; api.github.com when empty (tests point elsewhere)
 	Poll          time.Duration // queue poll interval
 	Grace         time.Duration // after SIGINT, before SIGKILL (pause, cancel)
 	LogBucket     string        // raw harness logs (run-logs)
@@ -349,11 +350,12 @@ type runCtx struct {
 	project         store.Project
 	spec            agentdef.Resolved
 	chatRepoAtStart *string
+	isolateGit      bool // see isolatedGitConfig
 }
 
 func (r *Runner) load(ctx context.Context, runID uuid.UUID) (runCtx, error) {
 	q := r.q()
-	var c runCtx
+	c := runCtx{isolateGit: r.isolatesGit()}
 	var err error
 	if c.run, err = q.LockRunNoWait(ctx, runID); err != nil {
 		return c, err
@@ -948,7 +950,7 @@ func (r *Runner) start(ctx context.Context, run store.Run) {
 	testRepo := testEnvRepo(ctx, r.q(), c)
 	recipe, hasRecipe := r.loadTestEnv(ctx, c, testRepo)
 	if c.run.Purpose == "chat" {
-		script += "\n" + r.chatTestEnvironmentScript(ctx, c)
+		script += "\n" + chatSetupCredentialsDone(c) + r.chatTestEnvironmentScript(ctx, c)
 	} else {
 		script += "\n" + recipe.NixInstallScript()
 		if testRepo != "" && !hasRecipe && len(c.spec.Services) == 0 {
@@ -1294,7 +1296,7 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 			r.failChat(ctx, c, "Could not prepare attached repositories.")
 			return
 		}
-		script += "\n" + r.chatTestEnvironmentScript(ctx, c)
+		script += "\n" + chatSetupCredentialsDone(c) + r.chatTestEnvironmentScript(ctx, c)
 		output, setupErr := r.runScript(ctx, c.run.ID, "chat-repositories", script, env)
 		if err = setupErr; err != nil {
 			r.failChat(ctx, c, "Could not prepare attached repositories: "+err.Error())
@@ -1559,8 +1561,13 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 	networks = append(networks, r.turnPlayground(ctx, c, env, sensitive)...)
 	r.event(ctx, c.run.ID, "lifecycle", map[string]any{"state": "turn_started", "turn": turn.Seq, "trigger": turn.Trigger,
 		"harness": c.spec.Harness, "resume": session != ""})
+	turnEnv := env
+	if c.run.Purpose == "chat" && allowedScope(c.spec, "repo:write") {
+		// Pushing waits for the person: the persona asks with request_push.
+		turnEnv = withoutPushCredentials(env)
+	}
 	proc, err := r.Backend.Start(ctx, wsID(c.run), ExecSpec{
-		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: env, Dir: dir, Files: files, Networks: networks,
+		Name: fmt.Sprintf("lazyagents-turn-%s-%d", c.run.ID, turn.Seq), Argv: argv, Env: turnEnv, Dir: dir, Files: files, Networks: networks,
 	})
 	if err != nil {
 		_ = q.FinishTurn(ctx, store.FinishTurnParams{ID: turn.ID, Usage: []byte("{}")})
@@ -1593,7 +1600,9 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 		// copied while it works so the chat can follow along.
 		videos, stopVideos = r.startVideoSync(ctx, c, sensitive)
 	}
+	stopReview := r.watchCodeReview(ctx, c, sensitive)
 	res, raw, code, waitErr := r.watch(ctx, c, proc, h.NewParser(c.spec.Model), sensitive, maxRuntime-used)
+	stopReview()
 	r.addTiming(c.run.ID, 0, time.Since(harnessStart), 0)
 	r.learnTestEnv(ctx, c, proc)
 	if videos != nil {
@@ -1641,6 +1650,10 @@ func (r *Runner) turn(ctx context.Context, turn store.RunTurn) {
 				return // shutting down: the turn re-runs on the next runner start
 			}
 			changes := r.chatRepositoryCodeChanges(ctx, c, repositoryBases, codeBase, sensitive, res, code, waitErr)
+			if allowedScope(c.spec, "repo:write") {
+				r.saveCodeReviews(ctx, c, sensitive, false)
+				r.stagePushRequests(ctx, c)
+			}
 			r.finishChatTurn(ctx, c, turn, res, code, waitErr, logKey, chatTurnCode{changes: changes, repositoryBranches: r.chatRepositoryBranches(ctx, c)}, images)
 		}
 		return

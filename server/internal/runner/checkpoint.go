@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/pushreq"
 	"github.com/liamphmurphy/vesper/server/internal/runs"
 	"github.com/liamphmurphy/vesper/server/internal/secrets"
 	"github.com/liamphmurphy/vesper/server/internal/store"
@@ -37,23 +38,38 @@ func CheckpointBranch(key string, runID uuid.UUID) string {
 // nothing to save, and checkpointPushed after a push.
 func CheckpointScript(branch string) string {
 	var b strings.Builder
-	b.WriteString("set -eu\n")
-	b.WriteString("[ -d .git ] || exit 0\n")
-	b.WriteString("git remote get-url origin >/dev/null 2>&1 || exit 0\n")
-	b.WriteString("git rev-parse -q --verify HEAD >/dev/null || exit 0\n")
-	b.WriteString(`idx=$(git rev-parse --git-path vesper-checkpoint-index)` + "\n")
-	b.WriteString(`trap 'rm -f "$idx"' EXIT` + "\n")
-	b.WriteString(`cp "$(git rev-parse --git-path index)" "$idx"` + "\n")
-	b.WriteString(`GIT_INDEX_FILE="$idx" git add -A -- .` + "\n")
-	b.WriteString(`tree=$(GIT_INDEX_FILE="$idx" git write-tree)` + "\n")
-	b.WriteString(`commit=$(git rev-parse HEAD)` + "\n")
-	b.WriteString(`if [ "$tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then` + "\n")
-	b.WriteString(`  commit=$(git commit-tree "$tree" -p HEAD -m 'Vesper checkpoint: uncommitted work from an earlier run')` + "\n")
-	b.WriteString(`elif [ -z "$(git rev-list -1 HEAD --not --exclude='origin/` + checkpointPrefix + `*' --remotes)" ]; then` + "\n")
-	b.WriteString("  exit 0\nfi\n")
+	b.WriteString(checkpointCommit)
+	b.WriteString(`if [ "$commit" = "$(git rev-parse HEAD)" ] && [ -z "$(git rev-list -1 HEAD --not --exclude='origin/` + checkpointPrefix + `*' --remotes)" ]; then exit 0; fi` + "\n")
 	b.WriteString(`git push --quiet --no-verify origin "+$commit:refs/heads/"` + shellQuote(branch) + "\n")
 	b.WriteString("echo '" + checkpointPushed + "'\n")
 	return b.String()
+}
+
+// checkpointCommit sets $commit to the workspace's work as one commit: HEAD,
+// or a commit of the working tree on top of it when anything is uncommitted.
+const checkpointCommit = `set -eu
+[ -d .git ] || exit 0
+git remote get-url origin >/dev/null 2>&1 || exit 0
+git rev-parse -q --verify HEAD >/dev/null || exit 0
+idx=$(git rev-parse --git-path vesper-checkpoint-index)
+trap 'rm -f "$idx"' EXIT
+cp "$(git rev-parse --git-path index)" "$idx"
+GIT_INDEX_FILE="$idx" git add -A -- .
+tree=$(GIT_INDEX_FILE="$idx" git write-tree)
+commit=$(git rev-parse HEAD)
+if [ "$tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then
+  commit=$(git commit-tree "$tree" -p HEAD -m 'Vesper checkpoint: uncommitted work from an earlier run')
+fi
+`
+
+// chatCheckpointRef holds a coding chat's checkpoint commit between building
+// it (no credential) and pushing it (see BundleScript).
+const chatCheckpointRef = "refs/vesper/checkpoint"
+
+// ChatCheckpointCommitScript is step 1 of a coding chat's checkpoint, run
+// with no credential: the work as one commit, at chatCheckpointRef.
+func ChatCheckpointCommitScript() string {
+	return checkpointCommit + "git update-ref " + chatCheckpointRef + ` "$commit"` + "\n"
 }
 
 // ScriptTimeout bounds one housekeeping script (a checkpoint push, a file
@@ -178,8 +194,7 @@ func (r *Runner) checkpointChat(ctx context.Context, run store.Run) error {
 		}
 		for _, repo := range repos {
 			branch := CheckpointBranch(fmt.Sprintf("chat/%x", sha256.Sum256([]byte(repo.RepoUrl)))[:21], c.run.ID)
-			script := "if [ ! -d " + shellQuote(repo.Directory+"/.git") + " ]; then echo vesper-checkpoint-absent; exit 0; fi\n(cd " + shellQuote(repo.Directory) + "\n" + CheckpointScript(branch) + ")\n"
-			out, e := r.runScript(ctx, c.run.ID, "lazyagents-checkpoint", script, env)
+			out, e := r.pushChatCheckpoint(ctx, c, repo, branch, env)
 			if e != nil {
 				return r.checkpointFailed(ctx, c, e)
 			}
@@ -245,4 +260,41 @@ func (r *Runner) recoverTicketWork(ctx context.Context, c runCtx) (string, error
 		return "", nil
 	}
 	return branch, err
+}
+
+// pushChatCheckpoint saves one checkout of a coding chat to branch in two
+// steps (see BundleScript): the commit and bundle are made with no credential,
+// and only a clean repository of ours pushes them with the token. Output says
+// vesper-checkpoint-absent when there is no checkout, checkpointPushed after a
+// push, and nothing when the work is already on the remote.
+func (r *Runner) pushChatCheckpoint(ctx context.Context, c runCtx, repo store.ChatRepository, branch string, env map[string]string) (string, error) {
+	dir := shellQuote(repo.Directory)
+	script := "if [ ! -d " + shellQuote(repo.Directory+"/.git") + " ]; then echo vesper-checkpoint-absent; exit 0; fi\n(cd " + dir + "\n" + ChatCheckpointCommitScript() + ")\n"
+	out, err := r.runScript(ctx, c.run.ID, "lazyagents-checkpoint", script, nil)
+	if err != nil || strings.Contains(out, "vesper-checkpoint-absent") {
+		return out, err
+	}
+	bundle := pushRoot + "/checkpoint-" + c.run.ID.String() + ".bundle"
+	bare := pushRoot + "/checkpoint-" + c.run.ID.String() + ".git"
+	defer func() {
+		_, _ = r.runScript(context.WithoutCancel(ctx), c.run.ID, "lazyagents-checkpoint-cleanup", "rm -rf "+shellQuote(bundle)+" "+shellQuote(bare), nil)
+	}()
+	if out, err = r.runScript(ctx, c.run.ID, "lazyagents-checkpoint-bundle", BundleScript(repo.Directory, chatCheckpointRef, bundle), nil); err != nil {
+		return out, err
+	}
+	if !strings.Contains(out, bundleMarker) {
+		return "", nil // already on the remote
+	}
+	// The token only ever goes to github.com; another remote gets none.
+	url, pushEnv := repo.RepoUrl, map[string]string(nil)
+	if u, ok := pushreq.HTTPSURL(repo.RepoUrl); ok {
+		url = u
+		if env["GH_TOKEN"] != "" {
+			pushEnv = map[string]string{"GH_TOKEN": env["GH_TOKEN"]}
+		}
+	}
+	if out, err = r.runScript(ctx, c.run.ID, "lazyagents-checkpoint-push", PushBundleScript(bundle, bare, url, branch, false, r.isolatesGit()), pushEnv); err != nil {
+		return out, err
+	}
+	return checkpointPushed, nil
 }

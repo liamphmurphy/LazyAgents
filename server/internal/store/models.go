@@ -273,6 +273,19 @@ type ChatCanvasVersion struct {
 	CreatedAt  time.Time
 }
 
+type ChatCodeReview struct {
+	ChatID    uuid.UUID
+	RepoUrl   string
+	Branch    *string
+	BaseSha   *string
+	HeadSha   *string
+	Commits   json.RawMessage
+	Files     json.RawMessage
+	Dirty     bool
+	Live      bool
+	UpdatedAt time.Time
+}
+
 type ChatFollowup struct {
 	ID        uuid.UUID
 	SessionID uuid.UUID
@@ -1195,6 +1208,42 @@ type ProviderUsage struct {
 	Available   bool
 	Windows     json.RawMessage
 	ObservedAt  time.Time
+}
+
+type PushRequest struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	ChatID      uuid.UUID
+	RunID       *uuid.UUID
+	PersonaID   *uuid.UUID
+	AgentID     uuid.UUID
+	RepoUrl     string
+	Branch      string
+	BaseBranch  *string
+	BaseSha     *string
+	HeadSha     *string
+	StagingRef  *string
+	Commits     json.RawMessage
+	Files       json.RawMessage
+	Title       string
+	Body        string
+	Draft       bool
+	State       string
+	Auto        bool
+	PrUrl       *string
+	PrNumber    *int32
+	Error       *string
+	CreatedAt   time.Time
+	DecidedAt   *time.Time
+}
+
+type RepositoryPushPolicy struct {
+	WorkspaceID uuid.UUID
+	UserID      uuid.UUID
+	RepoUrl     string
+	AutoPush    bool
+	UpdatedAt   time.Time
 }
 
 type RepositorySource struct {

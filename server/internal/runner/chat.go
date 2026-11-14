@@ -55,6 +55,13 @@ func chatSetupScript(ctx context.Context, q *store.Queries, c runCtx) (string, e
 	if err != nil {
 		return "", err
 	}
+	// The persona can write the home volume's git config (a credential helper
+	// or url.insteadOf there would see the token setup clones with); the
+	// checkout's own config only exists once cloned, and setup does nothing
+	// on the network with an existing one.
+	if c.isolateGit {
+		script += "\nexport GIT_CONFIG_GLOBAL=/dev/null"
+	}
 	script += "\n" + sshSetup
 	for _, repo := range repos {
 		script += repositories.SetupScript(repo.RepoUrl, repo.Directory, repo.WorkBranches, repo.CheckpointBranch, name, email)
