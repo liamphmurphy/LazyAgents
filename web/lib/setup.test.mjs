@@ -32,7 +32,9 @@ test("a new workspace has every step open, each linking to its settings section"
   const steps = setupChecklist(base);
   assert.deepEqual(steps.map((s) => s.key), ["repo", "secret", "runner", "agents", "plan"]);
   assert.ok(steps.every((s) => !s.done));
-  assert.deepEqual(steps.slice(0, 3).map((s) => s.href), ["/settings#projects", "/settings#secrets", "/settings#runners"]);
+  // A space's repository is set on its page; with no space tracking work, in a new one (LAZYAGENTS-213).
+  assert.deepEqual(steps.slice(0, 3).map((s) => s.href), ["/spaces/new?work=1", "/settings#secrets", "/settings#runners"]);
+  assert.equal(setupChecklist({ ...base, repoHref: "/spaces/s1" })[0].href, "/spaces/s1");
   assert.match(steps[1].detail, /Claude Code: no harness:anthropic secret/);
 });
 

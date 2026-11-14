@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { components } from "../lib/api/schema";
 import { installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 
 // VESPER-10: on a phone (project "mobile", 390×844) the chat header is ≡, the title, panels and ···,
@@ -80,8 +81,14 @@ test("the drawer traps focus, closes on Escape, scrim and swipe, and returns foc
   await expect(drawer(page)).toHaveCount(0);
 });
 
-test("Activity, project, rename and archive are in the chat menu", async ({ page }) => {
-  const mock = await installChatApi(page);
+const WEBAPP: components["schemas"]["ChatSpace"] = {
+  id: "11111111-1111-4111-8111-000000000001", name: "Web app", description: "", color: "blue", instructions: "", connector_ids: [], space_memory: false,
+  chat_count: 0, source_count: 0, memory_count: 0, inline_tokens: 0, created_at: "2026-11-01T09:00:00.000Z", updated_at: "2026-11-01T09:00:00.000Z",
+  project: "WEB", work: { key: "WEB", default_branch: "main", archived: false, revision: 1 },
+};
+
+test("Activity, space, rename and archive are in the chat menu", async ({ page }) => {
+  const mock = await installChatApi(page, { spaces: [WEBAPP] });
   await chatAbout(page, "menu chat");
   const menuButton = header(page).getByRole("button", { name: "Chat menu" });
 
@@ -93,8 +100,10 @@ test("Activity, project, rename and archive are in the chat menu", async ({ page
   await expect(composer(page)).toBeVisible();
 
   await menuButton.click();
-  await page.getByRole("menuitemradio", { name: "Web app" }).click();
-  await expect.poll(() => mock.chats.at(-1)?.project).toBe("WEB");
+  // Moving the chat into a space that tracks work files its tickets there (LAZYAGENTS-213).
+  await page.getByRole("menuitemradio", { name: /Web app/ }).click();
+  await expect.poll(() => mock.chats.at(-1)?.space?.id).toBe(WEBAPP.id);
+  expect(mock.chats.at(-1)?.project).toBe("WEB");
 
   await menuButton.click();
   await page.getByRole("menuitem", { name: "Rename" }).click();

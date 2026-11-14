@@ -70,10 +70,19 @@ export function ChatSpacePicker({ chat, disabled }: { chat: SpaceChat; disabled:
             update.isError && "ring-1 ring-pill-blocked-fg",
           )}
         >
-          <span className="text-fg-tertiary">In</span>
-          {current ? <span aria-hidden className="size-2 flex-none rounded-[3px]" style={{ background: spaceHex(current.color) }} /> : null}
-          <span className="max-w-[160px] truncate">{current?.name ?? "No space"}</span>
-          <Icon name="chev" size={11} className="flex-none text-fg-tertiary" />
+          {current ? (
+            <>
+              <span className="text-fg-tertiary">In</span>
+              <span aria-hidden className="size-2 flex-none rounded-[3px]" style={{ background: spaceHex(current.color) }} />
+              <span className="max-w-[160px] truncate">{current.name}</span>
+              <Icon name="chev" size={11} className="flex-none text-fg-tertiary" />
+            </>
+          ) : (
+            <>
+              <Icon name="plus" size={11} className="flex-none" />
+              <span>Space</span>
+            </>
+          )}
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

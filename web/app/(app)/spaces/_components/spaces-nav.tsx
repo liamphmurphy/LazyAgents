@@ -9,7 +9,7 @@ import { useSpaceChats, useSpaces } from "@/lib/api/space-hooks";
 import { chatTitle } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { activityLabel, badgeTarget, groupSpaceActivity, jumpTarget, type SpaceActivity, type SpaceChat } from "@/lib/space-activity";
-import { NESTED_CHATS } from "@/lib/spaces";
+import { listedSpaces, NESTED_CHATS } from "@/lib/spaces";
 import { Icon } from "@/components/ui/icon";
 import { NewSpaceDialog } from "./new-space-dialog";
 import { SpaceTile } from "./space-parts";
@@ -116,7 +116,7 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
   const dock = usePersonaDock();
   const activity = groupSpaceActivity(dock.data?.space_chats);
   const [creating, setCreating] = useState(false);
-  const list = spaces.data?.spaces ?? [];
+  const list = listedSpaces(spaces.data?.spaces ?? []);
   if (hideWhenEmpty && !spaces.isError && list.length === 0) return null;
   return (
     <section aria-label="Spaces" className="flex flex-col gap-px">
@@ -162,7 +162,10 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
                   className="flex h-full min-w-[0px] flex-1 items-center gap-[10px] pl-[8px]"
                 >
                   <SpaceTile name={s.name} color={s.color} />
-                  <span className="min-w-[0px] flex-1 truncate">{s.name}</span>
+                  <span className="min-w-[0px] truncate">{s.name}</span>
+                  {/* The key says the space tracks work (LAZYAGENTS-213). */}
+                  {s.work && <span className="min-w-[0px] flex-1 truncate font-mono text-10 uppercase text-fg-tertiary">{s.work.key}</span>}
+                  {!s.work && <span className="flex-1" />}
                 </Link>
                 {jump && (
                   <Link

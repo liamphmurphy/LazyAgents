@@ -16,7 +16,6 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
     { id: "s3", name: "db:staging", grants_scope: "db:migrate", created_at: at, updated_at: at },
   ].filter((s) => !(opts.noClaude && s.name === "harness:anthropic"));
   const puts: Record<string, unknown>[] = [];
-  const projectPuts: Record<string, unknown>[] = [];
   let modelFetches = 0;
   const project = { id: "p1", key: "WEB", name: "Web app", color: "#6e56cf", repo_url: "git@github.com:acme/web.git", default_branch: "main", archived: false, revision: 1 };
   await page.route("**/api/v1/secrets", async (route) => {
@@ -71,11 +70,6 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
     return route.fulfill({ json: s });
   });
   await page.route("**/api/v1/projects", (route) => route.fulfill({ json: [project] }));
-  await page.route("**/api/v1/projects/WEB", (route) => {
-    const body = route.request().postDataJSON() as Record<string, unknown>;
-    projectPuts.push(body);
-    return route.fulfill({ json: { ...project, ...body, repo_url: "git@github.com:acme/payments.git", revision: 2 } });
-  });
   let hostFolders = false;
   const runnerPuts: Record<string, unknown>[] = [];
   const runnerStatus = () =>
@@ -98,7 +92,7 @@ async function installSettingsApi(page: Page, opts: { runners?: boolean; secrets
     modelFetches++;
     return route.fulfill({ json: catalog(secrets.some((s) => s.name === "harness:openai")) });
   });
-  return { api, puts, projectPuts, runnerPuts, signIns, models: () => modelFetches };
+  return { api, puts, runnerPuts, signIns, models: () => modelFetches };
 }
 
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -221,25 +215,6 @@ test("Backup & move exports everything as a download", async ({ page }) => {
   expect(hits).toBe(1);
 });
 
-test("project repo URLs are validated inline and accept SSH and HTTPS", async ({ page }) => {
-  const mock = await installSettingsApi(page);
-  await page.goto("/settings#projects");
-  const projects = page.locator("#projects");
-  await expect(projects).toContainText("git@github.com:acme/web.git");
-  await projects.getByRole("button", { name: "Edit" }).click();
-  const repo = projects.getByLabel("GitHub repository");
-  await repo.fill("git@gitlab.com:northwind/payments.git");
-  await expect(projects.getByText(/Only GitHub repositories work/)).toBeVisible();
-  await expect(repo).toHaveAttribute("aria-invalid", "true");
-  await expect(projects.getByRole("button", { name: "Save changes" })).toBeDisabled();
-  await repo.fill("https://github.com/acme/payments");
-  await expect(projects).toContainText("Saved as https://github.com/acme/payments.git");
-  await expect(repo).not.toHaveAttribute("aria-invalid");
-  await projects.getByRole("button", { name: "Save changes" }).click();
-  await expect(projects.getByRole("status")).toContainText("Web app saved.");
-  expect(mock.projectPuts[0]).toMatchObject({ repo_url: "https://github.com/acme/payments", default_branch: "main" });
-});
-
 test("runner backends show current values and what they control", async ({ page }) => {
   await installSettingsApi(page);
   await page.goto("/settings#runners");
@@ -282,7 +257,8 @@ test("sections show empty and error states independently", async ({ page }) => {
   await expect(page.locator("#secrets").getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(page.locator("#runners")).toContainText("No runner online");
   await expect(page.locator("#runners")).toContainText("RUNNER_BACKEND = not reported");
-  await expect(page.locator("#projects")).toContainText("Web app");
+  // Settings has no Projects section: a space's work is managed on its page (LAZYAGENTS-213).
+  await expect(page.locator("#projects")).toHaveCount(0);
   await expect(page.locator("#workspace")).toContainText("Acme");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/settings-mobile.png", fullPage: true });

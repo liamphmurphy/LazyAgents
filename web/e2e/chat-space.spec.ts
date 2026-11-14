@@ -1,13 +1,22 @@
 import { expect, test } from "@playwright/test";
+import type { components } from "../lib/api/schema";
 import { installChatApi, persona } from "./mock-chat-api";
 
 const ATLAS = persona(1, { name: "Atlas", tone: "friendly", color: "#4fd1c5", is_default: true });
 const NOVA = persona(2, { name: "Nova", color: "#f6ad55" });
 
-test("chat lives above projects: no switcher, and a default project can be set and cleared", async ({ page }) => {
-  const mock = await installChatApi(page, { personas: [ATLAS] });
+const space = (id: string, name: string, over: Partial<components["schemas"]["ChatSpace"]> = {}): components["schemas"]["ChatSpace"] => ({
+  id, name, description: "", color: "blue", instructions: "", connector_ids: [], space_memory: false, chat_count: 0, source_count: 0, memory_count: 0,
+  inline_tokens: 0, created_at: "2026-11-01T09:00:00.000Z", updated_at: "2026-11-01T09:00:00.000Z", ...over,
+});
+const VESPER = space("11111111-1111-4111-8111-000000000001", "Vesper", { project: "WEB", work: { key: "WEB", default_branch: "main", archived: false, revision: 1 } });
+const HEALTH = space("11111111-1111-4111-8111-000000000002", "Health", { color: "green" });
+const OLD = space("11111111-1111-4111-8111-000000000003", "Old work", { work: { key: "OLD", default_branch: "main", archived: true, revision: 2 } });
+
+test("a chat moves into a space and out again: no project switcher, and archived work isn't offered (LAZYAGENTS-213)", async ({ page }) => {
+  const mock = await installChatApi(page, { personas: [ATLAS], spaces: [VESPER, HEALTH, OLD] });
   await page.goto("/chat");
-  await expect(page.getByRole("button", { name: /^Switch project/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Switch (project|space)/ })).toHaveCount(0);
 
   await page.getByRole("combobox", { name: "Message" }).fill("hello");
   await page.getByRole("combobox", { name: "Message" }).press("Enter");
@@ -15,22 +24,29 @@ test("chat lives above projects: no switcher, and a default project can be set a
   await expect(page.getByTestId("assistant-message").first()).toBeVisible();
   expect(mock.created.at(-1)?.project).toBeUndefined();
 
-  // The default project lives in the title's ▾ menu.
-  const titleMenu = page.getByTestId("chat-title-menu");
-  const project = page.getByTestId("chat-project");
-  await titleMenu.click();
-  await expect(project).toContainText("No default");
-  await project.click();
-  await page.getByRole("menuitemradio", { name: "Web app" }).click();
-  await expect.poll(() => mock.chats[0].project).toBe("WEB");
+  // The header's "In" control names the chat's space and moves it.
+  const inSpace = page.getByTestId("chat-space");
+  await expect(inSpace).toHaveAccessibleName("Put this chat in a space");
+  await inSpace.click();
+  await expect(page.getByRole("menuitemradio", { name: /Old work/ })).toHaveCount(0);
+  await page.getByRole("menuitemradio", { name: /Vesper/ }).click();
+  await expect.poll(() => mock.chats[0].space?.id).toBe(VESPER.id);
+  // Vesper tracks work, so the chat files its tickets there now.
+  expect(mock.chats[0].project).toBe("WEB");
+  await expect(inSpace).toHaveAccessibleName("In Vesper; move to another space");
 
-  await titleMenu.click();
-  await expect(project).toContainText("Web app");
-  await project.click();
-  await page.getByRole("menuitemradio", { name: "No default" }).click();
-  await expect.poll(() => mock.chats[0].project).toBeUndefined();
-  await titleMenu.click();
-  await expect(project).toContainText("No default");
+  // The title menu offers the same move; Health files nowhere, so the chat keeps WEB.
+  await page.getByTestId("chat-title-menu").click();
+  await expect(page.getByTestId("chat-space-menu")).toContainText("Vesper");
+  await page.getByTestId("chat-space-menu").click();
+  await page.getByRole("menuitemradio", { name: /Health/ }).click();
+  await expect.poll(() => mock.chats[0].space?.id).toBe(HEALTH.id);
+  expect(mock.chats[0].project).toBe("WEB");
+
+  await inSpace.click();
+  await page.getByRole("menuitemradio", { name: "No space" }).click();
+  await expect.poll(() => mock.chats[0].space).toBeUndefined();
+  await expect(inSpace).toHaveAccessibleName("Put this chat in a space");
   expect(mock.unhandled).toEqual([]);
 });
 

@@ -11,7 +11,7 @@ import { repoShortName } from "@/lib/persona-ui";
 import { floatPanel } from "@/components/domain/pickers";
 import { Icon } from "@/components/ui/icon";
 import { TextInput } from "@/components/ui/primitives";
-import { ProjectRadioItems, useChatProject } from "./chat-project";
+import { SpaceRadioItems, useChatSpace } from "./chat-space";
 import { useChatPanels } from "./chat-panel-host";
 import { HistoryDrawer } from "./history-drawer";
 import type { PersonaLook } from "./persona";
@@ -41,7 +41,7 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
   const router = useRouter();
   const update = useUpdateChat();
   const panels = useChatPanels(c.id, running);
-  const project = useChatProject(c, running);
+  const space = useChatSpace(c, running);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(c.title);
   // Rename and Repository move focus on (the title box, the repository picker) once the menu has
@@ -134,16 +134,12 @@ export function CompactChatHeader({ chat: c, personas, tab, onTab, running, canC
                       <span className="max-w-[40%] truncate text-12 text-fg-tertiary">{c.repo_url ? repoShortName(c.repo_url) : "None"}</span>
                     </DropdownMenu.Item>
                   )}
-                  {!c.space && (
-                    <>
-                      <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
-                      <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-12 font-medium text-fg-tertiary">Default project</DropdownMenu.Label>
-                      {project.locked ? (
-                        <p className="px-2.5 pb-1.5 text-13 text-fg-secondary">{project.current?.name ?? "No default"}</p>
-                      ) : (
-                        <ProjectRadioItems chat={c} projects={project.projects} onPick={project.pick} itemClassName={item} />
-                      )}
-                    </>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
+                  <DropdownMenu.Label className="px-2.5 pb-1 pt-1.5 text-12 font-medium text-fg-tertiary">Space</DropdownMenu.Label>
+                  {space.locked ? (
+                    <p className="px-2.5 pb-1.5 text-13 text-fg-secondary">{space.current?.name ?? "None"}</p>
+                  ) : (
+                    <SpaceRadioItems chat={c} spaces={space.spaces} onPick={space.pick} itemClassName={item} />
                   )}
                   <DropdownMenu.Separator className="my-1 h-px bg-border-strong" />
                   <DropdownMenu.Item

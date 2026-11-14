@@ -106,3 +106,43 @@ export const NESTED_CHATS = 3;
 
 /** How many chats the space page lists before "Show N more". */
 export const SPACE_PAGE_CHATS = 5;
+
+// ---- Work (LAZYAGENTS-213): a space that tracks work has a key, tickets, epics, runs and a
+// repository. The server checks the key; this mirrors its rule for the form.
+
+/** 2–10 letters or digits, starting with a letter (upper-cased by the server). */
+export const WORK_KEY = /^[A-Za-z][A-Za-z0-9]{1,9}$/;
+
+/**
+ * A key to suggest for a space's work: the initials of a several-word name ("Waterdeep
+ * campaign" → "WC"), or a one-word name's first letters ("Homelab" → "HOME"). "" when the name
+ * has nothing usable.
+ */
+export function suggestWorkKey(name: string): string {
+  const words = name.normalize("NFKD").replace(/[^A-Za-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const first = words.findIndex((w) => /^[A-Za-z]/.test(w));
+  if (first < 0) return "";
+  const rest = words.slice(first);
+  const key = (rest.length > 1 ? rest.map((w) => w[0]).join("") : rest[0].slice(0, 4)).toUpperCase().slice(0, 10);
+  return key.length >= 2 ? key : rest[0].slice(0, 4).toUpperCase().padEnd(2, "X");
+}
+
+type Listable = { work?: { archived: boolean } };
+
+/** The spaces the menus list: all but those whose work is archived. */
+export function listedSpaces<T extends Listable>(spaces: T[]): T[] {
+  return spaces.filter((s) => !s.work?.archived);
+}
+
+/** The spaces whose work a ticket, epic or run filter offers: those that track work. */
+export function workSpaces<T extends Listable>(spaces: T[]): (T & { work: NonNullable<T["work"]> })[] {
+  return spaces.filter((s): s is T & { work: NonNullable<T["work"]> } => !!s.work && !s.work.archived);
+}
+
+/**
+ * Where to manage a space's work (its repository, archiving): that space's page; or, with no
+ * project, a new space that tracks work. Replaces Settings › Projects.
+ */
+export function workSettingsHref(project?: { space_id?: string }): string {
+  return project?.space_id ? `/spaces/${project.space_id}` : "/spaces/new?work=1";
+}

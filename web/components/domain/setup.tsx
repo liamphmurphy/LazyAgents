@@ -1,5 +1,6 @@
 "use client";
 
+import { workSettingsHref } from "@/lib/spaces";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useSyncExternalStore } from "react";
@@ -95,6 +96,7 @@ export function useSetupChecklist(): { steps?: SetupStep[]; workspace?: string }
   if (!boot.data || !harness || planCount === undefined || !runnerReady) return { workspace };
   const steps = setupChecklist({
     repos: boot.data.projects.filter((p) => !p.archived && p.repo_url).length,
+    repoHref: workSettingsHref(boot.data.projects.find((p) => !p.archived)),
     harnessSecret: !!secrets.data?.secrets.some((s) => s.name.startsWith("harness:") && !s.project),
     harness,
     runnerOnline: !!runner.data?.online,
