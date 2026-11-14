@@ -366,7 +366,7 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
             </ol>
           ) : (
             <p className="py-8 text-center text-13 text-fg-tertiary">
-              {run.state === "queued" ? "The run starts when a runner slot is free." : "Messages appear as the agent works."}
+              {run.state === "queued" ? "The run starts when a runner slot is free." : `Messages appear as ${run.agent.name} works.`}
             </p>
           )}
           {ended && <Outcome d={d} />}

@@ -85,7 +85,7 @@ export function ContextArtifacts({ t }: { t: Ticket }) {
           ))}
         </div>
       ) : (
-        <p className="text-13 text-fg-tertiary">Attach the PRDs, specs and ADRs an agent should read before it starts.</p>
+        <p className="text-13 text-fg-tertiary">Attach the PRDs, specs and ADRs the persona should read before it starts.</p>
       )}
       {(attach.isError || detach.isError) && <p className="text-12 text-pill-blocked-fg">{(attach.error ?? detach.error)?.message}</p>}
       {mockup && <NewMockupDialog open ticketKey={t.key} defaultProject={t.project.key} defaultEpicId={t.epic?.id} onOpenChange={setMockup} />}

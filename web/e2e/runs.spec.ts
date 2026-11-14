@@ -189,7 +189,7 @@ test("D opens Deny… and A approves one request", async ({ page }) => {
   const card = page.getByRole("group", { name: "Needs attention" });
   await expect(card).toContainText("Run 0042 on staging");
   // Letters typed in a filter menu (Radix typeahead) never reach the page's shortcuts.
-  await list(page).getByRole("button", { name: /^Agent:/ }).click();
+  await list(page).getByRole("button", { name: /^Persona:/ }).click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("a");
   await page.keyboard.press("d");

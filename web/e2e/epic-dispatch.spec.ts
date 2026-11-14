@@ -53,7 +53,7 @@ for (const mixed of [false, true]) {
       return route.fallback();
     });
     await page.goto("/epics/epic-1");
-    const select = page.getByRole("combobox", { name: "Agent for unassigned tickets" });
+    const select = page.getByRole("combobox", { name: "Persona for unassigned tickets" });
     await expect(select).toHaveValue(agent.id);
     await expect(select.getByRole("option", { name: "Sub agent" })).toHaveCount(0);
     // Start ready leaves the blocked ticket alone and says why.
