@@ -26,11 +26,10 @@ import { PriorityGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME } from "@/components/domain/meta";
 import { floatPanel } from "@/components/domain/pickers";
 import { SavedViewHeader, SavedViewTabs } from "@/components/domain/saved-views";
-import { TopBar } from "@/components/shell/topbar";
 import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
 import { BulkBar, BulkResultPanel } from "./bulk-bar";
 import { CompactTicketRow, TicketRow, type Density } from "./ticket-row";
-import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
+import { ChipScroller, TicketsLayoutBar, TicketsTopBar } from "./layout-bar";
 
 const VIEWS: Array<{ key: TicketView; label: string }> = [
   { key: "all", label: "All tickets" },
@@ -409,9 +408,11 @@ export function TicketsScreen() {
 
   return (
     <>
-      {!compact && <TopBar
-        crumbs={crumbs}
-        actions={
+      {!compact && <TicketsTopBar
+        layout="list"
+        // The project crumb is the bar's project pill.
+        crumbs={proj ? crumbs.slice(1) : crumbs}
+        action={
           proj?.archived ? <ButtonLink href="/settings/projects" variant="outline">Manage project</ButtonLink> : <ButtonLink href={`/tickets/new${project ? `?project=${project}` : ""}`} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
         }
       />}

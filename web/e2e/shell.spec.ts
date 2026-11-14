@@ -21,7 +21,8 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   await page.goto("/tickets?layout=board&project=WEB");
   await expect(switcher(page)).toHaveAccessibleName("Switch project, current: Web app");
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumbs.getByRole("link", { name: "Web app" })).toBeVisible();
+  // The project is the breadcrumb's pill (the switcher itself), not a link.
+  await expect(crumbs.getByRole("button", { name: "Switch project, current: Web app" })).toBeVisible();
   await expect(crumbs.locator('[aria-current="page"]')).toHaveText("Tickets");
   const layouts = page.getByRole("navigation", { name: "Tickets layout" });
   await expect(layouts.getByRole("link")).toHaveText(["List", "Board", "Epics"]);

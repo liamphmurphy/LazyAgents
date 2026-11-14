@@ -8,6 +8,7 @@ import { useCompact } from "@/lib/viewport";
 import { TICKETS_LAYOUTS, TICKETS_LAYOUT_LABEL, layoutSwitchHref, type TicketsLayout } from "@/lib/tickets-layout";
 import { ButtonLink } from "@/components/ui/button";
 import { ProjectPicker } from "@/components/shell/project-picker";
+import { TopBar, type Crumb } from "@/components/shell/topbar";
 
 function LayoutSwitch({ layout, current, compact }: { layout: TicketsLayout; current: URLSearchParams; compact: boolean }) {
   return (
@@ -31,8 +32,25 @@ function LayoutSwitch({ layout, current, compact }: { layout: TicketsLayout; cur
 }
 
 /**
- * Above every Tickets layout: the project, then List · Board · Epics. On compact screens it is the
- * whole header (the screens drop their top bar): the title, the project and a + button, then the switch.
+ * Every Tickets layout's one top bar on wide screens: back and forward, the project as a pill in the
+ * breadcrumb, then the rest of the crumbs; the layout's primary action and List · Board · Epics on
+ * the right. The same bar on all three layouts, so switching layouts doesn't move the header.
+ */
+export function TicketsTopBar({ layout, crumbs = [{ label: "Tickets" }], action }: { layout: TicketsLayout; crumbs?: Crumb[]; action?: ReactNode }) {
+  const params = useSearchParams();
+  const current = new URLSearchParams(params.toString());
+  return (
+    <TopBar
+      // The board shows one project at a time, so it doesn't offer All projects.
+      crumbs={[{ label: <ProjectPicker crumb allowAll={layout !== "board"} /> }, ...crumbs]}
+      actions={<>{action}<LayoutSwitch layout={layout} current={current} compact={false} /></>}
+    />
+  );
+}
+
+/**
+ * Compact screens: the whole Tickets header (the screens drop their top bar): the title, the
+ * project and a + button, then the layout switch. Wide screens use TicketsTopBar instead.
  */
 export function TicketsLayoutBar({ layout }: { layout: TicketsLayout }) {
   const params = useSearchParams();
@@ -60,13 +78,7 @@ export function TicketsLayoutBar({ layout }: { layout: TicketsLayout }) {
       </header>
     );
   }
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-6 py-2.5">
-      {/* The board shows one project at a time, so it doesn't offer All projects. */}
-      <ProjectPicker allowAll={layout !== "board"} />
-      <LayoutSwitch layout={layout} current={current} compact={false} />
-    </div>
-  );
+  return null;
 }
 
 /** Compact screens: filter controls on one line that scrolls sideways instead of wrapping. */
