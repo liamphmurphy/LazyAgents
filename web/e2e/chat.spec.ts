@@ -369,6 +369,36 @@ test("Start chat links pre-attach the item and drop the query param", async ({ p
   expect(mock.posted.at(-1)?.body.context_refs).toEqual([{ kind: "page", id: "11111111-1111-4111-8111-111111111111" }]);
 });
 
+test("a ticket the chat carried opens beside it from the Linked row and from its sent chip", async ({ page }) => {
+  await installChatApi(page);
+  await page.route("**/api/v1/tickets/WEB-3", (route) => route.fulfill({ json: {
+    id: "t3", key: "WEB-3", title: "Session refresh", description_md: "Refresh **before** expiry.", status: "in_progress", priority: "high",
+    criteria: [{ id: "c1", position: 0, text: "Tokens refresh early", done: true }, { id: "c2", position: 1, text: "Expired sessions sign out", done: false }],
+    labels: [], artifacts: [], approvals: [], blocked_by: [], blocks: [], revision: 1, dependency_revision: 1, project: { key: "WEB", name: "Web app" },
+  } }));
+  await page.goto("/chat?project=WEB");
+  await newChat(page);
+  await page.goto(page.url() + "?attach=ticket:WEB-3&attach_title=Session%20refresh");
+  await send(page, "where does this stand?");
+  await expect(page.getByTestId("assistant-message")).toContainText("Echo:");
+
+  const row = page.getByRole("navigation", { name: "Linked items" });
+  await row.getByRole("button", { name: "WEB-3" }).click();
+  await expect(page).toHaveURL(/[?&]item=ticket%3AWEB-3/);
+  const item = page.getByTestId("linked-item");
+  await expect(item.getByRole("heading", { name: "WEB-3 · Session refresh" })).toBeVisible();
+  await expect(item.getByRole("region", { name: "Acceptance criteria" })).toContainText("1/2");
+  await expect(item.getByRole("link", { name: /Open ticket/ })).toHaveAttribute("href", "/tickets/WEB-3");
+  // The conversation stays where it was, beside it.
+  await expect(page.getByTestId("user-message").last()).toContainText("where does this stand?");
+  await item.getByRole("button", { name: "Close WEB-3 · Session refresh" }).click();
+  await expect(page.getByTestId("linked-item")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/item=/);
+
+  await page.getByTestId("sent-chip").getByRole("button").click();
+  await expect(page.getByTestId("linked-item").getByRole("heading", { name: "WEB-3 · Session refresh" })).toBeVisible();
+});
+
 test("sending from the Welcome creates the chat, posts the message and opens it", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?project=WEB");

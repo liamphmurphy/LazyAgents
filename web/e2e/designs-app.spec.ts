@@ -608,9 +608,10 @@ test("a design opens in the shared layout: slim header, Pages and layers, and a 
   await expect(tab("Design")).toBeVisible();
   await expect(tab("Review")).toHaveCount(0);
 
-  // Direct edit is the pill at the top of Chat.
-  const pill = page.getByTestId("direct-edit");
-  await expect(pill).toContainText("suggests changes");
+  // Direct edit sits in the chat's one header row, not a bar of its own.
+  const pill = page.getByTestId("chat-header").getByTestId("direct-edit");
+  await expect(pill).toHaveText(/^Suggests/);
+  await expect(pill).toHaveAccessibleName(/suggests changes$/);
   await pill.click();
   await page.getByRole("menuitemradio", { name: /Edits directly/ }).click();
   await expect.poll(() => settings).toEqual([{ direct_edit: true }]);

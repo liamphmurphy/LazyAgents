@@ -12,7 +12,6 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
 import { useToday } from "./kit";
 import { isTyping } from "@/components/shell/shortcuts";
-import { HistoryNav } from "@/components/shell/history-nav";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
@@ -217,9 +216,7 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
       <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Back and forward lead the pane bar; the tabs stay one tablist beside them. */}
           <div className="flex flex-none items-center border-b border-border-subtle bg-panel">
-            <HistoryNav className="pl-2 max-md:hidden" />
             <TabStrip tabs={tabs} active={active} onClose={close} />
           </div>
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>

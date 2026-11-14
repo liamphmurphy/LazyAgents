@@ -13,9 +13,10 @@ function historyApi(): HistoryApi | undefined {
 }
 
 /**
- * Back and forward at the start of a pane bar: following a link from a run to its ticket, or from
- * a chat to a page, keeps your place one click away. Where the browser can say whether there is
- * anywhere to go (the Navigation API), the buttons disable at either end; elsewhere they stay on.
+ * Back and forward on the rail, under the mark: every screen has the rail, so following a link from
+ * a run to its ticket, a chat to a page or Settings to a design keeps your place one click away,
+ * whichever header the screen draws. Where the browser can say whether there is anywhere to go
+ * (the Navigation API), the buttons disable at either end; elsewhere they stay on.
  */
 export function HistoryNav({ className }: { className?: string }) {
   const router = useRouter();
@@ -33,13 +34,13 @@ export function HistoryNav({ className }: { className?: string }) {
     api.addEventListener("currententrychange", update);
     return () => api.removeEventListener("currententrychange", update);
   }, []);
-  const button = "grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
+  const button = "grid size-[30px] flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
   return (
-    <div role="group" aria-label="History" data-testid="history-nav" className={cx("flex flex-none items-center", className)}>
-      <button type="button" aria-label="Back" title="Back" disabled={!can.back} onClick={() => router.back()} className={button}>
+    <div role="group" aria-label="History" data-testid="history-nav" className={cx("flex flex-none flex-col items-center", className)}>
+      <button type="button" aria-label="Go back" title="Back" disabled={!can.back} onClick={() => router.back()} className={button}>
         <Icon name="chevr" size={14} className="rotate-180" />
       </button>
-      <button type="button" aria-label="Forward" title="Forward" disabled={!can.forward} onClick={() => router.forward()} className={button}>
+      <button type="button" aria-label="Go forward" title="Forward" disabled={!can.forward} onClick={() => router.forward()} className={button}>
         <Icon name="chevr" size={14} />
       </button>
     </div>

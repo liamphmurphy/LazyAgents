@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NAV_GROUPS, currentProject, hasFilters, inAppsMenu, isActive, pickerHref, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
+import { NAV_GROUPS, RAIL_APP_ITEMS, currentProject, hasFilters, inAppsMenu, isActive, pickerHref, projectSection, resolveProject, switchHref, withProject } from "./project-scope.ts";
 
 const web = { key: "WEB", name: "Web app", color: "#6e56cf", archived: false };
 const ops = { key: "OPS", name: "Operations", color: "#3e9bff", archived: false };
@@ -21,9 +21,12 @@ test("one menu: Work, the Apps flyout's Apps and Tools, and the footer, with uni
   for (const gone of ["/dashboard", "/board", "/epics", "/plans", "/artifacts", "/costs", "/agents"]) assert.ok(!hrefs.includes(gone), gone);
 });
 
-test("the Apps row is current on any page its flyout opens", () => {
-  for (const p of ["/apps/finance", "/library", "/workflows/1", "/scheduled", "/learn/2", "/knowledge/abc/the-old-harbour"]) assert.equal(inAppsMenu(p), true, p);
+test("the Apps row is current on any page its flyout opens that has no rail entry of its own", () => {
+  for (const p of ["/apps/finance", "/library", "/workflows/1", "/scheduled", "/learn/2", "/apps/slides/s1"]) assert.equal(inAppsMenu(p), true, p);
   for (const p of ["/", "/chat/1", "/inbox", "/tickets", "/customization"]) assert.equal(inAppsMenu(p), false, p);
+  // Knowledge and Designs have their own rail entries, which read as current instead.
+  for (const p of ["/knowledge/abc/the-old-harbour", "/apps/designs/d1"]) assert.equal(inAppsMenu(p), false, p);
+  assert.deepEqual(RAIL_APP_ITEMS.map((i) => i.label), ["Knowledge", "Designs"]);
 });
 
 test("isActive matches the section, and / only itself", () => {

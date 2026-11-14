@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installChatApi, persona } from "./mock-chat-api";
+import { installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 
 // Assistant personas in the Assistant view (LAZYAGENTS-86): the sidebar's persona
 // dropdown, the persona's identity on replies, and the persona of a new conversation.
@@ -201,6 +201,27 @@ test("the Chats navigator keeps its width whatever the titles and persona filter
   await pick(page, /^Atlas/);
   await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
   expect(await width()).toBe(264);
+});
+
+test("the header names the chat's persona: it switches an empty chat, then starts a new chat once there are messages", async ({ page }) => {
+  await installChatApi(page, { personas: [ATLAS, NOVA] });
+  const id = await openEmptyChat(page, { persona_id: ATLAS.id });
+  await page.goto(`/chat/${id}`);
+  const header = page.getByTestId("chat-header");
+  const control = header.getByRole("button", { name: "Persona: Atlas" });
+  await expect(control).toBeVisible();
+  await control.click();
+  await expect(page.getByRole("menu").getByText("Persona for this conversation")).toBeVisible();
+  await page.getByRole("menuitem", { name: /Nova/ }).click();
+  // An empty chat is replaced by one with the new persona, as the composer's pill does.
+  await expect(header.getByRole("button", { name: "Persona: Nova" })).toBeVisible();
+  await composer(page).fill("hello nova");
+  await composer(page).press("Enter");
+  await expect(page.getByTestId("assistant-identity").first()).toContainText("Nova");
+  await header.getByRole("button", { name: "Persona: Nova" }).click();
+  await expect(page.getByRole("menu").getByText("New chat with")).toBeVisible();
+  await page.getByRole("menuitem", { name: /Atlas/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/chat\\?new&persona=${ATLAS.id}`));
 });
 
 test("the welcome's carousel slides between personas and keeps focus on the arrow keys", async ({ page }) => {

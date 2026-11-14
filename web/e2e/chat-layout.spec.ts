@@ -80,6 +80,9 @@ test("while a reply runs, the header says what the persona is doing and opens Ac
   await page.getByRole("combobox", { name: "Message" }).press("Enter");
   const presence = header(page).getByTestId("chat-presence");
   await expect(presence).toHaveText(/^Hackerman · .+…$/);
+  // The status card is on screen and already says it, so the header keeps only the pulsing dot.
+  await expect(page.getByTestId("chat-status-card")).toBeInViewport();
+  await expect(presence).toHaveAttribute("data-dot-only", "true");
   expect((await header(page).boundingBox())!.height).toBeLessThanOrEqual(60);
   expect(await overflowing(header(page))).toEqual([]);
   await presence.click();

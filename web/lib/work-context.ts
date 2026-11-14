@@ -12,16 +12,41 @@ export type WorkSubject =
   | { kind: "run"; id: string; title: string; agent: string; ticketKey?: string }
   | { kind: "ticket"; key: string; title: string };
 
-/** The context line the persona reads, naming what to look up. */
-export function workContextLine(s: WorkSubject): string {
-  if (s.kind === "ticket") return `Viewing ticket ${s.key} (“${s.title}”).`;
-  return `Viewing run ${s.id} (“${s.title}”) by ${s.agent}${s.ticketKey ? ` for ticket ${s.ticketKey}` : ""}.`;
+/** The context line the persona reads, naming what to look up; a pinned item says it was kept on purpose. */
+export function workContextLine(s: WorkSubject, pinned = false): string {
+  const verb = pinned ? "Pinned" : "Viewing";
+  if (s.kind === "ticket") return `${verb} ticket ${s.key} (“${s.title}”).`;
+  return `${verb} run ${s.id} (“${s.title}”) by ${s.agent}${s.ticketKey ? ` for ticket ${s.ticketKey}` : ""}.`;
 }
 
-/** The body with the subject appended after the marker, once. */
-export function withWorkContext(body: string, s: WorkSubject): string {
-  const suffix = `${WORK_CONTEXT_MARKER}${workContextLine(s)}`;
+/** Whether two subjects are the same run or ticket. */
+export function sameSubject(a: WorkSubject, b: WorkSubject): boolean {
+  return a.kind === "ticket" ? b.kind === "ticket" && a.key === b.key : b.kind === "run" && a.id === b.id;
+}
+
+/**
+ * The body with the context appended after the marker, once: the item in view, and the pinned
+ * one first when it is a different item, so "this" can mean either and the persona knows which
+ * the person chose to keep.
+ */
+export function withWorkContext(body: string, viewing: WorkSubject, pinned?: WorkSubject): string {
+  const lines = [pinned && !sameSubject(pinned, viewing) ? workContextLine(pinned, true) : undefined, workContextLine(viewing, !!pinned && sameSubject(pinned, viewing))].filter(Boolean);
+  const suffix = `${WORK_CONTEXT_MARKER}${lines.join("\n")}`;
   return body.endsWith(suffix) ? body : `${body}${suffix}`;
+}
+
+/** Reads a stored pin, dropping anything that isn't a run or ticket subject. */
+export function parsePin(raw: string | null): WorkSubject | undefined {
+  if (!raw) return undefined;
+  try {
+    const v = JSON.parse(raw) as Partial<WorkSubject>;
+    if (v?.kind === "ticket" && typeof v.key === "string" && typeof v.title === "string") return { kind: "ticket", key: v.key, title: v.title };
+    if (v?.kind === "run" && typeof v.id === "string" && typeof v.title === "string" && typeof v.agent === "string")
+      return { kind: "run", id: v.id, title: v.title, agent: v.agent, ...(typeof v.ticketKey === "string" ? { ticketKey: v.ticketKey } : {}) };
+  } catch {
+    /* A corrupt pin is no pin. */
+  }
+  return undefined;
 }
 
 /** The composer chip's label: what the next message carries. */

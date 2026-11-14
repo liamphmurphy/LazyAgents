@@ -214,7 +214,8 @@ test("opened directly, Tab stays in the workspace and Close falls back to the ti
   await page.keyboard.press("Shift+Tab");
   expect(await inDialog()).toBe(true);
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Back" })).toBeFocused();
+  // The workspace's own Back, not the rail's Go back behind the dialog.
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Back", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   expect(await inDialog()).toBe(true);
   await page.getByRole("button", { name: "Close" }).click();

@@ -1,5 +1,6 @@
 "use client";
 
+import { HarnessFooter } from "@/components/shell/harness-footer";
 import { Dialog } from "radix-ui";
 import { usePathname } from "next/navigation";
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
@@ -60,6 +61,10 @@ export function HistoryDrawer({ trigger }: { trigger: ReactNode }) {
               <NewConversationButton id={viewed ?? undefined} />
             </div>
             <ChatHistory id={viewed ?? undefined} viewed={viewed} fill between={<div className="pt-1"><SidebarSpaces viewed={viewed} hideWhenEmpty /></div>} />
+          </div>
+          {/* The rail's harness characters, which a phone has no rail for; Appearance hides them here too. */}
+          <div className="px-2.5">
+            <HarnessFooter layout="row" />
           </div>
         </Dialog.Content>
       </Dialog.Portal>

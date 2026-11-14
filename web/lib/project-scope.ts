@@ -57,8 +57,12 @@ export const NAV_GROUPS: NavGroup[] = [
   { label: "You", items: FOOTER_ITEMS },
 ];
 
-/** The Apps row reads as current on any page its flyout opens. */
+/** Apps used often enough to have their own rail entry too; the flyout still lists them. */
+export const RAIL_APP_ITEMS: NavItem[] = APP_ITEMS.filter((i) => i.href === "/knowledge" || i.href === "/apps/designs");
+
+/** The Apps row reads as current on any page its flyout opens, unless a rail entry of its own already does. */
 export function inAppsMenu(pathname: string): boolean {
+  if (RAIL_APP_ITEMS.some((i) => isActive(pathname, i.href))) return false;
   return [...APP_ITEMS, ...TOOL_ITEMS].some((i) => isActive(pathname, i.href));
 }
 

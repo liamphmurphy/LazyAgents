@@ -1,5 +1,6 @@
 "use client";
 
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu, Popover } from "radix-ui";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -128,6 +129,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const router = useRouter();
   const search = useSearchParams();
   const ref = useDesign(id);
+  useRecordVisit(ref.data ? { id: `design-${id}`, title: ref.data.title || "Design", meta: "Design", href: `/apps/designs/${id}`, kind: "Designs" } : undefined);
   const chatId = ref.data?.chat_id ?? "";
   const chat = useChat(chatId || undefined).data;
   const persona = (chat?.speaker ?? chat?.persona)?.name ?? "Assistant";
@@ -998,37 +1000,39 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   };
 
   const loading = <Skeleton className="m-3 flex-1" />;
+  // How the persona's edits land, in the chat's one header row rather than a bar of its own.
+  const editMode = (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          data-testid="direct-edit"
+          disabled={!ref.data || settings.isPending}
+          title={`Suggests: ${persona}’s edits wait as suggestions you review. Edits directly: they apply at once, and Undo reverts them.`}
+          aria-label={`${persona} ${direct ? "edits directly" : "suggests changes"}`}
+          className="flex h-[26px] flex-none items-center gap-1 rounded-full border border-border bg-surface-raised px-2.5 text-12 text-fg hover:bg-hover disabled:opacity-50"
+        >
+          {direct ? "Direct" : "Suggests"} <span aria-hidden className="text-fg-tertiary">▾</span>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-64")}>
+          <DropdownMenu.RadioGroup value={direct ? "direct" : "suggest"} onValueChange={(v) => settings.mutate({ direct_edit: v === "direct" })}>
+            <DropdownMenu.RadioItem value="suggest" className={cx(menuItem, "flex-col items-start")}>
+              <span>{direct ? "" : "✓ "}Suggests changes</span>
+              <span className="text-11 text-fg-tertiary">Edits wait as suggestions you review.</span>
+            </DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="direct" className={cx(menuItem, "flex-col items-start")}>
+              <span>{direct ? "✓ " : ""}Edits directly</span>
+              <span className="text-11 text-fg-tertiary">Edits apply at once; Undo reverts them.</span>
+            </DropdownMenu.RadioItem>
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
   const chatPanel = (
     <div data-design-chat className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-none border-b border-border-subtle px-3 py-2">
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              data-testid="direct-edit"
-              disabled={!ref.data || settings.isPending}
-              title={`Suggests: ${persona}’s edits wait as suggestions you review. Edits directly: they apply at once, and Undo reverts them.`}
-              className="flex h-[26px] items-center gap-1 rounded-full border border-border bg-surface-raised px-3 text-12 text-fg hover:bg-hover disabled:opacity-50"
-            >
-              {persona} {direct ? "edits directly" : "suggests changes"} <span aria-hidden className="text-fg-tertiary">▾</span>
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "z-50 w-64")}>
-              <DropdownMenu.RadioGroup value={direct ? "direct" : "suggest"} onValueChange={(v) => settings.mutate({ direct_edit: v === "direct" })}>
-                <DropdownMenu.RadioItem value="suggest" className={cx(menuItem, "flex-col items-start")}>
-                  <span>{direct ? "" : "✓ "}Suggests changes</span>
-                  <span className="text-11 text-fg-tertiary">Edits wait as suggestions you review.</span>
-                </DropdownMenu.RadioItem>
-                <DropdownMenu.RadioItem value="direct" className={cx(menuItem, "flex-col items-start")}>
-                  <span>{direct ? "✓ " : ""}Edits directly</span>
-                  <span className="text-11 text-fg-tertiary">Edits apply at once; Undo reverts them.</span>
-                </DropdownMenu.RadioItem>
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      </div>
       {pending && (
         <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-13">
           <span className="font-semibold text-fg">
@@ -1039,7 +1043,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
           <Button variant="approve" className="mt-1 self-start" onClick={startReview}>Review</Button>
         </div>
       )}
-      {chatId && <Conversation key={chatId} id={chatId} docked onNew={() => router.push("/apps/designs")} />}
+      {chatId && <Conversation key={chatId} id={chatId} docked actions={editMode} onNew={() => router.push("/apps/designs")} />}
     </div>
   );
   const dockTabs: DockTab[] = [

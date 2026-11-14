@@ -10,8 +10,8 @@ export type PanelLayout = "side" | "sheet";
 
 export const PANELS: ChatPanel[] = ["design", "canvas", "playground"];
 
-/** A tab in the desktop dock: the open panels, a thread while one is open, and Activity, which is always there. */
-export type DockTabId = ChatPanel | "thread" | "activity";
+/** A tab in the desktop dock: the open panels, a thread or linked item while one is open, and Activity, which is always there. */
+export type DockTabId = ChatPanel | "thread" | "item" | "activity";
 
 type Query = Pick<URLSearchParams, "get">;
 
@@ -81,6 +81,7 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
 export function dockTab(q: Query, open: readonly ChatPanel[]): DockTabId {
   if (q.get("panel") === "activity") return "activity";
   if (q.get("panel") === "thread" && q.get("thread")) return "thread";
+  if (q.get("panel") === "item" && itemOf(q)) return "item";
   return activePanel(q, open) ?? "activity";
 }
 
@@ -92,7 +93,7 @@ export function dockOpen(q: Query, open: readonly ChatPanel[]): boolean {
   const d = q.get("dock");
   if (d === "0") return false;
   if (d === "1") return true;
-  return open.length > 0 || q.get("panel") === "activity" || (q.get("panel") === "thread" && !!q.get("thread"));
+  return open.length > 0 || q.get("panel") === "activity" || (q.get("panel") === "thread" && !!q.get("thread")) || (q.get("panel") === "item" && !!itemOf(q));
 }
 
 /** The message whose thread the dock shows, if one is open. */
@@ -137,4 +138,55 @@ export function dragCloses(dy: number, ms: number, height: number): boolean {
 /** The threads a Comments button counts: top-level comments that aren't resolved (replies don't count). */
 export function openThreads(comments: readonly { status: string; parent_id?: string | null }[] | undefined): number {
   return (comments ?? []).filter((c) => !c.parent_id && c.status !== "resolved").length;
+}
+
+/** Something a chat links to that opens beside it in the dock: a ticket, a run or a Knowledge page. */
+export type LinkedItem = { kind: "ticket"; key: string } | { kind: "run"; id: string } | { kind: "page"; id: string };
+
+/** The item as the `item` param: "ticket:WEB-42", "run:<id>", "page:<id>". */
+export function itemParam(i: LinkedItem): string {
+  return i.kind === "ticket" ? `ticket:${i.key}` : `${i.kind}:${i.id}`;
+}
+
+/** The linked item the dock shows, if the URL names a valid one. */
+export function itemOf(q: Query): LinkedItem | undefined {
+  const m = /^(ticket|run|page):(.+)$/.exec(q.get("item") ?? "");
+  if (!m) return undefined;
+  const [, kind, ref] = m;
+  if (kind === "ticket") return /^[A-Z][A-Z0-9]*-\d+$/.test(ref) ? { kind, key: ref } : undefined;
+  return /^[0-9a-f-]{36}$/i.test(ref) ? { kind: kind as "run" | "page", id: ref } : undefined;
+}
+
+/** The query showing `item` beside the chat, in an open dock. */
+export function openItem(q: URLSearchParams, item: LinkedItem): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.set("item", itemParam(item));
+  next.set("panel", "item");
+  next.set("dock", "1");
+  return next;
+}
+
+/** The query with the linked item closed; the dock falls back to the other tabs. */
+export function closeItem(q: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.delete("item");
+  if (next.get("panel") === "item") next.delete("panel");
+  return next;
+}
+
+/**
+ * What a chat links to, for the row under its header: the tickets and pages its messages carried
+ * as context, then its ticket runs, each once, newest message's first.
+ */
+export function linkedItems(refs: readonly { kind: string; id?: string; key?: string }[], runs: readonly { run_id: string }[]): LinkedItem[] {
+  const out: LinkedItem[] = [];
+  const add = (i: LinkedItem) => {
+    if (!out.some((o) => itemParam(o) === itemParam(i))) out.push(i);
+  };
+  for (const r of [...refs].reverse()) {
+    if (r.kind === "ticket" && r.key) add({ kind: "ticket", key: r.key });
+    else if (r.kind === "page" && r.id) add({ kind: "page", id: r.id });
+  }
+  for (const r of runs) add({ kind: "run", id: r.run_id });
+  return out;
 }

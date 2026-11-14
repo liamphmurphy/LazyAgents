@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
-import type { ReactNode, RefObject } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 import type { Schemas } from "@/lib/api/client";
 import type { useControlRunById } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
@@ -18,6 +18,8 @@ import { PURPOSE_LABEL, workHref } from "@/lib/run-view";
 import { RUN_ENDED, StatusPill } from "@/components/domain/run-status";
 import { floatPanel } from "@/components/domain/pickers";
 import { Icon } from "@/components/ui/icon";
+import { WorkChatSheet } from "@/components/domain/work-chat";
+import { runTitle } from "@/lib/run-list";
 import { Banner } from "@/components/ui/primitives";
 import { ActionBox, ReplyComposer, confirmCancel, waitsForReply } from "./run-panels";
 
@@ -101,6 +103,7 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
   const live = !RUN_ENDED.includes(run.state);
   const lastLog = [...d.turns].reverse().find((t) => t.has_log)?.seq;
   const title = run.work_title || run.ticket_key || PURPOSE_LABEL[run.purpose];
+  const [chatting, setChatting] = useState(false);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-none items-center gap-1 border-b border-border-subtle px-1 pt-safe">
@@ -114,8 +117,13 @@ export function CompactRunDetail({ d, log, scroller, onScroll, control }: {
             <StatusPill run={run} />
           </span>
         </div>
+        <button type="button" aria-label="Chat with your persona about this run" onClick={() => setChatting(true)}
+          className="grid size-[44px] flex-none place-items-center rounded-md text-fg-secondary hover:bg-hover">
+          <Icon name="msg" size={18} />
+        </button>
         <RunMenu run={run} lastLog={lastLog} control={control} />
       </header>
+      <WorkChatSheet subject={{ kind: "run", id: run.id, title: runTitle(run), agent: run.agent.name, ticketKey: run.ticket_key ?? undefined }} open={chatting} onOpenChange={setChatting} />
       <StepStrip run={run} />
       {control.isError && (
         <div className="px-3 pt-2">

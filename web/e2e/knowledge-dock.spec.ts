@@ -269,6 +269,25 @@ test("in the dock a running turn starts as a strip naming the step under way, an
   await dock(page).getByRole("button", { name: "Stop", exact: true }).click();
 });
 
+test("a docked chat has one header row: no Chat/Activity tabs or repository picker, Activity is a toggle", async ({ page }) => {
+  await install(page);
+  await page.goto(`/knowledge/${P}`);
+  await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
+  const header = dock(page).getByTestId("chat-header");
+  await expect(header).toBeVisible();
+  await expect(header.getByRole("tablist", { name: "Chat view" })).toHaveCount(0);
+  // The pane's back and forward are on the rail; the dock doesn't repeat them.
+  await expect(dock(page).getByRole("group", { name: "History" })).toHaveCount(0);
+  expect((await header.boundingBox())!.height).toBeLessThanOrEqual(48);
+  const activity = header.getByRole("button", { name: "Activity" });
+  await activity.click();
+  await expect(activity).toHaveAttribute("aria-pressed", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: "Activity" })).toBeVisible();
+  await activity.click();
+  await expect(dock(page).locator('[role="tabpanel"][aria-label="Chat"]')).toBeVisible();
+});
+
 test("switching persona keeps the draft and page context inside Knowledge", async ({ page }) => {
   const first = persona(1, { name: "Atlas", is_default: true });
   const second = persona(2, { name: "Nova" });

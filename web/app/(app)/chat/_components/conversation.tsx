@@ -44,7 +44,9 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
-import { HistoryNav } from "@/components/shell/history-nav";
+import { linkedItems, openItem, type LinkedItem } from "@/lib/chat-panels";
+import { LinkedRow, OpenLinkedItem } from "./item-panel";
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, typedText, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -81,7 +83,7 @@ import { WebSearchPill } from "./web-search";
 import { RestoreChat } from "./restore";
 import { HarnessSwitchDialog } from "./switch-dialog";
 import { UsageTag } from "./usage-tag";
-import { PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, personaLook, toneLabel, type PersonaLook } from "./persona";
+import { HeaderPersona, PersonaAvatar, PersonaGreeting, PersonaName, PersonaStack, PersonaSwitcher, personaLook, toneLabel, type PersonaLook } from "./persona";
 import { PersonaProposals } from "./persona-proposals";
 import { ConnectorRequests } from "./connector-requests";
 import { SecretRequests } from "./secret-requests";
@@ -595,11 +597,15 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   const setCommitEmail = useSetChatCommitEmail();
   const [commitPickerOpen, setCommitPickerOpen] = useState(false);
   // What the trays above the composer hold, so the status slot can rank them (the queries are shared with the trays).
-  const ticketRuns = (useChatTicketRuns(id).data?.runs ?? []).filter((r) => !runEnded(r.state));
+  const allTicketRuns = useChatTicketRuns(id).data?.runs;
+  const ticketRuns = (allTicketRuns ?? []).filter((r) => !runEnded(r.state));
   const workflowRuns = (useChatWorkflowRuns(id).data?.runs ?? []).filter((r) => runActive(r.state));
   const followups = useChatFollowups(id).data ?? [];
 
   const c = chat.data;
+  // A chat you open on the chat page is a place to come back to; a dock's chat belongs to the page it sits beside.
+  useRecordVisit(c && !docked && !context?.hidden && c.message_count > 0
+    ? { id: `chat-${c.id}`, title: c.title || "Untitled chat", meta: (c.speaker ?? c.persona)?.name ?? "Assistant", href: `/chat/${c.id}`, kind: "Chats" } : undefined);
   const loaded = !!c;
   const running = c?.state === "running";
   // Videos sit on the reply their turn stored; the running turn's show live under it.
@@ -677,6 +683,21 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   }, [search, router, id]);
   // Refs only carry ids; remember what the chips were called so sent messages can show it.
   const [names, setNames] = useState(() => new Map<string, string>());
+  // What the conversation links to, opened beside it in the chat page's dock (not from an app's dock: it has none of its own).
+  const linked = useMemo(
+    () => linkedItems((list ?? []).flatMap((m) => (m.role === "user" ? (m.context_refs ?? []) : [])), allTicketRuns ?? []),
+    [list, allTicketRuns],
+  );
+  const openLinked = useCallback(
+    (item: LinkedItem) => router.replace(`${window.location.pathname}?${openItem(new URLSearchParams(window.location.search), item)}`, { scroll: false }),
+    [router],
+  );
+  const linkedLabel = (item: LinkedItem) => {
+    if (item.kind === "ticket") return item.key;
+    if (item.kind === "page") return names.get(item.id) ?? "Page";
+    const r = allTicketRuns?.find((x) => x.run_id === item.id);
+    return r ? `${r.ticket} run` : "Run";
+  };
 
   // Refetch the transcript when the chat changes (also covers polling without SSE).
   const stamp = c && `${c.state}:${c.message_count}:${c.revision}`;
@@ -871,6 +892,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   // Before the first message the persona can still change: a chat keeps its persona for life,
   // so switching starts a fresh chat with the other persona and drops this empty one.
   const fresh = !!c && !c.archived && c.message_count === 0 && !running && !list?.length;
+  // Whether the live status card is on screen: the header's live line shrinks to a dot while it is.
+  const statusRef = useRef<HTMLDivElement>(null);
+  const [statusInView, setStatusInView] = useState(false);
+  useEffect(() => {
+    const card = statusRef.current?.querySelector("[data-testid='chat-status-card']");
+    if (!running || !card) {
+      setStatusInView(false);
+      return;
+    }
+    const seen = new IntersectionObserver(([entry]) => setStatusInView(entry.isIntersecting));
+    seen.observe(card);
+    return () => seen.disconnect();
+  }, [running, c?.current_run_id]);
   // With several addresses, a coding chat asks which one its commits use; the
   // first message waits for the answer, later ones don't.
   const myEmails = boot.data?.me.emails ?? [];
@@ -1046,10 +1080,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             onRestored={restored}
           />
         ) : (
-        <div data-testid="chat-header" className="@container flex min-h-[44px] items-center gap-2.5 border-b border-border-subtle py-1.5 pl-3 pr-6">
-          {/* A dock's chat sits beside a pane that has its own back and forward. */}
-          {!docked && <HistoryNav />}
-          {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
+        <div data-testid="chat-header" className={cx("@container flex min-h-[44px] items-center border-b border-border-subtle py-1.5", docked ? "gap-1.5 pl-3 pr-2" : "gap-2.5 px-6")}>
+          {group ? <PersonaStack personas={participants} size={22} /> : <HeaderPersona persona={persona} personaId={c.persona?.id} fresh={fresh} onSwitch={switchPersona} disabled={locked || create.isPending} compact={docked} />}
           {c.space && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
@@ -1060,11 +1092,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
               commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
               onCommitEmail={() => setCommitPickerOpen((o) => !o)}
             />
-            {running && <ChatPresence runId={c.current_run_id} since={since} persona={speaker} onOpen={openActivity} />}
+            {running && <ChatPresence runId={c.current_run_id} since={since} persona={speaker} dotOnly={docked || statusInView} onOpen={openActivity} />}
           </div>
-          {repoPicker && <span className="flex min-w-0 max-w-[40%] flex-shrink">{repoPicker}</span>}
+          {/* A dock has no room for the picker in its one header row: it moves to the composer's + menu. */}
+          {repoPicker && !docked && <span className="flex min-w-0 max-w-[40%] flex-shrink">{repoPicker}</span>}
           <ChatRunsPill chatId={c.id} />
-          {!dockActivity && (
+          {!dockActivity && docked && (
+            <button type="button" aria-pressed={tab === "activity"} aria-label="Activity" title={tab === "activity" ? "Back to the chat" : "Activity: this chat's tool calls and memory"}
+              onClick={() => setTab(tab === "activity" ? "chat" : "activity")}
+              className={cx("grid size-7 flex-none place-items-center rounded-md", tab === "activity" ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg")}>
+              <Icon name="history" size={14} />
+            </button>
+          )}
+          {!dockActivity && !docked && (
             <span className="flex-none">
               <Tabs
                 label="Chat view"
@@ -1081,6 +1121,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
           {actions}
         </div>
         )}
+        {dockActivity && view === "chat" && <LinkedRow items={linked} label={linkedLabel} onOpen={openLinked} />}
         {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
         {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
         {!dockActivity && (
@@ -1152,6 +1193,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             <>
             <VideoPlayers.Provider value={players}>
             <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
+            <OpenLinkedItem.Provider value={dockActivity ? openLinked : undefined}>
             <OpenTurnStep.Provider value={openTurnStep}>
             <MessageActionsContext.Provider value={c.archived ? null : messageActions}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
@@ -1178,8 +1220,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <AudioCards chatId={c.id} audio={liveAudio} onStop={stopping ? undefined : () => cancel.mutate()} />
+                  <div ref={statusRef} className="contents">
                   <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} folded={docked} onOpenStep={openStep}
                     onAsk={locked || aside.isPending ? undefined : () => aside.mutate(QUIET_CHECK_IN)} onStop={stopping ? undefined : () => cancel.mutate()} />
+                  </div>
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}
                     actions={{
@@ -1197,6 +1241,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             </ol>
             </MessageActionsContext.Provider>
             </OpenTurnStep.Provider>
+            </OpenLinkedItem.Provider>
             </ReplyActions>
             </VideoPlayers.Provider>
             {!c.archived && <AskAboutSelection root={log} onAsk={askAboutSelection} />}
@@ -1421,7 +1466,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
               options={composerList}
               controls={{
                 // The desktop header holds it; the compact + sheet lists it.
-                repository: compact && repoPicker,
+                repository: (compact || docked) && repoPicker,
                 persona: <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />,
                 "send-mode": (
                   <SendModeSwitch
