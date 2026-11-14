@@ -356,6 +356,66 @@ export function PersonaSwitcher({
   );
 }
 
+/**
+ * The header's persona control (the workbench design's "Hackerman ▾"): who this conversation is
+ * with, always in view. Before the first message it switches the persona, as the composer's
+ * pill does; once the conversation has started it starts a new chat with another persona, since a
+ * conversation keeps the persona it began with.
+ */
+export function HeaderPersona({ persona, personaId, fresh, onSwitch, disabled, compact = false }: {
+  persona: PersonaLook;
+  /** The chat's persona id, or undefined for the built-in Assistant. */
+  personaId?: string;
+  /** No messages yet: picking switches this conversation's persona. */
+  fresh: boolean;
+  onSwitch: (id: string) => void;
+  disabled?: boolean;
+  /** In a narrow dock: the avatar and ▾ only, leaving the row to the title. */
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const manage = useOpenPersonaManager();
+  const q = usePersonas();
+  const personas = q.data?.personas ?? [];
+  const avatar = <PersonaAvatar persona={persona} size={22} />;
+  // No personas to pick from: the avatar alone says who it is.
+  if (!personas.length)
+    return <span title={persona.name} className="flex-none">{avatar}<span className="sr-only">Persona: {persona.name}</span></span>;
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" disabled={disabled} aria-label={`Persona: ${persona.name}`} data-testid="header-persona"
+          className={cx("flex h-[30px] max-w-[200px] flex-none items-center gap-1.5 rounded-full border border-border bg-surface pl-1 text-13 font-medium text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50", compact ? "pr-1.5" : "pr-2")}>
+          {avatar}
+          {!compact && <span className="truncate">{persona.name}</span>}
+          <Icon name="chev" size={12} strokeWidth={1.6} className="text-fg-tertiary" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className={cx(floatPanel, "w-[290px]")}>
+          <DropdownMenu.Label className="px-2 py-1 text-12 font-medium uppercase tracking-wide text-fg-tertiary">
+            {fresh ? "Persona for this conversation" : "New chat with"}
+          </DropdownMenu.Label>
+          {personas.map((p) => (
+            <DropdownMenu.Item key={p.id} className={item}
+              onSelect={() => (fresh ? onSwitch(p.id) : router.push(`/chat?new&persona=${encodeURIComponent(p.id)}`))}>
+              <PersonaAvatar persona={p} />
+              <PersonaName persona={p} className="truncate" />
+              <CapabilityBadges capabilities={p.capabilities} />
+              <span className="ml-auto" />
+              <Check on={p.id === personaId} />
+            </DropdownMenu.Item>
+          ))}
+          <DropdownMenu.Separator className="my-1 h-px bg-border-subtle" />
+          <DropdownMenu.Item className={item} onSelect={manage}>
+            <span className="text-12 text-fg-secondary">Manage personas…</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 /** A persona's portrait on a soft glow of its color: the welcome's centrepiece and an empty chat's greeting. */
 export function PersonaPortrait({ persona, size = 92, breathe }: { persona: PersonaLook; size?: number; breathe?: boolean }) {
   const glow = Math.round(size * 1.9);

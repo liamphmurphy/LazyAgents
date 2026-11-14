@@ -351,15 +351,16 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
  * "Hackerman · reading 4 files". It reads the run events the status card already caches.
  * Pressing it opens the turn's Activity.
  */
-export function ChatPresence({ runId, since, persona, onOpen }: { runId?: string; since?: string; persona: PersonaLook; onOpen?: () => void }) {
+export function ChatPresence({ runId, since, persona, dotOnly = false, onOpen }: { runId?: string; since?: string; persona: PersonaLook; dotOnly?: boolean; onOpen?: () => void }) {
   const q = useChatRunEvents(runId);
   const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
   const status = useMemo(() => chatStatus(calls, false), [calls]);
   return (
-    <button type="button" onClick={onOpen} disabled={!onOpen} data-testid="chat-presence" title="Open Activity"
+    <button type="button" onClick={onOpen} disabled={!onOpen} data-testid="chat-presence" data-dot-only={dotOnly || undefined} title={dotOnly ? `${persona.name} · ${status.phrase}… (open Activity)` : "Open Activity"}
       className="flex min-w-0 max-w-full items-center gap-1.5 truncate px-1.5 text-left text-12 text-state-progress hover:underline disabled:hover:no-underline">
       <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-progress motion-safe:animate-pulse" />
-      <span className="truncate">{persona.name} · {status.phrase}…</span>
+      {/* While the status card is on screen it already says this; the line comes back once it scrolls away. */}
+      <span className={dotOnly ? "sr-only" : "truncate"}>{persona.name} · {status.phrase}…</span>
     </button>
   );
 }
