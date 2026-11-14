@@ -121,6 +121,9 @@ test("the rail's Chat entry opens the chats, where the remembered Chats navigato
   await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
   await expect(nav(page).getByRole("link", { name: "Chat", exact: true })).toHaveAttribute("aria-current", "page");
+  // New chat is a button-high row at the top, with the history right under it.
+  const chats = page.getByRole("complementary", { name: "Chats" });
+  expect((await chats.getByRole("button", { name: "New chat" }).boundingBox())!.height).toBeLessThan(40);
   await page.getByRole("button", { name: "Hide chats" }).click();
   await expect(page.getByRole("complementary", { name: "Chats" })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBeNull();

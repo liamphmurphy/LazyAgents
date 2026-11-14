@@ -113,7 +113,10 @@ function ChatsNavigator({ viewed, animate, onSettle }: { viewed: string | null; 
       onTransitionEnd={onSettle}
       className={cx("flex min-w-0 flex-[1_1_264px] flex-col gap-4 border-r border-border-subtle bg-sidebar px-2.5 pt-3 min-[800px]:w-[264px] min-[800px]:flex-none min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh", animate && "motion-sidebar")}
     >
-      <NewConversationButton id={viewed ?? undefined} />
+      {/* A row: the button grows to the navigator's width, not its height. */}
+      <div className="flex flex-none">
+        <NewConversationButton id={viewed ?? undefined} />
+      </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         <SidebarSpaces viewed={viewed} hideWhenEmpty />
         <ChatHistory id={viewed ?? undefined} viewed={viewed} />

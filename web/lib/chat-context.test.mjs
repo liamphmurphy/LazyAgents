@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   addChip, attachQuery, chipFromTarget, citationSources, defaultSavePath, MAX_CONTEXT_REFS, parseAttach,
-  removeChip, toContextRefs, withChatBacklink,
+  removeChip, toContextRefs, typedText, withChatBacklink,
 } from "./chat-context.ts";
+import { WORK_CONTEXT_MARKER } from "./work-context.ts";
 
 const page = { kind: "artifact", id: "p1", title: "Plan", artifact_type: "note", path: "Eng/Plan" };
 const report = { kind: "artifact", id: "a1", title: "Q3 report", artifact_type: "report" };
@@ -67,4 +68,10 @@ test("saved replies end with a link back to the chat", () => {
   assert.equal(withChatBacklink("Hi\n", "c1", "My [chat]"), "Hi\n\n---\n\nSaved from chat [My chat](/chat/c1)\n");
   assert.equal(defaultSavePath("Plan / roadmap"), "Chats/Plan - roadmap");
   assert.equal(defaultSavePath("  "), "Chats/Chat");
+});
+
+test("a sent message shows what was typed, not the context a dock appended", () => {
+  assert.equal(typedText("Explain this\n\n<!-- vesper:knowledge-context -->\nCurrently viewing Knowledge page [[Reading list]]."), "Explain this");
+  assert.equal(typedText(`Is this safe?${WORK_CONTEXT_MARKER}Viewing run r1 (“Search”) by Atlas.`), "Is this safe?");
+  assert.equal(typedText("No context here <!-- not a marker -->"), "No context here <!-- not a marker -->");
 });

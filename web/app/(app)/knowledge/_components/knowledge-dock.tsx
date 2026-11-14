@@ -16,7 +16,7 @@ import { provideChatRefs, useChat, useCreateChat } from "@/lib/api/hooks";
 import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledge-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { refKey } from "@/lib/chat-context";
+import { KNOWLEDGE_CONTEXT_MARKER, refKey } from "@/lib/chat-context";
 import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
 import { isFolder, useKnowledgeChat, type FolderAttachment, type PageAttachment } from "./chat-context";
 import { SIDE_TABS, SidePanel } from "./page-side";
@@ -235,7 +235,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
     const viewing = page ? [`Currently viewing Knowledge page ${label(page)}.`] : screen ? [`On the Knowledge ${screen} screen, not viewing a page.`] : [];
     const blocks = [...viewing, ...passages, ...folderBlocks, ...snapshots];
     // The server excludes this source material when interpreting persona mentions and hand-off limits.
-    const suffix = `\n\n<!-- vesper:knowledge-context -->\n${blocks.join("\n\n")}`;
+    const suffix = `${KNOWLEDGE_CONTEXT_MARKER}${blocks.join("\n\n")}`;
     return blocks.length && !body.endsWith(suffix) ? `${body}${suffix}` : body;
   };
   const context: ConversationContext = {

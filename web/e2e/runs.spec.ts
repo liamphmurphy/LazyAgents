@@ -247,6 +247,9 @@ test("the side panel's Chat talks to your persona about the run; the run's compo
   await expect.poll(() => api.posted.length).toBe(1);
   expect(api.posted[0].body.body).toBe(`Is this safe to merge?\n\n<!-- vesper:work-context -->\nViewing run ${RUNNING} (“Search index”) by Builder for ticket WEB-9.`);
   expect(api.posted[0].body.context_refs).toEqual([{ kind: "ticket", key: "WEB-9" }]);
+  // The bubble shows what was typed; the context reaches the persona, not the transcript.
+  await expect(panel.getByTestId("user-message").first()).toContainText("Is this safe to merge?");
+  await expect(panel.getByTestId("user-message").first()).not.toContainText("vesper:work-context");
   // The reply finishes before the next message, so it posts rather than queueing as a follow-up.
   await expect(panel.getByRole("button", { name: "Send", exact: true })).toBeVisible();
 
