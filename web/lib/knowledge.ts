@@ -14,6 +14,29 @@ export function pageIcon(p: { kind?: PageKind; properties?: Record<string, unkno
   return p.properties?.query ? "board" : "artifacts";
 }
 
+/** Each kind's start page in Knowledge, in the order its tabs and Home's Start row show them. */
+export const KINDS: { kind: PageKind; label: string; plural: string }[] = [
+  { kind: "document", label: "Document", plural: "Documents" },
+  { kind: "deck", label: "Deck", plural: "Decks" },
+  { kind: "design", label: "Design", plural: "Designs" },
+];
+
+/** A kind from an address's ?kind=, or undefined for anything else (Knowledge Home). */
+export function parseKind(v: unknown): PageKind | undefined {
+  const k = Array.isArray(v) ? v[0] : v;
+  return KINDS.some((x) => x.kind === k) ? (k as PageKind) : undefined;
+}
+
+export const kindHref = (k: PageKind) => `/knowledge?kind=${k}`;
+
+/**
+ * The start pages share one tab, titled for the kind it shows, so switching kinds from the
+ * view's own tabs doesn't open three. The title is how the tab finds its way back.
+ */
+export const START_TAB = "start";
+export const startTab = (k: PageKind): Tab => ({ id: START_TAB, title: KINDS.find((x) => x.kind === k)!.plural, kind: "start" });
+export const startTabKind = (t: Tab): PageKind => KINDS.find((x) => x.plural === t.title)?.kind ?? "document";
+
 export type TreeFolder = { kind: "folder"; name: string; path: string; folders: TreeFolder[]; pages: TreeRow[]; count: number };
 
 /** Folders first, then pages, each alphabetical; a folder knows how many pages it holds in total. */
@@ -78,7 +101,7 @@ export function isoDay(d: Date): string {
 }
 
 /** An open tab: a page (a document, or a deck or design page, which opens its editor), or a Knowledge screen. */
-export type Tab = { id: string; title: string; kind?: "page" | "deck" | "design" | "graph" | "connect" | "home" };
+export type Tab = { id: string; title: string; kind?: "page" | "deck" | "design" | "graph" | "connect" | "home" | "start" };
 
 /** Opens a tab after the active one, or focuses it if it's already open; titles follow renames. */
 export function openTab(tabs: Tab[], tab: Tab, active?: string): Tab[] {

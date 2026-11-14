@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ago, pageHref } from "@/lib/knowledge";
-import { useAllPages, usePages, type PageRow } from "@/lib/api/knowledge-hooks";
+import { KINDS, ago, kindHref, pageHref, pageIcon, type PageKind } from "@/lib/knowledge";
+import { useAllPages, useCreatePage, usePages, type PageRow } from "@/lib/api/knowledge-hooks";
+import { useCreateDesign } from "@/lib/api/designs-hooks";
+import { useNewDeck } from "@/components/domain/use-new-deck";
+import { toast } from "@/lib/toast";
 import { cx } from "@/lib/cx";
 import { useBootstrap } from "@/lib/api/hooks";
 import { Icon } from "@/components/ui/icon";
@@ -61,6 +64,8 @@ export function KnowledgeHome() {
           </h1>
           <p className="mt-1 text-14 text-fg-tertiary">{today?.toLocaleDateString("en", { weekday: "long", day: "numeric", month: "long" })}</p>
 
+          {!agent && <StartRow pages={all.data} />}
+
           {!agent && (
             <section aria-label="Needs you" className="mt-8">
               <h2 className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Needs you</h2>
@@ -112,7 +117,7 @@ export function KnowledgeHome() {
             {rest.map((r) => (
               <li key={r.id} className="border-b border-border-row">
                 <Link href={pageHref(r.id, r.title)} className="grid grid-cols-[20px_1fr_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-hover">
-                  <Icon name={r.properties?.query ? "board" : "artifacts"} size={14} className="text-fg-tertiary" />
+                  <Icon name={pageIcon(r)} size={14} className="text-fg-tertiary" />
                   <span className="min-w-0">
                     <span className={cx("block truncate text-14 font-medium", isUntitled(r) ? "italic text-fg-secondary" : "text-fg")}>{displayTitle(r)}</span>
                     <span className="block truncate text-12 text-fg-tertiary">
@@ -138,6 +143,53 @@ export function KnowledgeHome() {
       </div>
       <StatusBar left={agent ? "Agent knowledge · written by runs" : "Your knowledge · private by default"} right="Online over Tailscale" />
     </>
+  );
+}
+
+const KIND_DETAIL: Record<PageKind, string> = { document: "Notes, specs, writing", deck: "Slides you present", design: "Flows and diagrams" };
+
+/** One tile per kind: make one now, or open its start page with every one you have. */
+function StartRow({ pages }: { pages?: PageRow[] }) {
+  const router = useRouter();
+  const doc = useCreatePage();
+  const deck = useNewDeck();
+  const design = useCreateDesign();
+  const failed = (what: string) => (e: Error) => toast({ id: `new-${what}`, tone: "error", title: `Couldn’t make the ${what}`, description: e.message });
+  const make: Record<PageKind, () => void> = {
+    document: () => doc.mutate({ title: "Untitled", body_md: "" }, { onSuccess: (p) => router.push(pageHref(p.id, p.title)), onError: failed("document") }),
+    deck: () => deck.start(),
+    design: () => design.mutate({ starter: "blank", title: "" }, { onSuccess: (d) => router.push(`/apps/designs/${d.id}`), onError: failed("design") }),
+  };
+  const busy = doc.isPending || deck.pending || design.isPending;
+  return (
+    <section aria-label="Start" className="mt-8">
+      <h2 className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Start</h2>
+      <div className="mt-2 grid gap-2.5 sm:grid-cols-3">
+        {KINDS.map(({ kind, label, plural }) => {
+          const count = pages?.filter((p) => (p.kind ?? "document") === kind).length;
+          return (
+            <div key={kind} className="flex flex-col rounded-xl border border-border bg-surface p-3.5">
+              <Link href={kindHref(kind)} className="flex items-start gap-2.5 rounded-md hover:opacity-90">
+                <Icon name={pageIcon({ kind })} size={18} className="mt-0.5 text-fg-secondary" />
+                <span className="min-w-0">
+                  <span className="block text-14 font-semibold text-fg">{label}</span>
+                  <span className="block truncate text-12 text-fg-secondary">{KIND_DETAIL[kind]}</span>
+                </span>
+              </Link>
+              <span className="mt-3 flex items-center gap-3 text-12">
+                <button type="button" disabled={busy} onClick={make[kind]} className="font-medium text-accent hover:underline disabled:opacity-50">
+                  + New
+                </button>
+                <Link href={kindHref(kind)} className="text-fg-tertiary hover:text-fg-secondary">
+                  All {plural.toLowerCase()}
+                  {count !== undefined ? ` · ${count}` : ""} →
+                </Link>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

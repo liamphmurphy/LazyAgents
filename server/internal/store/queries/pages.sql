@@ -50,6 +50,8 @@ AND (NOT sqlc.arg(orphans)::boolean OR NOT EXISTS (
  SELECT 1 FROM knowledge_links l WHERE (l.source_kind = 'artifact' AND l.source_id = a.id)
  OR (l.target_id = a.id AND (l.source_kind <> 'artifact' OR EXISTS (SELECT 1 FROM artifacts src WHERE src.id = l.source_id AND artifact_visible(src.audience,src.owner_user_id,sqlc.narg(viewer)::uuid))))))
 AND (NOT sqlc.arg(unresolved_only)::boolean OR EXISTS (SELECT 1 FROM knowledge_links l WHERE l.source_kind = 'artifact' AND l.source_id = a.id AND l.target_kind = 'unresolved'))
+-- Mirrors wiki.PageKind: a deck or design page is one whose canvas is that kind; everything else is a document.
+AND (sqlc.arg(page_kind)::text = '' OR sqlc.arg(page_kind)::text = CASE coalesce((SELECT cv.kind FROM chat_canvases cv WHERE cv.id = a.canvas_id), '') WHEN 'deck' THEN 'deck' WHEN 'design' THEN 'design' ELSE 'document' END)
 ORDER BY a.updated_at DESC, a.id
 LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
 
