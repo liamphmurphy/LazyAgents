@@ -191,7 +191,7 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 
 ```
 ┌──────────────────┬────────────────────────────────────┬──────────────┐
-│ Column (264px)   │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
+│ Column (248px)   │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
 │ fixed top        ├────────────────────────────────────┤ (dock)       │
 │ the area's list  │ [optional view/filter bar]         │ facts | Chat │
 │ fixed foot       │ Content (max 1180, padding 32/28)  │ ~320–360px   │
@@ -201,10 +201,10 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 The shell is one left column, the same on every screen, then the main pane with the open item, then
 the side panel with its facts and a chat with your persona.
 
-**Column** (`components/shell/sidebar.tsx`, 264px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`,
+**Column** (`components/shell/sidebar.tsx`, 248px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`,
 `--bg-sidebar`, shown at `COMPACT` and wider). Its top never changes: the mark and "Vesper", the
 Search field (⌘K), the Needs you pill (`--pill-human` while anything waits, with its count), and the
-areas as an icon row (Chat, Runs with a live dot, Tickets, Knowledge with a suggestions dot, Designs)
+areas as an icon row spread across the full width (Chat, Runs with a live dot, Tickets, Knowledge with a suggestions dot, Designs)
 ending in the Apps flyout, which holds the other apps and the tools (Reports among them) and reads as
 current on any of them. Its foot never changes either: the harness characters in a row, each opening
 its usage bubble above it, then Customization and Settings.
@@ -252,6 +252,16 @@ status card is on screen the header's live line is only its dot. A docked chat (
 or ticket side panel) has one header row: the persona as avatar ▾, the title, an Activity toggle and
 the host's actions (Designs' "Suggests ▾"); its repository picker moves to the composer's + menu.
 
+**Docks continue the top bar.** An app's dock (`Dock` in `components/shell/editor-layout.tsx`:
+Designs, Docs, Slides, Finance, Knowledge) is a full-height column beside the page's 44px top bar,
+and its own first row, the same height, continues it. That row is the active tab's header: for Chat,
+the chat's header itself (`useDockHeaderSlot`, so the conversation renders it there rather than
+under another row); for other tabs, the tab's name. The tabs show as icons in that row only when
+there is more than one (Designs: Chat, Design, Review), then ⇥. Nothing stacks between the row and
+the messages: the docked header doesn't name the app around it, what waits on the document sits
+on the editor's bar (Designs' "Review N" pill beside the save state), and a deck in chat is a
+one-line card that opens Slides, never a second copy of the deck beside it.
+
 **Recent.** ⌘K's Recent list holds what you opened as well as what you picked there: chats with
 messages, runs, tickets, Knowledge pages and designs (`useRecordVisit`), six at most.
 
@@ -262,7 +272,8 @@ Harnesses section on More; each opens its usage bubble above it.
 status, progress segments and the step under way ("Fix the snapshot · 2 of 3"); Show steps opens the
 full list. The main chat starts it open.
 
-**Pane bar** (`TopBar`, 44px): back and forward, then the breadcrumb (tertiary separators, current item in `--text` 500), with actions on the right, secondary buttons first and the primary button last. A screen with a `PageHeader` keeps its `TopBar` above it, so its back and forward come from there.
+**Pane bar** (`TopBar`, 44px): back and forward, then the breadcrumb (or a pane's tabs, as
+Knowledge's open pages, sitting on the bar's bottom rule) (tertiary separators, current item in `--text` 500), with actions on the right, secondary buttons first and the primary button last. A screen with a `PageHeader` keeps its `TopBar` above it, so its back and forward come from there.
 
 **Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the column beside the content.
 
@@ -271,6 +282,8 @@ full list. The main chat starts it open.
 *Compact Inbox.* Below `COMPACT` the Inbox (`app/(app)/inbox/compact-inbox.tsx`) is a list of cards: agent square and name, ticket key, age, a kind pill, title and a two-line summary, under sideways-scrolling filter chips (All, Approvals, Questions, Blocked, Mockups). Approval cards carry Deny and Approve (amber), question cards an inline reply field (16px text), blocked cards Open run. Tapping an approval card opens a bottom sheet with the action, risk summary and a monospace preview that scrolls sideways and opens full screen when long, with Deny and Approve pinned to its bottom edge. Touch targets are 44px, written in px (`h-[44px]`): the root font is 13px, so `h-11` is only 35.75px. There is no swipe-to-approve: approvals are consequential and a swipe is easy to make by accident.
 
 *Compact chat.* The chat header (`compact-chat-header.tsx`) has four parts, each control a 44px square: ≡ (history), the title in 15px semibold over a 12px tertiary line naming the persona and the repository, a panels button (an accent dot while a design, canvas or playground is open), and ··· (Chat menu). The menu holds what the desktop header and tabs hold: Activity, Repository, Default project, Rename, and Archive (Restore if the chat is archived). Its rows are at least 44px tall. ≡ opens the history drawer (`history-drawer.tsx`), a modal panel on `--sidebar` that slides in from the left, up to 320px wide (85vw at most), over a scrim. It holds New chat, Search chats, the persona row, spaces and recent chats, all from the sidebar's components. Row actions show without hover. Opening a chat or link closes the drawer, and so do a scrim tap, Escape and a swipe to the left. Focus returns to ≡.
+
+*Tickets header.* On wide screens every Tickets layout (List, Board, Epics) has one bar, `TicketsTopBar`: back and forward, the project as a pill in the breadcrumb (the project switcher itself), then "Tickets" and any saved view; New ticket and the List / Board / Epics switch on the right. The same bar on all three, so switching layouts doesn't move the header. The board's filters sit at the end of its Board / Map row.
 
 *Compact Tickets.* The Tickets layouts drop their top bar. The layout bar becomes the header: a "Tickets" title, the project picker and a + button, then a full-width List / Board / Epics switch. Filters sit on one line that scrolls sideways (`ChipScroller`, never wrapping), with chips 32px tall. The list is grouped (by status by default: In Progress, Todo, Backlog…) under sticky group headers. Its 64px rows open the ticket from anywhere in the row and show the status glyph, the title over key · priority · points, and the agent's square. There's no row checkbox or bulk bar. The board shows one status column per screen: columns snap sideways, and a status pager above them (pills with counts) follows the swipe and jumps to a column. Ticket detail is one column under a back bar: key, title, then a meta strip of 36px chips (status, agent, priority, epic). Each chip opens its picker as a bottom sheet (`components/ui/sheet.tsx`: slides up over the scrim, 48px options, current one checked). Then come criteria, description, activity, and the wide layout's side panel. Comment (which opens the composer in a sheet) and Start run (dispatch) are pinned to the bottom edge above the safe area. Touch sizes are in px, because the root font is 13px and rem-based sizes come out smaller than they look.
 
