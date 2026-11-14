@@ -1649,21 +1649,31 @@ func (q *Queries) ResolveLinks(ctx context.Context, arg ResolveLinksParams) (int
 }
 
 const searchKnowledgeArtifacts = `-- name: SearchKnowledgeArtifacts :many
-SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, ar.updated_at,
-  ts_headline('english', ar.search_text, websearch_to_tsquery('english', $1),
-    'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
-  (ts_rank(ar.search, websearch_to_tsquery('english', $1)) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
-                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $2::uuid) AND ($3::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
-   + CASE WHEN $4::boolean THEN word_similarity(lower($1), lower(ar.title)) ELSE 0 END)::float8 AS score
-FROM artifacts ar
-WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $5 AND ar.current_version_id IS NOT NULL
-  AND (ar.search @@ websearch_to_tsquery('english', $1) OR ar.title ILIKE '%' || $1 || '%'
-       OR ($4::boolean AND word_similarity(lower($1), lower(ar.title)) >= 0.3))
-  AND ($6::text[] IS NULL OR ar.type = ANY($6::text[]))
-  AND ($7::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $7)
-ORDER BY score DESC, ar.updated_at DESC
-LIMIT $8
+SELECT id, type, title, path, number, summary, project_id, updated_at, snippet, score, total::int AS total FROM (
+  SELECT m.id, m.type, m.title, m.path, m.number, m.summary, m.project_id, m.updated_at, m.snippet, m.score,
+    row_number() OVER (PARTITION BY m.type = 'note' ORDER BY m.score DESC, m.updated_at DESC) AS n,
+    count(*) OVER (PARTITION BY m.type = 'note') AS total
+  FROM (
+    SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, ar.updated_at,
+      ts_headline('english', ar.search_text, websearch_to_tsquery('english', $1),
+        'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
+      (ts_rank(ar.search, websearch_to_tsquery('english', $1)) *
+        (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                     WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, $2::uuid) AND ($3::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+       + CASE WHEN $4::boolean THEN greatest(word_similarity(lower($1), lower(ar.title)), word_similarity(lower($1), lower(coalesce(ar.path, '')))) ELSE 0 END)::float8 AS score
+    FROM artifacts ar
+    WHERE artifact_visible(ar.audience, ar.owner_user_id, $2::uuid) AND ($3::boolean OR ar.audience <> 'agent') AND ar.workspace_id = $5 AND ar.current_version_id IS NOT NULL
+      AND (ar.search @@ websearch_to_tsquery('english', $1) OR ar.title ILIKE '%' || $1 || '%'
+           OR ($4::boolean AND (word_similarity(lower($1), lower(ar.title)) >= 0.3
+               OR ar.path ILIKE '%' || $1 || '%'
+               OR EXISTS (SELECT 1 FROM artifact_aliases al WHERE al.artifact_id = ar.id AND al.path ILIKE '%' || $1 || '%'))))
+      AND ($6::text[] IS NULL OR ar.type = ANY($6::text[]))
+      AND ($7::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = $7)
+  ) m
+) ranked
+WHERE n <= $8::int
+ORDER BY score DESC, updated_at DESC
+LIMIT $9
 `
 
 type SearchKnowledgeArtifactsParams struct {
@@ -1674,6 +1684,7 @@ type SearchKnowledgeArtifactsParams struct {
 	WorkspaceID  uuid.UUID
 	Types        []string
 	ProjectID    *uuid.UUID
+	PerGroup     int32
 	Lim          int32
 }
 
@@ -1688,9 +1699,14 @@ type SearchKnowledgeArtifactsRow struct {
 	UpdatedAt time.Time
 	Snippet   string
 	Score     float64
+	Total     int32
 }
 
 // Full-text search over artifacts, boosted by how many sources link to them.
+// At most per_group pages and per_group other artifacts, so neither crowds out
+// the other; total is how many of that group matched before the cut. Fuzzy
+// (people typing) also matches a page's folder path and its aliases, so a
+// folder's name finds the pages in it.
 func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowledgeArtifactsParams) ([]SearchKnowledgeArtifactsRow, error) {
 	rows, err := q.db.Query(ctx, searchKnowledgeArtifacts,
 		arg.Q,
@@ -1700,6 +1716,7 @@ func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowle
 		arg.WorkspaceID,
 		arg.Types,
 		arg.ProjectID,
+		arg.PerGroup,
 		arg.Lim,
 	)
 	if err != nil {
@@ -1720,6 +1737,7 @@ func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowle
 			&i.UpdatedAt,
 			&i.Snippet,
 			&i.Score,
+			&i.Total,
 		); err != nil {
 			return nil, err
 		}
@@ -1732,13 +1750,15 @@ func (q *Queries) SearchKnowledgeArtifacts(ctx context.Context, arg SearchKnowle
 }
 
 const searchKnowledgeTickets = `-- name: SearchKnowledgeTickets :many
-SELECT t.id, t.key, t.title, t.status, t.project_id,
+SELECT t.id, t.key, t.title, t.status, t.project_id, t.updated_at, a.name AS assignee,
   ts_headline('english', t.title || E'\n' || t.description_md, websearch_to_tsquery('english', $1),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   ((ts_rank(t.search, websearch_to_tsquery('english', $1))
     + CASE WHEN $2::boolean THEN word_similarity(lower($1), lower(t.title)) ELSE 0 END)
-   * CASE WHEN $2::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score
+   * CASE WHEN $2::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score,
+  count(*) OVER ()::int AS total
 FROM tickets t
+LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = $3
   AND (t.search @@ websearch_to_tsquery('english', $1) OR t.key = upper($1)
        OR ($2::boolean AND (t.title ILIKE '%' || $1 || '%'
@@ -1762,10 +1782,14 @@ type SearchKnowledgeTicketsRow struct {
 	Title     string
 	Status    string
 	ProjectID uuid.UUID
+	UpdatedAt time.Time
+	Assignee  *string
 	Snippet   string
 	Score     float64
+	Total     int32
 }
 
+// total is how many tickets matched before the limit.
 func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledgeTicketsParams) ([]SearchKnowledgeTicketsRow, error) {
 	rows, err := q.db.Query(ctx, searchKnowledgeTickets,
 		arg.Q,
@@ -1787,8 +1811,11 @@ func (q *Queries) SearchKnowledgeTickets(ctx context.Context, arg SearchKnowledg
 			&i.Title,
 			&i.Status,
 			&i.ProjectID,
+			&i.UpdatedAt,
+			&i.Assignee,
 			&i.Snippet,
 			&i.Score,
+			&i.Total,
 		); err != nil {
 			return nil, err
 		}

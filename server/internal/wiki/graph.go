@@ -1,8 +1,12 @@
 package wiki
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -154,10 +158,72 @@ func Search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, ki
 	return search(ctx, q, ws, text, kinds, projectID, limit, false)
 }
 
-// SearchFuzzy is Search for people typing: partial words and typos in titles
-// match too, title matches score higher and finished tickets lower.
-func SearchFuzzy(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, projectID *uuid.UUID, limit int) ([]Hit, error) {
-	return search(ctx, q, ws, text, nil, projectID, limit, true)
+// PaletteHit is a search hit for the ⌘K palette, with its context line and
+// when it last changed.
+type PaletteHit struct {
+	Hit
+	Group     string // "ticket", "page" or "artifact"
+	Detail    string
+	UpdatedAt time.Time
+}
+
+// SearchPalette is Search for people typing: partial words and typos in titles
+// match too, and so do a page's folder path and aliases; title matches score
+// higher and finished tickets lower. Tickets, pages and other artifacts are
+// each capped at perKind, so one can't crowd the others out, and counts holds
+// how many of each matched before the cap. groups narrows to some of "ticket",
+// "page" and "artifact"; empty means all three.
+func SearchPalette(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, groups []string, projectID *uuid.UUID, perKind int) ([]PaletteHit, map[string]int, error) {
+	want := func(g string) bool { return len(groups) == 0 || slices.Contains(groups, g) }
+	hits := []PaletteHit{}
+	counts := map[string]int{}
+	if want("page") || want("artifact") {
+		var types []string
+		if !want("artifact") {
+			types = []string{"note"}
+		}
+		rows, err := q.SearchKnowledgeArtifacts(ctx, store.SearchKnowledgeArtifactsParams{
+			Q: text, Fuzzy: true, WorkspaceID: ws, Types: types, ProjectID: projectID, PerGroup: int32(perKind), Lim: int32(2 * perKind),
+			Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, r := range rows {
+			group, detail := "artifact", ""
+			if r.Type == "note" {
+				group = "page"
+				if r.Path != nil {
+					if i := strings.LastIndex(*r.Path, "/"); i > 0 {
+						detail = (*r.Path)[:i]
+					}
+				}
+			}
+			if !want(group) {
+				continue
+			}
+			counts[group] = int(r.Total)
+			hits = append(hits, PaletteHit{
+				Hit:   Hit{Target: links.ArtifactTarget(store.Artifact{ID: r.ID, Type: r.Type, Title: r.Title, Path: r.Path, Number: r.Number}, ""), Snippet: r.Snippet, Score: r.Score},
+				Group: group, Detail: detail, UpdatedAt: r.UpdatedAt,
+			})
+		}
+	}
+	if want("ticket") {
+		rows, err := q.SearchKnowledgeTickets(ctx, store.SearchKnowledgeTicketsParams{Q: text, Fuzzy: true, WorkspaceID: ws, ProjectID: projectID, Lim: int32(perKind)})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, r := range rows {
+			counts["ticket"] = int(r.Total)
+			hits = append(hits, PaletteHit{
+				Hit:   Hit{Target: links.TicketTarget(store.Ticket{ID: r.ID, Key: r.Key, Title: r.Title, Status: r.Status}), Snippet: r.Snippet, Score: r.Score},
+				Group: "ticket", Detail: deref(r.Assignee), UpdatedAt: r.UpdatedAt,
+			})
+		}
+	}
+	slices.SortStableFunc(hits, func(a, b PaletteHit) int { return cmp.Compare(b.Score, a.Score) })
+	return hits, counts, nil
 }
 
 func search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, kinds []string, projectID *uuid.UUID, limit int, fuzzy bool) ([]Hit, error) {
@@ -180,7 +246,7 @@ func search(ctx context.Context, q *store.Queries, ws uuid.UUID, text string, ki
 			tf = types
 		}
 		rows, err := q.SearchKnowledgeArtifacts(ctx, store.SearchKnowledgeArtifactsParams{
-			Q: text, Fuzzy: fuzzy, WorkspaceID: ws, Types: tf, ProjectID: projectID, Lim: int32(limit), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent,
+			Q: text, Fuzzy: fuzzy, WorkspaceID: ws, Types: tf, ProjectID: projectID, PerGroup: int32(limit), Lim: int32(limit), Viewer: pageview.From(ctx).UserID, IncludeAgent: pageview.From(ctx).IncludeAgent,
 		})
 		if err != nil {
 			return nil, err
