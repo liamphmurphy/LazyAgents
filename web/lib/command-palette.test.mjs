@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   GROUP_ORDER,
+  appMatches,
   groupOf,
   linkFromTarget,
   matchParts,
@@ -10,6 +11,7 @@ import {
   parseFilters,
   parseRecent,
   passesFilters,
+  personaMatches,
   projectOfKey,
   promoteTop,
   pushRecent,
@@ -116,4 +118,33 @@ test("the best hit is promoted only when grouping buried it", () => {
   assert.deepEqual(promoteTop([first, page]), [first, page]);
   const best = { group: "Agents", score: 5 };
   assert.deepEqual(promoteTop([first, best]), [{ ...best, group: "Top result" }, first]);
+});
+
+test("a typed persona name finds the persona, whole name first, then its start, then a word's start", () => {
+  const ps = [{ name: "Health Coach" }, { name: "Laura" }, { name: "Lau" }, { name: "Maya" }];
+  assert.deepEqual(personaMatches(ps, "lau").map((p) => p.name), ["Lau", "Laura"]);
+  assert.deepEqual(personaMatches(ps, "coach").map((p) => p.name), ["Health Coach"]);
+  assert.deepEqual(personaMatches(ps, "hea co").map((p) => p.name), ["Health Coach"]);
+  assert.deepEqual(personaMatches(ps, "chat with maya").map((p) => p.name), ["Maya"]);
+  assert.deepEqual(personaMatches(ps, "talk to LAURA").map((p) => p.name), ["Laura"]);
+  // One letter inside a name isn't a match: it would take the top result from most queries.
+  assert.deepEqual(personaMatches(ps, "a"), []);
+  assert.deepEqual(personaMatches(ps, "  "), []);
+  assert.deepEqual(personaMatches(ps, "chat"), []);
+});
+
+test("a typed app name finds the app; app or apps lists them all", () => {
+  const apps = [{ label: "Knowledge" }, { label: "Slides" }, { label: "Designs" }];
+  assert.deepEqual(appMatches(apps, "sli").map((a) => a.label), ["Slides"]);
+  assert.deepEqual(appMatches(apps, "open designs").map((a) => a.label), ["Designs"]);
+  assert.deepEqual(appMatches(apps, "go to know").map((a) => a.label), ["Knowledge"]);
+  assert.deepEqual(appMatches(apps, "slides app").map((a) => a.label), ["Slides"]);
+  assert.equal(appMatches(apps, "apps").length, 3);
+  assert.deepEqual(appMatches(apps, "s"), [{ label: "Slides" }]);
+  assert.deepEqual(appMatches(apps, "deploy"), []);
+  assert.deepEqual(appMatches(apps, ""), []);
+});
+
+test("is:app filters to the Apps group", () => {
+  assert.deepEqual(parseFilters("is:app slides").groups, ["Apps"]);
 });
