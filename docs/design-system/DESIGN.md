@@ -203,8 +203,11 @@ area holds, the main pane shows the open item, and the side panel holds its fact
 your persona.
 
 **Rail** (`components/shell/sidebar.tsx`, 52px, `--bg-sidebar`, always shown at `COMPACT` and wider):
-the mark; the Chats toggle (chat screens only); New chat, Search (⌘K) and Needs you (count badge);
-the areas as 30px icon links (Chat, Runs with a live dot, Tickets, Reports) and the Apps flyout;
+the mark; Go back and Go forward (`HistoryNav`, the shell's only back and forward, so every screen
+has them whatever header it draws; disabled at either end where the browser has the Navigation
+API); the Chats toggle (chat screens only); New chat, Search (⌘K) and Needs you (count badge);
+the areas as 30px icon links (Chat, Runs with a live dot, Tickets, Reports, Knowledge, Designs) and
+the Apps flyout, which reads as current only on apps without a rail entry of their own;
 the persona and space shortcuts while the Chats navigator is hidden; Customization and Settings at
 the foot; and the harness characters under them, each opening its usage bubble to the right.
 
@@ -220,14 +223,34 @@ persona. A run's Context panel and a ticket's Properties switch between their fa
 (`PanelTabs`, remembered per panel). The work chat (`components/domain/work-chat.tsx`) is one list
 shared by every run and ticket, so the conversation follows you; each message carries the item in
 view after `<!-- vesper:work-context -->`, as Knowledge's carries the page after its own marker.
-Dock composers lead with a "To <persona>" chip, then what the message carries (`DockContext`). The
-person's bubble shows only what they typed.
+A Pin on the Viewing chip keeps an item attached as you move between runs and tickets: messages
+then name both ("Pinned …", "Viewing …"), until it is unpinned. Dock composers lead with a
+"To <persona>" chip, then what the message carries (`DockContext`). The person's bubble shows only
+what they typed. On phones the run's header and the ticket's action bar open the same work chat in
+a full-height sheet.
+
+**Linked items.** Under the main chat's header, a Linked row lists what the conversation links to:
+the tickets and pages its messages carried, then its runs. Each opens read-only in the chat page's
+dock (`?item=ticket:KEY|run:ID|page:ID`, like a thread), with an Open link to the full page; the sent
+chips under messages open the same way.
+
+**Chat headers.** The chat header names the persona as a control ("Persona: Atlas ▾"): before the
+first message it switches the persona, afterwards it starts a new chat with another. While the live
+status card is on screen the header's live line is only its dot. A docked chat (an app's dock, a run
+or ticket side panel) has one header row: the persona as avatar ▾, the title, an Activity toggle and
+the host's actions (Designs' "Suggests ▾"); its repository picker moves to the composer's + menu.
+
+**Recent.** ⌘K's Recent list holds what you opened as well as what you picked there: chats with
+messages, runs, tickets, Knowledge pages and designs (`useRecordVisit`), six at most.
+
+**Harness characters on phones.** A row of them sits at the foot of the chat history drawer and in a
+Harnesses section on More; each opens its usage bubble above it.
 
 **Live activity in a dock.** A conversation marked `docked` starts its live card folded: the scene,
 status, progress segments and the step under way ("Fix the snapshot · 2 of 3"); Show steps opens the
 full list. The main chat starts it open.
 
-**Pane bar** (`TopBar`, 44px): back and forward (`HistoryNav`; disabled at either end where the browser has the Navigation API, hidden below md), then the breadcrumb (tertiary separators, current item in `--text` 500). Actions on the right go secondary buttons first and the primary button last. The chat header and the Knowledge tab strip lead with the same back and forward; a docked chat's header doesn't repeat them.
+**Pane bar** (`TopBar`, 44px): the breadcrumb (tertiary separators, current item in `--text` 500), with actions on the right, secondary buttons first and the primary button last. Back and forward are on the rail, not in pane bars.
 
 **Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the rail (and any navigator) beside the content.
 
