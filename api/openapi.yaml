@@ -282,11 +282,17 @@ paths:
   /search:
     get:
       operationId: search
-      summary: Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories and Library
+      summary: Search tickets, artifacts, wiki pages, epics, agents, runs and the local user's chats, messages, workflows, personas, memories, Library, spaces, courses, scheduled tasks and canvases
+      description: |
+        At most 8 hits of each type, or up to 50 of one type when kind is set. counts holds how many
+        of each type matched before that cut (chats: those matched by title plus those with matching
+        messages among the message hits returned). A message hit is a chat target whose anchor is the
+        message's id.
       parameters:
         - $ref: "#/components/parameters/IncludeAgent"
         - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
         - { name: project, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/SearchType" }, description: "Only this type, with a higher cap" }
       responses:
         "200":
           description: Search results
@@ -294,9 +300,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [hits]
+                required: [hits, counts]
                 properties:
                   hits: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+                  counts: { type: object, additionalProperties: { type: integer }, description: "Matches per SearchType, before the per-type cut; types with none are left out" }
         default: { $ref: "#/components/responses/Error" }
   /health:
     get:
@@ -7894,7 +7901,7 @@ components:
       required: [kind, title]
       description: What a [[link]] points at, with enough to render it
       properties:
-        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, run, workflow, persona, memory, library, unresolved], description: "chat, run, workflow, persona, memory and library only appear in GET /search hits" }
+        kind: { type: string, enum: [artifact, section, ticket, epic, agent, comment, chat, run, workflow, persona, memory, library, space, course, scheduled, canvas, unresolved], description: "chat, run, workflow, persona, memory, library, space, course, scheduled and canvas only appear in GET /search hits" }
         id: { type: string, format: uuid }
         anchor: { type: string }
         title: { type: string }
@@ -7952,6 +7959,12 @@ components:
         target: { $ref: "#/components/schemas/LinkTarget" }
         snippet: { type: string, description: "Matches are wrapped in « »" }
         score: { type: number }
+        detail: { type: string, description: "Context for a second line: a ticket's assignee, a chat's persona, a message's author (You for the person), a canvas's chat" }
+        updated_at: { type: string, format: date-time, description: "When the hit last changed (a message: when it was sent)" }
+    SearchType:
+      type: string
+      description: "A palette type (the is: filter), as GET /search counts and narrows them"
+      enum: [ticket, page, artifact, chat, agent, epic, run, workflow, persona, memory, library, space, course, scheduled, canvas]
     WikiPattern:
       type: object
       required: [title, path, topic, tags, summary, snippet, score]

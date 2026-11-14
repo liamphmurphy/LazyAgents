@@ -70,7 +70,8 @@ const escapeText = (s: string) => s.replace(/[\\[\]*_`]/g, (c) => `\\${c}`);
 export function defaultLabel(r: Pick<WikiRef, "target" | "anchor" | "display">) {
   if (r.display) return r.display;
   if (!r.target) return r.anchor;
-  return r.anchor ? `${r.target} › ${r.anchor}` : r.target;
+  const title = r.target.split("/").pop() ?? r.target;
+  return r.anchor ? `${title} › ${r.anchor}` : title;
 }
 
 /**

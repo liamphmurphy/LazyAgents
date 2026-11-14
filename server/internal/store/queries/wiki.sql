@@ -108,30 +108,47 @@ LIMIT 50;
 
 -- name: SearchKnowledgeArtifacts :many
 -- Full-text search over artifacts, boosted by how many sources link to them.
-SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, ar.updated_at,
-  ts_headline('english', ar.search_text, websearch_to_tsquery('english', sqlc.arg(q)),
-    'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
-  (ts_rank(ar.search, websearch_to_tsquery('english', sqlc.arg(q))) *
-    (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
-                 WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
-   + CASE WHEN sqlc.arg(fuzzy)::boolean THEN word_similarity(lower(sqlc.arg(q)), lower(ar.title)) ELSE 0 END)::float8 AS score
-FROM artifacts ar
-WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = sqlc.arg(workspace_id) AND ar.current_version_id IS NOT NULL
-  AND (ar.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR ar.title ILIKE '%' || sqlc.arg(q) || '%'
-       OR (sqlc.arg(fuzzy)::boolean AND word_similarity(lower(sqlc.arg(q)), lower(ar.title)) >= 0.3))
-  AND (sqlc.narg(types)::text[] IS NULL OR ar.type = ANY(sqlc.narg(types)::text[]))
-  AND (sqlc.narg(project_id)::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = sqlc.narg(project_id))
-ORDER BY score DESC, ar.updated_at DESC
+-- At most per_group pages and per_group other artifacts, so neither crowds out
+-- the other; total is how many of that group matched before the cut. Fuzzy
+-- (people typing) also matches a page's folder path and its aliases, so a
+-- folder's name finds the pages in it.
+SELECT id, type, title, path, number, summary, project_id, updated_at, snippet, score, total::int AS total FROM (
+  SELECT m.*,
+    row_number() OVER (PARTITION BY m.type = 'note' ORDER BY m.score DESC, m.updated_at DESC) AS n,
+    count(*) OVER (PARTITION BY m.type = 'note') AS total
+  FROM (
+    SELECT ar.id, ar.type, ar.title, ar.path, ar.number, ar.summary, ar.project_id, ar.updated_at,
+      ts_headline('english', ar.search_text, websearch_to_tsquery('english', sqlc.arg(q)),
+        'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
+      (ts_rank(ar.search, websearch_to_tsquery('english', sqlc.arg(q))) *
+        (1 + ln(1 + (SELECT count(DISTINCT (l.source_kind, l.source_id)) FROM knowledge_links l LEFT JOIN artifacts src ON l.source_kind = 'artifact' AND src.id = l.source_id
+                     WHERE (l.source_kind <> 'artifact' OR (artifact_visible(src.audience, src.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR src.audience <> 'agent'))) AND l.target_id = ar.id AND l.target_kind IN ('artifact', 'section'))))
+       + CASE WHEN sqlc.arg(fuzzy)::boolean THEN greatest(word_similarity(lower(sqlc.arg(q)), lower(ar.title)), word_similarity(lower(sqlc.arg(q)), lower(coalesce(ar.path, '')))) ELSE 0 END)::float8 AS score
+    FROM artifacts ar
+    WHERE artifact_visible(ar.audience, ar.owner_user_id, sqlc.narg(viewer)::uuid) AND (sqlc.arg(include_agent)::boolean OR ar.audience <> 'agent') AND ar.workspace_id = sqlc.arg(workspace_id) AND ar.current_version_id IS NOT NULL
+      AND (ar.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR ar.title ILIKE '%' || sqlc.arg(q) || '%'
+           OR (sqlc.arg(fuzzy)::boolean AND (word_similarity(lower(sqlc.arg(q)), lower(ar.title)) >= 0.3
+               OR ar.path ILIKE '%' || sqlc.arg(q) || '%'
+               OR EXISTS (SELECT 1 FROM artifact_aliases al WHERE al.artifact_id = ar.id AND al.path ILIKE '%' || sqlc.arg(q) || '%'))))
+      AND (sqlc.narg(types)::text[] IS NULL OR ar.type = ANY(sqlc.narg(types)::text[]))
+      AND (sqlc.narg(project_id)::uuid IS NULL OR ar.project_id IS NULL OR ar.project_id = sqlc.narg(project_id))
+  ) m
+) ranked
+WHERE n <= sqlc.arg(per_group)::int
+ORDER BY score DESC, updated_at DESC
 LIMIT sqlc.arg(lim);
 
 -- name: SearchKnowledgeTickets :many
-SELECT t.id, t.key, t.title, t.status, t.project_id,
+-- total is how many tickets matched before the limit.
+SELECT t.id, t.key, t.title, t.status, t.project_id, t.updated_at, a.name AS assignee,
   ts_headline('english', t.title || E'\n' || t.description_md, websearch_to_tsquery('english', sqlc.arg(q)),
     'MaxWords=30, MinWords=10, MaxFragments=1, StartSel=«, StopSel=»')::text AS snippet,
   ((ts_rank(t.search, websearch_to_tsquery('english', sqlc.arg(q)))
     + CASE WHEN sqlc.arg(fuzzy)::boolean THEN word_similarity(lower(sqlc.arg(q)), lower(t.title)) ELSE 0 END)
-   * CASE WHEN sqlc.arg(fuzzy)::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score
+   * CASE WHEN sqlc.arg(fuzzy)::boolean AND t.status IN ('done', 'canceled') THEN 0.7 ELSE 1 END)::float8 AS score,
+  count(*) OVER ()::int AS total
 FROM tickets t
+LEFT JOIN agents a ON a.id = t.assignee_agent_id
 WHERE t.workspace_id = sqlc.arg(workspace_id)
   AND (t.search @@ websearch_to_tsquery('english', sqlc.arg(q)) OR t.key = upper(sqlc.arg(q))
        OR (sqlc.arg(fuzzy)::boolean AND (t.title ILIKE '%' || sqlc.arg(q) || '%'
