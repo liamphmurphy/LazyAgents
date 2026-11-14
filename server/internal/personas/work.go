@@ -93,6 +93,15 @@ func (s *Service) SetWork(ctx context.Context, o Owner, id uuid.UUID, work strin
 		if WorkOf(rec) == work {
 			return nil
 		}
+		if rec != nil && rec.ArchivedAt == nil {
+			// Hold the live record while checking its tickets and runs, as deleting an agent
+			// did, so two changes to its work (or a definition save) can't interleave.
+			locked, err := q.LockAgentByHandle(ctx, store.LockAgentByHandleParams{WorkspaceID: o.WorkspaceID, Handle: rec.Handle})
+			if err != nil {
+				return err
+			}
+			rec = &locked
+		}
 		switch {
 		case work == WorkNone:
 			return stopWork(ctx, q, rec)
