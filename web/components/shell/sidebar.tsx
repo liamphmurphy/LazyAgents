@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
 import { cx } from "@/lib/cx";
 import { useNavCounts } from "@/lib/use-nav-counts";
-import { WORK_ITEMS, isActive, type NavBadge } from "@/lib/project-scope";
+import { WORK_ITEMS, isActive } from "@/lib/project-scope";
+import { inChats, navigatorArea } from "@/lib/navigator";
 import { badgeLabel } from "@/lib/tab-bar";
 import { viewedChatId } from "@/lib/persona-dock";
 import { Icon, Mark } from "@/components/ui/icon";
@@ -37,35 +38,9 @@ function NavLink({ href, active, label, children }: { href: string; active: bool
   );
 }
 
-function Badge({ kind, counts }: { kind?: NavBadge; counts: Record<NavBadge, number> }) {
-  const n = kind ? counts[kind] : 0;
-  if (!kind || n <= 0) return null;
-  if (kind === "runs") {
-    return (
-      <span className="flex items-center gap-[6px] text-12 text-fg-tertiary">
-        <span aria-hidden className="size-1.5 rounded-full bg-state-done" />
-        {n} running
-      </span>
-    );
-  }
-  if (kind === "settings") {
-    return (
-      <span className="size-2 rounded-full bg-state-human" title="A setting runs need is missing">
-        <span className="sr-only">: a setting runs need is missing</span>
-      </span>
-    );
-  }
-  return (
-    <span className="font-mono text-12 text-pill-human-fg" title={`${n} suggested edits to review`}>
-      {n}
-      <span className="sr-only"> suggested edits to review</span>
-    </span>
-  );
-}
-
 const EXPANDED_KEY = "lazyagents.sidebar-expanded";
 
-/** The main menu starts collapsed to an icon rail; expanding it is remembered per browser. */
+/** The Chats navigator starts hidden, leaving the rail; showing it is remembered per browser (the key predates the navigator). */
 function useExpanded(): [boolean, (v: boolean) => void] {
   const [expanded, setExpanded] = useState(false);
   // Read after mount so the server render (always collapsed) matches the first client render.
@@ -90,7 +65,7 @@ function useExpanded(): [boolean, (v: boolean) => void] {
 }
 
 function ToggleButton({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
-  const label = expanded ? "Collapse menu" : "Expand menu";
+  const label = expanded ? "Hide chats" : "Show chats";
   return (
     <button
       type="button"
@@ -125,29 +100,41 @@ function MenuSettings({ active, settingsNeedYou, rail }: { active: (href: string
   );
 }
 
-/** Work: what agents are doing for you (Runs, Tickets; what needs you is the pill above), then the Apps row and its flyout. */
-function WorkGroup({ counts, active, onNewSpace }: { counts: Record<NavBadge, number>; active: (href: string) => boolean; onNewSpace: () => void }) {
+/**
+ * The Chats navigator beside the rail on chat screens: new chat, spaces, the history and setup
+ * progress. Other areas draw their own list in this place (Runs, the Knowledge explorer, an
+ * editor's structure), so two lists never stack.
+ */
+function ChatsNavigator({ viewed, animate, onSettle }: { viewed: string | null; animate: boolean; onSettle: (e: TransitionEvent<HTMLElement>) => void }) {
   return (
-    <div role="group" aria-label="Work" className="flex flex-col gap-px">
-      <span aria-hidden className="px-2 pb-1 text-12 font-medium text-fg-tertiary">Work</span>
-      {WORK_ITEMS.map((n) => (
-        <NavLink key={n.href} href={n.href} active={active(n.href)}>
-          <Icon name={n.icon} />
-          <span className="flex-1">{n.label}</span>
-          <Badge kind={n.badge} counts={counts} />
-        </NavLink>
-      ))}
-      <AppsMenu counts={counts} onNewSpace={onNewSpace} />
-    </div>
+    <aside
+      aria-label="Chats"
+      data-navigator="chats"
+      onTransitionEnd={onSettle}
+      className={cx("flex min-w-0 flex-[1_1_264px] flex-col gap-4 border-r border-border-subtle bg-sidebar px-2.5 pt-3 min-[800px]:w-[264px] min-[800px]:flex-none min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh", animate && "motion-sidebar")}
+    >
+      <NewConversationButton id={viewed ?? undefined} />
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <SidebarSpaces viewed={viewed} hideWhenEmpty />
+        <ChatHistory id={viewed ?? undefined} viewed={viewed} />
+        <SetupProgress />
+      </div>
+    </aside>
   );
 }
 
+/**
+ * The rail is always there and switches areas (DESIGN.md §3): search, new chat, Needs you, then
+ * Chat, Work and the Apps flyout, the persona and space shortcuts, settings, and the harness
+ * characters at the foot. On chat screens the toggle shows or hides the Chats navigator beside it,
+ * remembered per browser; elsewhere the area brings its own list, or none.
+ */
 export function Sidebar() {
   const pathname = usePathname();
   const counts = useNavCounts();
   const [appearance] = useAppearance();
   const [expanded, setExpanded] = useExpanded();
-  // An app editor shows the menu as its rail without touching the remembered preference.
+  // An app editor draws its own structure panel beside the rail, without touching the remembered preference.
   const editorRail = useEditorRail();
   // The chat's ⌘. reading focus hides the menu altogether, again leaving the preference alone.
   const readingFocus = useReadingFocus();
@@ -162,17 +149,18 @@ export function Sidebar() {
   const newSpace = () => setCreatingSpace(true);
   const searchEvent = () => window.dispatchEvent(new Event("la:search"));
   if (readingFocus) return null;
-  if (!expanded || editorRail) {
-    return (
-      <aside aria-label="Main menu" onTransitionEnd={settle} className={cx("flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pt-3 min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh", toggled && "motion-sidebar")}>
-        {/* Primary spans the header too, so Settings and Customization stay in the navigation landmark. */}
+  const area = editorRail ? null : navigatorArea(pathname);
+  const navigator = area !== null && expanded;
+  return (
+    <>
+      <aside aria-label="Main menu" data-expanded={navigator || undefined} className="flex w-[52px] flex-none flex-col items-center gap-4 border-r border-border-subtle bg-sidebar px-1.5 pt-3 min-[612px]:sticky min-[612px]:top-0 min-[612px]:h-dvh">
+        {/* Primary spans the foot too, so Settings and Customization stay in the navigation landmark. */}
         <nav aria-label="Primary" className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
           <span title="Vesper" className="grid size-[30px] place-items-center">
             <Mark />
           </span>
           <div className="flex flex-col items-center gap-1">
-            <MenuSettings rail active={navActive} settingsNeedYou={settingsNeedYou} />
-            {!editorRail && <ToggleButton expanded={false} onToggle={() => toggle(true)} />}
+            {area && <ToggleButton expanded={navigator} onToggle={() => toggle(!navigator)} />}
             <NewConversationButton id={viewed ?? undefined} rail />
             <button
               type="button"
@@ -187,6 +175,9 @@ export function Sidebar() {
           </div>
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-4">
             <div className="flex w-full flex-col gap-px">
+              <NavLink label="Chat" href="/chat" active={inChats(pathname)}>
+                <Icon name="msg" />
+              </NavLink>
               {WORK_ITEMS.map((n) => (
                 <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
                   <Icon name={n.icon} />
@@ -195,54 +186,16 @@ export function Sidebar() {
               ))}
               <AppsMenu rail counts={counts} onNewSpace={newSpace} />
             </div>
-            <SpaceRail viewed={viewed} />
-            <PersonaRail id={viewed ?? undefined} viewed={viewed} />
+            {/* The navigator lists spaces and personas itself; the rail's shortcuts stand in while it's hidden. */}
+            {!navigator && <SpaceRail viewed={viewed} />}
+            {!navigator && <PersonaRail id={viewed ?? undefined} viewed={viewed} />}
           </div>
+          <MenuSettings rail active={navActive} settingsNeedYou={settingsNeedYou} />
         </nav>
-        {appearance.showHarnessActivity !== false && <HarnessFooter rail />}
+        {appearance.showHarnessActivity !== false && <HarnessFooter />}
         <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
       </aside>
-    );
-  }
-  return (
-    <aside aria-label="Main menu" data-expanded onTransitionEnd={settle} className={cx("flex min-w-0 flex-[1_1_232px] flex-col gap-4 border-r min-[800px]:w-[232px] min-[800px]:flex-none border-border-subtle bg-sidebar px-2.5 pt-3 min-[800px]:sticky min-[800px]:top-0 min-[800px]:h-dvh", toggled && "motion-sidebar")}>
-      {/* Primary spans the header too, so Settings and Customization stay in the navigation landmark. */}
-      <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-[9px] px-1.5 py-[5px]">
-              <Mark />
-              <span className="text-14 font-semibold tracking-[-0.01em]">Vesper</span>
-            </span>
-            <div className="flex items-center gap-0.5">
-              <MenuSettings active={navActive} settingsNeedYou={settingsNeedYou} />
-              <ToggleButton expanded onToggle={() => toggle(false)} />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <NewConversationButton id={viewed ?? undefined} />
-            <button
-              type="button"
-              aria-label="Search"
-              title="Search (⌘K)"
-              onClick={searchEvent}
-              className="grid size-[34px] flex-none place-items-center rounded-[9px] border border-border bg-surface text-fg-secondary hover:bg-hover hover:text-fg"
-            >
-              <Icon name="search" size={15} strokeWidth={1.6} />
-            </button>
-          </div>
-          <NeedsYou variant="expanded" count={counts.inbox} />
-        </div>
-        {/* Work and Spaces on top, as in other chat apps; the history fills the rest and scrolls. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <WorkGroup counts={counts} active={navActive} onNewSpace={newSpace} />
-          <SidebarSpaces viewed={viewed} hideWhenEmpty />
-          <ChatHistory id={viewed ?? undefined} viewed={viewed} />
-          <SetupProgress />
-        </div>
-      </nav>
-      {appearance.showHarnessActivity !== false && <HarnessFooter />}
-      <NewSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} />
-    </aside>
+      {navigator && <ChatsNavigator viewed={viewed} animate={toggled} onSettle={settle} />}
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { claimEditorRail } from "@/lib/editor-layout";
 import { cx } from "@/lib/cx";
+import { NAVIGATOR_WIDTH } from "@/lib/navigator";
 import { ancestors, buildTree, closeTab, folderPaths, isoDay, joinPath, movedPath, nameOf, openTab, pageHref, parentOf, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
 import { useAllPages, useCreatePage, useDaily, useDeleteFolder, useDeletePage, useMoveFolder, useMovePage, usePage } from "@/lib/api/knowledge-hooks";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -476,7 +477,7 @@ function Explorer({ pathname }: { pathname: string }) {
 
 
   return (
-    <aside aria-label="Knowledge explorer" className="hidden w-[272px] flex-none flex-col border-r border-border-subtle bg-sidebar md:flex">
+    <aside aria-label="Knowledge explorer" className={cx(NAVIGATOR_WIDTH, "hidden flex-none flex-col border-r border-border-subtle bg-sidebar md:flex")}>
       <div className="flex h-10 flex-none items-center gap-1 px-3">
         <span className="flex-1 text-14 font-semibold text-fg">Knowledge</span>
         <ExplorerButton icon="edit" label="New page" onClick={newPage} />

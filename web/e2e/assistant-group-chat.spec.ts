@@ -85,7 +85,7 @@ test("a group chat shows everyone in it in the history and lists under each of i
   const id = await openChat(page);
   mock.chats.find((c) => c.id === id)!.guest_persona_ids = [NOVA.id];
   await page.reload();
-  await page.getByRole("button", { name: "Expand menu" }).click();
+  await page.getByRole("button", { name: "Show chats" }).click();
 
   const history = page.getByRole("complementary", { name: "Chat history" });
   const row = history.locator(`a[href="/chat/${id}"]`);
