@@ -2,10 +2,10 @@ import { Extension } from "@tiptap/core";
 import { Plugin, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
-type PageLink = { id: string; title: string; path: string };
-type Match = { from: number; to: number; query: string };
+type LinkSuggestion = { title: string; ref: string; detail: string };
+type Match = { from: number; to: number; query: string; image: boolean };
 
-/** Only an unfinished page name at the caret, outside code and link aliases. */
+/** An unfinished note or image name at the caret, outside code and link aliases. */
 function matchLink(state: EditorState): Match | undefined {
   const { empty, $from, from } = state.selection;
   if (!empty || !$from.parent.isTextblock || $from.parent.type.spec.code) return;
@@ -15,12 +15,13 @@ function matchLink(state: EditorState): Match | undefined {
   if (at < 0 || before[at - 1] === "[" || /(?:^|[^\\])(?:\\\\)*\\$/.test(before.slice(0, at))) return;
   const query = before.slice(at + 2);
   if (/[\[\]\n|#\ufffc]/.test(query) || query.length > 200) return;
-  const start = from - query.length - 2;
+  const image = before[at - 1] === "!";
+  const start = from - query.length - 2 - (image ? 1 : 0);
   const code = state.schema.marks.code;
   if (code && state.doc.rangeHasMark(start, from, code)) return;
   const after = $from.parent.textBetween($from.parentOffset, $from.parent.content.size, "\n", "\ufffc");
   const closing = /^[^[\]\n]*\]\]/.exec(after)?.[0].length ?? 0;
-  return { from: start, to: from + closing, query };
+  return { from: start, to: from + closing, query, image };
 }
 
 /** An editor-owned popup keeps focus and selection in the document. */
@@ -28,7 +29,7 @@ class Completion {
   private panel: HTMLDivElement;
   private match?: Match;
   private dismissed?: number;
-  private items: PageLink[] = [];
+  private items: LinkSuggestion[] = [];
   private active = 0;
   private loading = false;
   private request?: AbortController;
@@ -36,7 +37,7 @@ class Completion {
   private destroyed = false;
   private readonly role: string | null;
 
-  constructor(private view: EditorView, private search: (query: string, signal: AbortSignal) => Promise<PageLink[]>) {
+  constructor(private view: EditorView, private search: (query: string, signal: AbortSignal, image: boolean) => Promise<LinkSuggestion[]>) {
     this.role = view.dom.getAttribute("role");
     this.panel = document.createElement("div");
     this.panel.id = `kn-link-picker-${++pickerId}`;
@@ -58,7 +59,7 @@ class Completion {
       return;
     }
     if (this.dismissed === next.from) return;
-    if (this.match?.from === next.from && this.match.query === next.query) {
+    if (this.match?.from === next.from && this.match.query === next.query && this.match.image === next.image) {
       this.match = next;
       this.position();
       return;
@@ -68,20 +69,21 @@ class Completion {
     this.active = 0;
     this.items = [];
     this.loading = true;
-    this.render("Finding notes…");
+    this.panel.setAttribute("aria-label", next.image ? "Link to image" : "Link to note");
+    this.render(next.image ? "Finding images…" : "Finding notes…");
     const request = new AbortController();
     this.request = request;
     this.timer = setTimeout(async () => {
       try {
-        const items = await this.search(next.query, request.signal);
+        const items = await this.search(next.query, request.signal, next.image);
         if (this.destroyed || request.signal.aborted) return;
         this.items = items;
         this.loading = false;
-        this.render(items.length ? undefined : "No matching notes");
+        this.render(items.length ? undefined : next.image ? "No matching images" : "No matching notes");
       } catch {
         if (!this.destroyed && !request.signal.aborted) {
           this.loading = false;
-          this.render("Couldn’t find notes. Keep typing to try again.");
+          this.render(`Couldn’t find ${next.image ? "images" : "notes"}. Keep typing to try again.`);
         }
       }
     }, 100);
@@ -124,7 +126,7 @@ class Completion {
       title.textContent = item.title;
       const path = document.createElement("div");
       path.className = "truncate text-11 text-fg-tertiary";
-      path.textContent = item.path;
+      path.textContent = item.detail;
       option.append(title, path);
       option.addEventListener("mouseenter", () => { this.active = i; this.highlight(); });
       option.addEventListener("mousedown", (event) => { event.preventDefault(); this.pick(item); });
@@ -142,10 +144,10 @@ class Completion {
     if (this.items.length) this.view.dom.setAttribute("aria-activedescendant", `${this.panel.id}-${this.active}`);
   }
 
-  private pick(item: PageLink) {
+  private pick(item: LinkSuggestion) {
     const match = matchLink(this.view.state);
-    if (!this.match || !match || match.from !== this.match.from || match.query !== this.match.query) return;
-    const text = `[[${item.path}]]`;
+    if (!this.match || !match || match.from !== this.match.from || match.query !== this.match.query || match.image !== this.match.image) return;
+    const text = `${match.image ? "!" : ""}[[${item.ref}]]`;
     this.close();
     const tr = this.view.state.tr.insertText(text, match.from, match.to);
     tr.setSelection(TextSelection.create(tr.doc, match.from + text.length));
@@ -200,7 +202,7 @@ class Completion {
 
 let pickerId = 0;
 
-export const KnowledgeCompletion = Extension.create<{ search: (query: string, signal: AbortSignal) => Promise<PageLink[]> }>({
+export const KnowledgeCompletion = Extension.create<{ search: (query: string, signal: AbortSignal, image: boolean) => Promise<LinkSuggestion[]> }>({
   name: "knowledgeCompletion",
   addOptions() { return { search: async () => [] }; },
   addProseMirrorPlugins() {

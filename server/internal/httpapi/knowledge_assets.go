@@ -22,6 +22,27 @@ import (
 const knowledgeAssetLimit = 512 << 20
 
 func (s *Server) knowledgeAssetRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/knowledge/assets", func(w http.ResponseWriter, r *http.Request) {
+		u, _, ws := me(r.Context())
+		rows, err := s.Q.SuggestKnowledgeImages(r.Context(), store.SuggestKnowledgeImagesParams{WorkspaceID: ws, Viewer: &u.ID, Query: strings.TrimSpace(r.URL.Query().Get("q"))})
+		if err != nil {
+			s.responseError(w, r, err)
+			return
+		}
+		type image struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Ref         string `json:"ref"`
+			ContentType string `json:"content_type"`
+		}
+		images := make([]image, 0, len(rows))
+		for _, asset := range rows {
+			images = append(images, image{ID: asset.ID.String(), Title: asset.Filename, Ref: wiki.AttachmentRef(asset.ID, asset.Filename), ContentType: asset.ContentType})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "private, no-store")
+		json.NewEncoder(w).Encode(map[string]any{"images": images})
+	})
 	mux.HandleFunc("POST /api/v1/knowledge/assets", func(w http.ResponseWriter, r *http.Request) {
 		u, _, ws := me(r.Context())
 		if s.Blobs == nil {

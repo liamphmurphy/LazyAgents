@@ -1,5 +1,6 @@
 import { expect, test, type Page as BrowserPage } from "@playwright/test";
 import { installChatApi } from "./mock-chat-api";
+import type { Embed } from "../lib/api/knowledge-hooks";
 
 const ID = "55555555-5555-4555-8555-555555555555";
 const pages = [
@@ -8,6 +9,7 @@ const pages = [
   { id: "other-dawn", title: "Dawn", path: "Other/Dawn" },
 ];
 const mod = process.platform === "darwin" ? "Meta" : "Control";
+const mapRef = "attachment:88888888-8888-4888-8888-888888888888/Map.png";
 
 async function install(page: BrowserPage, body = "Notes. ", delay = 0) {
   await installChatApi(page);
@@ -15,7 +17,8 @@ async function install(page: BrowserPage, body = "Notes. ", delay = 0) {
   const searches: string[] = [];
   const note = { id: ID, title: "Tracker", path: "Campaign/Tracker", audience: "private", body_md: body,
     version_id: "v1", seq: 1, properties: {}, direct: false, paused: false, chat_id: null,
-    url: `/knowledge/${ID}`, embeds: [], reviews: [], versions: [] };
+    url: `/knowledge/${ID}`, embeds: [] as Embed[], reviews: [], versions: [] };
+  await page.route("**/knowledge-test-map.png", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=", "base64") }));
   await page.route(/\/api\/v1\/knowledge\//, async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace("/api/v1/knowledge", "");
@@ -28,11 +31,20 @@ async function install(page: BrowserPage, body = "Notes. ", delay = 0) {
         .map((p) => ({ ...p, kind: "artifact", artifact_type: "note", href: `/knowledge/${p.id}` })) };
     }
     if (path === "/query") data = { rows: [note, ...pages], has_more: false };
+    if (path === "/assets") {
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      data = { images: [
+        { id: "map", title: "Map.png", ref: mapRef, content_type: "image/png" },
+        { id: "portrait", title: "Portrait.jpg", ref: "attachment:99999999-9999-4999-8999-999999999999/Portrait.jpg", content_type: "image/jpeg" },
+        { id: "pdf", title: "Map guide.pdf", ref: "attachment:pdf/Map.pdf", content_type: "application/pdf" },
+      ].filter((i) => i.title.toLowerCase().includes(q)) };
+    }
     if (path === `/pages/${ID}`) {
       if (route.request().method() === "PUT") {
         const input = route.request().postDataJSON();
         saved.push(input.body_md);
         Object.assign(note, input, { seq: note.seq + 1, version_id: `v${note.seq + 1}` });
+        note.embeds = note.body_md.includes(`![[${mapRef}]]`) ? [{ ref: `![[${mapRef}]]`, kind: "file", title: "Map.png", available: true, content_type: "image/png", url: "/knowledge-test-map.png" }] : [];
       }
       data = note;
     }
@@ -147,4 +159,20 @@ test("no matches leaves literal note text editable and Enter can continue writin
   await editor.press("Enter");
   await expect(editor.locator("p")).toHaveCount(2);
   await expect(page.getByRole("listbox", { name: "Link to note" })).toHaveCount(0);
+});
+
+test("![[ offers only Knowledge images and inserts one embed with the attachment ref", async ({ page }) => {
+  const { editor, saved, searches } = await install(page);
+  await page.keyboard.type("![[");
+  const list = page.getByRole("listbox", { name: "Link to image" });
+  await expect(list.getByRole("option")).toHaveCount(2);
+  await expect(list).not.toContainText("Map guide.pdf");
+  await expect(list).not.toContainText("Dawn");
+  expect(searches).toEqual([]);
+  await page.keyboard.type("Map");
+  await expect(list.getByRole("option")).toHaveCount(1);
+  await editor.press("Enter");
+  await expect.poll(() => saved.at(-1)).toBe(`Notes. ![[${mapRef}]]`);
+  await expect(list).toHaveCount(0);
+  await expect(editor.getByRole("img", { name: "Map.png" })).toBeVisible();
 });

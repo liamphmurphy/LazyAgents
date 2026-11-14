@@ -12,7 +12,7 @@ import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
 import { KnowledgeCompletion } from "@/lib/knowledge-completion";
 import { api, unwrap } from "@/lib/api/client";
-import { fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
+import { fetchKnowledgeImages, fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { floatPanel } from "@/components/domain/pickers";
@@ -134,10 +134,15 @@ function Loaded({ page: p }: { page: Page }) {
         },
       }),
       KnowledgeCompletion.configure({
-        search: async (q, signal) => {
+        search: async (q, signal, image) => {
+          if (image) {
+            const result = await fetchKnowledgeImages(q, signal);
+            return result.images.filter((i) => i.content_type.startsWith("image/"))
+              .map((i) => ({ title: i.title, ref: i.ref, detail: i.content_type }));
+          }
           const result = await unwrap(api.GET("/knowledge/suggest", { params: { query: { q, include_agent: true } }, signal }));
           return result.targets.filter((t) => t.kind === "artifact" && t.artifact_type === "note" && t.path && t.id)
-            .map((t) => ({ id: t.id!, title: t.title, path: t.path! }));
+            .map((t) => ({ title: t.title, ref: t.path!, detail: t.path! }));
         },
       }),
     ],

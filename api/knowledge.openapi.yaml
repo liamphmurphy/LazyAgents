@@ -309,6 +309,31 @@ paths:
       responses:
         "200": { description: "The inbox page", content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
   /knowledge/assets:
+    get:
+      tags: [knowledge-pages]
+      summary: Suggest visible Knowledge image attachments by filename
+      description: Returns at most 12 image attachments owned by the person or referenced in a page they can see. Filters by stored image MIME type, not filename extension.
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: "Case-insensitive filename substring" }
+      responses:
+        "200":
+          description: Matching images for ![[ autocomplete
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [images]
+                properties:
+                  images:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, title, ref, content_type]
+                      properties:
+                        id: { type: string, format: uuid }
+                        title: { type: string }
+                        ref: { type: string }
+                        content_type: { type: string }
     post:
       tags: [knowledge-pages]
       summary: Upload an attachment (stored by content hash, reused when identical)
