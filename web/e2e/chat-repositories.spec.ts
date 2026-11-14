@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installChatApi, openEmptyChat, persona } from "./mock-chat-api";
+import { composerOption, installChatApi, openEmptyChat, persona } from "./mock-chat-api";
 
 test("a repository-less coding chat attaches unlisted repositories without replacing the conversation", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: false }, repos: [] })] });
@@ -44,16 +44,15 @@ test("selecting a repository during a reply displays the queued selection", asyn
   expect(mock.unhandled).toEqual([]);
 });
 
-test("the repository chip sits in the composer, lists the persona's repos, and always offers Other repository", async ({ page }) => {
+test("the repository chip sits in the Welcome's + menu, lists the persona's repos, and always offers Other repository", async ({ page }) => {
   const repos = ["https://github.com/acme/api.git", "git@github.com:acme/app.git"];
   const mock = await installChatApi(page, { personas: [persona(1, { name: "Dev", is_default: true, capabilities: { code: true, images: false }, repos })] });
   await page.goto("/chat?project=WEB");
-  const chip = page.getByTestId("repository-picker").first();
-  // In the composer's option row (beside Research), not above it.
-  await expect(page.locator("form").filter({ has: chip }).getByRole("button", { name: "Research" })).toBeVisible();
+  // On the Welcome, which has no header, it's in the composer's + menu; in a chat, in the header.
+  const chip = (await composerOption(page, "repository")).getByTestId("repository-picker");
   await expect(chip).toContainText("acme/api");
   await chip.getByRole("button", { name: /^Repository:/ }).click();
-  const menu = page.getByRole("dialog");
+  const menu = page.getByRole("dialog").filter({ has: page.getByRole("region", { name: "Dev’s repositories" }) });
   await expect(menu.getByRole("region", { name: "Dev’s repositories" }).getByRole("button")).toHaveText([/acme\/api/, /acme\/app/]);
   await expect(menu.getByRole("button", { name: /acme\/api/ })).toHaveAttribute("aria-current", "true");
   await expect(menu.getByRole("button", { name: "Other repository…" })).toBeVisible();

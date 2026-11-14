@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { installChatApi, composerOption } from "./mock-chat-api";
 
 // Designs from chat (LAZYAGENTS-151, docs/design/designs-from-chat.svg): the + menu and
 // /design ask the chat's persona for a design, the design it starts opens beside the chat,
@@ -52,7 +52,7 @@ const box = (page: Page) => page.getByRole("combobox", { name: "Message" });
 
 test("the + menu and /design ask the persona for a design", async ({ page }) => {
   await install(page);
-  await page.getByRole("button", { name: "Add context" }).click();
+  await (await composerOption(page, "context")).getByRole("button", { name: "Add context" }).click();
   const create = page.getByTestId("create-with");
   await expect(create).toContainText(/Create with/);
   await expect(create.getByRole("button")).toHaveText([/Doc/, /Slides/, /Design.*Flow, diagram or wireframe.*\/design/]);

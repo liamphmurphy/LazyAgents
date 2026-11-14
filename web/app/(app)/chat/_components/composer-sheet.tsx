@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Dialog } from "radix-ui";
+import { Dialog, Popover } from "radix-ui";
 import type { ComposerOption } from "@/lib/composer-options";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icon";
@@ -95,38 +95,87 @@ export function ComposerSheet({
             <span aria-hidden className="h-1 w-9 rounded-full bg-border-strong" />
           </div>
           <Dialog.Title className="px-4 pb-1 text-13 font-semibold text-fg-secondary">Options</Dialog.Title>
-          <ul className="flex min-h-0 flex-col overflow-y-auto pb-2">
-            {options.map((o) => {
-              const value = shownValue(o, counts);
-              return (
-                <li
-                  key={o.id}
-                  data-testid="sheet-option"
-                  data-option={o.id}
-                  className={cx(
-                    "relative flex min-h-[56px] flex-none items-center gap-3 px-4 active:bg-hover",
-                    // Stretch the control's trigger over the row; a segmented choice keeps its own buttons.
-                    o.opens !== "segmented" && "[&_.relative]:static [&_button]:after:absolute [&_button]:after:inset-0 [&_button]:after:content-['']",
-                  )}
-                >
-                  <span className="flex-none text-fg-secondary">
-                    <RowIcon icon={o.icon} />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-15 text-fg">{o.label}</span>
-                    {value && (
-                      <span data-testid="sheet-option-value" className="truncate text-13 text-fg-tertiary">
-                        {value}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex max-w-[45%] flex-none items-center justify-end">{control(o)}</span>
-                </li>
-              );
-            })}
-          </ul>
+          <OptionRows options={options} control={control} counts={counts} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** One row per option with its current value and its own control, whose trigger is stretched over the row. */
+function OptionRows({ options, control, counts, dense }: { options: ComposerOption[]; control: (o: ComposerOption) => ReactNode; counts: SheetCounts; dense?: boolean }) {
+  return (
+    <ul className="flex min-h-0 flex-col overflow-y-auto pb-2">
+      {options.map((o) => {
+        const value = shownValue(o, counts);
+        return (
+          <li
+            key={o.id}
+            data-testid="sheet-option"
+            data-option={o.id}
+            className={cx(
+              dense ? "relative flex min-h-[40px] flex-none items-center gap-3 rounded-md px-3 hover:bg-hover" : "relative flex min-h-[56px] flex-none items-center gap-3 px-4 active:bg-hover",
+              // Stretch the control's trigger over the row; a segmented choice keeps its own buttons.
+              o.opens !== "segmented" && "[&_.relative]:static [&_button]:after:absolute [&_button]:after:inset-0 [&_button]:after:content-['']",
+            )}
+          >
+            <span className="flex-none text-fg-secondary">
+              <RowIcon icon={o.icon} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className={dense ? "text-13 text-fg" : "text-15 text-fg"}>{o.label}</span>
+              {value && (
+                <span data-testid="sheet-option-value" className={cx("truncate text-fg-tertiary", dense ? "text-12" : "text-13")}>
+                  {value}
+                </span>
+              )}
+            </span>
+            <span className="flex max-w-[45%] flex-none items-center justify-end">{control(o)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * The desktop composer's + menu: the same rows as the compact sheet, in a popover above the box,
+ * so the row under the message box holds only +, the model, Stop and Send at any width.
+ */
+export function ComposerMenu({
+  open,
+  onOpenChange,
+  options,
+  control,
+  counts,
+  disabled,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  options: ComposerOption[];
+  control: (o: ComposerOption) => ReactNode;
+  counts: SheetCounts;
+  disabled?: boolean;
+}) {
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>
+        <button type="button" aria-label="Composer options" title="Context, files and options" disabled={disabled} className={composerIconButton}>
+          <Icon name="plus" size={15} strokeWidth={1.7} />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          data-testid="composer-menu"
+          aria-label="Composer options"
+          className="z-50 flex max-h-[min(480px,70dvh)] w-[300px] flex-col rounded-xl border border-border-float bg-surface-raised p-1 shadow-[var(--shadow-float)] outline-none"
+        >
+          <OptionRows options={options} control={control} counts={counts} dense />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

@@ -18,8 +18,9 @@ DELETE FROM chat_followups WHERE id = (
 ) RETURNING *;
 
 -- name: SetChatParent :one
--- Makes a new hidden chat an aside of its parent.
-UPDATE chat_sessions SET parent_chat_id = sqlc.arg(parent_chat_id) WHERE id = sqlc.arg(id) RETURNING *;
+-- Makes a new hidden chat an aside of its parent, a thread when it is
+-- anchored to one of the parent's messages.
+UPDATE chat_sessions SET parent_chat_id = sqlc.arg(parent_chat_id), anchor_message_id = sqlc.narg(anchor_message_id) WHERE id = sqlc.arg(id) RETURNING *;
 
 -- name: ListChatAsides :many
 -- A chat's asides, oldest first.

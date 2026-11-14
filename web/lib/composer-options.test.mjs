@@ -9,9 +9,9 @@ test("a chat whose persona can't code has no repository option", () => {
   assert.deepEqual(ids(list), ["context", "attach", "code", "research"]);
 });
 
-test("a coding chat without a repository offers the picker with nothing chosen", () => {
+test("a coding chat without a repository offers the picker with nothing chosen, in the header", () => {
   const repo = composerOptions({ code: true, research: false }).find((o) => o.id === "repository");
-  assert.deepEqual(repo, { id: "repository", label: "Repository", icon: "branch", value: undefined, opens: "popover", place: "options" });
+  assert.deepEqual(repo, { id: "repository", label: "Repository", icon: "branch", value: undefined, opens: "popover", place: "header" });
 });
 
 test("a chat with a repository shows its short name, and a queued one for the next turn", () => {
@@ -31,9 +31,9 @@ test("a fresh running chat lists every control in the desktop order", () => {
     model: "Opus 5.5 · Auto",
     project: { name: "Web" },
   });
-  assert.deepEqual(ids(list, "options"), ["context", "attach", "code", "repository", "persona", "send-mode", "research", "temporary"]);
+  assert.deepEqual(ids(list, "options"), ["context", "attach", "code", "persona", "send-mode", "research", "temporary"]);
   assert.deepEqual(ids(list, "actions"), ["model"]);
-  assert.deepEqual(ids(list, "header"), ["project"]);
+  assert.deepEqual(ids(list, "header"), ["repository", "project"]);
   assert.equal(list.find((o) => o.id === "research").on, true);
   assert.equal(list.find((o) => o.id === "temporary").on, false);
   assert.equal(list.find((o) => o.id === "model").value, "Opus 5.5 · Auto");

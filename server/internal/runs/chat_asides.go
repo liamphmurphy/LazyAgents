@@ -47,9 +47,19 @@ Answer briefly and concretely from the snapshot above and the conversation; use 
 The person's question:
 `
 
-// StartChatAside asks a question about the chat's running reply. It returns
-// the aside: a hidden chat whose first turn answers it.
-func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UUID, question string) (store.ChatSession, error) {
+const threadFooter = `---
+(Vesper: this is a thread about the message above, which the person picked in the main conversation. You are a separate instance answering in this side conversation: the main conversation doesn't see it, and nothing you write here reaches it.
+Answer about that message, concretely; use the read tools if you need more. Don't create, change or delete anything (tickets, epics, memory, canvases, chats, code). If the person asks for a change, say so, and that they can ask for it in the main conversation.)
+
+The person's question:
+`
+
+// StartChatAside asks a question beside the chat's main conversation and
+// returns the aside: a hidden chat whose first turn answers it. Without an
+// anchor it is about the running reply, so something must be running. With
+// one it is a thread about that message of the chat, which can start at any
+// time.
+func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UUID, question string, anchor *uuid.UUID) (store.ChatSession, error) {
 	var out store.ChatSession
 	question = strings.TrimSpace(question)
 	if question == "" || len([]rune(question)) > 20000 {
@@ -65,8 +75,22 @@ func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UU
 			return apperr.Conflict("the chat is archived")
 		case parent.ParentChatID != nil:
 			return apperr.Conflict("an aside can't have asides of its own")
-		case parent.State != "running" || parent.CurrentRunID == nil:
+		case anchor == nil && (parent.State != "running" || parent.CurrentRunID == nil):
 			return apperr.Conflict("nothing is running: send it as a message instead")
+		}
+		var anchored *store.ChatMessage
+		if anchor != nil {
+			m, err := q.GetChatMessage(ctx, *anchor)
+			if errors.Is(err, pgx.ErrNoRows) || (err == nil && m.SessionID != parent.ID) {
+				return apperr.Invalid("anchor_message_id", "not a message of this chat")
+			}
+			if err != nil {
+				return err
+			}
+			if m.Role == "system" {
+				return apperr.Invalid("anchor_message_id", "a thread needs a message from you or a persona")
+			}
+			anchored = &m
 		}
 		asides, err := q.ListChatAsides(ctx, &parent.ID)
 		if err != nil {
@@ -75,7 +99,12 @@ func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UU
 		if n := countRunning(asides); n >= MaxLiveAsides {
 			return apperr.Conflict("%d asides are still answering; wait for one to finish", n)
 		}
-		preamble, err := asidePreamble(ctx, q, parent)
+		var preamble string
+		if anchored != nil {
+			preamble, err = threadPreamble(ctx, q, parent, *anchored)
+		} else {
+			preamble, err = asidePreamble(ctx, q, parent)
+		}
 		if err != nil {
 			return err
 		}
@@ -88,7 +117,7 @@ func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UU
 		// asides don't reach memory or past chats either.
 		aside, err := s.startChat(ctx, q, ws, user, ChatInput{
 			Project:      p.Key,
-			Title:        "Aside: " + firstLine(question, 70),
+			Title:        asideTitle(anchored != nil) + firstLine(question, 70),
 			PersonaID:    ChatSpeakerID(parent),
 			Hidden:       true,
 			Temporary:    parent.Temporary,
@@ -102,7 +131,7 @@ func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UU
 		if aside, err = q.SetChatSelection(ctx, store.SetChatSelectionParams{ID: aside.ID, Harness: parent.Harness, Model: parent.Model, Effort: parent.Effort}); err != nil {
 			return err
 		}
-		if aside, err = q.SetChatParent(ctx, store.SetChatParentParams{ID: aside.ID, ParentChatID: &parent.ID}); err != nil {
+		if aside, err = q.SetChatParent(ctx, store.SetChatParentParams{ID: aside.ID, ParentChatID: &parent.ID, AnchorMessageID: anchor}); err != nil {
 			return err
 		}
 		if aside, _, err = postChatMessage(ctx, q, s.ChatCatalog(), aside, ChatMessageInput{Body: question, preamble: preamble}, s.HandoffChars); err != nil {
@@ -116,6 +145,41 @@ func (s *Service) StartChatAside(ctx context.Context, ws, user, parentID uuid.UU
 		return nil
 	})
 	return out, err
+}
+
+func asideTitle(thread bool) string {
+	if thread {
+		return "Thread: "
+	}
+	return "Aside: "
+}
+
+// threadPreamble is what a thread's first turn is told ahead of the question:
+// the parent's recent conversation, then the message the thread is about.
+func threadPreamble(ctx context.Context, q *store.Queries, parent store.ChatSession, m store.ChatMessage) (string, error) {
+	total, err := q.CountChatHistory(ctx, parent.ID)
+	if err != nil {
+		return "", err
+	}
+	rows, err := q.ListRecentChatMessages(ctx, store.ListRecentChatMessagesParams{SessionID: parent.ID, RowLimit: handoffRows, MaxChars: handoffFetchChars})
+	if err != nil {
+		return "", err
+	}
+	hist := make([]HandoffMessage, len(rows))
+	for i, r := range rows {
+		hist[i] = HandoffMessage{Seq: r.Seq, Role: r.Role, Harness: deref(r.Harness), Model: deref(r.Model), Persona: r.PersonaName, Body: r.BodyMd}
+	}
+	hc, err := loadHandoffContext(ctx, q, parent.ID)
+	if err != nil {
+		return "", err
+	}
+	who := "The person"
+	if m.Role == "assistant" {
+		who = "You"
+	}
+	about := fmt.Sprintf("---\nThe message this thread is about (%s wrote it, message %d of the conversation):\n\n%s\n\n", who, m.Seq, quote(clip(m.BodyMd, asideSnapshotRunes)))
+	rendered := renderHandoff(hist, int(total), asideHistoryChars, hc, about+threadFooter, "")
+	return strings.Replace(rendered, handoffLead, "You are answering a thread about one message of the conversation below.", 1), nil
 }
 
 func countRunning(asides []store.ChatSession) int {

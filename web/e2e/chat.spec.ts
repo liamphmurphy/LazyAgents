@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { AGENTS, catalog, installChatApi, openEmptyChat, persona } from "./mock-chat-api";
+import { AGENTS, catalog, installChatApi, openEmptyChat, persona, composerOption } from "./mock-chat-api";
 
 // History lives in the expanded menu.
 test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("lazyagents.sidebar-expanded", "1")));
@@ -140,7 +140,7 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   expect(mock.unhandled).toEqual([]);
 });
 
-test("Send stays at the composer's bottom right when the options wrap", async ({ page }) => {
+test("Send stays at the composer's bottom right, level with the model, at every width", async ({ page }) => {
   // A persona adds its switcher to a new chat's options, which is what pushes them past one line.
   await installChatApi(page, { personas: [persona(1, { name: "VesperBot", tone: "direct", color: "#4fd1c5", is_default: true })] });
   await page.goto("/chat?project=WEB");
@@ -149,6 +149,9 @@ test("Send stays at the composer's bottom right when the options wrap", async ({
   // Whether Send lands alone on a line depends on how much room the last line has left, so sweep widths.
   for (let width = 760; width <= 1400; width += 20) {
     await page.setViewportSize({ width, height: 800 });
+    // Around 780px the composer swaps between its compact and desktop rows: measure the row that settled.
+    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+    await expect(effort(page)).toBeVisible();
     const form = await composer(page).locator("xpath=ancestor::form").boundingBox();
     const sendBox = await page.getByRole("button", { name: "Send" }).boundingBox();
     const last = await effort(page).boundingBox();
@@ -254,7 +257,7 @@ test("[[ picks context as removable chips and sends them as context_refs", async
   await expect(chips(page)).toHaveCount(2);
 
   // "Add context" opens the same picker.
-  await page.getByRole("button", { name: "Add context" }).click();
+  await (await composerOption(page, "context")).getByRole("button", { name: "Add context" }).click();
   await page.getByRole("combobox", { name: "Search pages, artifacts and tickets" }).fill("Q3");
   await page.getByRole("option", { name: /Q3 report/ }).click();
   await expect(chips(page)).toHaveCount(3);
@@ -383,8 +386,9 @@ test("sending from the Welcome creates the chat, posts the message and opens it"
 test("Temporary on the Welcome makes the chat temporary", async ({ page }) => {
   const mock = await installChatApi(page);
   await page.goto("/chat?new");
-  await page.getByRole("button", { name: "Temporary", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await (await composerOption(page, "temporary")).getByRole("button", { name: "Temporary", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("composer-modes").getByRole("button", { name: "Temporary", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("combobox", { name: "Message" }).fill("off the record");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/);
@@ -400,7 +404,8 @@ test("the Welcome's box is a chat's: model and effort, / commands, @ mentions an
   // Before a pick a new chat routes its model automatically, from the agents' harness, at automatic effort.
   await expect(picker(page)).toHaveAccessibleName("Model and effort for the next message: Claude Code, automatic model, Automatic effort");
   await expect(picker(page)).toHaveText("Auto");
-  await expect(page.getByRole("button", { name: "Add context" })).toBeVisible();
+  await expect(await composerOption(page, "context")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("composer-hints")).toContainText("/ commands");
 
   await box.pressSequentially("/");
@@ -478,7 +483,8 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
 
-  await page.getByRole("button", { name: "Save to wiki" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save to wiki" }).click();
   const path = page.getByRole("textbox", { name: "Page path" });
   await expect(path).toHaveValue("Chats/plain");
   await path.fill("Notes/From chat");
@@ -492,7 +498,8 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
   await page.getByRole("button", { name: "Done" }).click();
 
   // A taken path shows the server's error and keeps the dialog open.
-  await page.getByRole("button", { name: "Save to wiki" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save to wiki" }).click();
   await page.getByRole("textbox", { name: "Page path" }).fill("Notes/From chat");
   await page.getByRole("button", { name: "Save page" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "already exists" })).toBeVisible();
@@ -504,7 +511,8 @@ test("save a reply as a report artifact with a link back to the chat", async ({ 
   await newChat(page);
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
-  await page.getByRole("button", { name: "Save as artifact" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save as artifact" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Plain answer");
   await page.getByRole("button", { name: "Save report" }).click();
   await expect(page.getByRole("link", { name: "Open Plain answer" })).toHaveAttribute("href", "/artifacts/66666666-6666-4666-8666-666666666666");

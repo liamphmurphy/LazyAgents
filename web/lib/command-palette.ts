@@ -285,6 +285,16 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     ],
   },
   {
+    section: "Chat",
+    items: [
+      { label: "Next / previous message", keys: ["J", "K"] },
+      { label: "Reply to the message (quote it)", keys: ["R"] },
+      { label: "Start a thread on the message", keys: ["T"] },
+      { label: "Edit your last message", keys: ["E"] },
+      { label: "Back to the message box", keys: ["Esc"] },
+    ],
+  },
+  {
     section: "Palette",
     items: [
       { label: "Move / open / close", keys: ["↑", "↓", "↵", "Esc"] },

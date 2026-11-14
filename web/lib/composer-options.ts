@@ -12,7 +12,7 @@ export type ComposerOptionOpens = "menu" | "popover" | "toggle" | "files" | "seg
 
 /**
  * Where the desktop composer shows it: the option row (left), the actions before Send (right),
- * or the conversation header (the chat's project), which the composer itself leaves out.
+ * or the conversation header (the chat's repository and project), which the composer itself leaves out.
  */
 export type ComposerOptionPlace = "options" | "actions" | "header";
 
@@ -58,7 +58,7 @@ export function composerOptions(s: ComposerOptionsState): ComposerOption[] {
   if (s.code) {
     const value = s.repo ? repoShortName(s.repo) : undefined;
     const next = s.pendingRepo ? `${repoShortName(s.pendingRepo)} (next turn)` : undefined;
-    list.push({ id: "repository", label: "Repository", icon: "branch", value: next ? `${value ?? "none"} → ${next}` : value, opens: "popover", place: "options" });
+    list.push({ id: "repository", label: "Repository", icon: "branch", value: next ? `${value ?? "none"} → ${next}` : value, opens: "popover", place: "header" });
   }
   if (s.persona !== undefined) list.push({ id: "persona", label: "Persona", icon: "users", value: s.persona, opens: "menu", place: "options" });
   if (s.sendMode !== undefined) list.push({ id: "send-mode", label: "Send as", icon: "msg", value: s.sendMode, opens: "segmented", place: "options" });

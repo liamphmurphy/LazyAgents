@@ -13,7 +13,7 @@ import { acceptTarget, AddContext, ChipList, type CreateWith } from "./context-c
 import { AttachButton, AttachmentChips, type useAttachments } from "./attachments";
 import { ComposerHints, composerFrameFor, composerIconButton, composerInput, SendButton, type SendTone } from "./reply-tools";
 import { PersonaAvatar, PersonaName, personaLook } from "./persona";
-import { ComposerSheet } from "./composer-sheet";
+import { ComposerMenu, ComposerSheet } from "./composer-sheet";
 import { useCompact } from "@/lib/viewport";
 import { detectLanguage, isBigPaste, messageWithSnippets, offerAsSnippet, withoutPaste } from "@/lib/snippets";
 import { Icon } from "@/components/ui/icon";
@@ -39,8 +39,8 @@ export type ComposerCommands = {
  * the caller's composerOptions list: the "options" ones on the left, the "actions" ones on the
  * right before the caller's actions (Stop) and Send; controls holds each one's control, while
  * Add context, Attach and Code are the composer's own. Its parent owns the draft, chips, files and snippets so
- * it can send them, clear them and seed them from links. Below COMPACT the row under the box is
- * just + (a sheet listing every option, "header" ones too), the model chip, the actions and Send.
+ * it can send them, clear them and seed them from links. The row under the box is + (a popover on desktop,
+ * a sheet below COMPACT, listing the options), the modes that are on, the model, the actions and Send.
  */
 export function Composer({
   text,
@@ -208,6 +208,7 @@ export function Composer({
           attach(t);
           setSheet(false);
         }}
+        onClosed={() => inputRef.current?.focus()}
         disabled={disabled}
         compact
         create={create}
@@ -440,13 +441,23 @@ export function Composer({
               <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
             </div>
           ) : (
-          /* The options wrap within their own column so model, Stop and Send never drop to a line of their own. */
-          <div className="flex items-end gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              {options.filter((o) => o.place === "options").map(control)}
+          /* One row at any width: everything that isn't used every message lives in +, and a mode that is on shows as its own pill. */
+          <div className="flex min-w-0 items-center gap-2" data-testid="composer-controls">
+            <ComposerMenu
+              open={sheet}
+              onOpenChange={setSheet}
+              // "header" options join the menu only where the caller passes their control: the Welcome has no header.
+              options={options.filter((o) => o.place !== "actions" && o.id !== "send-mode" && o.id !== "persona" && (controls[o.id] || o.id === "context" || o.id === "attach" || o.id === "code"))}
+              control={sheetControl}
+              counts={{ context: chips.length, attach: files.items.length, code: snippets.items.length }}
+              disabled={disabled}
+            />
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden" data-testid="composer-modes">
+              {/* Before the first message, who answers is the choice that matters most, so the persona stays in view. */}
+              {options.filter((o) => o.id === "persona" || (o.opens === "toggle" && o.on)).map(control)}
             </div>
             <div className="flex flex-none items-center gap-1">
-              {options.filter((o) => o.place === "actions").map(control)}
+              {options.filter((o) => o.place === "actions" || o.id === "send-mode").map(control)}
               {actions}
               <SendButton label={send.label} disabled={send.disabled} title={send.title} tone={send.tone} />
             </div>

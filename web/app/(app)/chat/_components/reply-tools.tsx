@@ -145,6 +145,13 @@ export function quoteForComposer(selected: string, mention?: string): string {
 type Picked = { x: number; y: number; text: string; author?: string; authorId?: string };
 
 /** A floating "Ask about this" over text selected in a reply, which opens a small box to ask right there. */
+/** What the selection bar's one-press edits ask for, quoted with the passage. */
+export const SELECTION_EDITS = [
+  { label: "Shorter", question: "Say this more briefly." },
+  { label: "Longer", question: "Expand on this, with more detail." },
+  { label: "Rewrite", question: "Rewrite this to read more clearly." },
+] as const;
+
 export function AskAboutSelection({ root, onAsk }: { root: RefObject<HTMLElement | null>; onAsk: (text: string, question: string, authorId?: string, author?: string) => boolean }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [asking, setAsking] = useState(false);
@@ -215,18 +222,31 @@ export function AskAboutSelection({ root, onAsk }: { root: RefObject<HTMLElement
       </div>
     );
   }
+  const quick = (question: string) => {
+    if (onAsk(picked.text, question, picked.authorId, picked.author)) close();
+  };
+  const tool = "flex items-center gap-1 rounded-md px-2 py-1 text-12 font-medium text-fg hover:bg-hover";
   return (
-    <button
-      type="button"
-      data-testid="ask-about-selection"
-      style={{ left: picked.x, top: Math.max(picked.y - 36, 8) }}
+    <div
+      role="toolbar"
+      aria-label="Selected text"
+      data-testid="selection-actions"
+      style={{ left: picked.x, top: Math.max(picked.y - 40, 8) }}
       // Keep the selection: a press would otherwise clear it before the click.
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => setAsking(true)}
-      className="fixed z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border-float bg-surface-raised px-2.5 py-1 text-12 font-medium text-fg shadow-[var(--shadow-float)] hover:bg-hover"
+      className="fixed z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border-float bg-surface-raised p-0.5 shadow-[var(--shadow-float)]"
     >
-      <Icon name="msg" size={13} />
-      Ask about this
-    </button>
+      {/* People ask for the same passage shorter or longer again and again; one press does it (NN/g "accordion editing"). */}
+      {SELECTION_EDITS.map((e) => (
+        <button key={e.label} type="button" className={tool} title={e.question} onClick={() => quick(e.question)}>
+          {e.label}
+        </button>
+      ))}
+      <span aria-hidden className="mx-0.5 h-4 w-px bg-border-subtle" />
+      <button type="button" data-testid="ask-about-selection" onClick={() => setAsking(true)} className={tool}>
+        <Icon name="msg" size={13} />
+        Ask about this
+      </button>
+    </div>
   );
 }

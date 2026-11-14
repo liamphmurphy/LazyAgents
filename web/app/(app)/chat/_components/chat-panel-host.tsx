@@ -6,7 +6,7 @@ import { useCanvasComments, useChatCanvases } from "@/lib/api/canvas-hooks";
 import { useChatPlayground } from "@/lib/api/playground-hooks";
 import { useDesignProposals } from "@/lib/api/designs-hooks";
 import { useChat, useChatRunEvents } from "@/lib/api/hooks";
-import { activePanel, closePanel, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThreads, PANELS, setDock, sheetHidden, switchPanel, type ChatPanel, type DockTabId, type PanelLayout } from "@/lib/chat-panels";
+import { activePanel, closePanel, closeThread, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThreads, PANELS, setDock, sheetHidden, switchPanel, threadOf, type ChatPanel, type DockTabId, type PanelLayout } from "@/lib/chat-panels";
 import { toolCalls } from "@/lib/chat-ui";
 import { presenceOf } from "@/lib/designs/presence";
 import { claimReadingFocus, dockReducer, dockShortcut, type DockAction, type DockState } from "@/lib/editor-layout";
@@ -18,8 +18,9 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { CanvasDock, CanvasFullscreen } from "@/components/domain/canvas-view";
 import { PlaygroundFullscreen, PlaygroundPanel } from "@/components/domain/playground";
 import { DesignPanel, useOpenNewDesigns } from "./design-panel";
+import { ThreadPanel } from "./thread-panel";
 
-const LABELS: Record<DockTabId, string> = { design: "Design", canvas: "Canvas", playground: "Playground", activity: "Activity" };
+const LABELS: Record<DockTabId, string> = { design: "Design", canvas: "Canvas", playground: "Playground", thread: "Thread", activity: "Activity" };
 
 /** Which of a chat's panels are open and which a sheet shows, with the moves between them (lib/chat-panels). */
 export function useChatPanels(chatId: string, live: boolean) {
@@ -67,7 +68,7 @@ export function ChatPanelHost({ chatId, live, readOnly, agent, activity, layout 
   return <PanelSheet chatId={chatId} live={live} readOnly={readOnly} agent={agent} panels={panels} />;
 }
 
-const ICONS: Record<DockTabId, IconName> = { design: "designs", canvas: "artifacts", playground: "play", activity: "history" };
+const ICONS: Record<DockTabId, IconName> = { design: "designs", canvas: "artifacts", playground: "play", thread: "branch", activity: "history" };
 
 /**
  * Which tabs changed since they last showed: a tab is unread once its `sig` moves on from what it
@@ -173,14 +174,16 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
     state.open && !hidden ? (state.tab as DockTabId) : undefined,
   );
 
+  const thread = threadOf(search);
   const content: Record<DockTabId, ReactNode> = {
+    thread: thread && <ThreadPanel key={thread} chatId={chatId} messageId={thread} onClose={() => go(closeThread(new URLSearchParams(search.toString())))} />,
     design: <DesignPanel chatId={chatId} live={live} />,
     canvas: <CanvasDock chatId={chatId} live={live} readOnly={readOnly} agent={agent} />,
     playground: <PlaygroundPanel chatId={chatId} />,
     activity,
   };
   const busy: Partial<Record<DockTabId, boolean>> = { design: designBusy, playground: pgBusy, activity: live };
-  const tabs: DockTab[] = [...open, "activity" as const].map((id) => ({
+  const tabs: DockTab[] = [...open, ...(thread ? ["thread" as const] : []), "activity" as const].map((id) => ({
     id,
     label: LABELS[id],
     icon: ICONS[id],
@@ -188,7 +191,7 @@ function ChatDock({ chatId, live, readOnly, agent, activity, panels }: { chatId:
     unread: unread.has(id),
     badge: id === "design" && pending > 0 ? <span data-testid="design-tab-pending" title={`${pending} to review`} className="rounded-full bg-pill-review-bg px-1.5 text-11 text-pill-review-fg">{pending}</span> : undefined,
     // A design under review needs its canvas and the list of changes side by side.
-    wide: id === "design" && canvasPanel.reviewing ? "max" : id !== "activity",
+    wide: id === "design" && canvasPanel.reviewing ? "max" : id !== "activity" && id !== "thread",
     content: content[id],
   }));
 

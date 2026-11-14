@@ -40,6 +40,9 @@ type Chat = {
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string; temporary?: boolean;
   effort?: Effort; auto_model?: boolean;
+  unread?: number;
+  /** A thread: an aside anchored to a message of parent_chat_id. Hidden from the chat list. */
+  parent_chat_id?: string; anchor_message_id?: string; hidden?: boolean;
   // Personas that joined besides the host (chat_participants); listed by their persona filter too.
   guest_persona_ids?: string[];
 };
@@ -491,13 +494,31 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
     if (/^\/chats\/[^/]+\/followups$/.test(path) && method === "GET") return json({ followups: [] });
-    if (/^\/chats\/[^/]+\/asides$/.test(path) && method === "GET") return json({ asides: [] });
-    const asideOn = /^\/chats\/([^/]+)\/asides$/.exec(path);
+    const asidesOf = /^\/chats\/([^/]+)\/asides$/.exec(path);
+    if (asidesOf && method === "GET") return json({ asides: chats.filter((x) => x.parent_chat_id === asidesOf[1]).map(ref) });
+    const asideOn = asidesOf;
     if (asideOn && method === "POST") {
       const c = chats.find((x) => x.id === asideOn[1]);
       if (!c) return fail(err(404, "not_found", "chat not found"));
-      asides.push(String(body().body));
-      return json(ref(c), 201);
+      const b = body();
+      asides.push(String(b.body));
+      if (!b.anchor_message_id) return json(ref(c), 201);
+      // A thread: a hidden chat about one message, which answers like any chat (an Echo).
+      if (!messages.get(c.id)?.some((m) => m.id === b.anchor_message_id)) return fail(err(422, "invalid", "not a message of this chat", "anchor_message_id"));
+      const t: Chat = { ...c, id: uuid(), title: `Thread: ${String(b.body).slice(0, 40)}`, state: "idle", revision: 1, message_count: 0, created_at: now(), updated_at: now(),
+        parent_chat_id: c.id, anchor_message_id: String(b.anchor_message_id), hidden: true };
+      chats.push(t);
+      messages.set(t.id, []);
+      c.revision++;
+      const question = String(b.body);
+      add(t, "user", question);
+      prompts.set(t.id, question);
+      t.state = "running";
+      t.current_run_id = uuid();
+      touch(t);
+      timers.set(t.id, setTimeout(() => finishTurn(t, question), delay));
+      void emit(t);
+      return json(ref(t), 201);
     }
     if (path === "/persona-dock") return json({ personas: dock, space_chats: [], harnesses: [] });
     if (path === "/inbox" && method === "GET") return json({ items: inbox });
@@ -726,7 +747,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       chatPersonaFilters.push(pid ?? "");
       const want = pid ?? defaultPersona()?.id ?? "none";
       const list = chats
-        .filter((c) => c.archived === archived)
+        .filter((c) => c.archived === archived && !c.hidden)
         .filter((c) => want === "all" || (want === "none" ? !c.persona_id : c.persona_id === want || !!c.guest_persona_ids?.includes(want)))
         .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
       return json({ chats: list.map(ref), has_more: false });
@@ -1211,4 +1232,14 @@ export function frameSvg(kind: string, idx: number): string {
     return `<rect x="${x}" y="${280 - h}" width="64" height="${h}" fill="#16122b"/><rect x="${x + 10}" y="${290 - h}" width="6" height="${h * 0.3}" fill="${["#ff2896", "#1ee1ff", "#9646ff", "#ffa528"][i % 4]}"/>`;
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06061a"/><stop offset="1" stop-color="#46104f"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><circle cx="480" cy="68" r="28" fill="#cdd0f0" opacity=".85"/>${towers}<rect y="280" width="640" height="80" fill="#0f0f1c"/><ellipse cx="${220 + idx / 4}" cy="250" rx="46" ry="14" fill="#0a0910"/><circle cx="${266 + idx / 4}" cy="236" r="13" fill="#0a0910"/><text x="12" y="350" fill="#8b8b94" font-family="monospace" font-size="12">${kind} ${idx}</text></svg>`;
+}
+
+/**
+ * One option's row in the composer's + menu (the desktop popover), opening the menu if it's closed.
+ * The row holds the option's own control, e.g. Research's toggle or the repository picker.
+ */
+export async function composerOption(page: Page, option: string) {
+  const menu = page.getByTestId("composer-menu");
+  if (!(await menu.isVisible())) await page.getByTestId("composer-controls").getByRole("button", { name: "Composer options" }).click();
+  return menu.locator(`[data-option="${option}"]`);
 }

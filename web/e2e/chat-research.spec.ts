@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installChatApi } from "./mock-chat-api";
+import { installChatApi, composerOption } from "./mock-chat-api";
 
 // Deep research: approve a plan in the chat, follow its progress, read the report.
 
@@ -11,7 +11,8 @@ async function open(page: Page) {
   await page.goto("/chat?project=WEB");
   const box = page.getByRole("combobox", { name: "Message" });
   await box.fill("research: local tts");
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await (await composerOption(page, "research")).getByRole("button", { name: "Research", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Plan it" })).toBeVisible();
   await box.press("Enter");
   await expect(page.getByTestId("research-plan")).toBeVisible();
@@ -41,7 +42,8 @@ const base = (message: string) => ({ id: "11111111-1111-4111-8111-111111111111",
 test("Research sends one message asking for a plan, then resets", async ({ page }) => {
   const mock = await open(page);
   expect(mock.posted.at(-1)?.body).toMatchObject({ body: "research: local tts", research: true });
-  await expect(page.getByRole("button", { name: "Research", exact: true })).toHaveAttribute("aria-pressed", "false");
+  // Off again, so its pill leaves the composer row.
+  await expect(page.getByTestId("composer-modes").getByRole("button", { name: "Research", exact: true })).toHaveCount(0);
   await expect(page.getByTestId("research-question")).toHaveCount(2);
 });
 

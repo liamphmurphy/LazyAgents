@@ -3,7 +3,7 @@
 import { canvasFenceIds } from "@/lib/chat-canvas";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
 import { useEntrances } from "@/components/ui/motion";
@@ -42,7 +42,8 @@ import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-ca
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
-import { setDock } from "@/lib/chat-panels";
+import { openThread, setDock } from "@/lib/chat-panels";
+import { isTyping } from "@/components/shell/shortcuts";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -52,10 +53,10 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
 import { CodeChanges } from "./code-changes";
 import { SentChips } from "./context-chips";
-import { SaveActions } from "./save-actions";
+import { MessageActionsContext, MessageToolbar, ThreadLink, type MessageActions } from "./message-toolbar";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
@@ -70,7 +71,7 @@ import { summaryRequestUrl } from "@/lib/chat-recommend";
 import { hostOf } from "@/lib/web-search";
 import { timelineTime } from "@/lib/format";
 import { ModelEffortPicker, effortLabel, modelEffortSummary, modelEfforts, modelLabel, sameSelection, type Effort, type Selection } from "./model-picker";
-import { ChatStatus, InterimReply, OpenTurnStep, RunActivity, TurnSteps, TurnToolCalls } from "./activity";
+import { ChatPresence, ChatStatus, InterimReply, OpenTurnStep, RunActivity, TurnSteps, TurnToolCalls } from "./activity";
 import { MemoryNotices } from "./memory-notices";
 import { DropOverlay, ReplyAttachments, SentAttachments, useAttachments, useFileDrop } from "./attachments";
 import { useSnippets } from "./snippets";
@@ -96,7 +97,6 @@ import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
-import { hoverReveal } from "@/lib/reveal";
 import { confirmAction } from "@/components/ui/confirm";
 
 type Message = Schemas["ChatMessage"];
@@ -116,10 +116,20 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
 }
 
 // Actions that stay out of the way until the message is hovered or focused.
-const REVEAL = cx(hoverReveal("msg"), "transition-opacity focus-within:opacity-100");
 const LONG_REPLY = 1500;
 /** What the status card's "Ask what it's doing" sends as an aside when a turn has gone quiet. */
 const QUIET_CHECK_IN = "What are you working on right now, and is anything holding you up?";
+
+/** Above the replies that arrived since the person last read the chat, as messaging apps mark them. */
+function NewDivider() {
+  return (
+    <li className="flex items-center gap-3 text-12 font-semibold text-state-blocked" data-testid="new-divider">
+      <span aria-hidden className="h-px flex-1 bg-state-blocked/50" />
+      <span>New</span>
+      <span aria-hidden className="h-px flex-1 bg-state-blocked/50" />
+    </li>
+  );
+}
 
 function Divider({ children, testId }: { children: string; testId?: string }) {
   return (
@@ -133,7 +143,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, audio, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; audio?: ChatAudio[]; asides?: ReactNode }) {
+const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, audio, asides, thread }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; audio?: ChatAudio[]; asides?: ReactNode; thread?: { count: number; running: boolean } }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -170,7 +180,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
     <>
-    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
+    <li ref={self} id={`msg-${m.id}`} tabIndex={-1} data-message-id={m.id} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg relative flex scroll-mt-4 flex-col gap-1 rounded-xl outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-4 focus-visible:ring-offset-bg", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
       {/* Your messages need no name: the bubble on the right is you. */}
       {mine ? null : (
         // Assistant replies carry the avatar of the persona that wrote them (the chat's host
@@ -225,21 +235,18 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
         // A design's selection rides along with every message sent from the editor.
         return r.kind === "canvas" && r.selection ? { ...chip, label: r.selection.nodes.length ? `Design · ${r.selection.nodes.length} selected` : "Design" } : chip;
       })} />}
-      {mine && editable && !editing && (
-        <div className={REVEAL}>
-          <Button variant="ghost" icon="edit" onClick={() => { setDraft(m.body_md); setEditing(true); }}>Edit</Button>
-        </div>
+      {mine && !editing && m.body_md.trim() && (
+        <MessageToolbar messageId={m.id} body={m.body_md} mine chat={chat} testId="message-actions"
+          onEdit={editable ? () => { setDraft(m.body_md); setEditing(true); } : undefined} />
       )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
       {!mine && asides}
+      {thread && <ThreadLink messageId={m.id} count={thread.count} running={thread.running} />}
       {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
       {!mine && saveable && m.body_md.trim() && (
-        <div className={cx("flex flex-wrap items-center gap-1.5", REVEAL)} data-testid="reply-actions">
-          <CopyButton text={m.body_md} />
-          {m.body_md.length > LONG_REPLY && <Button variant="ghost" onClick={() => self.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Top of reply</Button>}
-          {onRetry && <Button variant="ghost" onClick={async () => { if (await confirmAction({ title: "Replace this reply with a new one?", body: "The current reply is discarded.", confirmLabel: "Retry" })) onRetry(); }}>Retry</Button>}
-          <SaveActions chat={chat} body={m.body_md} />
-        </div>
+        <MessageToolbar messageId={m.id} body={m.body_md} authorId={m.persona?.id} author={author.name} mine={false} chat={chat} testId="reply-actions"
+          onTop={m.body_md.length > LONG_REPLY ? () => self.current?.scrollIntoView({ block: "start", behavior: "smooth" }) : undefined}
+          onRetry={onRetry && (async () => { if (await confirmAction({ title: "Replace this reply with a new one?", body: "The current reply is discarded.", confirmLabel: "Retry" })) onRetry(); })} />
       )}
     </li>
     {mine && endedSteps}
@@ -255,7 +262,9 @@ type ChatAsides = NonNullable<ReturnType<typeof useChatAsides>["data"]>;
  * a ref when it is a callback) and a keystroke only re-checks props instead of re-rendering
  * every message's markdown.
  */
-function BubbleList({ list, chat, persona, speakerName, names, highlight, running, since, locked, archived, editPending, lastUser, videosByMessage, audioByMessage, asideList, pinnedRef, editLast }: {
+function BubbleList({ unreadFrom, list, chat, persona, speakerName, names, highlight, running, since, locked, archived, editPending, lastUser, videosByMessage, audioByMessage, asideList, pinnedRef, editLast }: {
+  /** The first reply since the person last read the chat: "New" goes above it. */
+  unreadFrom?: string;
   list: Message[];
   chat: ChatInfo;
   persona: PersonaLook;
@@ -297,18 +306,28 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
     return out;
   }, [turns, asideList, running, since, speakerName]);
   const ended = useMemo(() => endedTurns(list, running), [list, running]);
+  // Each message's newest thread, for the line under it.
+  const threads = useMemo(() => {
+    const out = new Map<string, { count: number; running: boolean }>();
+    for (const a of asideList ?? []) if (a.anchor_message_id) out.set(a.anchor_message_id, { count: a.message_count ?? 0, running: a.state === "running" });
+    return out;
+  }, [asideList]);
   const canEdit = !running && !locked && !editPending && !archived;
   const canRetry = !running && !editPending && !archived && !!lastUser;
   const lastId = list.at(-1)?.id;
   return list.map((m, i) => (
-    <Bubble key={m.id} m={m} chat={chat} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} ended={ended.get(m.id)} highlighted={highlight === m.id}
+    <Fragment key={m.id}>
+    {m.id === unreadFrom && <NewDivider />}
+    <Bubble m={m} chat={chat} persona={persona} saveable={!running} names={names} turn={turns.get(m.id)} ended={ended.get(m.id)} highlighted={highlight === m.id}
       editable={canEdit && m.id === lastUser?.id}
       onEdit={onEdit}
       onRetry={canRetry && m.id === lastId ? onRetry : undefined}
       summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
       videos={videosByMessage.get(m.id)}
       audio={audioByMessage.get(m.id)}
-      asides={asideNodes.get(m.id) ?? null} />
+      asides={asideNodes.get(m.id) ?? null}
+      thread={threads.get(m.id)} />
+    </Fragment>
   ));
 }
 
@@ -529,6 +548,12 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
   // The same for a finished turn's step in the conversation, kept stable so replies don't re-render.
   const openStepRef = useRef<(key: string) => void>(undefined);
   const openTurnStep = useCallback((key: string) => openStepRef.current?.(key), []);
+  // The header's live line opens the turn's Activity: the dock's tab on desktop, the chat's own tab otherwise.
+  const openActivity = () => {
+    if (!dockActivity) return setTab("activity");
+    const q = setDock(new URLSearchParams(window.location.search), { tab: "activity", open: true });
+    router.replace(`${window.location.pathname}?${q.toString()}`, { scroll: false });
+  };
   const openStep = (key: string) => {
     if (dockActivity) {
       focusActivityStep(key);
@@ -612,6 +637,14 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     ...(effortPending ? { effort: effort ?? ("default" as const) } : {}),
   };
   const list = messages.data?.messages;
+  // Where "New" goes: before the first reply that arrived since the person last read this chat,
+  // fixed when the chat opens so it doesn't move as they read on.
+  const [unreadFrom, setUnreadFrom] = useState<{ chat: string; message: string | null }>();
+  if (c && list && unreadFrom?.chat !== c.id) {
+    const replies = list.filter((m) => m.role === "assistant");
+    const n = c.unread ?? 0;
+    setUnreadFrom({ chat: c.id, message: n > 0 && n <= replies.length ? replies[replies.length - n].id : null });
+  }
   useEntrances(log);
   const lastUser = list?.findLast((m) => m.role === "user");
   // The running turn starts after the newest message, which may be a reply, not
@@ -718,6 +751,64 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     send.mutate({ body, ...nextRunSettings }, { onSuccess: context?.onSent, onError: () => setText((t) => (t ? `${body}\n\n${t}` : body)) });
     return true;
   };
+
+  // A message's Reply quotes it into the box, above whatever is already drafted, and puts the caret after it.
+  const replyTo = useRef<(body: string, authorId?: string, author?: string) => void>(() => {});
+  replyTo.current = (body, authorId, author) => {
+    const quote = quoteForComposer(body, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined);
+    setText((t) => quote + t);
+    requestAnimationFrame(() => {
+      const el = area.current;
+      el?.focus();
+      el?.setSelectionRange(quote.length, quote.length);
+    });
+  };
+  // Threads open in the desktop dock (the compact sheet has no Thread tab yet).
+  const threadDock = dockActivity;
+  const messageActions = useMemo<MessageActions>(() => ({
+    reply: (body, authorId, author) => replyTo.current(body, authorId, author),
+    ...(threadDock ? { thread: (messageId: string) => router.replace(`${window.location.pathname}?${openThread(new URLSearchParams(window.location.search), messageId).toString()}`, { scroll: false }) } : {}),
+  }), [threadDock, router]);
+
+  // J/K move between messages, R replies to the one in focus, T threads it, E edits your last
+  // message, Esc goes back to the box: the messaging-app keys, listed in the ? reference.
+  const keyNav = useRef<(e: KeyboardEvent) => void>(() => {});
+  keyNav.current = (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || isTyping(e.target) || view !== "chat") return;
+    const items = [...(log.current?.querySelectorAll<HTMLElement>("li[data-message-id]") ?? [])];
+    const at = items.findIndex((el) => el === document.activeElement);
+    const key = e.key.toLowerCase();
+    if (key === "j" || key === "k") {
+      if (!items.length) return;
+      e.preventDefault();
+      const next = at < 0 ? (key === "k" ? items.length - 1 : 0) : Math.min(items.length - 1, Math.max(0, at + (key === "j" ? 1 : -1)));
+      items[next].focus();
+      items[next].scrollIntoView({ block: "nearest" });
+      if (key === "k") pinned.current = false;
+      return;
+    }
+    if (e.key === "Escape" && at >= 0) {
+      e.preventDefault();
+      area.current?.focus();
+      return;
+    }
+    const focused = at >= 0 ? list?.find((x) => x.id === items[at].dataset.messageId) : undefined;
+    if (key === "r" && focused && !c?.archived) {
+      e.preventDefault();
+      replyTo.current(focused.body_md, focused.persona?.id, focused.persona?.name);
+    } else if (key === "t" && focused && focused.role !== "system" && threadDock && !c?.archived) {
+      e.preventDefault();
+      messageActions.thread?.(focused.id);
+    } else if (key === "e" && lastUser && !running && !c?.archived) {
+      e.preventDefault();
+      document.querySelector<HTMLElement>(`#msg-${lastUser.id} [aria-label="Edit"]`)?.click();
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyNav.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   function submit(body: string) {
     if (!body.trim() || locked || unavailable || files.pending || commitPickRequired) return;
@@ -921,6 +1012,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     model: modelSummary,
     project: c.space ? undefined : { name: boot.data?.projects.find((p) => p.key === c.project)?.name },
   });
+  const canCode = !!(c.speaker ?? c.persona)?.capabilities?.code;
+  const repoPicker = canCode && (
+    <RepositoryPicker
+      value={c.repo_url}
+      pending={c.pending_repo_url}
+      onPick={(r) => selectRepo.mutate(r)}
+      disabled={c.archived || selectRepo.isPending}
+      error={selectRepo.error}
+      signal={repoSignal}
+      personaName={speaker.name}
+      personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
+    />
+  );
   return (
     <Tooltip.Provider delayDuration={200}>
       <section aria-label={chatTitle(c)} className="relative flex min-h-0 flex-1 flex-col" {...drop.props}>
@@ -939,17 +1043,21 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             onRestored={restored}
           />
         ) : (
-        <div className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
+        <div data-testid="chat-header" className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
-          <ChatTitleMenu
-            chat={c}
-            participants={participants}
-            running={running}
-            commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
-            onCommitEmail={() => setCommitPickerOpen((o) => !o)}
-          />
-          <span className="flex-1" />
+          {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
+          <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
+            <ChatTitleMenu
+              chat={c}
+              participants={participants}
+              running={running}
+              commitEmail={c.repo_url && c.commit_email && myEmails.length > 1 ? c.commit_email : undefined}
+              onCommitEmail={() => setCommitPickerOpen((o) => !o)}
+            />
+            {running && <ChatPresence runId={c.current_run_id} since={since} persona={speaker} onOpen={openActivity} />}
+          </div>
+          {repoPicker && <span className="flex min-w-0 max-w-[40%] flex-shrink">{repoPicker}</span>}
           <ChatRunsPill chatId={c.id} />
           {!dockActivity && (
             <span className="flex-none">
@@ -1040,9 +1148,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             <VideoPlayers.Provider value={players}>
             <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
             <OpenTurnStep.Provider value={openTurnStep}>
+            <MessageActionsContext.Provider value={c.archived ? null : messageActions}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
-              <BubbleList list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
+              <BubbleList unreadFrom={unreadFrom?.message ?? undefined} list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
                 locked={locked} archived={c.archived} editPending={edit.isPending} lastUser={lastUser} videosByMessage={videosByMessage} audioByMessage={audioByMessage} asideList={asideList}
                 pinnedRef={pinned} editLast={edit.mutate} />
               <PersonaProposals chatId={c.id} disabled={c.archived} />
@@ -1081,6 +1190,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               )}
               <li ref={end} aria-hidden />
             </ol>
+            </MessageActionsContext.Provider>
             </OpenTurnStep.Provider>
             </ReplyActions>
             </VideoPlayers.Provider>
@@ -1305,18 +1415,8 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               }
               options={composerList}
               controls={{
-                repository: (
-                  <RepositoryPicker
-                    value={c.repo_url}
-                    pending={c.pending_repo_url}
-                    onPick={(r) => selectRepo.mutate(r)}
-                    disabled={c.archived || selectRepo.isPending}
-                    error={selectRepo.error}
-                    signal={repoSignal}
-                    personaName={speaker.name}
-                    personaRepos={personas.data?.personas.find((p) => p.id === (c.speaker ?? c.persona)?.id)?.repos}
-                  />
-                ),
+                // The desktop header holds it; the compact + sheet lists it.
+                repository: compact && repoPicker,
                 persona: <PersonaSwitcher value={c.persona?.id} onChange={switchPersona} disabled={locked || create.isPending} />,
                 "send-mode": (
                   <SendModeSwitch
@@ -1343,7 +1443,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                   />
                 ),
                 // The desktop composer leaves this to the header; the compact + sheet lists it too.
-                project: !c.space && <ChatProjectPicker chat={c} disabled={running} />,
+                project: compact && !c.space && <ChatProjectPicker chat={c} disabled={running} />,
               }}
               actions={
                 running && (

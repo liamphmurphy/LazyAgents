@@ -68,7 +68,7 @@ export function ChatTitleMenu({ chat: c, participants, running, commitEmail, onC
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex min-w-0 max-w-full items-center gap-1.5">
       <DropdownMenu.Root>
         {/* The heading holds the button (not the other way round) so it stays a heading named by the title. */}
         <h1 className="min-w-0 text-14 font-semibold">

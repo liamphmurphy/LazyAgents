@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installChatApi, openEmptyChat } from "./mock-chat-api";
+import { installChatApi, openEmptyChat, composerOption } from "./mock-chat-api";
 
 const composer = (page: Page) => page.getByRole("combobox", { name: "Message" });
 const bubble = (page: Page) => page.getByTestId("snippet-bubble");
@@ -39,7 +39,7 @@ test("a snippet from the Code bubble waits as a chip and is sent as a fenced blo
   const mock = await installChatApi(page);
   await openEmptyChat(page);
 
-  await page.getByTestId("snippet-button").click();
+  await (await composerOption(page, "code")).getByRole("button", { name: "Add code or Markdown" }).click();
   await expect(bubble(page)).toBeVisible();
   await bubble(page).getByTestId("snippet-input").fill(GO);
   // The language follows the text until it's picked by hand.
@@ -78,7 +78,7 @@ test("a message can be only a snippet, and Ctrl+Enter adds it", async ({ page })
   const send = page.getByRole("button", { name: "Send", exact: true });
   await expect(send).toBeDisabled();
 
-  await page.getByTestId("snippet-button").click();
+  await (await composerOption(page, "code")).getByRole("button", { name: "Add code or Markdown" }).click();
   await bubble(page).getByTestId("snippet-input").fill('{"retries": 5, "backoff": "exp"}');
   await expect(bubble(page).getByTestId("snippet-lang")).toHaveValue("json");
   await bubble(page).getByTestId("snippet-input").press("Control+Enter");
@@ -92,7 +92,7 @@ test("Markdown with its own fences is sent in a longer fence", async ({ page }) 
   const mock = await installChatApi(page);
   await openEmptyChat(page);
   const md = "## Retry policy\n\n- Back off **exponentially**\n\n```yaml\nretries: 5\n```";
-  await page.getByTestId("snippet-button").click();
+  await (await composerOption(page, "code")).getByRole("button", { name: "Add code or Markdown" }).click();
   await bubble(page).getByTestId("snippet-input").fill(md);
   await expect(bubble(page).getByTestId("snippet-lang")).toHaveValue("markdown");
   await bubble(page).getByRole("button", { name: "Add to message" }).click();
@@ -143,7 +143,7 @@ test("a very long paste is offered as a file, from the message box and from the 
   await expect(page.getByTestId("attachment-chip")).toHaveAttribute("data-status", "done");
   expect(uploads).toEqual(["pasted-log-1.txt"]);
 
-  await page.getByTestId("snippet-button").click();
+  await (await composerOption(page, "code")).getByRole("button", { name: "Add code or Markdown" }).click();
   await bubble(page).getByTestId("snippet-input").fill(log);
   await expect(bubble(page).getByTestId("snippet-big")).toContainText("500 lines");
   await bubble(page).getByRole("button", { name: "Attach as file" }).click();

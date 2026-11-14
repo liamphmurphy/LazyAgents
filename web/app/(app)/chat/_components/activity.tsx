@@ -335,6 +335,24 @@ export function ChatStatus({ chatId, disabled, runId, since, persona, stopping, 
 }
 
 /**
+ * The header's live line while a reply runs, the way a messaging app shows someone typing:
+ * "Hackerman · reading 4 files". It reads the run events the status card already caches.
+ * Pressing it opens the turn's Activity.
+ */
+export function ChatPresence({ runId, since, persona, onOpen }: { runId?: string; since?: string; persona: PersonaLook; onOpen?: () => void }) {
+  const q = useChatRunEvents(runId);
+  const calls = useMemo(() => chatCalls(q.data, since), [q.data, since]);
+  const status = useMemo(() => chatStatus(calls, false), [calls]);
+  return (
+    <button type="button" onClick={onOpen} disabled={!onOpen} data-testid="chat-presence" title="Open Activity"
+      className="flex min-w-0 max-w-full items-center gap-1.5 truncate px-1.5 text-left text-12 text-state-progress hover:underline disabled:hover:no-underline">
+      <span aria-hidden className="size-1.5 flex-none rounded-full bg-state-progress motion-safe:animate-pulse" />
+      <span className="truncate">{persona.name} · {status.phrase}…</span>
+    </button>
+  );
+}
+
+/**
  * Opens the Activity tab on a finished turn's step, given its turnStepKey. A context, so the
  * memoized reply bubbles don't re-render when the conversation's callbacks change.
  */

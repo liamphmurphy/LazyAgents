@@ -1406,6 +1406,16 @@ export function useStartAside(id: string, prepare?: (body: string) => Promise<st
   });
 }
 
+/** Starts a thread: an aside about one message of the chat, which can start at any time. */
+export function useStartThread(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, body }: { messageId: string; body: string }) =>
+      unwrap(api.POST("/chats/{id}/asides", { params: { path: { id } }, body: { body, anchor_message_id: messageId } })),
+    onSettled: () => qc.invalidateQueries({ queryKey: asidesKey(id) }),
+  });
+}
+
 /** The current turn's tool calls/results, read from the segment run's events. */
 export function useChatRunEvents(runId?: string, enabled = true, poll = true) {
   const qc = useQueryClient();

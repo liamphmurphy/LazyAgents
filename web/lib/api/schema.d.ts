@@ -4459,15 +4459,20 @@ export interface paths {
         get: operations["listChatAsides"];
         put?: never;
         /**
-         * Ask about the running reply without interrupting it
+         * Ask about the running reply, or start a thread on a message, without interrupting the chat
          * @description Starts an aside: a hidden chat whose first turn answers the question.
          *     The same persona answers in a fresh session that gets the chat's
          *     recent conversation and a snapshot of the running reply (what it has
-         *     written and which tools it called, with their output). An aside only
-         *     reads: no shell, images, connectors or secrets, and no Vesper tool that
-         *     changes anything. Neither conversation sees the other afterwards.
-         *     409 when nothing is running, the chat is archived or is itself an
-         *     aside, or 3 asides are still answering.
+         *     written and which tools it called, with their output). With
+         *     anchor_message_id it is a thread about that message instead: it gets
+         *     the message rather than the running reply, and can start while
+         *     nothing runs. The person can keep replying in it (POST its
+         *     /messages). An aside only reads: no shell, images, connectors or
+         *     secrets, and no Vesper tool that changes anything. Neither
+         *     conversation sees the other afterwards. 409 when nothing is running
+         *     (and there is no anchor), the chat is archived or is itself an aside,
+         *     or 3 asides are still answering; 422 when the anchor isn't a person's
+         *     or persona's message of this chat.
          */
         post: operations["startChatAside"];
         delete?: never;
@@ -7673,6 +7678,11 @@ export interface components {
              * @description Set on an aside: the chat whose running reply it answers a question about
              */
             parent_chat_id?: string;
+            /**
+             * Format: uuid
+             * @description Set on a thread (an aside anchored to a message): the parent chat's message it is about
+             */
+            anchor_message_id?: string;
             revision: number;
             message_count: number;
             /** @description Assistant replies newer than the person's read position (POST /chats/{id}/read) */
@@ -7759,6 +7769,14 @@ export interface components {
         };
         ChatMessageEdit: {
             body: string;
+        };
+        ChatAsideStart: {
+            body: string;
+            /**
+             * Format: uuid
+             * @description Starts a thread about this message of the chat instead of an aside about the running reply
+             */
+            anchor_message_id?: string;
         };
         ChatFollowup: {
             /** Format: uuid */
@@ -16618,7 +16636,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ChatMessageEdit"];
+                "application/json": components["schemas"]["ChatAsideStart"];
             };
         };
         responses: {
