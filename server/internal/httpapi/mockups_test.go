@@ -65,7 +65,7 @@ func TestMockupHTTP(t *testing.T) {
 	want(rec, 201)
 	var art api.Artifact
 	_ = json.Unmarshal(rec.Body.Bytes(), &art)
-	if art.Type != api.ArtifactTypeMockup || art.CurrentVersion.Content.Kind != api.Svg || art.CurrentVersion.Review == nil || art.CurrentVersion.Review.State != api.MockupReviewStatePending {
+	if art.Type != api.ArtifactTypeMockup || art.CurrentVersion.Content.Kind != api.ArtifactContentKindSvg || art.CurrentVersion.Review == nil || art.CurrentVersion.Review.State != api.MockupReviewStatePending {
 		t.Fatalf("created = %+v", art.CurrentVersion)
 	}
 	if v, _ := art.BodyMd.Get(); v != httpSVG {

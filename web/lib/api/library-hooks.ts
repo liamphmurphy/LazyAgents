@@ -2,12 +2,13 @@
 
 // ---- The Library: the caller's permanent keepsakes from assistant chats.
 
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, postForm, unwrap, type Schemas } from "./client";
 
 export type LibraryItem = Schemas["LibraryItem"];
 export type LibraryItemKind = Schemas["LibraryItemKind"];
 export type LibraryReferenceRole = Schemas["LibraryReferenceRole"];
+export type LibraryFilePreview = Schemas["LibraryFilePreview"];
 
 export const libraryKeys = {
   all: ["library"] as const,
@@ -43,7 +44,7 @@ export function useDeleteLibraryItem() {
   });
 }
 
-/** Multipart POST of one image of the person's own (PNG, JPEG, GIF or WebP, up to 25 MB). */
+/** Multipart POST of one image (PNG, JPEG, GIF or WebP) or audio file (MP3, WAV, OGG or M4A) of the person's own, up to 25 MB. */
 export function useUploadLibraryItem() {
   const qc = useQueryClient();
   return useMutation({
@@ -52,6 +53,26 @@ export function useUploadLibraryItem() {
       form.append("file", file);
       return postForm<LibraryItem>("/library", form);
     },
+    onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
+  });
+}
+
+/** A file's first lines, rows or zip entries, read when its dialog opens. */
+export function useLibraryFilePreview(itemId: string, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: ["library", "preview", itemId],
+    queryFn: () => unwrap(api.GET("/library/{itemId}/preview", { params: { path: { itemId } } })),
+    staleTime: Infinity,
+  });
+}
+
+/** Retitles one of the caller's items. */
+export function useRenameLibraryItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { itemId: string; title: string }) =>
+      unwrap(api.PATCH("/library/{itemId}", { params: { path: { itemId: v.itemId } }, body: { title: v.title } })),
     onSettled: () => qc.invalidateQueries({ queryKey: libraryKeys.all }),
   });
 }

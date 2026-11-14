@@ -286,6 +286,18 @@ const GLYPHS: Record<ChatStatusKind, ReactNode> = {
       ))}
     </>
   ),
+  "audio-render": (
+    <>
+      {[
+        [2.2, 6, 4],
+        [5.4, 3.5, 9],
+        [8.6, 2.5, 11],
+        [11.8, 5, 6],
+      ].map(([x, y, h], i) => (
+        <rect key={x} className="glyph-a glyph-bar" style={delay(i * 0.3)} x={x} y={y} width="2" height={h} rx="1" fill="currentColor" />
+      ))}
+    </>
+  ),
   finance: (
     <>
       <path className="glyph-s" d="M1.5 14h13" />

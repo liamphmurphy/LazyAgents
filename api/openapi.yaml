@@ -2679,12 +2679,18 @@ paths:
         default: { $ref: "#/components/responses/Error" }
     post:
       operationId: uploadLibraryItem
-      summary: Add an image of your own to your Library
+      summary: Add an image or audio file of your own to your Library
       description: |
-        Stores one image (PNG, JPEG, GIF or WebP, up to 25 MB) in the caller's
-        Library, e.g. a photo to use as their reference image. It counts
-        against the same storage cap as generated images. 422 for another
-        type, an empty file, one over the limit or a full Library.
+        Stores one image (PNG, JPEG, GIF or WebP), audio file (MP3, WAV,
+        OGG or M4A) or any other file, up to 25 MB, in the caller's Library,
+        e.g. a photo to use as their reference image, a voice memo, a script,
+        a zip or a spreadsheet. Anything that isn't an image or audio is kept
+        as a file and only ever downloaded: executables and disk images are
+        refused, and a zip is listed, never unpacked. It counts against the same
+        storage cap as generated images. An audio file is checked against its
+        name, and its length and waveform are read for WAV and MP3. 422 for
+        a file that isn't what its name says, an executable or disk image, an empty file,
+        one over the limit or a full Library.
       tags: [library]
       requestBody:
         required: true
@@ -2790,6 +2796,29 @@ paths:
   /library/{itemId}:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: renameLibraryItem
+      summary: Rename an item in your Library
+      description: 404 unless it is yours. 422 for an empty or over-long title.
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 300 }
+      responses:
+        "200":
+          description: The renamed item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteLibraryItem
       summary: Remove an item from your Library
@@ -2859,6 +2888,26 @@ paths:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /library/{itemId}/preview:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getLibraryFilePreview
+      summary: A file's contents at a glance
+      description: |
+        The first 200 lines of a text or code file, the first 20 rows of a CSV
+        or TSV, or the names in a zip, read when asked for. Nothing is run,
+        rendered or unpacked. 404 unless it is your file.
+      tags: [library]
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryFilePreview" }
+        "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /library/{itemId}/poster:
@@ -3361,6 +3410,54 @@ paths:
           description: The requested range of the video
           content:
             video/mp4:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/audio:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listChatAudio
+      summary: The chat's audio, oldest first
+      description: |
+        Audio a coding chat renders with code during its turn (MIDI through a
+        soundfont, a synth script, ffmpeg). Each follows its stages (compose,
+        render, check, save) as the agent and its renderer report them; a
+        finished one is also kept in the Library.
+      tags: [chats]
+      responses:
+        "200":
+          description: The chat's audio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatAudios" }
+        "404": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /chats/{id}/audio/{audioId}/content:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+      - { name: audioId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getChatAudioContent
+      summary: A finished audio file, for playing or downloading
+      description: Supports a single byte Range, so players can seek.
+      tags: [chats]
+      parameters:
+        - { name: download, in: query, description: Serve as an attachment instead of inline, schema: { type: boolean, default: false } }
+        - { name: Range, in: header, description: "One byte range, e.g. bytes=0-1023", schema: { type: string } }
+      responses:
+        "200":
+          description: The audio
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "206":
+          description: The requested range of the audio
+          content:
+            application/octet-stream:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
         "416": { $ref: "#/components/responses/Error" }
@@ -4510,6 +4607,38 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /slides/{canvasId}/library:
+    parameters:
+      - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: saveDeckExportToLibrary
+      summary: Save an export of a deck (PDF or PowerPoint) to the Library
+      description: |
+        Stores one finished export file, built by the Export menu, as an
+        export linked to its deck. The file's content decides its type: a PDF,
+        or a .pptx (a zip holding ppt/presentation.xml). It counts against the
+        Library's 1 GB storage cap. 404 for anyone else's deck; 422 for another
+        type, an empty file, one over 25 MB or a full Library.
+      tags: [slides]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /slides/{canvasId}/duplicate:
     parameters:
       - { name: canvasId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4887,10 +5016,9 @@ paths:
       operationId: saveDesignExportToLibrary
       summary: Save an export of a design (PNG, SVG or PDF) to the Library
       description: |
-        Stores one finished export file, built by the Export menu, in the
-        caller's Library: a PNG as an image, an SVG as a diagram and a PDF as
-        a document, titled after the file name. The file's content decides
-        its type, not its name. It counts against the Library's 1 GB storage
+        Stores one finished export file (PNG, SVG or PDF), built by the Export
+        menu, as an export linked to its design, titled after the file name.
+        The file's content decides its type, not its name. It counts against the Library's 1 GB storage
         cap. 404 for anyone else's design; 422 for another type, an empty
         file, one over 25 MB or a full Library, and then nothing is stored.
       tags: [designs]
@@ -5096,7 +5224,8 @@ paths:
       operationId: saveDocToLibrary
       summary: Save a document's current version to the Library as Markdown
       description: |
-        Keeps a copy of the text as it is now; later edits don't change it.
+        Keeps a copy of the text as it is now, as an export linked to the
+        document; later edits don't change it.
         Saving the same text again returns the existing item. It counts
         against the Library's storage cap. 404 for anyone else's canvas; 422
         for an SVG canvas or a full Library.
@@ -9020,9 +9149,51 @@ components:
       required: [videos]
       properties:
         videos: { type: array, items: { $ref: "#/components/schemas/ChatVideo" } }
+    ChatAudioStage:
+      type: string
+      enum: [compose, render, check, save]
+      description: "compose: the music or sound is being written; render: the renderer is running; check: measuring the file (a persona can't listen, so the checks are numbers); save: storing it"
+    ChatAudioOutput:
+      type: object
+      required: [filename, content_type, size_bytes]
+      properties:
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        duration_ms: { type: integer }
+    ChatAudio:
+      type: object
+      required: [id, title, duration_ms, method, stage, state, script_path, checks, percent, stage_note, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        duration_ms: { type: integer, description: The planned length }
+        method: { type: string, description: "How it was made, e.g. MIDI → FluidSynth; empty until named" }
+        stage: { $ref: "#/components/schemas/ChatAudioStage" }
+        state: { type: string, enum: [running, done, failed] }
+        failure_kind: { type: string, enum: [error, stopped], description: "Why a failed job failed: stopped when the person stopped the reply" }
+        error: { type: string }
+        error_log: { type: string, description: The failing command's output, when the agent attached it }
+        script_path: { type: string, description: "The renderer, relative to the chat's workspace; empty until named" }
+        checks: { type: array, items: { $ref: "#/components/schemas/ChatVideoCheck" } }
+        percent: { type: integer, minimum: 0, maximum: 100 }
+        stage_note: { type: string }
+        run_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid, description: "The reply it belongs to, once that reply is stored; absent while the turn runs" }
+        library_item_id: { type: string, format: uuid, description: "Its copy in the Library, while that exists" }
+        peaks: { type: array, maxItems: 64, items: { type: integer, minimum: 0, maximum: 255 }, description: "The waveform of a finished file the server could decode" }
+        output: { $ref: "#/components/schemas/ChatAudioOutput" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    ChatAudios:
+      type: object
+      required: [audio]
+      properties:
+        audio: { type: array, items: { $ref: "#/components/schemas/ChatAudio" } }
     LibraryItemKind:
       type: string
-      enum: [image, diagram, link, document, video]
+      enum: [image, diagram, link, document, video, audio, file, export]
     LibraryItem:
       type: object
       required: [id, kind, title, filename, content_type, size_bytes, created_at]
@@ -9048,11 +9219,41 @@ components:
         video_id: { type: string, description: "For a video link: the YouTube id" }
         link_status: { $ref: "#/components/schemas/LibraryLinkStatus" }
         summary: { type: string, description: "For a link: a saved summary, as markdown" }
-        duration_ms: { type: integer, description: "For a video: its length" }
+        duration_ms: { type: integer, description: "For a video or audio: its length" }
         width: { type: integer, description: "For a video: frame width in pixels" }
         height: { type: integer, description: "For a video: frame height in pixels" }
         has_poster: { type: boolean, description: "For a video: a poster image is served at /library/{itemId}/poster" }
+        detail: { type: string, description: "For a file or export: one line under the name, e.g. 18 files, 112 lines or 1,204 rows · 6 columns. Absent when there is nothing to say beyond the size." }
+        export_source: { $ref: "#/components/schemas/LibraryExportSource" }
+        method: { type: string, description: "For generated audio: how it was made, e.g. MIDI → FluidSynth; absent for an upload" }
+        peaks: { type: array, maxItems: 64, items: { type: integer, minimum: 0, maximum: 255 }, description: "For audio: the waveform, one value (0-255) per bucket. Absent when the server can't decode the format (OGG, M4A); duration_ms is absent then too." }
         created_at: { type: string, format: date-time }
+    LibraryExportSource:
+      type: object
+      required: [kind, id, status]
+      description: "For an export: the Slides deck, Design or Doc it was made from, and whether that has changed since"
+      properties:
+        kind: { type: string, enum: [slides, designs, docs] }
+        id: { type: string, format: uuid }
+        title: { type: string, description: "The source's current title; absent once it is deleted" }
+        status: { type: string, enum: [current, changed, deleted], description: "current: not edited since the export; changed: edited since; deleted: gone" }
+    LibraryFilePreview:
+      type: object
+      required: [kind, total, truncated]
+      description: "What a file's dialog shows. Nothing is run or rendered: text is shown as text."
+      properties:
+        kind: { type: string, enum: [text, table, zip, none] }
+        lines: { type: array, items: { type: string }, description: "text: the first 200 lines" }
+        rows: { type: array, items: { type: array, items: { type: string } }, description: "table: the first 20 rows" }
+        entries: { type: array, items: { $ref: "#/components/schemas/LibraryFileEntry" }, description: "zip: the first 200 file names" }
+        total: { type: integer, description: "Lines, rows or files in the whole file; 0 when it isn't known" }
+        truncated: { type: boolean }
+    LibraryFileEntry:
+      type: object
+      required: [name, size]
+      properties:
+        name: { type: string }
+        size: { type: integer, format: int64, description: "Uncompressed size in bytes" }
     LibraryLinkStatus:
       type: string
       enum: [to_read, done]

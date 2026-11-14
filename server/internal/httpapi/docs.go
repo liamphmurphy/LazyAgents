@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"time"
@@ -79,30 +78,12 @@ func (s *Server) SaveDocToLibrary(ctx context.Context, req api.SaveDocToLibraryR
 		return nil, err
 	}
 	content := []byte(cur.Body)
-	key := docs.LibraryKey(ws, u.ID, content)
-	l, err := s.Q.GetLibraryDocumentByBlob(ctx, store.GetLibraryDocumentByBlobParams{WorkspaceID: ws, UserID: u.ID, BlobKey: key})
-	if errors.Is(err, pgx.ErrNoRows) {
-		stored, err := s.Q.ChatGeneratedImageBytes(ctx, store.ChatGeneratedImageBytesParams{WorkspaceID: ws, UserID: u.ID})
-		if err != nil {
-			return nil, err
-		}
-		if stored+int64(len(content)) > runs.MaxGeneratedImageStorageBytes {
-			return nil, apperr.Invalid("canvasId", "your Library is full (1 GB): remove items you no longer need")
-		}
-		if err := s.Blobs.Put(ctx, s.ArtifactBucket, key, bytes.NewReader(content), int64(len(content)), docs.LibraryContentType); err != nil {
-			return nil, err
-		}
-		l, err = s.Q.CreateLibraryItem(ctx, store.CreateLibraryItemParams{WorkspaceID: ws, UserID: u.ID, Kind: "document", Title: docs.LibraryTitle(cv.Title), Filename: docs.LibraryFilename(cv.Title),
-			ContentType: docs.LibraryContentType, SizeBytes: int64(len(content)), BlobKey: key, ChatID: &cv.ChatID})
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
+	row, err := s.keepExport(ctx, u.ID, ws, cv, exportFile{data: content, contentType: docs.LibraryContentType, filename: docs.LibraryFilename(cv.Title),
+		title: docs.LibraryTitle(cv.Title), detail: runs.CountWords(cur.Body)})
+	if err != nil {
 		return nil, err
 	}
-	source := api.LibraryItemSource(l.Source)
-	return api.SaveDocToLibrary201JSONResponse{Id: l.ID, Kind: api.LibraryItemKind(l.Kind), Title: l.Title, Filename: l.Filename, ContentType: l.ContentType, SizeBytes: l.SizeBytes,
-		ChatId: l.ChatID, PersonaId: l.PersonaID, Source: &source, CreatedAt: l.CreatedAt}, nil
+	return api.SaveDocToLibrary201JSONResponse(toLibraryItem(row)), nil
 }
 
 // PromoteDocToWiki publishes a text canvas's current version as a wiki page.
