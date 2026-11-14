@@ -226,7 +226,7 @@ export function ActivityTab({ handle }: { handle: string }) {
         </div>
       ) : (
         <EmptyState icon="play" title="No runs yet">
-          Dispatch an assigned ticket to start this agent.
+          Start an assigned ticket to put this persona to work.
         </EmptyState>
       )}
       <div className="flex items-center justify-between gap-2 border-t border-border-subtle p-3">

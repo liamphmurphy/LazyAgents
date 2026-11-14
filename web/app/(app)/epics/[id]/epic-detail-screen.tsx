@@ -385,7 +385,7 @@ function StartReady({ epic }: { epic: EpicOverview }) {
   const start = useMutation({
     mutationFn: async ({ ticketKeys, unassignedKeys, assignee }: { ticketKeys: string[]; unassignedKeys: string[]; assignee?: string }) => {
       if (unassignedKeys.length) {
-        if (!assignee) throw new Error("Choose a main agent for unassigned tickets.");
+        if (!assignee) throw new Error("Choose a persona that takes tickets for the unassigned ones.");
         await bulk.mutateAsync({ keys: unassignedKeys, patch: { assignee_agent_id: assignee } });
       }
       return dispatch.mutateAsync(ticketKeys);
@@ -428,11 +428,11 @@ function StartReady({ epic }: { epic: EpicOverview }) {
       {unassigned > 0 && (
         <label className="flex flex-wrap items-center gap-2 text-12 text-fg-secondary">
           Agent for unassigned tickets
-          <select aria-label="Agent for unassigned tickets" value={selectedAgent?.id ?? ""}
+          <select aria-label="Persona for unassigned tickets" value={selectedAgent?.id ?? ""}
             disabled={start.isPending || bootstrap.isPending}
             onChange={(e) => { setAgentId(e.target.value); start.reset(); }}
             className="h-[30px] rounded-md border border-border-strong bg-surface px-2 text-fg">
-            {!agents.length && <option value="">No main agents available</option>}
+            {!agents.length && <option value="">No persona takes tickets yet</option>}
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <span>{unassigned} {unassigned === 1 ? "ticket" : "tickets"} will be assigned to {selectedAgent?.name ?? "the agent you choose"} first.</span>
@@ -452,7 +452,7 @@ function StartReady({ epic }: { epic: EpicOverview }) {
         </div>
       )}
       {!loading && live.size > 0 && <p className="text-12 text-fg-tertiary">{live.size} already {live.size === 1 ? "has a run" : "have runs"}.</p>}
-      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-12 text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load agents. Refresh to try again." : "Create a main agent to assign and start these tickets."}</p>}
+      {unassigned > 0 && !bootstrap.isPending && !agents.length && <p role="alert" className="text-12 text-pill-blocked-fg">{bootstrap.isError ? "Couldn’t load personas. Refresh to try again." : "Turn on Takes tickets for a persona to assign and start these tickets."}</p>}
       {start.isError && <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t start the tickets: {start.error.message}{bulk.isSuccess && " Agent assignments were saved; retry to start."}</p>}
       {failed && <p role="alert" className="text-12 text-pill-blocked-fg">Couldn’t load all ticket details. Refresh to try again.</p>}
       {incomplete && <p role="alert" className="text-12 text-pill-blocked-fg">The ticket list is incomplete. Open the ticket list to start tickets in smaller batches.</p>}

@@ -37,7 +37,8 @@ test("hits land in the mockup's groups", () => {
   assert.equal(groupOf({ kind: "artifact", artifact_type: "adr", title: "a" }), "Artifacts");
   assert.equal(groupOf({ kind: "section", title: "s" }), "Artifacts");
   assert.equal(groupOf({ kind: "chat", title: "c" }), "Chats");
-  assert.equal(groupOf({ kind: "agent", title: "a" }), "Agents");
+  // A work record is its persona's work page: no separate Agents group.
+  assert.equal(groupOf({ kind: "agent", title: "a" }), "Personas");
   assert.equal(groupOf({ kind: "epic", title: "e" }), "Epics");
 });
 
@@ -52,7 +53,7 @@ test("links use the wiki path for pages and skip targets without an href", () =>
 
 test("sortByGroup follows GROUP_ORDER and keeps ranking within a group", () => {
   const items = [
-    { group: "Agents", n: 1 },
+    { group: "Personas", n: 1 },
     { group: "Tickets", n: 2 },
     { group: "Chats", n: 3 },
     { group: "Tickets", n: 4 },
@@ -118,7 +119,7 @@ test("the best hit is promoted only when grouping buried it", () => {
   const first = { group: "Tickets", score: 2 };
   const page = { group: "Pages", score: 1 };
   assert.deepEqual(promoteTop([first, page]), [first, page]);
-  const best = { group: "Agents", score: 5 };
+  const best = { group: "Personas", score: 5 };
   assert.deepEqual(promoteTop([first, best]), [{ ...best, group: "Top result" }, first]);
 });
 

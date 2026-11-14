@@ -116,20 +116,20 @@ export function OverrideDialog({
             </Dialog.Close>
           </div>
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
-            <p className="text-13 text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this space. Permissions can only get stricter.</p>
+            <p className="text-13 text-fg-tertiary">Overrides merge over the work definition for runs in this space. Permissions can only get stricter.</p>
             <Field label="Harness" htmlFor="ov-h">
               <Segmented
                 label="Harness"
                 value={harness}
                 onChange={setHarness}
-                options={[{ value: "inherit" as const, label: `Agent's (${spec.harness})` }, ...detail.harnesses.map((h) => ({ value: h.name, label: h.label }))]}
+                options={[{ value: "inherit" as const, label: `Definition's (${spec.harness})` }, ...detail.harnesses.map((h) => ({ value: h.name, label: h.label }))]}
               />
             </Field>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
               <Field label="Model" htmlFor="ov-model">
                 <TextInput id="ov-model" mono placeholder={spec.model} value={model} onChange={(e) => setModel(e.target.value)} />
               </Field>
-              <Field label="Max runtime" htmlFor="ov-rt" hint="Only lowers the agent's guard">
+              <Field label="Max runtime" htmlFor="ov-rt" hint="Only lowers the definition's guard">
                 <TextInput id="ov-rt" mono placeholder={spec.budget.max_runtime ?? "none"} value={runtime} onChange={(e) => setRuntime(e.target.value)} />
               </Field>
               <Field label="Max turns" htmlFor="ov-turns">

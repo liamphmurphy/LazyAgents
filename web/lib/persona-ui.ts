@@ -14,7 +14,7 @@ type PersonaLike = {
 
 export const NAME_MAX = 60;
 export const INSTRUCTIONS_MAX = 2000;
-export const MAX_PERSONAS = 20;
+export const MAX_PERSONAS = 40;
 export const AVATAR_MAX_BYTES = 1_048_576;
 export const AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export const AVATAR_ACCEPT = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
@@ -370,7 +370,25 @@ export function mentionQuery(text: string, caret: number): { start: number; quer
 }
 
 /** Personas whose name starts with the query (then those containing it), case-insensitively; at most `max`. */
-export function mentionSuggestions<P extends { name: string }>(personas: P[], query: string, max = 6): P[] {
+/**
+ * The personas offered in the chat switcher and the @ menu: those in the chat list, plus
+ * `keep` (the one a conversation already uses) so a picker never loses its own value.
+ */
+export function inChatList<P extends { id: string; in_chat_list?: boolean }>(personas: P[], keep?: string): P[] {
+  return personas.filter((p) => p.in_chat_list !== false || p.id === keep);
+}
+
+export type PersonaWork = "none" | "tickets" | "helper";
+
+/** What a persona does besides chatting, as the Personas list and its Work section say it. */
+export const WORK: { value: PersonaWork; label: string; hint: string }[] = [
+  { value: "none", label: "Chat only", hint: "Talks with you. It can't be assigned tickets." },
+  { value: "tickets", label: "Takes tickets", hint: "Can be assigned tickets and started from a Start card. Works in its own workspace and branch." },
+  { value: "helper", label: "Helps on runs", hint: "Another persona's run can hand it part of the work, such as a review or a search. It can't hold tickets." },
+];
+
+export function mentionSuggestions<P extends { name: string; in_chat_list?: boolean }>(personas: P[], query: string, max = 6): P[] {
+  personas = personas.filter((p) => p.in_chat_list !== false);
   const q = query.trim().toLowerCase();
   const name = (p: P) => p.name.trim().toLowerCase();
   const starts = personas.filter((p) => name(p).startsWith(q));

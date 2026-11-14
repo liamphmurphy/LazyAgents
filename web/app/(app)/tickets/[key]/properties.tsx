@@ -129,8 +129,8 @@ export function Properties({ t, boot, save, error }: { t: Ticket; boot: Bootstra
           {PRIORITY_NAME[t.priority]}
         </PropButton>
       </PriorityMenu>
-      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id ?? null} onChange={(id) => save({ assignee_agent_id: id }, `Agent → ${agentName(id)}`)}>
-        <PropButton label="Agent">
+      <AgentPicker agents={boot.agents.filter((a) => a.kind === "main")} value={t.assignee?.id ?? null} onChange={(id) => save({ assignee_agent_id: id }, `Persona → ${agentName(id)}`)}>
+        <PropButton label="Persona">
           {t.assignee ? (
             <>
               <AgentAvatar name={t.assignee.name} colorIndex={t.assignee.color_index} label={false} />

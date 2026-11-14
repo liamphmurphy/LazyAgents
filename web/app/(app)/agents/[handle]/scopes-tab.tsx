@@ -30,7 +30,7 @@ export function scopeNote(scope: string, detail: Pick<AgentDetail, "catalog">, p
   const info = detail.catalog.find((c) => c.scope === scope);
   if (info) return info.description;
   if (scope.endsWith(":*")) return `Custom wildcard: covers every ${scope.slice(0, -1)} scope${project ? `, named by the ${project} override` : ""}`;
-  return "Custom scope: enforced only through the agent's instructions unless a secret grants it";
+  return "Custom scope: enforced only through the work brief unless a secret grants it";
 }
 
 /** The agent's scopes as a matrix: definition level, the effective level in a project, and how it's enforced. */
@@ -86,7 +86,7 @@ export function ScopesTab({
         </form>
       </div>
       <p className="text-12 text-fg-tertiary">
-        Pick a level to change the agent&apos;s definition. Projects can only tighten it, and a scope the agent doesn&apos;t grant is denied. New custom scopes start at Approval.
+        Pick a level to change the work definition. Spaces can only tighten it, and a scope the definition doesn&apos;t grant is denied. New custom scopes start at Approval.
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -166,7 +166,7 @@ function Row({
         </div>
         {fromProject && project && (
           <div className="mt-0.5 text-12 text-fg-tertiary">
-            {r.projectOnly || !r.granted ? `${project} denies it` : `${project} tightens ${r.definition ? MODE_LABEL[r.definition] : "the agent's level"}`}
+            {r.projectOnly || !r.granted ? `${project} denies it` : `${project} tightens ${r.definition ? MODE_LABEL[r.definition] : "the definition's level"}`}
           </div>
         )}
       </td>

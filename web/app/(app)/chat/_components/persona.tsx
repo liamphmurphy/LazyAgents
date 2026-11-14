@@ -8,11 +8,12 @@ import { usePersonaDock } from "@/lib/api/hooks";
 import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { DOCK_STATE_LABEL, dockEntries, type DockState } from "@/lib/persona-dock";
+import { inChatList } from "@/lib/persona-ui";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { floatPanel } from "@/components/domain/pickers";
 
-// Assistant personas in the Assistant view only (ADR: Assistant personas). Ticket,
-// epic and run views keep their agent identity and never render these.
+// Persona pickers, avatars and names for chats. A persona that works is also named on
+// tickets and runs, by the same id.
 
 type Persona = Schemas["Persona"];
 type Summary = Schemas["PersonaSummary"];
@@ -352,10 +353,11 @@ export function PersonaSwitcher({
 }) {
   const manage = useOpenPersonaManager();
   const q = usePersonas();
-  const personas = q.data?.personas ?? [];
+  const all = q.data?.personas ?? [];
+  const personas = inChatList(all, value);
   if (!personas.length) return null;
   const defaultId = q.data?.default_persona_id;
-  const current = personaLook(personas.find((p) => p.id === value));
+  const current = personaLook(all.find((p) => p.id === value));
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -420,7 +422,7 @@ export function HeaderPersona({ persona, personaId, fresh, onSwitch, disabled, c
   const router = useRouter();
   const manage = useOpenPersonaManager();
   const q = usePersonas();
-  const personas = q.data?.personas ?? [];
+  const personas = inChatList(q.data?.personas ?? [], personaId);
   const avatar = <PersonaAvatar persona={persona} size={22} />;
   // No personas to pick from: the avatar alone says who it is.
   if (!personas.length)

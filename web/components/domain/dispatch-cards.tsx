@@ -444,7 +444,7 @@ function StartCard({ ticketKey, chatId, messageId, onDismiss }: { ticketKey: str
       </div>
       {ticket.data && <p className="truncate text-13 text-fg">{ticket.data.title}</p>}
       <dl className="grid grid-cols-[92px_1fr] items-center gap-x-3 gap-y-1.5 text-13">
-        <dt className={TERM}>Agent</dt>
+        <dt className={TERM}>Persona</dt>
         <dd className="flex items-center gap-1.5"><AgentAvatar name={p.agent.name} colorIndex={p.agent.color_index} label={false} />@{p.agent.handle}</dd>
         {p.repo_url && (
           <>

@@ -14,7 +14,6 @@ export type PaletteGroup =
   | "Pages"
   | "Artifacts"
   | "Chats"
-  | "Agents"
   | "Epics"
   | "Runs"
   | "Workflows"
@@ -39,7 +38,6 @@ export const GROUP_ORDER: PaletteGroup[] = [
   "Pages",
   "Artifacts",
   "Chats",
-  "Agents",
   "Epics",
   "Runs",
   "Workflows",
@@ -85,7 +83,7 @@ const FILTER_GROUPS: Record<string, PaletteGroup> = {
   page: "Pages",
   artifact: "Artifacts",
   chat: "Chats",
-  agent: "Agents",
+  agent: "Personas",
   epic: "Epics",
   run: "Runs",
   workflow: "Workflows",
@@ -161,7 +159,8 @@ export function groupOf(t: TargetLike): PaletteGroup {
     case "chat":
       return "Chats";
     case "agent":
-      return "Agents";
+      // A work record is its persona's work page.
+      return "Personas";
     case "epic":
       return "Epics";
     case "run":

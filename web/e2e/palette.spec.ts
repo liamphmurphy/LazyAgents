@@ -91,7 +91,7 @@ test("free text returns grouped results from the server with keyboard navigation
   await input(page).fill("deploy");
   for (const [group, text] of [
     ["Tickets", /Deploy staging/], ["Pages", /Payments\/Deploy runbook/], ["Artifacts", /Blue\/green deploys/],
-    ["Chats", /Why did the deploy fail\?/], ["Agents", /Deployer/],
+    ["Chats", /Why did the deploy fail\?/], ["Personas", /Deployer/],
   ] as const) await expect(results(page).getByRole("group", { name: group }).getByRole("option")).toHaveText([text]);
   await page.screenshot({ path: "/tmp/palette-results.png" });
   // Groups render in the mockup's order regardless of server order.

@@ -68,7 +68,7 @@ const MODEL_SUGGESTIONS: Record<Harness, string[]> = {
 const DEFAULT_MEMORY: NonNullable<AgentSpec["memory"]> = { enabled: true, inject: "selective", max_tokens: 1500 };
 const INJECT_HELP = {
   selective: "Up to three relevant previews; load full pages only when needed.",
-  index: "Only the agent's Memory page.",
+  index: "Only its own Memory page.",
   linked: "The Memory page, plus pages linked to or from the ticket and its documents.",
   search: "Everything in Linked, plus the best wiki matches for the ticket title.",
 } as const;
@@ -153,8 +153,8 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
     <div className="flex flex-col gap-4">
       <SectionCard title="Identity">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
-          <Field label="Name" htmlFor="ag-name">
-            <TextInput id="ag-name" value={draft.name} maxLength={40} onChange={(e) => onChange({ ...draft, name: e.target.value })} />
+          <Field label="Name" htmlFor="ag-name" hint="The persona's name: rename it on its profile.">
+            <TextInput id="ag-name" value={draft.name} readOnly className="text-fg-secondary" />
           </Field>
           <Field label="Handle" htmlFor="ag-handle" hint="Used for @mentions and branch names. Fixed once created.">
             <TextInput id="ag-handle" mono prefix="@" value={detail.agent.handle} readOnly className="text-fg-secondary" />
@@ -163,24 +163,24 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
         <Field label="Role" htmlFor="ag-role">
           <TextInput id="ag-role" value={draft.role} onChange={(e) => onChange({ ...draft, role: e.target.value })} placeholder="e.g. Backend · migrations & data models" />
         </Field>
-        <Field label="Specialty" htmlFor="ag-spec" hint="Shown in the agent picker next to the model">
+        <Field label="Specialty" htmlFor="ag-spec" hint="Shown in the assignee picker next to the model">
           <TextInput id="ag-spec" value={draft.specialty} onChange={(e) => onChange({ ...draft, specialty: e.target.value })} />
         </Field>
         <div className="flex flex-col gap-1.5">
-          <span className="text-13 font-medium text-fg-2">Kind</span>
+          <span className="text-13 font-medium text-fg-2">Does</span>
           <Segmented
-            label="Agent kind"
+            label="What this persona does"
             value={draft.kind}
             onChange={(kind) => onChange({ ...draft, kind })}
             options={[
-              { value: "main", label: "Main" },
-              { value: "sub", label: "Sub" },
+              { value: "main", label: "Takes tickets" },
+              { value: "sub", label: "Helps on runs" },
             ]}
           />
           <p className="text-12 text-fg-tertiary">
             {draft.kind === "main"
-              ? "Takes tickets, and can delegate parts of them to sub agents."
-              : "Can't be assigned tickets. Runs only when a main agent delegates a task to it."}
+              ? "Takes tickets, and can hand parts of them to personas that help on runs."
+              : "Can't be assigned tickets. Runs only when another persona's run hands it a task."}
           </p>
         </div>
         <div className="flex flex-col gap-1.5">

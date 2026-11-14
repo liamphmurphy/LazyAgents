@@ -42,7 +42,6 @@ const GLYPH: Partial<Record<PaletteGroup, string>> = {
   Pages: "▤",
   Artifacts: "▦",
   Chats: "◌",
-  Agents: "◍",
   Epics: "◆",
   Runs: "▶",
   Workflows: "⇢",
