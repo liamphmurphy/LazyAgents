@@ -266,6 +266,32 @@ test("the side panel's Chat talks to your persona about the run; the run's compo
   expect(api.posted[1].body.body).toContain("Viewing run " + DONE);
 });
 
+test("a pinned run stays attached to the side-panel chat as you move to another run", async ({ page }) => {
+  const { api } = await installRuns(page);
+  await page.goto(`/runs/${RUNNING}`);
+  const panel = page.getByRole("complementary", { name: "Context" });
+  await panel.getByRole("tablist", { name: "Side panel" }).getByRole("tab", { name: "Chat" }).click();
+  await panel.getByRole("button", { name: "Start a chat" }).click();
+  await panel.getByRole("button", { name: "Pin WEB-9 · Search index" }).click();
+  await expect(panel.getByTestId("work-chat-pinned")).toHaveText(/Pinned: WEB-9 · Search index/);
+  await expect(panel.getByTestId("work-chat-subject")).toHaveCount(0);
+
+  await page.goto(`/runs/${DONE}`);
+  await expect(panel.getByTestId("work-chat-pinned")).toHaveText(/Pinned: WEB-9 · Search index/);
+  await expect(panel.getByTestId("work-chat-subject")).toHaveText(/Viewing: WEB-3 · Session refresh/);
+  await expect(panel.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+  await panel.getByRole("combobox", { name: "Message" }).fill("Compare them");
+  await panel.getByRole("combobox", { name: "Message" }).press("Enter");
+  await expect.poll(() => api.posted.length).toBe(1);
+  expect(api.posted[0].body.body).toBe(`Compare them\n\n<!-- vesper:work-context -->\nPinned run ${RUNNING} (“Search index”) by Builder for ticket WEB-9.\nViewing run ${DONE} (“Session refresh”) by Builder for ticket WEB-3.`);
+  expect(api.posted[0].body.context_refs).toEqual([{ kind: "ticket", key: "WEB-9" }, { kind: "ticket", key: "WEB-3" }]);
+
+  await panel.getByRole("button", { name: "Unpin WEB-9 · Search index" }).click();
+  await expect(panel.getByTestId("work-chat-pinned")).toHaveCount(0);
+  await page.reload();
+  await expect(panel.getByTestId("work-chat-pinned")).toHaveCount(0);
+});
+
 test("the Context panel shows the ticket, code and run, opens the views, and remembers closing", async ({ page }) => {
   await installRuns(page);
   await page.goto(`/runs/${APPROVING}`);

@@ -10,21 +10,45 @@ import { Icon } from "@/components/ui/icon";
 import { useAddDockChat, useDockChats, type DockScope } from "@/lib/api/dock-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import { useChat, useCreateChat } from "@/lib/api/hooks";
-import { withWorkContext, workSubjectLabel, type WorkSubject } from "@/lib/work-context";
+import { parsePin, sameSubject, withWorkContext, workSubjectLabel, type WorkSubject } from "@/lib/work-context";
 
 /** One list of work chats, shared by every run and ticket, so the conversation follows you between them. */
 const SCOPE: DockScope = "app:work";
 /** The chat the panel opened last, in any run or ticket. */
 const CURRENT_KEY = "vesper.work.chat";
 
-/** Whom the next message goes to and what it carries: the persona, and the item in the main pane. */
-function Chips({ persona, subject }: { persona?: string; subject: WorkSubject }) {
+/** The pin, kept across runs and tickets in this browser. */
+const PIN_KEY = "vesper.work.pinned";
+
+const subjectIcon = (s: WorkSubject) => (s.kind === "run" ? "play" : "tickets");
+const chipButton = "grid size-4 flex-none place-items-center rounded-xs text-fg-tertiary hover:bg-hover hover:text-fg";
+
+/**
+ * Whom the next message goes to and what it carries: the persona, the item in the main pane, and
+ * the item you pinned, which stays attached as you move between runs and tickets until you unpin it.
+ */
+function Chips({ persona, subject, pinned, onPin }: { persona?: string; subject: WorkSubject; pinned?: WorkSubject; onPin: (s: WorkSubject | undefined) => void }) {
+  const viewingIsPinned = !!pinned && sameSubject(pinned, subject);
   return (
     <DockContext persona={persona} label="Message context">
-      <span data-testid="work-chat-subject" className={dockContextChip} title={workSubjectLabel(subject)}>
-        <Icon name={subject.kind === "run" ? "play" : "tickets"} size={12} className="flex-none text-fg-tertiary" />
-        <span className="truncate">Viewing: {workSubjectLabel(subject)}</span>
-      </span>
+      {pinned && (
+        <span data-testid="work-chat-pinned" className={dockContextChip} title={`Pinned: ${workSubjectLabel(pinned)}`}>
+          <Icon name="bookmark" size={12} className="flex-none text-accent" />
+          <span className="truncate">Pinned: {workSubjectLabel(pinned)}</span>
+          <button type="button" aria-label={`Unpin ${workSubjectLabel(pinned)}`} onClick={() => onPin(undefined)} className={chipButton}>
+            <Icon name="x" size={11} />
+          </button>
+        </span>
+      )}
+      {!viewingIsPinned && (
+        <span data-testid="work-chat-subject" className={dockContextChip} title={workSubjectLabel(subject)}>
+          <Icon name={subjectIcon(subject)} size={12} className="flex-none text-fg-tertiary" />
+          <span className="truncate">Viewing: {workSubjectLabel(subject)}</span>
+          <button type="button" aria-label={`Pin ${workSubjectLabel(subject)}`} title="Pin: keep it attached as you move to other runs and tickets" onClick={() => onPin(subject)} className={chipButton}>
+            <Icon name="bookmark" size={11} />
+          </button>
+        </span>
+      )}
     </DockContext>
   );
 }
@@ -62,6 +86,20 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
     setCurrent(window.localStorage.getItem(CURRENT_KEY));
     setLoaded(true);
   }, []);
+  const [pinned, setPinned] = useState<WorkSubject>();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading browser-only storage after hydration
+    setPinned(parsePin(window.localStorage.getItem(PIN_KEY)));
+  }, []);
+  const pin = useCallback((next: WorkSubject | undefined) => {
+    setPinned(next);
+    try {
+      if (next) window.localStorage.setItem(PIN_KEY, JSON.stringify(next));
+      else window.localStorage.removeItem(PIN_KEY);
+    } catch {
+      /* Pinned for this visit only. */
+    }
+  }, []);
   const remember = useCallback((id: string) => {
     window.localStorage.setItem(CURRENT_KEY, id);
     setCurrent(id);
@@ -98,14 +136,17 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
   const persona = chat ? personaLook(chat.speaker ?? chat.persona).name : undefined;
   const context: ConversationContext = {
     hidden: true,
-    composer: <Chips persona={persona} subject={subject} />,
+    composer: <Chips persona={persona} subject={subject} pinned={pinned} onPin={pin} />,
     prepare: async (input: Schemas["NewChatMessage"]) => {
       const refs = [...(input.context_refs ?? [])];
-      const key = subject.kind === "ticket" ? subject.key : subject.ticketKey;
-      if (key && !refs.some((r) => r.kind === "ticket" && r.key === key)) refs.push({ kind: "ticket", key });
-      return { ...input, body: withWorkContext(input.body, subject), ...(refs.length ? { context_refs: refs } : {}) };
+      // The tickets of the pinned item and the one in view, so the persona can open either.
+      for (const s of [pinned, subject]) {
+        const key = !s ? undefined : s.kind === "ticket" ? s.key : s.ticketKey;
+        if (key && !refs.some((r) => r.kind === "ticket" && r.key === key)) refs.push({ kind: "ticket", key });
+      }
+      return { ...input, body: withWorkContext(input.body, subject, pinned), ...(refs.length ? { context_refs: refs } : {}) };
     },
-    prepareText: async (body) => withWorkContext(body, subject),
+    prepareText: async (body) => withWorkContext(body, subject, pinned),
     onSent: () => {},
     welcome: welcomeFor(subject),
   };
@@ -122,7 +163,7 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
       {chats.length > 0 && switcher}
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
         <Icon name="msg" size={22} className="text-fg-tertiary" />
-        <Chips persona={persona} subject={subject} />
+        <Chips persona={persona} subject={subject} pinned={pinned} onPin={pin} />
         <p className="text-13 text-fg-secondary">
           Talk it through with a persona. It can read the {subject.kind} and its ticket; replies to the agent stay in the main pane.
         </p>

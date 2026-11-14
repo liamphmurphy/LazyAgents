@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { WORK_CONTEXT_MARKER, withWorkContext, workContextLine, workSubjectLabel } from "./work-context.ts";
+import { WORK_CONTEXT_MARKER, parsePin, sameSubject, withWorkContext, workContextLine, workSubjectLabel } from "./work-context.ts";
 
 const run = { kind: "run", id: "r1", title: "Welcome flow checks", agent: "Atlas", ticketKey: "WEB-42" };
 const ticket = { kind: "ticket", key: "WEB-42", title: "Simplify the first welcome step" };
@@ -22,4 +22,20 @@ test("the chip says which item the message is about", () => {
   assert.equal(workSubjectLabel(run), "WEB-42 · Welcome flow checks");
   assert.equal(workSubjectLabel({ ...run, ticketKey: undefined }), "Welcome flow checks");
   assert.equal(workSubjectLabel(ticket), "WEB-42 · Simplify the first welcome step");
+});
+
+test("a pinned item rides along with what's in view, named as pinned", () => {
+  const body = withWorkContext("Compare them", run, ticket);
+  assert.equal(body, `Compare them${WORK_CONTEXT_MARKER}Pinned ticket WEB-42 (“Simplify the first welcome step”).\nViewing run r1 (“Welcome flow checks”) by Atlas for ticket WEB-42.`);
+  assert.equal(withWorkContext(body, run, ticket), body);
+  // Pinned and in view at once: one line, marked pinned.
+  assert.equal(withWorkContext("Hi", ticket, ticket), `Hi${WORK_CONTEXT_MARKER}Pinned ticket WEB-42 (“Simplify the first welcome step”).`);
+});
+
+test("a stored pin is read back, and anything malformed is no pin", () => {
+  assert.deepEqual(parsePin(JSON.stringify(run)), run);
+  assert.deepEqual(parsePin(JSON.stringify(ticket)), ticket);
+  for (const raw of [null, "", "{", JSON.stringify({ kind: "run", id: 1 }), JSON.stringify({ kind: "page", id: "p" })]) assert.equal(parsePin(raw), undefined);
+  assert.equal(sameSubject(run, { ...run, title: "renamed" }), true);
+  assert.equal(sameSubject(run, ticket), false);
 });
