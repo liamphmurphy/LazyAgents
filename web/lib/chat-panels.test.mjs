@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activePanel, closePanel, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThreads, setDock, sheetHidden, switchPanel } from "./chat-panels.ts";
+import { activePanel, closePanel, closeThread, dockOpen, dockTab, dragCloses, hideSheet, openPanels, openThread, openThreads, setDock, sheetHidden, switchPanel, threadOf } from "./chat-panels.ts";
 
 const D = "01a1bbdd-4937-7baa-af62-b3726025d331";
 const C = "01a1bbdd-4937-7baa-af62-b3726025d332";
@@ -134,4 +134,17 @@ test("dock: setDock writes the tab and open state, keeping the panels", () => {
   assert.equal(dockTab(next, openPanels(next, [D])), "activity");
   assert.equal(dockOpen(next, []), false);
   assert.equal(dockOpen(setDock(next, { tab: "design", open: true }), []), true);
+});
+
+test("dock: a thread opens the dock on its tab, keeps the panels, and closing it falls back", () => {
+  const M = "99999999-9999-4999-8999-999999999999";
+  const next = openThread(q(`canvas=${D}`), M);
+  assert.equal(threadOf(next), M);
+  assert.equal(dockTab(next, openPanels(next, [D])), "thread");
+  assert.equal(dockOpen(next, []), true);
+  // Without a message there is no thread to show.
+  assert.equal(dockTab(q("panel=thread"), []), "activity");
+  const closed = closeThread(next);
+  assert.equal(threadOf(closed), undefined);
+  assert.equal(dockTab(closed, openPanels(closed, [D])), "design");
 });

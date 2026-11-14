@@ -42,7 +42,7 @@ import { ChatRunsPill, ChatTicketRunTray } from "@/components/domain/dispatch-ca
 import { ActivityScene } from "./activity-scene";
 import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
-import { setDock } from "@/lib/chat-panels";
+import { openThread, setDock } from "@/lib/chat-panels";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -52,7 +52,7 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
 import { CodeChanges } from "./code-changes";
 import { SentChips } from "./context-chips";
-import { MessageActionsContext, MessageToolbar, type MessageActions } from "./message-toolbar";
+import { MessageActionsContext, MessageToolbar, ThreadLink, type MessageActions } from "./message-toolbar";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
 import { AskAboutSelection, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
@@ -131,7 +131,7 @@ function Divider({ children, testId }: { children: string; testId?: string }) {
 
 type ChatInfo = { id: string; title: string; project?: string; agent: { name: string } };
 
-const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, audio, asides }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; audio?: ChatAudio[]; asides?: ReactNode }) {
+const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, ended, summaryUrl, editable, onEdit, onRetry, highlighted, videos, audio, asides, thread }: { m: Message; chat: ChatInfo; persona: PersonaLook; saveable: boolean; names: Map<string, string>; turn?: TurnWindow; ended?: EndedTurn; summaryUrl?: string | null; editable?: boolean; onEdit?: (body: string) => void; onRetry?: () => void; highlighted?: boolean; videos?: ChatVideo[]; audio?: ChatAudio[]; asides?: ReactNode; thread?: { count: number; running: boolean } }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
@@ -229,6 +229,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
       )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
       {!mine && asides}
+      {thread && <ThreadLink messageId={m.id} count={thread.count} running={thread.running} />}
       {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
       {!mine && saveable && m.body_md.trim() && (
         <MessageToolbar messageId={m.id} body={m.body_md} authorId={m.persona?.id} author={author.name} mine={false} chat={chat} testId="reply-actions"
@@ -291,6 +292,12 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
     return out;
   }, [turns, asideList, running, since, speakerName]);
   const ended = useMemo(() => endedTurns(list, running), [list, running]);
+  // Each message's newest thread, for the line under it.
+  const threads = useMemo(() => {
+    const out = new Map<string, { count: number; running: boolean }>();
+    for (const a of asideList ?? []) if (a.anchor_message_id) out.set(a.anchor_message_id, { count: a.message_count ?? 0, running: a.state === "running" });
+    return out;
+  }, [asideList]);
   const canEdit = !running && !locked && !editPending && !archived;
   const canRetry = !running && !editPending && !archived && !!lastUser;
   const lastId = list.at(-1)?.id;
@@ -302,7 +309,8 @@ function BubbleList({ list, chat, persona, speakerName, names, highlight, runnin
       summaryUrl={m.role === "assistant" && turns.has(m.id) ? summaryRequestUrl(list.slice(0, i).findLast((x) => x.role === "user")?.body_md) : null}
       videos={videosByMessage.get(m.id)}
       audio={audioByMessage.get(m.id)}
-      asides={asideNodes.get(m.id) ?? null} />
+      asides={asideNodes.get(m.id) ?? null}
+      thread={threads.get(m.id)} />
   ));
 }
 
@@ -730,7 +738,12 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
       el?.setSelectionRange(quote.length, quote.length);
     });
   };
-  const messageActions = useMemo<MessageActions>(() => ({ reply: (body, authorId, author) => replyTo.current(body, authorId, author) }), []);
+  // Threads open in the desktop dock (the compact sheet has no Thread tab yet).
+  const threadDock = dockActivity;
+  const messageActions = useMemo<MessageActions>(() => ({
+    reply: (body, authorId, author) => replyTo.current(body, authorId, author),
+    ...(threadDock ? { thread: (messageId: string) => router.replace(`${window.location.pathname}?${openThread(new URLSearchParams(window.location.search), messageId).toString()}`, { scroll: false }) } : {}),
+  }), [threadDock, router]);
 
   function submit(body: string) {
     if (!body.trim() || locked || unavailable || files.pending || commitPickRequired) return;

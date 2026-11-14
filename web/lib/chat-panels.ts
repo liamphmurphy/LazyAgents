@@ -10,8 +10,8 @@ export type PanelLayout = "side" | "sheet";
 
 export const PANELS: ChatPanel[] = ["design", "canvas", "playground"];
 
-/** A tab in the desktop dock: the open panels, and Activity, which is always there. */
-export type DockTabId = ChatPanel | "activity";
+/** A tab in the desktop dock: the open panels, a thread while one is open, and Activity, which is always there. */
+export type DockTabId = ChatPanel | "thread" | "activity";
 
 type Query = Pick<URLSearchParams, "get">;
 
@@ -80,6 +80,7 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
 /** The tab the desktop dock shows: the one picked (Activity, or a panel still open), else the frontmost open panel, else Activity. */
 export function dockTab(q: Query, open: readonly ChatPanel[]): DockTabId {
   if (q.get("panel") === "activity") return "activity";
+  if (q.get("panel") === "thread" && q.get("thread")) return "thread";
   return activePanel(q, open) ?? "activity";
 }
 
@@ -91,7 +92,29 @@ export function dockOpen(q: Query, open: readonly ChatPanel[]): boolean {
   const d = q.get("dock");
   if (d === "0") return false;
   if (d === "1") return true;
-  return open.length > 0 || q.get("panel") === "activity";
+  return open.length > 0 || q.get("panel") === "activity" || (q.get("panel") === "thread" && !!q.get("thread"));
+}
+
+/** The message whose thread the dock shows, if one is open. */
+export function threadOf(q: Query): string | undefined {
+  return q.get("thread") || undefined;
+}
+
+/** The query showing the thread about `messageId` in the dock, open. */
+export function openThread(q: URLSearchParams, messageId: string): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.set("thread", messageId);
+  next.set("panel", "thread");
+  next.set("dock", "1");
+  return next;
+}
+
+/** The query with the thread closed; the dock falls back to the other tabs. */
+export function closeThread(q: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(q.toString());
+  next.delete("thread");
+  if (next.get("panel") === "thread") next.delete("panel");
+  return next;
 }
 
 /** The query showing the dock on `tab` (which must already be open), open or collapsed. */

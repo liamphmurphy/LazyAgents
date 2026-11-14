@@ -146,10 +146,10 @@ test("each message has one toolbar: Reply quotes it into the box, Copy and ⋯ f
   await reply.hover();
   const bar = reply.getByRole("toolbar", { name: "Message actions" });
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole("button")).toHaveCount(3);
+  await expect(bar.getByRole("button")).toHaveCount(4);
   await bar.getByRole("button", { name: "Reply" }).click();
   await expect(box(page)).toBeFocused();
-  await expect(box(page)).toHaveValue(/^> .+\n\nmy draft$/s);
+  await expect(box(page)).toHaveValue(/^> [\s\S]+\n\nmy draft$/);
   // Your own message: Reply, Copy and Edit; no Save.
   const mine = page.getByTestId("user-message").last();
   await mine.hover();
@@ -159,4 +159,32 @@ test("each message has one toolbar: Reply quotes it into the box, Copy and ⋯ f
   await reply.hover();
   await bar.getByRole("button", { name: "More message actions" }).click();
   await expect(page.getByRole("menuitem")).toHaveText(["Retry", "Save to wiki", "Save as artifact"]);
+});
+
+test("a thread on a reply opens beside the chat, answers there, and the reply links back to it", async ({ page }) => {
+  const mock = await open(page);
+  const reply = page.getByTestId("assistant-message").first();
+  await reply.hover();
+  await reply.getByRole("toolbar").getByRole("button", { name: "Start a thread" }).click();
+  const panel = page.getByTestId("thread-panel");
+  await expect(panel).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Thread/ })).toHaveAttribute("aria-selected", "true");
+  await expect(panel.getByTestId("thread-anchor")).toContainText("Echo: plain hello");
+  const input = panel.getByRole("textbox", { name: "Reply in thread" });
+  await expect(input).toBeFocused();
+  await input.fill("why that?");
+  await input.press("Enter");
+  await expect(panel.getByTestId("thread-reply")).toContainText("Echo: why that?");
+  // Its own conversation: the main chat didn't get the question.
+  await expect(page.getByTestId("user-message")).toHaveCount(1);
+  expect(mock.asides).toEqual(["why that?"]);
+  // Replying again continues the same thread.
+  await input.fill("and then?");
+  await input.press("Enter");
+  await expect(panel.getByTestId("thread-reply")).toHaveCount(2);
+  // The reply says it has a thread, and closing the panel keeps that way back in.
+  await panel.getByRole("button", { name: "Close thread" }).click();
+  await expect(panel).toHaveCount(0);
+  await reply.getByTestId("thread-link").click();
+  await expect(page.getByTestId("thread-panel").getByTestId("thread-reply")).toHaveCount(2);
 });

@@ -128,3 +128,16 @@ export function MessageToolbar({
     </>
   );
 }
+
+/** Under a message with a thread: how many messages it holds, and a way back into it. */
+export function ThreadLink({ messageId, count, running }: { messageId: string; count: number; running: boolean }) {
+  const actions = useContext(MessageActionsContext);
+  if (!actions?.thread) return null;
+  return (
+    <button type="button" onClick={() => actions.thread!(messageId)} data-testid="thread-link"
+      className="flex items-center gap-1.5 rounded-md px-1 py-0.5 text-12 font-medium text-accent hover:bg-hover">
+      <Icon name="branch" size={12} />
+      {running ? "Thread · answering…" : `Thread · ${count} ${count === 1 ? "message" : "messages"}`}
+    </button>
+  );
+}

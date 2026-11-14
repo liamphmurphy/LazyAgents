@@ -40,6 +40,8 @@ type Chat = {
   error?: string; current_run_id?: string; archived: boolean; revision: number; message_count: number;
   created_at: string; updated_at: string; last_message_at?: string; persona_id?: string; repo_url?: string; pending_repo_url?: string; repositories?: { repo_url: string; directory: string; work_branches: string[] }[]; work_branches?: string[]; commit_email?: string; workspace_path?: string; temporary?: boolean;
   effort?: Effort; auto_model?: boolean;
+  /** A thread: an aside anchored to a message of parent_chat_id. Hidden from the chat list. */
+  parent_chat_id?: string; anchor_message_id?: string; hidden?: boolean;
   // Personas that joined besides the host (chat_participants); listed by their persona filter too.
   guest_persona_ids?: string[];
 };
@@ -491,13 +493,31 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
     if (/^\/chats\/[^/]+\/research$/.test(path) && method === "GET") return json({ jobs: [] });
     if (/^\/chats\/[^/]+\/runs$/.test(path) && method === "GET") return json({ runs: [] });
     if (/^\/chats\/[^/]+\/followups$/.test(path) && method === "GET") return json({ followups: [] });
-    if (/^\/chats\/[^/]+\/asides$/.test(path) && method === "GET") return json({ asides: [] });
-    const asideOn = /^\/chats\/([^/]+)\/asides$/.exec(path);
+    const asidesOf = /^\/chats\/([^/]+)\/asides$/.exec(path);
+    if (asidesOf && method === "GET") return json({ asides: chats.filter((x) => x.parent_chat_id === asidesOf[1]).map(ref) });
+    const asideOn = asidesOf;
     if (asideOn && method === "POST") {
       const c = chats.find((x) => x.id === asideOn[1]);
       if (!c) return fail(err(404, "not_found", "chat not found"));
-      asides.push(String(body().body));
-      return json(ref(c), 201);
+      const b = body();
+      asides.push(String(b.body));
+      if (!b.anchor_message_id) return json(ref(c), 201);
+      // A thread: a hidden chat about one message, which answers like any chat (an Echo).
+      if (!messages.get(c.id)?.some((m) => m.id === b.anchor_message_id)) return fail(err(422, "invalid", "not a message of this chat", "anchor_message_id"));
+      const t: Chat = { ...c, id: uuid(), title: `Thread: ${String(b.body).slice(0, 40)}`, state: "idle", revision: 1, message_count: 0, created_at: now(), updated_at: now(),
+        parent_chat_id: c.id, anchor_message_id: String(b.anchor_message_id), hidden: true };
+      chats.push(t);
+      messages.set(t.id, []);
+      c.revision++;
+      const question = String(b.body);
+      add(t, "user", question);
+      prompts.set(t.id, question);
+      t.state = "running";
+      t.current_run_id = uuid();
+      touch(t);
+      timers.set(t.id, setTimeout(() => finishTurn(t, question), delay));
+      void emit(t);
+      return json(ref(t), 201);
     }
     if (path === "/persona-dock") return json({ personas: dock, space_chats: [], harnesses: [] });
     if (path === "/inbox" && method === "GET") return json({ items: inbox });
@@ -726,7 +746,7 @@ export function installChatApi(page: Page, opts: MockOptions = {}) {
       chatPersonaFilters.push(pid ?? "");
       const want = pid ?? defaultPersona()?.id ?? "none";
       const list = chats
-        .filter((c) => c.archived === archived)
+        .filter((c) => c.archived === archived && !c.hidden)
         .filter((c) => want === "all" || (want === "none" ? !c.persona_id : c.persona_id === want || !!c.guest_persona_ids?.includes(want)))
         .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
       return json({ chats: list.map(ref), has_more: false });
