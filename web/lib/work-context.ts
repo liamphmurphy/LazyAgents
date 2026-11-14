@@ -27,10 +27,13 @@ export function sameSubject(a: WorkSubject, b: WorkSubject): boolean {
 /**
  * The body with the context appended after the marker, once: the item in view, and the pinned
  * one first when it is a different item, so "this" can mean either and the persona knows which
- * the person chose to keep.
+ * the person chose to keep. On a page with no run or ticket in view (the companion beside Library,
+ * Settings…) only the pin goes, and with neither the body goes as it is.
  */
-export function withWorkContext(body: string, viewing: WorkSubject, pinned?: WorkSubject): string {
-  const lines = [pinned && !sameSubject(pinned, viewing) ? workContextLine(pinned, true) : undefined, workContextLine(viewing, !!pinned && sameSubject(pinned, viewing))].filter(Boolean);
+export function withWorkContext(body: string, viewing: WorkSubject | undefined, pinned?: WorkSubject): string {
+  const same = !!pinned && !!viewing && sameSubject(pinned, viewing);
+  const lines = [pinned && !same ? workContextLine(pinned, true) : undefined, viewing ? workContextLine(viewing, same) : undefined].filter(Boolean);
+  if (!lines.length) return body;
   const suffix = `${WORK_CONTEXT_MARKER}${lines.join("\n")}`;
   return body.endsWith(suffix) ? body : `${body}${suffix}`;
 }

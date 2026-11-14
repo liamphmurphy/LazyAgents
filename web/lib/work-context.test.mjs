@@ -39,3 +39,11 @@ test("a stored pin is read back, and anything malformed is no pin", () => {
   assert.equal(sameSubject(run, { ...run, title: "renamed" }), true);
   assert.equal(sameSubject(run, ticket), false);
 });
+
+test("with nothing in view only the pin goes, and with no pin the body goes as it is", () => {
+  const ticket = { kind: "ticket", key: "WEB-9", title: "Fix login" };
+  assert.equal(withWorkContext("Hello", undefined), "Hello");
+  const pinnedOnly = withWorkContext("What's left?", undefined, ticket);
+  assert.equal(pinnedOnly, `What's left?${WORK_CONTEXT_MARKER}${workContextLine(ticket, true)}`);
+  assert.equal(withWorkContext(pinnedOnly, undefined, ticket), pinnedOnly);
+});

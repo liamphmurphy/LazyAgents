@@ -28,7 +28,7 @@ import { RUN_ENDED, RUN_STATE as STATE, StatusPill } from "@/components/domain/r
 import { TopBar, type Crumb } from "@/components/shell/topbar";
 import { ActionBox, RunRail, confirmCancel } from "./run-panels";
 import { CostValue, RunThread } from "./run-thread";
-import { ContextButton, RunContext, useRunContextPanel } from "./run-context";
+import { RunContext } from "./run-context";
 import { RunFiles } from "./run-files";
 import { RunGraphView } from "./run-graph-view";
 import { CompactRunDetail } from "./run-compact";
@@ -363,10 +363,9 @@ export function RunLogScreen({ id }: { id: string }) {
   const params = useSearchParams();
   // The hash (a deep link to a turn or event) is read once on load; ?view= is
   // read on every render, so the URL stays the truth. The thread is the default:
-  // the Raw log (details), Graph and Files open from the Context panel.
+  // the Raw log (details), Graph and Files open from the companion's Context tab.
   const [nav, setNav] = useState(() => ({ hash: typeof window === "undefined" ? "" : window.location.hash }));
   const mode = pickRunView(params.get("view"), nav.hash, null);
-  const [contextOpen, setContextOpen] = useRunContextPanel();
   const anchor = mode === "details" ? parseRunAnchor(nav.hash) : null;
   const [follow, setFollow] = useState(() => !anchor);
   const detailsScroll = useRef<number | null>(null);
@@ -542,7 +541,6 @@ export function RunLogScreen({ id }: { id: string }) {
                 Cancel run
               </Button>
             )}
-            {!contextOpen && <ContextButton onOpen={() => setContextOpen(true)} />}
           </>
         }
       />
@@ -618,7 +616,8 @@ export function RunLogScreen({ id }: { id: string }) {
       </div>
       )}
       </div>
-      {contextOpen && <RunContext d={d} mode={mode} setMode={(m) => switchMode(m)} onClose={() => setContextOpen(false)} />}
+      {/* The run's companion: Context and Chat, in the shell's right-hand column. */}
+      <RunContext d={d} mode={mode} setMode={(m) => switchMode(m)} />
       </div>
       {mode === "details" && !follow && (
         <Button

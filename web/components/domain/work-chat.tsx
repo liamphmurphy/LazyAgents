@@ -28,8 +28,8 @@ const chipButton = "grid size-4 flex-none place-items-center rounded-xs text-fg-
  * Whom the next message goes to and what it carries: the persona, the item in the main pane, and
  * the item you pinned, which stays attached as you move between runs and tickets until you unpin it.
  */
-function Chips({ persona, subject, pinned, onPin }: { persona?: string; subject: WorkSubject; pinned?: WorkSubject; onPin: (s: WorkSubject | undefined) => void }) {
-  const viewingIsPinned = !!pinned && sameSubject(pinned, subject);
+function Chips({ persona, subject, pinned, onPin }: { persona?: string; subject?: WorkSubject; pinned?: WorkSubject; onPin: (s: WorkSubject | undefined) => void }) {
+  const viewingIsPinned = !!pinned && !!subject && sameSubject(pinned, subject);
   return (
     <DockContext persona={persona} label="Message context">
       {pinned && (
@@ -41,7 +41,7 @@ function Chips({ persona, subject, pinned, onPin }: { persona?: string; subject:
           </button>
         </span>
       )}
-      {!viewingIsPinned && (
+      {subject && !viewingIsPinned && (
         <span data-testid="work-chat-subject" className={dockContextChip} title={workSubjectLabel(subject)}>
           <Icon name={subjectIcon(subject)} size={12} className="flex-none text-fg-tertiary" />
           <span className="truncate">Viewing: {workSubjectLabel(subject)}</span>
@@ -54,7 +54,18 @@ function Chips({ persona, subject, pinned, onPin }: { persona?: string; subject:
   );
 }
 
-function welcomeFor(subject: WorkSubject): DockWelcome {
+function welcomeFor(subject: WorkSubject | undefined): DockWelcome {
+  // The companion beside a page with no run or ticket of its own: the same chat, about your work.
+  if (!subject)
+    return {
+      where: "beside this page",
+      intro: "One chat that follows you around Vesper. Pin a run or ticket from its page to keep it attached here.",
+      label: "Your work",
+      starters: [
+        { icon: "check", title: "What did my agents finish?", prompt: "What did my agents finish since yesterday, and what's waiting on me?" },
+        { icon: "search", title: "What needs me?", prompt: "What needs me right now, most urgent first?" },
+      ],
+    };
   const what = subject.kind === "run" ? "this run" : "this ticket";
   return {
     where: subject.kind === "run" ? "beside the run" : `beside ${subject.key}`,
@@ -75,11 +86,11 @@ function welcomeFor(subject: WorkSubject): DockWelcome {
 }
 
 /**
- * The persona chat in a run's or ticket's side panel: the dock always talks to your persona, while
- * the main pane's composer talks to what's in it (the run's agent). One chat follows you between
- * items; every message says which item the person was looking at.
+ * The persona chat in the companion panel: beside a run or ticket, and beside every page with no
+ * panel of its own. The dock always talks to your persona, while a run's own composer talks to its
+ * agent. One chat follows you between pages; every message says which run or ticket was in view.
  */
-export function WorkChat({ subject }: { subject: WorkSubject }) {
+export function WorkChat({ subject }: { subject?: WorkSubject }) {
   const [current, setCurrent] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -171,7 +182,9 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
         <Icon name="msg" size={22} className="text-fg-tertiary" />
         <Chips persona={persona} subject={subject} pinned={pinned} onPin={pin} />
         <p className="text-13 text-fg-secondary">
-          Talk it through with a persona. It can read the {subject.kind} and its ticket; replies to the agent stay in the main pane.
+          {subject
+            ? `Talk it through with a persona. It can read the ${subject.kind} and its ticket; replies to the agent stay in the main pane.`
+            : "Talk your work through with a persona: runs, tickets, what's waiting on you. The same chat follows you to every page."}
         </p>
         <Button variant="primary" disabled={create.isPending} onClick={start}>Start a chat</Button>
         {create.error && <p role="alert" className="text-12 text-state-blocked">{create.error.message}</p>}

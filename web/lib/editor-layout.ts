@@ -1,6 +1,8 @@
 // State, persistence and shortcuts for the shared editor layout
 // (components/shell/editor-layout.tsx), kept free of React so node:test covers them.
 
+import { companionOpen, setCompanionOpen } from "./companion.ts";
+
 /** The dock's state: open or collapsed to its rail, which tab shows, and whether ⌘. hid every panel. */
 export type DockState = { open: boolean; tab: string; hidden: boolean };
 
@@ -32,18 +34,23 @@ export const dockKey = (app: string) => `lazyagents.editor-dock.${app}`;
 
 type KV = Pick<Storage, "getItem" | "setItem">;
 
+const browserStorage = (): KV | undefined => (typeof window === "undefined" ? undefined : window.localStorage);
+
 /**
- * The remembered dock for `app`: `defaultOpen` (open unless an app says otherwise) until stored
- * otherwise, on the stored tab if it still exists, else the first. Never hidden: ⌘. lasts for the visit only.
+ * The remembered dock for `app`: open or folded as the companion panel last was on any page
+ * (`shared`, one state for every dock), else as this app's dock was, else `defaultOpen`; on the
+ * stored tab if it still exists, else the first. Never hidden: ⌘. lasts for the visit only.
  */
-export function loadDock(store: KV | undefined, app: string, tabs: string[], defaultOpen = true): DockState {
-  const fallback: DockState = { open: defaultOpen, tab: tabs[0] ?? "", hidden: false };
+export function loadDock(store: KV | undefined, app: string, tabs: string[], defaultOpen = true, shared: KV | null = browserStorage() ?? null): DockState {
+  // null: this dock doesn't open with the shared state (Knowledge starts each new tab folded).
+  const everywhere = companionOpen(shared ?? undefined);
+  const fallback: DockState = { open: everywhere ?? defaultOpen, tab: tabs[0] ?? "", hidden: false };
   try {
     const raw = store?.getItem(dockKey(app));
     if (!raw) return fallback;
     const v = JSON.parse(raw) as { open?: unknown; tab?: unknown };
     return {
-      open: typeof v.open === "boolean" ? v.open : defaultOpen,
+      open: everywhere ?? (typeof v.open === "boolean" ? v.open : defaultOpen),
       tab: typeof v.tab === "string" && tabs.includes(v.tab) ? v.tab : fallback.tab,
       hidden: false,
     };
@@ -58,6 +65,17 @@ export function saveDock(store: KV | undefined, app: string, s: DockState) {
   } catch {
     /* No storage: not remembered. */
   }
+}
+
+/**
+ * The dock after a person's action, recording its open state as the companion's for every page
+ * when the action opened or folded it. Only actions count: loading a dock, or a page's own default,
+ * never changes what other pages open with.
+ */
+export function actOnDock(s: DockState, a: DockAction, shared: KV | undefined = browserStorage()): DockState {
+  const next = dockReducer(s, a);
+  if (next.open !== s.open) setCompanionOpen(shared, next.open);
+  return next;
 }
 
 export type DockShortcut = "toggle" | "chat" | "hideAll";

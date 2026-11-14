@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dockKey, dockReducer, dockShortcut, loadDock, saveDock } from "./editor-layout.ts";
+import { actOnDock, dockKey, dockReducer, dockShortcut, loadDock, saveDock } from "./editor-layout.ts";
 
 const open = { open: true, tab: "chat", hidden: false };
 const memory = () => {
@@ -73,3 +73,28 @@ test("persistence: open state and tab per app, survive a reload, never the ⌘. 
   assert.doesNotThrow(() => saveDock(full, "docs", open));
 });
 
+
+test("the companion's open state is shared: folding one dock folds every page's", () => {
+  const memory = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+  const tabs = ["chat", "comments"];
+  const app = memory();
+  const shared = memory();
+  // Never chosen anywhere: each dock's own default; loading or saving one doesn't choose for the others.
+  const runs = loadDock(app, "runs", tabs, false, shared);
+  saveDock(app, "runs", runs);
+  assert.equal(runs.open, false);
+  assert.equal(loadDock(app, "designs", tabs, true, shared).open, true);
+  // Folded by the person in Designs: every dock opens folded, whatever its default or its own last state.
+  const designs = loadDock(app, "designs", tabs, true, shared);
+  saveDock(app, "designs", actOnDock(designs, { type: "collapse" }, shared));
+  assert.equal(loadDock(app, "docs", tabs, true, shared).open, false);
+  // Opened again from a run: every dock opens open, and each keeps its own tab.
+  actOnDock(loadDock(app, "runs", tabs, false, shared), { type: "open", tab: "comments" }, shared);
+  assert.equal(loadDock(app, "designs", tabs, true, shared).open, true);
+  // A dock that opts out (null) opens with its own state whatever the shared one says.
+  assert.equal(loadDock(app, "knowledge", tabs, false, null).open, false);
+  // Switching tabs leaves the shared state alone.
+  const before = shared.getItem("lazyagents.companion-open");
+  actOnDock({ open: true, tab: "chat", hidden: false }, { type: "select", tab: "comments" }, shared);
+  assert.equal(shared.getItem("lazyagents.companion-open"), before);
+});

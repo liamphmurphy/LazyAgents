@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Conversation, type ConversationContext, type DockStarter, type DockWelcome } from "@/app/(app)/chat/_components/conversation";
 import { PersonaAvatar, personaLook, useDockPersona } from "@/app/(app)/chat/_components/persona";
 import { Dock, type DockTab } from "@/components/shell/editor-layout";
+import { CompanionPortal } from "@/components/shell/companion";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
@@ -17,7 +18,7 @@ import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledg
 import { ApiError, type Schemas } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { KNOWLEDGE_CONTEXT_MARKER, refKey } from "@/lib/chat-context";
-import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
+import { actOnDock, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
 import { isFolder, useKnowledgeChat, type FolderAttachment, type PageAttachment } from "./chat-context";
 import { SIDE_TABS, SidePanel } from "./page-side";
 
@@ -47,7 +48,7 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   const page = usePage(pageId).data;
   const [general, setGeneral] = useState<string | null>(null);
   const [state, setState] = useState<DockState>({ open: false, tab: "chat", hidden: false });
-  const dispatch = useCallback((a: DockAction) => setState((s) => dockReducer(s, a)), []);
+  const dispatch = useCallback((a: DockAction) => setState((s) => actOnDock(s, a)), []);
   const [loaded, setLoaded] = useState(false);
   const [focusChat, setFocusChat] = useState(0);
 
@@ -56,8 +57,9 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    // Per tab (sessionStorage), so a new visit starts folded but a reload keeps it as it was.
-    setState(loadDock(window.sessionStorage, APP, TABS, false));
+    // Per tab (sessionStorage), so a new visit starts folded but a reload keeps it as it was. Knowledge
+    // doesn't open with the companion's shared state: a new tab of notes starts as a reading space.
+    setState(loadDock(window.sessionStorage, APP, TABS, false, null));
     setGeneral(window.localStorage.getItem(GENERAL_CHAT_KEY));
     setLoaded(true);
   }, []);
@@ -156,7 +158,9 @@ export function KnowledgeDock({ pageId }: { pageId?: string }) {
   // Hidden below md: the page sidebar and explorer already fill a phone.
   return (
     <div className="hidden md:contents">
-      <Dock uid={uid} tabs={tabs} state={state} dispatch={dispatch} panels={shown ? undefined : null} />
+      <CompanionPortal>
+        <Dock uid={uid} tabs={tabs} state={state} dispatch={dispatch} panels={shown ? undefined : null} />
+      </CompanionPortal>
     </div>
   );
 }
