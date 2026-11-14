@@ -223,8 +223,14 @@ test("a long model menu stays on screen and scrolls to its first harness", async
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(720);
   expect(box.height).toBeLessThanOrEqual(400);
-  // The rest is reached by scrolling the menu, not the page.
-  expect(await menu.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  // Effort sits beside the models, all of it in view without scrolling past them.
+  const effortGroup = page.getByRole("group", { name: "Reasoning effort" });
+  const effortBox = (await effortGroup.boundingBox())!;
+  expect(effortBox.x).toBeGreaterThan(box.x + 100);
+  await expect(effortGroup.getByRole("menuitem").last()).toBeInViewport({ ratio: 1 });
+  // The rest of the models are reached by scrolling their column, not the page.
+  const opus = page.getByRole("menuitem", { name: "Claude Code Opus 5.5" });
+  expect(await opus.evaluate((el) => { const col = el.closest("[role=menu] > div")!; return col.scrollHeight > col.clientHeight; })).toBe(true);
   const fable = page.getByRole("menuitem", { name: "Claude Code Fable 5.2" });
   await fable.scrollIntoViewIfNeeded();
   await expect(fable).toBeInViewport({ ratio: 1 });

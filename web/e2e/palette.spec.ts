@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installBoardApi } from "./mock-board-api";
+import { persona } from "./mock-chat-api";
 
 // LAZYAGENTS-43: ⌘K command palette and the ? shortcut reference.
 const palette = (page: Page) => page.getByRole("dialog", { name: "Search and commands" });
@@ -115,6 +116,45 @@ test("Enter waits for results instead of falling through to an action", async ({
   await expect(palette(page)).toBeVisible();
   await expect(page).toHaveURL(/\/tickets\?layout=board&project=WEB$/);
   await expect(results(page).getByRole("option").first()).toHaveText(/Deploy staging/);
+});
+
+test("a persona's name offers a new chat with them as the top result", async ({ page }) => {
+  await install(page);
+  const laura = persona(1, { name: "Laura" });
+  const lauren = persona(2, { name: "Lauren" });
+  await page.route("**/api/v1/personas", (route) => route.fulfill({ json: { personas: [lauren, laura, persona(3, { name: "Health Coach" })] } }));
+  await page.goto("/board?project=WEB");
+  await openPalette(page);
+  await input(page).fill("laura");
+  const top = results(page).getByRole("group", { name: "Top result" }).getByRole("option");
+  await expect(top).toHaveText([/Chat with Laura.*new chat/]);
+  await expect(top).toHaveAttribute("aria-selected", "true");
+  await expect(results(page).getByRole("group", { name: "Start a chat" })).toHaveCount(0);
+
+  await input(page).fill("lau");
+  await expect(top).toHaveText([/Chat with Lauren/]);
+  await expect(results(page).getByRole("group", { name: "Start a chat" }).getByRole("option")).toHaveText([/Chat with Laura/]);
+
+  // Matched locally, so ↵ takes it without waiting for the search.
+  await input(page).fill("chat with coach");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/chat\\?new&persona=${persona(3).id}$`));
+});
+
+test("an app's name jumps to the app, and apps lists them all", async ({ page }) => {
+  await install(page);
+  await page.goto("/board?project=WEB");
+  await openPalette(page);
+  await input(page).fill("apps");
+  await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Knowledge/]);
+  await expect(results(page).getByRole("group", { name: "Apps" }).getByRole("option")).toHaveText([/Slides/, /Designs/, /Finance/, /Library/, /Workflows/, /Scheduled/, /Learn/]);
+
+  await input(page).fill("slides");
+  await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Slides.*app/]);
+  // Offered once: not again under Go to.
+  await expect(results(page).getByRole("option", { name: /Go to Slides/ })).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/apps\/slides$/);
 });
 
 test("actions: new ticket, start planning, new chat and switch project", async ({ page }) => {

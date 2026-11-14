@@ -8,6 +8,8 @@ export type PaletteGroup =
   | "Continue"
   | "Recent"
   | "Jump to"
+  | "Start a chat"
+  | "Apps"
   | "Tickets"
   | "Pages"
   | "Artifacts"
@@ -31,6 +33,8 @@ export const GROUP_ORDER: PaletteGroup[] = [
   "Continue",
   "Recent",
   "Jump to",
+  "Start a chat",
+  "Apps",
   "Tickets",
   "Pages",
   "Artifacts",
@@ -88,6 +92,7 @@ const FILTER_GROUPS: Record<string, PaletteGroup> = {
   persona: "Personas",
   memory: "Memories",
   library: "Library",
+  app: "Apps",
 };
 
 export type PaletteFilters = { text: string; groups: PaletteGroup[]; status?: string; tokens: string[] };
@@ -209,6 +214,48 @@ export function matchesWords(text: string, query: string): boolean {
     .split(/\s+/)
     .filter(Boolean)
     .every((w) => hay.includes(w));
+}
+
+const words = (s: string) => s.toLowerCase().split(/\s+/).filter(Boolean);
+
+/**
+ * Every query word starts a word of the text ("hea co" finds "Health Coach"). Prefixes, not
+ * substrings: one typed letter would otherwise match most names and take the top result.
+ */
+function startsWords(text: string, query: string): boolean {
+  const hay = words(text);
+  const want = words(query);
+  return want.length > 0 && want.every((w) => hay.some((h) => h.startsWith(w)));
+}
+
+/**
+ * Personas the typed text names, best first: the whole name, then the name's start, then the
+ * start of a word in it. A leading "chat with" or "talk to" is the intent, not part of the name.
+ */
+export function personaMatches<P extends { name: string }>(personas: P[], query: string): P[] {
+  const q = query.trim().toLowerCase().replace(/^(?:chat(?:\s+with)?|talk\s+to)\s+/, "");
+  if (!q) return [];
+  const rank = (name: string) => {
+    const n = name.toLowerCase();
+    if (n === q) return 0;
+    if (n.startsWith(q)) return 1;
+    return startsWords(n, q) ? 2 : -1;
+  };
+  return personas
+    .map((p, i) => ({ p, i, r: rank(p.name) }))
+    .filter((x) => x.r >= 0)
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.p);
+}
+
+/**
+ * Apps the typed text names, in menu order. "app" or "apps" lists them all; a leading
+ * "open" or "go to" is the intent, not part of the name.
+ */
+export function appMatches<A extends { label: string }>(apps: A[], query: string): A[] {
+  const q = query.trim().replace(/^(?:open|go\s+to)\s+/i, "");
+  if (!q) return [];
+  return apps.filter((a) => startsWords(`${a.label} apps`, q));
 }
 
 export const MAX_RECENT = 6;
