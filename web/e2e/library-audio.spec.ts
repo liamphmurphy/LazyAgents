@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { components } from "../lib/api/schema";
 import { installBoardApi } from "./mock-board-api";
-import { mockWav } from "./mock-chat-api";
+import { fulfillWav, mockWav } from "./mock-chat-api";
 
 type Item = components["schemas"]["LibraryItem"];
 
@@ -42,7 +42,7 @@ async function installLibrary(page: Page, items: Item[]) {
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(it) });
     }
     // Long enough that a slow test never reaches the end of the clip.
-    if (m?.[2]) return route.fulfill({ status: 200, contentType: "audio/wav", body: mockWav(30) });
+    if (m?.[2]) return fulfillWav(route, 30);
     const kind = url.searchParams.get("kind");
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: items.filter((i) => !kind || i.kind === kind), has_more: false }) });
   });
@@ -92,8 +92,6 @@ test("a tile opens the player and starts it: scrub, speed, loop, details and dow
   const seek = player.getByRole("slider", { name: "Seek" });
   // The file's own length (30 s here) replaces the planned one once its metadata loads.
   await expect(player.getByTestId("audio-time")).toContainText("/ 0:30");
-  // A mocked response has no byte ranges, so the browser can't seek until the whole clip has arrived.
-  await expect.poll(() => dialog.locator("audio").evaluate((a: HTMLAudioElement) => a.seekable.length > 0 && a.seekable.end(0) >= a.duration - 0.5)).toBe(true);
   await seek.focus();
   const before = Number(await seek.getAttribute("aria-valuenow"));
   await seek.press("ArrowRight");

@@ -77,7 +77,7 @@ test("the deck renders in the editor layout and its dock collapses and reopens",
 test("Share holds both exports and Present stays in the header", async ({ page }) => {
   await install(page, [{ seq: 1, body: JSON.stringify(deckWith("Quarterly review")), author: "user" }]);
 
-  for (const [item, file] of [[/PDF/, "Layout.pdf"], [/PowerPoint/, "Layout.pptx"]] as const) {
+  for (const [item, file] of [[/^PDF \(\.pdf\)/, "Layout.pdf"], [/^PowerPoint \(\.pptx\)/, "Layout.pptx"]] as const) {
     await page.getByRole("button", { name: "Share" }).click();
     const download = page.waitForEvent("download");
     await page.getByRole("menuitem", { name: item }).click();
@@ -86,6 +86,21 @@ test("Share holds both exports and Present stays in the header", async ({ page }
 
   await page.getByRole("button", { name: /Present/ }).click();
   await expect(page).toHaveURL(new RegExp(`/present/slides/${DECK}\\?slide=1`));
+});
+
+test("Share can keep an export in the Library, linked to the deck", async ({ page }) => {
+  await install(page, [{ seq: 1, body: JSON.stringify(deckWith("Quarterly review")), author: "user" }]);
+  const saved: { url: string; body: string }[] = [];
+  await page.route(`**/api/v1/slides/${DECK}/library`, (route) => {
+    saved.push({ url: route.request().url(), body: route.request().postData() ?? "" });
+    return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ id: "x", kind: "export", title: "Layout", filename: "Layout.pdf", content_type: "application/pdf", size_bytes: 1, created_at: new Date().toISOString() }) });
+  });
+  await page.getByRole("button", { name: "Share" }).click();
+  await page.getByRole("menuitem", { name: /^Save PDF to Library/ }).click();
+  await expect(page.getByText("Saved “Layout.pdf” to your Library")).toBeVisible();
+  expect(saved).toHaveLength(1);
+  expect(saved[0].body).toContain('filename="Layout.pdf"');
+  expect(saved[0].body).toContain("%PDF-");
 });
 
 test("a persona's suggestions open in the Review tab and can be accepted or rejected", async ({ page }) => {
