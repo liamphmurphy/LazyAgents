@@ -192,7 +192,7 @@ function StatusLine({ project }: { project?: string }) {
   );
 }
 
-function Chips({ project, agent, hideDone }: { project?: string; agent?: string; hideDone: boolean }) {
+function Chips({ project, agent, hideDone, doneOnly = false }: { project?: string; agent?: string; hideDone: boolean; doneOnly?: boolean }) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -208,10 +208,11 @@ function Chips({ project, agent, hideDone }: { project?: string; agent?: string;
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-1">
       {/* "All spaces" stays explicit (?project=), so the shell's project doesn't come back. */}
-      <FilterMenu label="Space" value={project ?? ""} onChange={(v) => set("project", v)}
-        options={[{ value: "", label: "All spaces" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />
-      <FilterMenu label="Persona" value={agent ?? ""} onChange={(v) => set("agent", v || undefined)}
-        options={[{ value: "", label: "All personas" }, ...agents.map((a) => ({ value: a.handle, label: a.name }))]} />
+      {/* Work has its own Space and Persona filters above the list, so it only takes Hide done. */}
+      {!doneOnly && <FilterMenu label="Space" value={project ?? ""} onChange={(v) => set("project", v)}
+        options={[{ value: "", label: "All spaces" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />}
+      {!doneOnly && <FilterMenu label="Persona" value={agent ?? ""} onChange={(v) => set("agent", v || undefined)}
+        options={[{ value: "", label: "All personas" }, ...agents.map((a) => ({ value: a.handle, label: a.name }))]} />}
       <button
         type="button"
         aria-pressed={hideDone}
@@ -263,7 +264,7 @@ export function RunList({ selected, fill, embedded = false, search: workSearch }
       {embedded && (
         <div className="flex flex-col gap-2 px-1">
           <StatusLine project={data.project} />
-          <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} />
+          <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} doneOnly />
         </div>
       )}
       {!embedded && <div className="flex flex-col gap-2 px-1">

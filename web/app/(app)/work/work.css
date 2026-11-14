@@ -40,8 +40,10 @@
   display: flex;
   gap: 2px;
 }
-.work-tabs button {
+.work-tabs button,
+.work-tabs a {
   flex: 1;
+  text-align: center;
   border-radius: 5px;
   padding: 6px 8px;
   font-size: 12px;

@@ -133,7 +133,7 @@ test("the list groups runs beside the selected run, and the URL keeps the select
   for (const t of ["Partition ledger entries", "Payout retries", "Billing plan"]) await expect(tray.locator("[data-tray-row]").filter({ hasText: t })).toHaveCount(1);
   // Open all lands on Work with Needs you in view.
   await tray.getByRole("link", { name: "Open all →" }).click();
-  await expect(page).toHaveURL(/\/work#needs-you$/);
+  await expect(page).toHaveURL(/\/work(\?[^#]*)?#needs-you$/);
   await expect(needs).toBeInViewport();
 
   // Selecting a row updates the URL; a reload restores the selection.

@@ -29,10 +29,15 @@ integration. Updates read the live URL at the event boundary to preserve precedi
 navigation that React has not rendered yet. Back/Forward restore the same run,
 context and filters. Modified link clicks retain normal browser behavior.
 
-Legacy Runs, Tickets and Epics URLs enter Work. Advanced run log/graph/files URLs
-remain available. Explicit `?full=1` ticket and epic detail links retain the
-existing activity, criteria management and other detailed tools. No API or database
-schema changes are needed.
+`/work` is Activity plus the ticket/epic context and focused panes. Browsing
+tickets and epics reuses the existing full screens under the one Work nav item:
+the Tickets and Epics tabs open `/tickets` and `/tickets?layout=epics` (list,
+board, dependency map, epics overview), and a bare `/work?view=tickets|epics`
+redirects there. `/tickets/<key>`, `/epics/<id>` and `/runs/<id>` stay the full
+detail screens (run keys, Context panel, side chat). `/runs` opens Activity.
+The two screens keep separate URL params (`view`, `epic` and `assignee` mean
+different things), which is why they aren't mounted inside each other.
+No API or database schema changes are needed.
 
 `e2e/unified-work.spec.ts` exercises the desktop and compact journeys and captures
 screenshots for all seven frames, plus saved filters, previous attempts, errors,
