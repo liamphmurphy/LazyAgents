@@ -1030,8 +1030,9 @@ export function useReadInbox() {
   if(!r.response.ok)throw new Error("Couldn't mark item read");
  },onSuccess:()=>{void qc.invalidateQueries({queryKey:["inbox"]});void qc.invalidateQueries({queryKey:keys.bootstrap});}});
 }
-export function useSearch(q:string,project?:string) {
- return useQuery({queryKey:["search",q,project??""],queryFn:()=>unwrap(api.GET("/search",{params:{query:{q,project}}})).then(d=>d.hits),enabled:q.trim().length>0,placeholderData:keepPreviousData});
+/** ⌘K search: hits capped per type, with how many of each matched; kind lists one type in full. */
+export function useSearch(q:string,project?:string,kind?:Schemas["SearchType"],enabled=true) {
+ return useQuery({queryKey:["search",q,project??"",kind??""],queryFn:()=>unwrap(api.GET("/search",{params:{query:{q,project,kind}}})),enabled:enabled&&q.trim().length>0,placeholderData:keepPreviousData});
 }
 
 // ------------------------------------------------------------- overviews

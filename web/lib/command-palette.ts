@@ -1,6 +1,80 @@
 // Pure logic for the ⌘K command palette (LAZYAGENTS-43). Kept free of React so
 // `npm run test:unit` covers it; the component is components/shell/command-menu.tsx.
 
+/**
+ * A searchable type: a chip (or a row under More), an `is:` filter, and the
+ * /search kinds it covers. People are personas and agents together.
+ */
+export type TypeKey =
+  | "ticket"
+  | "page"
+  | "chat"
+  | "people"
+  | "run"
+  | "epic"
+  | "memory"
+  | "canvas"
+  | "course"
+  | "space"
+  | "workflow"
+  | "library"
+  | "scheduled"
+  | "artifact"
+  | "app";
+
+/** /search's kinds (SearchType in the API). */
+export type SearchKind =
+  | "ticket"
+  | "page"
+  | "artifact"
+  | "chat"
+  | "agent"
+  | "epic"
+  | "run"
+  | "workflow"
+  | "persona"
+  | "memory"
+  | "library"
+  | "space"
+  | "course"
+  | "scheduled"
+  | "canvas";
+
+export type TypeDef = {
+  key: TypeKey;
+  /** Chip and group label. */
+  label: string;
+  /** "+ 28 more tickets". */
+  noun: string;
+  token: string;
+  kinds: SearchKind[];
+};
+
+export const TYPES: TypeDef[] = [
+  { key: "ticket", label: "Tickets", noun: "tickets", token: "is:ticket", kinds: ["ticket"] },
+  { key: "page", label: "Pages", noun: "pages", token: "is:page", kinds: ["page"] },
+  { key: "chat", label: "Chats", noun: "chats", token: "is:chat", kinds: ["chat"] },
+  { key: "people", label: "People", noun: "people", token: "is:people", kinds: ["persona", "agent"] },
+  { key: "run", label: "Runs", noun: "runs", token: "is:run", kinds: ["run"] },
+  { key: "epic", label: "Epics", noun: "epics", token: "is:epic", kinds: ["epic"] },
+  { key: "memory", label: "Memories", noun: "memories", token: "is:memory", kinds: ["memory"] },
+  { key: "canvas", label: "Canvases", noun: "canvases", token: "is:canvas", kinds: ["canvas"] },
+  { key: "course", label: "Courses", noun: "courses", token: "is:course", kinds: ["course"] },
+  { key: "space", label: "Spaces", noun: "spaces", token: "is:space", kinds: ["space"] },
+  { key: "workflow", label: "Workflows", noun: "workflows", token: "is:workflow", kinds: ["workflow"] },
+  { key: "library", label: "Library", noun: "Library items", token: "is:library", kinds: ["library"] },
+  { key: "scheduled", label: "Scheduled", noun: "scheduled tasks", token: "is:scheduled", kinds: ["scheduled"] },
+  { key: "artifact", label: "Artifacts", noun: "artifacts", token: "is:artifact", kinds: ["artifact"] },
+  // Matched in the browser from the menu, not by /search.
+  { key: "app", label: "Apps", noun: "apps", token: "is:app", kinds: [] },
+];
+
+export const TYPE: Record<TypeKey, TypeDef> = Object.fromEntries(TYPES.map((t) => [t.key, t])) as Record<TypeKey, TypeDef>;
+
+/** The chip row, after All; Tab steps through it. The rest are under More. */
+export const CHIP_TYPES: TypeKey[] = ["ticket", "page", "chat", "people", "run"];
+export const MORE_TYPES: TypeKey[] = TYPES.map((t) => t.key).filter((k) => !CHIP_TYPES.includes(k));
+
 export type PaletteGroup =
   | "Top result"
   | "Needs you"
@@ -9,47 +83,10 @@ export type PaletteGroup =
   | "Recent"
   | "Jump to"
   | "Start a chat"
-  | "Apps"
-  | "Tickets"
-  | "Pages"
-  | "Artifacts"
-  | "Chats"
-  | "Agents"
-  | "Epics"
-  | "Runs"
-  | "Workflows"
-  | "Personas"
-  | "Memories"
-  | "Library"
+  | (typeof TYPES)[number]["label"]
   | "Actions"
   | "Switch space"
   | "Go to";
-
-/** Display order of groups; search hits are re-sorted into it. */
-export const GROUP_ORDER: PaletteGroup[] = [
-  "Top result",
-  "Needs you",
-  "Running",
-  "Continue",
-  "Recent",
-  "Jump to",
-  "Start a chat",
-  "Apps",
-  "Tickets",
-  "Pages",
-  "Artifacts",
-  "Chats",
-  "Agents",
-  "Epics",
-  "Runs",
-  "Workflows",
-  "Personas",
-  "Memories",
-  "Library",
-  "Actions",
-  "Switch space",
-  "Go to",
-];
 
 /** A navigable result, as stored in the recent list. */
 export type PaletteLink = {
@@ -64,6 +101,7 @@ export type PaletteLink = {
 type TargetLike = {
   kind: string;
   id?: string;
+  anchor?: string;
   title: string;
   artifact_type?: string;
   path?: string;
@@ -80,33 +118,58 @@ export function ticketKeyFrom(query: string, project?: string): string | undefin
   return m ? m[1].toUpperCase() : undefined;
 }
 
-const FILTER_GROUPS: Record<string, PaletteGroup> = {
-  ticket: "Tickets",
-  page: "Pages",
-  artifact: "Artifacts",
-  chat: "Chats",
-  agent: "Agents",
-  epic: "Epics",
-  run: "Runs",
-  workflow: "Workflows",
-  persona: "Personas",
-  memory: "Memories",
-  library: "Library",
-  app: "Apps",
+/** `is:` words, the API's names and a few plurals and synonyms included. */
+const FILTER_TYPES: Record<string, TypeKey> = {
+  ticket: "ticket",
+  tickets: "ticket",
+  page: "page",
+  pages: "page",
+  note: "page",
+  chat: "chat",
+  chats: "chat",
+  message: "chat",
+  people: "people",
+  person: "people",
+  persona: "people",
+  agent: "people",
+  run: "run",
+  runs: "run",
+  epic: "epic",
+  memory: "memory",
+  canvas: "canvas",
+  course: "course",
+  learn: "course",
+  space: "space",
+  project: "space",
+  workflow: "workflow",
+  library: "library",
+  scheduled: "scheduled",
+  schedule: "scheduled",
+  artifact: "artifact",
+  app: "app",
 };
 
-export type PaletteFilters = { text: string; groups: PaletteGroup[]; status?: string; tokens: string[] };
+export type PaletteFilters = { text: string; types: TypeKey[]; status?: string; tokens: string[] };
 
-/** Splits `is:ticket status:done deploy` into filters and search text; unknown tokens stay text. */
+/**
+ * Splits `is:ticket status:done deploy` into filters and search text; unknown tokens stay text.
+ * A leading `@` asks for people and `#` for tickets, as `is:people` and `is:ticket` do.
+ */
 export function parseFilters(query: string): PaletteFilters {
-  const out: PaletteFilters = { text: "", groups: [], tokens: [] };
+  const out: PaletteFilters = { text: "", types: [], tokens: [] };
   const words: string[] = [];
-  for (const word of query.trim().split(/\s+/).filter(Boolean)) {
+  let rest = query.trim();
+  const prefix = rest.match(/^([@#])\s*/);
+  if (prefix) {
+    out.types.push(prefix[1] === "@" ? "people" : "ticket");
+    rest = rest.slice(prefix[0].length);
+  }
+  for (const word of rest.split(/\s+/).filter(Boolean)) {
     const lower = word.toLowerCase();
     const kind = lower.match(/^(?:is|in):(.+)$/)?.[1];
     const status = lower.match(/^status:(.+)$/)?.[1];
-    if (kind && FILTER_GROUPS[kind]) {
-      out.groups.push(FILTER_GROUPS[kind]);
+    if (kind && FILTER_TYPES[kind]) {
+      if (!out.types.includes(FILTER_TYPES[kind])) out.types.push(FILTER_TYPES[kind]);
       out.tokens.push(word);
     } else if (status) {
       out.status = status;
@@ -117,11 +180,6 @@ export function parseFilters(query: string): PaletteFilters {
   return out;
 }
 
-/** Whether a hit passes the parsed filters. */
-export function passesFilters(hit: { group: PaletteGroup; status?: string }, f: PaletteFilters): boolean {
-  return (!f.groups.length || f.groups.includes(hit.group)) && (!f.status || hit.status === f.status);
-}
-
 /** The query with one filter token taken out. */
 export function removeToken(query: string, token: string): string {
   return query.trim().split(/\s+/).filter((w) => w !== token).join(" ");
@@ -129,7 +187,10 @@ export function removeToken(query: string, token: string): string {
 
 /** Cuts a server snippet («match») into plain and marked runs. */
 export function snippetParts(snippet: string): { text: string; match: boolean }[] {
+  // [[Path|label]] reads as its label (or path); a cut-off "[[" or "]]" is dropped.
   return snippet
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1")
+    .replace(/\[\[|\]\]/g, "")
     .split(/(«[^»]*»)/)
     .filter(Boolean)
     .map((s) => (s.startsWith("«") && s.endsWith("»") ? { text: s.slice(1, -1), match: true } : { text: s, match: false }));
@@ -143,67 +204,164 @@ export function matchParts(text: string, query: string): { text: string; match: 
   return text.split(re).filter(Boolean).map((s) => ({ text: s, match: words.some((w) => new RegExp(`^${w}$`, "i").test(s)) }));
 }
 
-/** Lifts the best-scoring hit into "Top result" unless grouping already put it first. */
-export function promoteTop<T extends { group: PaletteGroup; score?: number }>(sorted: T[]): T[] {
-  let best = 0;
-  sorted.forEach((item, i) => {
-    if ((item.score ?? 0) > (sorted[best].score ?? 0)) best = i;
-  });
-  if (best === 0) return sorted;
-  return [{ ...sorted[best], group: "Top result" }, ...sorted.filter((_, i) => i !== best)];
-}
-
-/** The palette group a search hit belongs to; wiki pages are notes. */
-export function groupOf(t: TargetLike): PaletteGroup {
+/** The type a search hit belongs to; wiki pages are pages, other artifacts artifacts. */
+export function typeOf(t: Pick<TargetLike, "kind" | "artifact_type">): TypeKey {
   switch (t.kind) {
     case "ticket":
-      return "Tickets";
     case "chat":
-      return "Chats";
-    case "agent":
-      return "Agents";
-    case "epic":
-      return "Epics";
     case "run":
-      return "Runs";
-    case "workflow":
-      return "Workflows";
-    case "persona":
-      return "Personas";
+    case "epic":
     case "memory":
-      return "Memories";
+    case "canvas":
+    case "course":
+    case "space":
+    case "workflow":
     case "library":
-      return "Library";
+    case "scheduled":
+      return t.kind;
+    case "agent":
+    case "persona":
+      return "people";
     default:
-      return t.artifact_type === "note" ? "Pages" : "Artifacts";
+      return t.artifact_type === "note" ? "page" : "artifact";
   }
+}
+
+/** The /search kind to ask for so a type's chip lists all of it; none when it spans several (People). */
+export function searchKind(type: TypeKey | undefined): SearchKind | undefined {
+  const kinds = type ? TYPE[type].kinds : [];
+  return kinds.length === 1 ? kinds[0] : undefined;
+}
+
+/** Matches per type from /search's counts (per kind). */
+export function typeCounts(counts: Partial<Record<string, number>> | undefined): Partial<Record<TypeKey, number>> {
+  const out: Partial<Record<TypeKey, number>> = {};
+  for (const t of TYPES) {
+    const n = t.kinds.reduce((sum, k) => sum + (counts?.[k] ?? 0), 0);
+    if (n) out[t.key] = n;
+  }
+  return out;
 }
 
 /** A search hit as a palette link; undefined when it has nowhere to go. */
 export function linkFromTarget(t: TargetLike): PaletteLink | undefined {
   if (!t.href) return undefined;
-  const meta =
-    t.kind === "chat"
-      ? "chat"
-      : t.kind === "artifact" && t.artifact_type === "note"
-        ? "wiki page"
-        : (t.display_id ?? t.artifact_type ?? t.kind);
+  const type = typeOf(t);
+  const page = type === "page";
   return {
     id: t.id ?? t.href,
-    title: t.kind === "artifact" && t.artifact_type === "note" && t.path ? t.path : t.title,
-    meta,
+    title: page && t.path ? t.path : t.title,
+    meta: page ? "page" : (t.display_id ?? t.artifact_type ?? (t.kind === "agent" || t.kind === "persona" ? t.kind : TYPE[type].label.toLowerCase())),
     href: t.href,
-    kind: groupOf(t),
+    kind: TYPE[type].label,
     ...(t.status ? { status: t.status } : {}),
   };
 }
 
-/** Stable sort into GROUP_ORDER, keeping the server's ranking inside a group. */
-export function sortByGroup<T extends { group: PaletteGroup }>(items: T[]): T[] {
-  return items
-    .map((item, i) => ({ item, i }))
-    .sort((a, b) => GROUP_ORDER.indexOf(a.item.group) - GROUP_ORDER.indexOf(b.item.group) || a.i - b.i)
-    .map((x) => x.item);
+type Hit = { target: TargetLike; snippet: string; score: number; detail?: string; updated_at?: string };
+
+/** One matching message under its chat. */
+export type MessageMatch = { id: string; href: string; snippet: string; author: string; at?: string };
+
+/** A chat found by its title, its messages, or both: one row, its messages under it. */
+export type ChatMatch = {
+  id: string;
+  title: string;
+  href: string;
+  /** The chat's persona, when the server said. */
+  persona?: string;
+  at?: string;
+  score: number;
+  /** Matched by its title, not only by what was said in it. */
+  titled: boolean;
+  messages: MessageMatch[];
+};
+
+/**
+ * Folds chat hits into one row per chat: /search returns a title match as the chat and each
+ * matching message as the chat with the message as its anchor. Order is the best hit's.
+ */
+export function groupChats(hits: Hit[]): ChatMatch[] {
+  const byId = new Map<string, ChatMatch>();
+  for (const h of hits) {
+    const t = h.target;
+    if (t.kind !== "chat" || !t.id || !t.href) continue;
+    let chat = byId.get(t.id);
+    if (!chat) {
+      chat = { id: t.id, title: t.title || "Untitled chat", href: `/chat/${t.id}`, score: h.score, titled: false, messages: [] };
+      byId.set(t.id, chat);
+    }
+    chat.score = Math.max(chat.score, h.score);
+    if (t.anchor) {
+      chat.messages.push({ id: t.anchor, href: t.href, snippet: h.snippet, author: h.detail ?? "", at: h.updated_at });
+      // A message's author names the persona when it isn't the person.
+      if (!chat.persona && h.detail && h.detail !== "You") chat.persona = h.detail;
+    } else {
+      chat.titled = true;
+      chat.href = t.href;
+      if (h.detail) chat.persona = h.detail;
+      chat.at = h.updated_at ?? chat.at;
+    }
+    if (!chat.at && h.updated_at) chat.at = h.updated_at;
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Orders groups by their best score, keeping each group's own order, and shows at most `cap`
+ * of each; `more` is how many matched beyond those (from the server's count when it has one).
+ */
+export function rankGroups<T extends { score?: number }>(
+  groups: { type: TypeKey; items: T[] }[],
+  cap: number,
+  counts: Partial<Record<TypeKey, number>> = {},
+): { type: TypeKey; items: T[]; total: number; more: number }[] {
+  const best = (items: T[]) => Math.max(...items.map((i) => i.score ?? 0));
+  return groups
+    .filter((g) => g.items.length > 0)
+    .map((g, i) => ({ g, i, best: best(g.items) }))
+    .sort((a, b) => b.best - a.best || a.i - b.i)
+    .map(({ g }) => {
+      const total = Math.max(counts[g.type] ?? 0, g.items.length);
+      const items = g.items.slice(0, cap);
+      return { type: g.type, items, total, more: total - items.length };
+    });
+}
+
+/** The hit with the highest score across groups, or undefined when there's nothing to lift. */
+export function bestOf<T extends { score?: number }>(items: T[]): T | undefined {
+  let best: T | undefined;
+  for (const it of items) if (!best || (it.score ?? 0) > (best.score ?? 0)) best = it;
+  return best;
+}
+
+/** Facet values in a one-type list (status for tickets, folder for pages, persona for chats), with counts, most common first. */
+export function facets(values: (string | undefined)[]): { value: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+/** The chip after (or, with `back`, before) `current`: All, then each chip type, wrapping. */
+export function stepChip(current: TypeKey | undefined, back = false): TypeKey | undefined {
+  const order: (TypeKey | undefined)[] = [undefined, ...CHIP_TYPES];
+  const i = Math.max(0, order.indexOf(current));
+  return order[(i + (back ? order.length - 1 : 1)) % order.length];
+}
+
+/** Markdown as one plain line for a preview: code, links, images and markup dropped; cut at `max` characters. */
+export function plainExcerpt(md: string, max: number): string {
+  const text = md
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)|!\[\[[^\]]*\]\]/g, " ")
+    .replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^---\n[\s\S]*?\n---\n/, " ")
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
+    .replace(/[*_`~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 /** Every word of the query appears in the text (case-insensitive); empty matches all. */
@@ -363,7 +521,10 @@ export const SHORTCUTS: { section: string; items: { label: string; keys: string[
     section: "Palette",
     items: [
       { label: "Move / open / close", keys: ["↑", "↓", "↵", "Esc"] },
-      { label: "Toggle space scope · commands only", keys: ["Tab", ">"] },
+      { label: "Next / previous type", keys: ["Tab", "⇧Tab"] },
+      { label: "Expand / collapse a chat's matching messages", keys: ["→", "←"] },
+      { label: "Attach to a chat", keys: ["⌥", "↵"] },
+      { label: "People · tickets · commands only", keys: ["@", "#", ">"] },
       { label: "Open in a new tab", keys: ["⌘/Ctrl", "↵"] },
     ],
   },

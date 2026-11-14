@@ -1,26 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  GROUP_ORDER,
   appMatches,
-  groupOf,
+  bestOf,
+  facets,
+  groupChats,
   linkFromTarget,
   matchParts,
   matchesWords,
   pageContext,
+  plainExcerpt,
   parseFilters,
   parseRecent,
-  passesFilters,
   personaMatches,
   projectOfKey,
-  promoteTop,
   pushRecent,
+  rankGroups,
   RECENT_KEY,
   recordRecent,
   removeToken,
+  searchKind,
   snippetParts,
-  sortByGroup,
+  stepChip,
   ticketKeyFrom,
+  typeCounts,
+  typeOf,
 } from "./command-palette.ts";
 
 test("a typed ticket key is recognised and uppercased", () => {
@@ -31,35 +35,79 @@ test("a typed ticket key is recognised and uppercased", () => {
   assert.equal(ticketKeyFrom("-12"), undefined);
 });
 
-test("hits land in the mockup's groups", () => {
-  assert.equal(groupOf({ kind: "ticket", title: "t" }), "Tickets");
-  assert.equal(groupOf({ kind: "artifact", artifact_type: "note", title: "p" }), "Pages");
-  assert.equal(groupOf({ kind: "artifact", artifact_type: "adr", title: "a" }), "Artifacts");
-  assert.equal(groupOf({ kind: "section", title: "s" }), "Artifacts");
-  assert.equal(groupOf({ kind: "chat", title: "c" }), "Chats");
-  assert.equal(groupOf({ kind: "agent", title: "a" }), "Agents");
-  assert.equal(groupOf({ kind: "epic", title: "e" }), "Epics");
+test("hits land in their type: pages apart from artifacts, personas and agents as people", () => {
+  assert.equal(typeOf({ kind: "ticket" }), "ticket");
+  assert.equal(typeOf({ kind: "artifact", artifact_type: "note" }), "page");
+  assert.equal(typeOf({ kind: "artifact", artifact_type: "adr" }), "artifact");
+  assert.equal(typeOf({ kind: "section" }), "artifact");
+  assert.equal(typeOf({ kind: "agent" }), "people");
+  assert.equal(typeOf({ kind: "persona" }), "people");
+  for (const k of ["chat", "run", "epic", "memory", "canvas", "course", "space", "workflow", "library", "scheduled"]) assert.equal(typeOf({ kind: k }), k);
 });
 
 test("links use the wiki path for pages and skip targets without an href", () => {
   assert.deepEqual(
     linkFromTarget({ kind: "artifact", artifact_type: "note", id: "1", title: "Runbook", path: "Payments/Runbook", href: "/wiki/Payments/Runbook" }),
-    { id: "1", title: "Payments/Runbook", meta: "wiki page", href: "/wiki/Payments/Runbook", kind: "Pages" },
+    { id: "1", title: "Payments/Runbook", meta: "page", href: "/wiki/Payments/Runbook", kind: "Pages" },
   );
   assert.equal(linkFromTarget({ kind: "ticket", title: "x" }), undefined);
   assert.equal(linkFromTarget({ kind: "ticket", id: "2", title: "x", display_id: "PAY-1", href: "/tickets/PAY-1" }).meta, "PAY-1");
+  assert.equal(linkFromTarget({ kind: "space", id: "3", title: "Homelab", href: "/spaces/3" }).kind, "Spaces");
 });
 
-test("sortByGroup follows GROUP_ORDER and keeps ranking within a group", () => {
-  const items = [
-    { group: "Agents", n: 1 },
-    { group: "Tickets", n: 2 },
-    { group: "Chats", n: 3 },
-    { group: "Tickets", n: 4 },
-    { group: "Pages", n: 5 },
+test("a type's chip asks the server for that kind alone, unless it spans several", () => {
+  assert.equal(searchKind("ticket"), "ticket");
+  assert.equal(searchKind("people"), undefined);
+  assert.equal(searchKind("app"), undefined);
+  assert.equal(searchKind(undefined), undefined);
+  assert.deepEqual(typeCounts({ ticket: 30, persona: 1, agent: 2, page: 0 }), { ticket: 30, people: 3 });
+});
+
+test("Tab steps All → each chip → All, and Shift+Tab back", () => {
+  assert.equal(stepChip(undefined), "ticket");
+  assert.equal(stepChip("ticket"), "page");
+  assert.equal(stepChip("run"), undefined);
+  assert.equal(stepChip(undefined, true), "run");
+  // From a type under More, Tab goes on to the first chip.
+  assert.equal(stepChip("epic"), "ticket");
+});
+
+test("groups are ordered by their best hit, capped, and say how many more matched", () => {
+  const groups = [
+    { type: "ticket", items: [{ score: 0.4 }, { score: 0.3 }, { score: 0.2 }, { score: 0.2 }] },
+    { type: "page", items: [{ score: 0.9 }] },
+    { type: "run", items: [] },
+    { type: "chat", items: [{ score: 0.9 }, { score: 0.1 }] },
   ];
-  assert.deepEqual(sortByGroup(items).map((i) => i.n), [2, 4, 5, 3, 1]);
-  assert.ok(GROUP_ORDER.indexOf("Recent") < GROUP_ORDER.indexOf("Tickets"));
+  const ranked = rankGroups(groups, 3, { ticket: 30, page: 2 });
+  assert.deepEqual(ranked.map((g) => g.type), ["page", "chat", "ticket"]);
+  assert.deepEqual(ranked.map((g) => [g.items.length, g.total, g.more]), [[1, 2, 1], [2, 2, 0], [3, 30, 27]]);
+  assert.deepEqual(bestOf([{ score: 1 }, { score: 3 }, { score: 2 }]), { score: 3 });
+  assert.equal(bestOf([]), undefined);
+});
+
+test("a chat's title match and its matching messages become one row", () => {
+  const chat = ({ target, ...rest }) => ({ target: { kind: "chat", id: "c1", title: "Tailscale ACLs", href: "/chat/c1", ...target }, snippet: "", score: 0.05, ...rest });
+  const rows = groupChats([
+    chat({ target: { anchor: "m1", href: "/chat/c1?message=m1" }, snippet: "keep the «runner» off", detail: "You", updated_at: "2026-11-14T10:12:00Z" }),
+    chat({ score: 1, detail: "Hackerman", updated_at: "2026-11-14T11:00:00Z" }),
+    chat({ target: { anchor: "m2", href: "/chat/c1?message=m2" }, detail: "Hackerman" }),
+    { target: { kind: "chat", id: "c2", anchor: "m3", title: "Homelab", href: "/chat/c2?message=m3" }, snippet: "x", score: 0.05, detail: "You" },
+    { target: { kind: "ticket", id: "t", title: "t", href: "/tickets/T-1" }, snippet: "", score: 2 },
+  ]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(
+    { ...rows[0], messages: rows[0].messages.map((m) => [m.id, m.author]) },
+    { id: "c1", title: "Tailscale ACLs", href: "/chat/c1", persona: "Hackerman", at: "2026-11-14T11:00:00Z", score: 1, titled: true, messages: [["m1", "You"], ["m2", "Hackerman"]] },
+  );
+  // Found only by a message: the row opens the chat, and the person's own words don't name a persona.
+  assert.equal(rows[1].href, "/chat/c2");
+  assert.equal(rows[1].titled, false);
+  assert.equal(rows[1].persona, undefined);
+});
+
+test("facets count values, most common first, and skip blanks", () => {
+  assert.deepEqual(facets(["todo", "done", "todo", undefined, ""]), [{ value: "todo", count: 2 }, { value: "done", count: 1 }]);
 });
 
 test("matchesWords needs every word", () => {
@@ -95,31 +143,23 @@ test("a bare number is a ticket in the current project", () => {
 
 test("filters come out of the query and unknown tokens stay text", () => {
   const f = parseFilters("is:ticket deploy STATUS:done is:nope");
-  assert.deepEqual(f, { text: "deploy is:nope", groups: ["Tickets"], status: "done", tokens: ["is:ticket", "STATUS:done"] });
-  assert.ok(passesFilters({ group: "Tickets", status: "done" }, f));
-  assert.ok(!passesFilters({ group: "Pages", status: "done" }, f));
-  assert.ok(!passesFilters({ group: "Tickets", status: "todo" }, f));
+  assert.deepEqual(f, { text: "deploy is:nope", types: ["ticket"], status: "done", tokens: ["is:ticket", "STATUS:done"] });
+  assert.deepEqual(parseFilters("is:agent is:persona x").types, ["people"]);
+  assert.deepEqual(parseFilters("is:project pay").types, ["space"]);
   assert.equal(removeToken("is:ticket deploy", "is:ticket"), "deploy");
 });
 
-test("new hit kinds have groups and carry status", () => {
-  assert.equal(groupOf({ kind: "run", title: "r" }), "Runs");
-  assert.equal(groupOf({ kind: "memory", title: "m" }), "Memories");
-  assert.equal(linkFromTarget({ kind: "run", id: "1", title: "r", href: "/runs/1", status: "failed" }).status, "failed");
+test("@ asks for people and # for tickets", () => {
+  assert.deepEqual(parseFilters("@hack"), { text: "hack", types: ["people"], tokens: [] });
+  assert.deepEqual(parseFilters("# 214"), { text: "214", types: ["ticket"], tokens: [] });
+  assert.deepEqual(parseFilters("mail@home").types, []);
 });
 
 test("snippets and titles mark every match", () => {
   assert.deepEqual(snippetParts("a «b» c"), [{ text: "a ", match: false }, { text: "b", match: true }, { text: " c", match: false }]);
+  assert.deepEqual(snippetParts("See [[Homelab/Setup|setup]] and [[Notes]], then [[Home"), [{ text: "See setup and Notes, then Home", match: false }]);
   assert.deepEqual(matchParts("Deploy the web", "web deploy").filter((p) => p.match).map((p) => p.text), ["Deploy", "web"]);
   assert.deepEqual(matchParts("a.b", "."), [{ text: "a", match: false }, { text: ".", match: true }, { text: "b", match: false }]);
-});
-
-test("the best hit is promoted only when grouping buried it", () => {
-  const first = { group: "Tickets", score: 2 };
-  const page = { group: "Pages", score: 1 };
-  assert.deepEqual(promoteTop([first, page]), [first, page]);
-  const best = { group: "Agents", score: 5 };
-  assert.deepEqual(promoteTop([first, best]), [{ ...best, group: "Top result" }, first]);
 });
 
 test("opening an item records it as recent, newest first, once per href", () => {
@@ -158,6 +198,14 @@ test("a typed app name finds the app; app or apps lists them all", () => {
   assert.deepEqual(appMatches(apps, ""), []);
 });
 
-test("is:app filters to the Apps group", () => {
-  assert.deepEqual(parseFilters("is:app slides").groups, ["Apps"]);
+test("is:app filters to apps", () => {
+  assert.deepEqual(parseFilters("is:app slides").types, ["app"]);
+});
+
+test("a preview excerpt is plain text, cut with an ellipsis", () => {
+  assert.equal(
+    plainExcerpt("---\ntags: [x]\n---\n# Setup\nInstall **Tailscale** via [the docs](https://x) and [[Homelab/Notes|notes]].\n```nix\nfoo\n```\n- done", 200),
+    "Setup Install Tailscale via the docs and notes. done",
+  );
+  assert.equal(plainExcerpt("abcdef", 4), "abc…");
 });
