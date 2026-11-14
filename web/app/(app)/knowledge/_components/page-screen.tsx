@@ -4,11 +4,13 @@ import { useRecordVisit } from "@/components/shell/use-record-visit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ContextMenu, DropdownMenu } from "radix-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "@/lib/cx";
+import { defaultLabel, parseWikiLinks } from "@/lib/wikilinks";
 import { pageHref, restoreObsidianSyntax, visibleProperties, wordCount } from "@/lib/knowledge";
 import { KnowledgeSyntax, linkTarget } from "@/lib/knowledge-editor";
-import { fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Page } from "@/lib/api/knowledge-hooks";
+import { fetchPages, usePage, usePages, useSavePage, useSavedQuery, type Audience, type Embed, type Page } from "@/lib/api/knowledge-hooks";
 import { useChat, useSendChatMessage } from "@/lib/api/hooks";
 import { downloadFile } from "@/lib/api/docs-hooks";
 import { floatPanel } from "@/components/domain/pickers";
@@ -84,10 +86,43 @@ function Loaded({ page: p }: { page: Page }) {
   // editor reads them once, on mount, so it waits for them (or their failure).
   const titles = usePages({ limit: 200, include_agent: true });
   const known = useMemo(() => new Set((titles.data?.rows ?? []).flatMap((r) => [r.title.toLowerCase(), r.path.toLowerCase()])), [titles.data]);
+  const previewData = useRef({ known, rows: titles.data?.rows, embeds: p.embeds });
+  const refreshPreview = useRef(() => {});
+  const [inlinePreviews, setInlinePreviews] = useState<Map<Node, { dom: HTMLElement; embed: Embed; key: number }>>(new Map());
+  const previewKey = useRef(0);
   const extensions = useMemo(
     () => [
+      // configure stores these callbacks; ProseMirror reads their refs after mount.
+      // eslint-disable-next-line react-hooks/refs
       KnowledgeSyntax.configure({
-        isResolved: (t) => known.size === 0 || known.has(t.toLowerCase()) || /^[A-Z]+-\d+$/.test(t),
+        subscribe: (refresh) => {
+          refreshPreview.current = refresh;
+          return () => { refreshPreview.current = () => {}; };
+        },
+        isResolved: (t) => previewData.current.known.size === 0 || previewData.current.known.has(t.toLowerCase()) || /^[A-Z]+-\d+$/.test(t),
+        title: (t) => previewData.current.rows?.find((r) => r.path.toLowerCase() === t.toLowerCase() || r.title.toLowerCase() === t.toLowerCase())?.title,
+        preview: (raw) => {
+          const e = previewData.current.embeds.find((e) => e.ref === raw);
+          if (!e?.available) return undefined;
+          return {
+            key: JSON.stringify(e),
+            mount: () => {
+              const dom = document.createElement("span");
+              dom.className = "kn-inline-preview";
+              dom.contentEditable = "false";
+              const key = ++previewKey.current;
+              queueMicrotask(() => setInlinePreviews((prev) => new Map(prev).set(dom, { dom, embed: e, key })));
+              return dom;
+            },
+            destroy: (dom) => {
+              queueMicrotask(() => setInlinePreviews((prev) => {
+                const next = new Map(prev);
+                next.delete(dom);
+                return next;
+              }));
+            },
+          };
+        },
         onOpen: (raw) => {
           const { target } = linkTarget(raw);
           void fetchPages({ text: target, limit: 5, include_agent: true }).then((t) => {
@@ -97,8 +132,12 @@ function Loaded({ page: p }: { page: Page }) {
         },
       }),
     ],
-    [router, known],
+    [router],
   );
+  useLayoutEffect(() => {
+    previewData.current = { known, rows: titles.data?.rows, embeds: p.embeds };
+    refreshPreview.current();
+  }, [known, titles.data, p.embeds, extensions]);
 
   const onSave = async (body: string, baseSeq: number) => {
     const next = await save.mutateAsync({ body_md: restoreObsidianSyntax(body), base_version_id: idOf.get(baseSeq) });
@@ -113,6 +152,7 @@ function Loaded({ page: p }: { page: Page }) {
 
   return (
     <div className="flex min-h-0 flex-1">
+      {[...inlinePreviews.values()].map(({ dom, embed, key }) => createPortal(<EmbedPreview embed={embed} />, dom, key))}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 flex-none items-center gap-2 px-6">
           <nav aria-label="Folder" className="flex min-w-0 flex-1 items-center gap-1.5 text-12 text-fg-tertiary">
@@ -201,7 +241,6 @@ function Loaded({ page: p }: { page: Page }) {
               </ContextMenu.Content>
             </ContextMenu.Portal>
             </ContextMenu.Root>
-            <Embeds page={p} />
           </article>
         </div>
         <StatusBar
@@ -312,7 +351,10 @@ function PropertiesBlock({ properties, onChange }: { properties: Page["propertie
 function PropValue({ v }: { v: unknown }) {
   const s = typeof v === "object" ? JSON.stringify(v) : String(v);
   const link = /^\[\[(.+)\]\]$/.exec(s);
-  if (link) return <span className="font-medium text-accent">{link[1].split("|").pop()}</span>;
+  if (link) {
+    const ref = parseWikiLinks(s)[0];
+    return <span className="font-medium text-accent">{ref ? defaultLabel(ref) : link[1]}</span>;
+  }
   if (/^https?:\/\//.test(s))
     return (
       <a href={s} target="_blank" rel="noreferrer" className="truncate text-accent underline">
@@ -322,40 +364,33 @@ function PropValue({ v }: { v: unknown }) {
   return <span>{s}</span>;
 }
 
-/** What the page embeds with ![[…]], resolved: pages and blocks as text, images and files as previews. */
-function Embeds({ page }: { page: Page }) {
-  if (!page.embeds.length) return null;
+/** A resolved ![[…]] preview, mounted at its position inside the editor. */
+function EmbedPreview({ embed: e }: { embed: Embed }) {
+  if (e.url && (e.kind === "image" || e.content_type?.startsWith("image/"))) {
+    // eslint-disable-next-line @next/next/no-img-element -- an attachment served by the API, sized by the page
+    return <img src={e.url} alt={e.title ?? ""} className="max-h-[420px] max-w-full rounded-lg object-contain" />;
+  }
   return (
-    <section aria-label="Embeds" className="mt-10 space-y-3">
-      <p className="text-10 font-bold uppercase tracking-[0.06em] text-fg-tertiary">Embedded in this page</p>
-      {page.embeds.map((e) => (
-        <figure key={e.ref} className="overflow-hidden rounded-xl border border-border bg-surface">
-          <figcaption className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-12 text-fg-tertiary">
-            <Icon name={e.kind === "image" || e.content_type?.startsWith("image/") ? "library" : e.kind === "design" ? "designs" : "link"} size={12} />
-            <span className="truncate">{e.title ?? e.ref}</span>
-            {!e.available && <span className="text-state-human">not found</span>}
-            {e.url && e.kind !== "page" && (
-              <a href={e.url} target="_blank" rel="noreferrer" className="ml-auto text-accent hover:underline">
-                Open
-              </a>
-            )}
-          </figcaption>
-          {e.available &&
-            (e.content_type?.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element -- an attachment served by the API, sized by the page
-              <img src={e.url} alt={e.title ?? ""} className="max-h-[420px] w-full object-contain" />
-            ) : e.content_type?.startsWith("video/") ? (
-              <video src={e.url} controls className="max-h-[420px] w-full" />
-            ) : e.content_type?.startsWith("audio/") ? (
-              <audio src={e.url} controls className="w-full p-3" />
-            ) : e.markdown ? (
-              <div className="border-l-2 border-border-strong px-4 py-3 text-14">
-                <Markdown>{e.markdown}</Markdown>
-              </div>
-            ) : null)}
-        </figure>
-      ))}
-    </section>
+    <figure className="overflow-hidden rounded-xl border border-border bg-surface">
+      <figcaption className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-12 text-fg-tertiary">
+        <Icon name={e.kind === "image" || e.content_type?.startsWith("image/") ? "library" : e.kind === "design" ? "designs" : "link"} size={12} />
+        <span className="truncate">{e.title ?? e.ref}</span>
+        {e.url && e.kind !== "page" && (
+          <a href={e.url} target="_blank" rel="noreferrer" className="ml-auto text-accent hover:underline">
+            Open
+          </a>
+        )}
+      </figcaption>
+      {e.content_type?.startsWith("video/") ? (
+        <video src={e.url} controls className="max-h-[420px] w-full" />
+      ) : e.content_type?.startsWith("audio/") ? (
+        <audio src={e.url} controls className="w-full p-3" />
+      ) : e.markdown ? (
+        <div className="border-l-2 border-border-strong px-4 py-3 text-14">
+          <Markdown>{e.markdown}</Markdown>
+        </div>
+      ) : null}
+    </figure>
   );
 }
 

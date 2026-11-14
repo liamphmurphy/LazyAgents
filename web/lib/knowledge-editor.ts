@@ -1,15 +1,16 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, type Selection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { defaultLabel, parseWikiLinks } from "./wikilinks";
 
 // Live preview of Obsidian syntax in the Docs editor: [[links]] and ![[embeds]]
-// read as links, #tags as pills and ^block ids fade, while the Markdown stays
-// exactly as typed. ⌘/Ctrl-click a link to open it.
+// read as titles and inline previews, #tags as pills and ^block ids fade.
+// The Markdown stays exactly as typed. ⌘/Ctrl-click a link to open it.
 
 const PATTERN = /(!?\[\[[^\]\n]+\]\])|(?<![\w/#])(#[\p{L}\p{N}_/-]*\p{L}[\p{L}\p{N}_/-]*)|(\s\^[A-Za-z0-9-]+\s*$)/gu;
 
-function decorate(doc: PMNode, isResolved: (target: string) => boolean): DecorationSet {
+function decorate(doc: PMNode, selection: Selection, focused: boolean, opts: KnowledgeSyntaxOptions): DecorationSet {
   const out: Decoration[] = [];
   doc.descendants((node, pos, parent) => {
     if (!node.isText || !node.text) return;
@@ -18,8 +19,35 @@ function decorate(doc: PMNode, isResolved: (target: string) => boolean): Decorat
       const from = pos + (m.index ?? 0);
       const to = from + m[0].length;
       if (m[1]) {
-        const target = m[1].replace(/^!?\[\[/, "").replace(/\]\]$/, "").split("|")[0].split("#")[0].trim();
-        const cls = m[1].startsWith("!") ? "kn-embed" : isResolved(target) ? "kn-link" : "kn-link kn-unresolved";
+        const raw = m[1];
+        const ref = parseWikiLinks(raw)[0];
+        if (!ref) continue;
+        const cls = ref.embed ? "kn-embed" : opts.isResolved(ref.target) ? "kn-link" : "kn-link kn-unresolved";
+        const editing = focused && selection.from <= to && selection.to >= from;
+        const preview = ref.embed ? opts.preview(ref.raw) : undefined;
+        if (preview) {
+          out.push(Decoration.widget(to, () => preview.mount(), { key: `${from}:${preview.key}`, side: 1, destroy: preview.destroy }));
+        } else if (!ref.embed && !editing) {
+          const label = defaultLabel({ ...ref, target: opts.title(ref.target) ?? ref.target });
+          out.push(Decoration.widget(from, (view) => {
+            const el = document.createElement("span");
+            el.className = cls;
+            el.textContent = label;
+            el.setAttribute("data-target", raw);
+            el.title = ref.target;
+            el.addEventListener("mousedown", (event) => {
+              if (event.metaKey || event.ctrlKey) return;
+              event.preventDefault();
+              view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from + 2)));
+              view.focus();
+            });
+            return el;
+          }, { key: `${from}:${raw}:${label}:${cls}`, side: -1 }));
+        }
+        if (!editing && (preview || !ref.embed)) {
+          out.push(Decoration.inline(from, to, { class: "kn-source-hidden" }));
+          continue;
+        }
         out.push(Decoration.inline(from, to, { class: cls, "data-target": m[1] }));
       } else if (m[2]) out.push(Decoration.inline(from, to, { class: "kn-tag" }));
       else if (m[3]) out.push(Decoration.inline(from, to, { class: "kn-block" }));
@@ -31,6 +59,11 @@ function decorate(doc: PMNode, isResolved: (target: string) => boolean): Decorat
 export type KnowledgeSyntaxOptions = {
   /** Whether a link target names a page that exists; unresolved links fade. */
   isResolved: (target: string) => boolean;
+  title: (target: string) => string | undefined;
+  /** Resolved previews are mounted only by ProseMirror, then disposed with the widget. */
+  preview: (raw: string) => { key: string; mount: () => HTMLElement; destroy: (node: Node) => void } | undefined;
+  /** Refresh previews after the server resolves an embed added by an edit. */
+  subscribe: (refresh: () => void) => () => void;
   /** ⌘/Ctrl-click on a [[link]] or ![[embed]], with the link as written. */
   onOpen: (raw: string) => void;
 };
@@ -38,19 +71,36 @@ export type KnowledgeSyntaxOptions = {
 export const KnowledgeSyntax = Extension.create<KnowledgeSyntaxOptions>({
   name: "knowledgeSyntax",
   addOptions() {
-    return { isResolved: () => true, onOpen: () => {} };
+    return { isResolved: () => true, title: () => undefined, preview: () => undefined, subscribe: () => () => {}, onOpen: () => {} };
   },
   addProseMirrorPlugins() {
     const opts = this.options;
+    let focused = false;
     const key = new PluginKey("knowledgeSyntax");
     return [
       new Plugin({
         key,
         state: {
-          init: (_, { doc }) => decorate(doc, opts.isResolved),
-          apply: (tr, old) => (tr.docChanged || tr.getMeta(key) ? decorate(tr.doc, opts.isResolved) : old),
+          init: (_, state) => decorate(state.doc, state.selection, focused, opts),
+          apply: (tr, old) => (tr.docChanged || tr.selectionSet || tr.getMeta(key) ? decorate(tr.doc, tr.selection, focused, opts) : old),
+        },
+        view(view) {
+          const unsubscribe = opts.subscribe(() => view.dispatch(view.state.tr.setMeta(key, true)));
+          return { destroy: unsubscribe };
         },
         props: {
+          handleDOMEvents: {
+            focus(view) {
+              focused = true;
+              view.dispatch(view.state.tr.setMeta(key, true));
+              return false;
+            },
+            blur(view) {
+              focused = false;
+              view.dispatch(view.state.tr.setMeta(key, true));
+              return false;
+            },
+          },
           decorations(state) {
             return key.getState(state);
           },
