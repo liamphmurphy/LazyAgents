@@ -919,6 +919,49 @@ func (q *Queries) StageOrphanKnowledgeAssets(ctx context.Context) error {
 	return err
 }
 
+const suggestKnowledgeImages = `-- name: SuggestKnowledgeImages :many
+SELECT k.id, k.filename, k.content_type FROM knowledge_assets k
+WHERE k.workspace_id=$1 AND k.content_type LIKE 'image/%'
+AND strpos(lower(k.filename), lower($2::text)) > 0
+AND (k.owner_user_id=$3::uuid OR EXISTS (
+ SELECT 1 FROM page_asset_refs r JOIN artifact_versions v ON v.id=r.version_id JOIN artifacts a ON a.id=v.artifact_id
+ WHERE r.asset_id=k.id AND artifact_visible(a.audience,a.owner_user_id,$3::uuid)))
+ORDER BY k.created_at DESC, k.id
+LIMIT 12
+`
+
+type SuggestKnowledgeImagesParams struct {
+	WorkspaceID uuid.UUID
+	Query       string
+	Viewer      *uuid.UUID
+}
+
+type SuggestKnowledgeImagesRow struct {
+	ID          uuid.UUID
+	Filename    string
+	ContentType string
+}
+
+func (q *Queries) SuggestKnowledgeImages(ctx context.Context, arg SuggestKnowledgeImagesParams) ([]SuggestKnowledgeImagesRow, error) {
+	rows, err := q.db.Query(ctx, suggestKnowledgeImages, arg.WorkspaceID, arg.Query, arg.Viewer)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SuggestKnowledgeImagesRow{}
+	for rows.Next() {
+		var i SuggestKnowledgeImagesRow
+		if err := rows.Scan(&i.ID, &i.Filename, &i.ContentType); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const unindexedDocPages = `-- name: UnindexedDocPages :many
 SELECT a.id, a.workspace_id, a.project_id, a.epic_id, a.type, a.title, a.number, a.summary, a.author_type, a.author_id, a.current_version_id, a.search_text, a.search, a.created_at, a.updated_at, a.path, a.audience, a.owner_user_id, a.persona_direct, a.persona_paused, a.chat_session_id, a.canvas_id FROM doc_page_redirects d JOIN artifacts a ON a.id=d.artifact_id WHERE NOT d.indexed
 `

@@ -188,6 +188,8 @@ export const knowledgeKeys = {
 
 export const fetchPages = (q: PageQuery) => call<PageTable>("POST", "/query", q);
 export const fetchPage = (id: string) => call<Page>("GET", `/pages/${id}`);
+export const fetchKnowledgeImages = (q: string, signal: AbortSignal) =>
+  call<{ images: { id: string; title: string; ref: string; content_type: string }[] }>("GET", `/assets${qs({ q })}`, undefined, { signal });
 export const resolveLegacy = (path: string) => call<{ id: string; url: string }>("GET", `/legacy${qs({ path })}`);
 
 /** Pages matching a filter, newest first. */
