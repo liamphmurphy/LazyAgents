@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { HistoryNav } from "@/components/shell/history-nav";
+import { NavigatorPortal } from "@/components/shell/navigator-slot";
+import { useCompact } from "@/lib/viewport";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { usePulse } from "@/components/ui/motion";
@@ -201,6 +204,7 @@ function ProgressDot({ lesson, current }: { lesson: CourseLesson; current: boole
 }
 
 export function StudyView({ course, onDelete }: { course: Course; onDelete: () => void }) {
+  const compact = useCompact();
   const router = useRouter();
   const search = useSearchParams();
   const id = course.summary.id;
@@ -214,10 +218,10 @@ export function StudyView({ course, onDelete }: { course: Course; onDelete: () =
   useEffect(() => { scroller.current?.scrollTo?.(0, 0); }, [key]);
   const { summary } = course;
   const cited = new Set(lesson?.body.flatMap((b) => b.sources ?? []) ?? []);
-  return (
-    <div className="grid min-h-0 flex-1 lg:h-[100dvh] lg:grid-cols-[256px_minmax(0,1fr)_340px]">
-      <nav className="overflow-y-auto border-r border-border-subtle bg-panel" aria-label="Lessons">
-        <div className="flex h-[52px] items-center justify-between border-b border-border-subtle px-4 text-13">
+  // The lessons are the left column's list (no second column beside it); phones have no column, so they sit above the lesson.
+  const lessons = (
+    <nav className={cx("overflow-y-auto", compact ? "border-b border-border-subtle bg-panel" : "min-h-0 flex-1")} aria-label="Lessons">
+        <div className="flex h-8 items-center justify-between px-4 text-13">
           <Link href="/learn" className="text-fg-tertiary hover:text-fg">← Learn</Link>
           <button type="button" onClick={onDelete} className="text-12 text-fg-tertiary hover:text-fg">Delete</button>
         </div>
@@ -244,9 +248,16 @@ export function StudyView({ course, onDelete }: { course: Course; onDelete: () =
           </div>
         ))}
       </nav>
+  );
+  return (
+    <div className="grid min-h-0 flex-1 lg:h-[100dvh] lg:grid-cols-[minmax(0,1fr)_340px]">
+      {compact ? lessons : <NavigatorPortal>{lessons}</NavigatorPortal>}
       <div ref={scroller} className="min-w-0 overflow-y-auto">
-        <div className="flex h-[52px] items-center justify-between border-b border-border-subtle px-6">
+        <div className="flex h-[52px] items-center justify-between border-b border-border-subtle pl-3 pr-6">
+          <span className="flex min-w-0 items-center gap-2">
+          <HistoryNav />
           <span className="truncate text-13 text-fg-tertiary">{lesson?.unit_title}{lesson && <span className="font-medium text-fg"> / {lesson.title}</span>}</span>
+          </span>
           {next && <Button variant="outline" onClick={() => router.push(`/learn/${id}?lesson=${next.key}`)}>Next →</Button>}
         </div>
         {lesson && (

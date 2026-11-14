@@ -191,29 +191,3 @@ export function SidebarSpaces({ viewed, hideWhenEmpty }: { viewed: string | null
   );
 }
 
-/** The collapsed menu's spaces: one tile each, stacked under the nav icons. */
-export function SpaceRail({ viewed }: { viewed: string | null }) {
-  const spaces = useSpaces();
-  const open = useOpenSpace(viewed);
-  const list = spaces.data?.spaces ?? [];
-  if (list.length === 0) return null;
-  return (
-    <nav aria-label="Spaces" className="flex w-full flex-col items-center gap-[4px] border-t border-border-subtle pt-[10px]">
-      {list.map((s) => {
-        const on = open.page === s.id || (!open.page && open.chatSpace === s.id);
-        return (
-          <Link
-            key={s.id}
-            href={`/spaces/${s.id}`}
-            aria-label={`${s.name} space`}
-            title={s.name}
-            aria-current={open.page === s.id ? "page" : undefined}
-            className={cx("grid size-[30px] place-items-center rounded-md", on ? "bg-accent-soft" : "hover:bg-hover")}
-          >
-            <SpaceTile name={s.name} color={s.color} size={20} />
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}

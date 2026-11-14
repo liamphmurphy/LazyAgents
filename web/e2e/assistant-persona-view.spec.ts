@@ -144,25 +144,24 @@ test("without personas the built-in Assistant is the default and there's no swit
   expect(mock.unhandled).toEqual([]);
 });
 
-test("the collapsed menu lists personas and opens each one's newest conversation", async ({ page }) => {
-  await page.addInitScript(() => localStorage.removeItem("lazyagents.sidebar-expanded"));
-  const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
+test("personas sit in the Chats list only: the collapsed strip and app screens never show them", async ({ page }) => {
+  await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
-  await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
-  await page.getByRole("combobox", { name: "Message" }).press("Enter");
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+/);
-  const atlasChat = new URL(page.url()).pathname;
-
-  const rail = page.getByRole("group", { name: "Open a persona’s conversations" });
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
-  // No conversations yet: the rail has no list to offer one from, so it starts one.
-  await rail.getByRole("button", { name: "Nova" }).click();
-  await expect.poll(() => mock.created.at(-1)?.persona_id).toBe(NOVA.id);
-  await expect(page).not.toHaveURL(new RegExp(atlasChat));
-
-  await rail.getByRole("button", { name: /^Atlas/ }).click();
-  await expect(page).toHaveURL(new RegExp(atlasChat));
-  expect(mock.unhandled).toEqual([]);
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  // Expanded on a chat screen: the Chats list leads with the persona filter.
+  await expect(strip(page)).toBeVisible();
+  // A screen with a list of its own (Runs) puts it in the column instead, with no personas.
+  await page.goto("/runs");
+  await expect(menu.getByRole("group", { name: "Show conversations for" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: /^(Atlas|Nova)/ })).toHaveCount(0);
+  // Collapsed, the strip holds the same fixed items on every screen, and no personas either.
+  await menu.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(menu.getByRole("button", { name: /^(Atlas|Nova)/ })).toHaveCount(0);
+  await page.goto("/chat?project=WEB");
+  await expect(menu.getByRole("button", { name: /^(Atlas|Nova)/ })).toHaveCount(0);
+  await expect(strip(page)).toHaveCount(0);
+  await menu.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(strip(page)).toBeVisible();
 });
 
 test("a new conversation opens at once, without waiting for the lists to refresh", async ({ page }) => {
@@ -181,7 +180,7 @@ test("a new conversation opens at once, without waiting for the lists to refresh
   await expect(page).toHaveURL(/\/chat\?new/, { timeout: 2500 });
 });
 
-test("the Chats navigator keeps its width whatever the titles and persona filter", async ({ page }) => {
+test("the left column keeps its width whatever the titles and persona filter", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
   await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
@@ -192,7 +191,7 @@ test("the Chats navigator keeps its width whatever the titles and persona filter
   await page.reload();
   await expect(history(page).getByRole("link", { name: /A title still being generated/ })).toBeVisible();
 
-  const menu = page.getByRole("complementary", { name: "Chats" });
+  const menu = page.getByRole("complementary", { name: "Main menu" });
   const width = async () => (await menu.boundingBox())!.width;
   expect(await width()).toBe(264);
   await pick(page, "All personas");

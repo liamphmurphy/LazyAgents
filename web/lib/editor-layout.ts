@@ -76,34 +76,8 @@ export function dockShortcut(e: { key: string; metaKey: boolean; ctrlKey: boolea
   return null;
 }
 
-// While any editor layout is mounted the Vesper sidebar shows as its icon rail. A count, not a flag,
-// so a layout replacing another during navigation never drops the override in between.
-let editors = 0;
-const listeners = new Set<() => void>();
-const notify = () => listeners.forEach((l) => l());
-
-/** Mark an editor layout mounted; call the returned function on unmount. */
-export function claimEditorRail(): () => void {
-  editors++;
-  notify();
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    editors--;
-    notify();
-  };
-}
-
-export const editorRailActive = () => editors > 0;
-
-export function subscribeEditorRail(l: () => void): () => void {
-  listeners.add(l);
-  return () => listeners.delete(l);
-}
-
 // ⌘. in the chat ("reading focus") hides the Vesper sidebar too, for as long as it's claimed,
-// without touching its remembered preference. A count, like the editor rail.
+// without touching its remembered preference. A count, so overlapping claims never drop it.
 let focusClaims = 0;
 const focusListeners = new Set<() => void>();
 const notifyFocus = () => focusListeners.forEach((l) => l());

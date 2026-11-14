@@ -156,7 +156,7 @@ test("an app's name jumps to the app, and apps lists them all", async ({ page })
   await openPalette(page);
   await input(page).fill("apps");
   await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Knowledge/]);
-  await expect(results(page).getByRole("group", { name: "Apps" }).getByRole("option")).toHaveText([/Slides/, /Designs/, /Finance/, /Library/, /Workflows/, /Scheduled/, /Learn/]);
+  await expect(results(page).getByRole("group", { name: "Apps" }).getByRole("option")).toHaveText([/Slides/, /Designs/, /Finance/, /Library/, /Workflows/, /Scheduled/, /Learn/, /Reports/]);
 
   await input(page).fill("slides");
   await expect(results(page).getByRole("group", { name: "Top result" }).getByRole("option")).toHaveText([/Slides.*app/]);

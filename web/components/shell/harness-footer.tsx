@@ -39,9 +39,10 @@ function UsageBubble({ h, all, onNavigate }: { h: HarnessActivity; all: HarnessA
 }
 
 /**
- * The harnesses that can run here; each character opens its own usage bubble. Stacked at the foot
- * of the rail on wide screens (the bubble opens to the right); a row on phones, which have no rail
- * (the bubble opens above).
+ * The harnesses that can run here; each character opens its own usage bubble. A stack in the
+ * collapsed strip (the bubble opens to the right); a row above the expanded column's foot links
+ * and in the phone header (the bubble opens above, or below where there's no room, so it never
+ * covers the characters beside it).
  */
 export function HarnessFooter({ layout = "rail" }: { layout?: "rail" | "row" }) {
   const rail = layout === "rail";

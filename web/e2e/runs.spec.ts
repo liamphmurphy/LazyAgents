@@ -334,7 +334,8 @@ test("Costs and Highlights moved to Reports; the old tabs redirect", async ({ pa
   await page.goto("/runs?tab=costs&project=WEB");
   await expect(page).toHaveURL(/\/reports\?tab=costs&project=WEB$/);
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
+  // Reports is a tool in the Apps flyout, so Apps reads as current.
+  await expect(page.getByRole("list", { name: "Areas" }).getByRole("button", { name: "Apps" })).toHaveAttribute("aria-current", "page");
   await page.goto("/runs?tab=highlights");
   await expect(page).toHaveURL(/\/reports\?tab=highlights$/);
 });

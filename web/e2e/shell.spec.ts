@@ -60,23 +60,24 @@ test("switching projects from the board layout rescopes it, and is remembered", 
   expect(api.unhandled).toEqual([]);
 });
 
-test("one rail switches areas; only chat screens add the Chats navigator beside it", async ({ page }) => {
+test("one column switches areas; a screen's own list takes the place of Chats", async ({ page }) => {
   const api = await installBoardApi(page);
   await page.route("**/api/v1/runs?*", (route) => route.fulfill({ json: { runs: [], has_more: false } }));
   await page.goto("/runs");
-  // Runs brings its own list, so the Chats navigator doesn't stack beside it even when it's shown on chats.
-  await expect(page.getByRole("complementary", { name: "Chats" })).toHaveCount(0);
-  await expect(page.getByRole("complementary", { name: "Runs" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Show chats" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
+  const menu = page.getByRole("complementary", { name: "Main menu" });
+  // Runs brings its own list into the column's middle: Chats steps aside, no second column.
+  await expect(menu.getByRole("complementary", { name: "Runs" })).toBeVisible();
+  await expect(menu.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: "Search" })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Menu mode" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Projects & tickets" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Chats & personas" })).toHaveCount(0);
   const work = nav(page);
   // The areas, then Apps; Inbox left the menu: the Needs you button opens the tray instead.
-  for (const name of ["Chat", /^Runs/, "Tickets", "Reports", "Knowledge", "Designs"]) await expect(work.getByRole("link", { name, exact: typeof name === "string" })).toBeVisible();
+  const areas = page.getByRole("list", { name: "Areas" });
+  const names = await areas.getByRole("link").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+  expect(names).toEqual(["Chat", "Runs", "Tickets", "Knowledge", "Designs"]);
   await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
-  const menu = page.getByRole("complementary", { name: "Main menu" });
   await expect(menu.getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");
   await expect(menu.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
 
@@ -87,7 +88,7 @@ test("one rail switches areas; only chat screens add the Chats navigator beside 
   await apps.click();
   const flyout = page.getByRole("dialog", { name: "Apps" });
   await expect(flyout.getByRole("group", { name: "Apps" }).getByRole("link")).toHaveText([/Knowledge/, "Slides", "Designs", "Finance", "Library"]);
-  await expect(flyout.getByRole("group", { name: "Tools" }).getByRole("link")).toHaveText(["Workflows", /Scheduled/, "Learn"]);
+  await expect(flyout.getByRole("group", { name: "Tools" }).getByRole("link")).toHaveText(["Workflows", /Scheduled/, "Learn", "Reports"]);
   await expect(flyout.getByRole("button", { name: "New space" })).toBeVisible();
   const flyoutBox = await flyout.boundingBox();
   const appsBox = await apps.boundingBox();
@@ -112,34 +113,48 @@ test("one rail switches areas; only chat screens add the Chats navigator beside 
   expect(api.unhandled.filter((r) => !r.includes("/library"))).toEqual([]);
 });
 
-test("the rail's Chat entry opens the chats, where the remembered Chats navigator shows and hides", async ({ page }) => {
+test("the Chat area brings back the Chats list, and the mark collapses the column to a strip on every screen", async ({ page }) => {
   await installChatApi(page);
   await page.goto("/settings");
-  await expect(page.getByRole("complementary", { name: "Chats" })).toHaveCount(0);
+  const menu = page.getByRole("complementary", { name: "Main menu" });
   await nav(page).getByRole("link", { name: "Chat", exact: true }).click();
   await expect(page).toHaveURL(/\/chat/);
-  await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Chat history" })).toBeVisible();
-  await expect(nav(page).getByRole("link", { name: "Chat", exact: true })).toHaveAttribute("aria-current", "page");
-  // New chat is a button-high row at the top, with the history right under it.
-  const chats = page.getByRole("complementary", { name: "Chats" });
-  expect((await chats.getByRole("button", { name: "New chat" }).boundingBox())!.height).toBeLessThan(40);
-  await page.getByRole("button", { name: "Hide chats" }).click();
-  await expect(page.getByRole("complementary", { name: "Chats" })).toHaveCount(0);
-  expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBeNull();
-  // The rail stands in with persona shortcuts while the navigator is hidden.
-  await page.getByRole("button", { name: "Show chats" }).click();
-  await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
+  await expect(menu.getByRole("heading", { name: "Chats", level: 2 })).toBeVisible();
+  await expect(menu.getByRole("complementary", { name: "Chat history" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Areas" }).getByRole("link", { name: "Chat", exact: true })).toHaveAttribute("aria-current", "page");
+  // New chat is a button-high row beside the list's title, with the history right under it.
+  expect((await menu.getByRole("button", { name: "New chat" }).boundingBox())!.height).toBeLessThan(40);
+  await menu.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(menu).not.toHaveAttribute("data-expanded");
+  await expect(menu.getByRole("complementary", { name: "Chat history" })).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("lazyagents.column-collapsed"))).toBe("1");
+  // The strip keeps the same fixed items wherever you go.
+  await page.goto("/settings");
+  await expect(menu).not.toHaveAttribute("data-expanded");
+  await expect(page.getByRole("list", { name: "Areas" }).getByRole("link")).toHaveCount(5);
+  await menu.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(menu).toHaveAttribute("data-expanded");
+  expect(await page.evaluate(() => localStorage.getItem("lazyagents.column-collapsed"))).toBeNull();
 });
 
-test("back and forward live on the rail, so every screen has them, whatever its header", async ({ page }) => {
+test("back and forward sit at the top left of the page content, whatever its header", async ({ page }) => {
   await installBoardApi(page);
-  // Settings draws a PageHeader, not a TopBar: the controls must still be there.
+  // Settings draws a PageHeader under its TopBar: the controls come once, outside the column.
   await page.goto("/settings");
-  const history = page.getByRole("complementary", { name: "Main menu" }).getByRole("group", { name: "History" });
+  const history = page.getByRole("group", { name: "History" });
   await expect(history).toHaveCount(1);
-  await expect(page.getByRole("group", { name: "History" })).toHaveCount(1);
-  await nav(page).getByRole("link", { name: "Reports", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Main menu" }).getByRole("group", { name: "History" })).toHaveCount(0);
+  // First in the content's top bar: just right of the column, on the breadcrumb's line, before it.
+  const column = (await page.getByRole("complementary", { name: "Main menu" }).boundingBox())!;
+  const back = (await history.getByRole("button", { name: "Go back" }).boundingBox())!;
+  const crumb = (await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox())!;
+  expect(back.x).toBeGreaterThanOrEqual(column.x + column.width);
+  expect(back.x).toBeLessThan(column.x + column.width + 40);
+  expect(back.x).toBeLessThan(crumb.x);
+  expect(Math.abs(back.y + back.height / 2 - (crumb.y + crumb.height / 2))).toBeLessThan(4);
+  // Reports is a tool now, in the Apps flyout.
+  await nav(page).getByRole("button", { name: "Apps" }).click();
+  await page.getByRole("dialog", { name: "Apps" }).getByRole("link", { name: "Reports" }).click();
   await expect(page).toHaveURL(/\/reports/);
   await history.getByRole("button", { name: "Go back" }).click();
   await expect(page).toHaveURL(/\/settings$/);
@@ -214,7 +229,7 @@ test("Runs lists live work and marks the nav item current", async ({ page }) => 
   await page.goto("/runs");
   // /runs opens the first live run beside the list.
   await expect(page).toHaveURL(/\/runs\/11111111-1111-4111-8111-111111111111$/);
-  await expect(nav(page).locator('[aria-current="page"]')).toHaveAccessibleName(/^Runs/);
+  await expect(page.getByRole("list", { name: "Areas" }).locator('[aria-current="page"]')).toHaveAccessibleName(/^Runs/);
   const list = page.getByRole("complementary", { name: "Runs" });
   await expect(list.getByRole("status")).toContainText("1 busy · 0 queued · 3 slots");
   const running = list.getByRole("region", { name: "Running" });

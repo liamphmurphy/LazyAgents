@@ -12,8 +12,7 @@ test("a fresh install lands in the Welcome Wizard", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/chat\?new$/);
   await expect(page.getByTestId("welcome-wizard")).toBeVisible();
-  await page.getByRole("button", { name: "Show chats" }).click();
-  await expect(page.getByRole("complementary", { name: "Chats" }).getByRole("region", { name: "Getting set up" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Main menu" }).getByRole("region", { name: "Getting set up" })).toBeVisible();
 });
 
 test("a finished user only sees the wizard again from Settings", async ({ page }) => {

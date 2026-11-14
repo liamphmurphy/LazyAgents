@@ -767,6 +767,7 @@ export function DeckScreen({ id }: { id: string }) {
   const saveBad = saveState.s === "error" || saveState.s === "conflict";
   const header: EditorHeader = {
     back: { href: "/apps/slides", label: "Slides" },
+    name: title,
     title,
     saveState: ref.data && c && (
       <span data-testid="deck-save-state" title={saveState.message} className={cx("flex items-center gap-1.5", saveBad && "text-pill-blocked-fg")}>

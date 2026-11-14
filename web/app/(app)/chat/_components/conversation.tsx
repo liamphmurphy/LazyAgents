@@ -44,6 +44,7 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
+import { HistoryNav } from "@/components/shell/history-nav";
 import { linkedItems, openItem, type LinkedItem } from "@/lib/chat-panels";
 import { LinkedRow, OpenLinkedItem } from "./item-panel";
 import { useRecordVisit } from "@/components/shell/use-record-visit";
@@ -1080,7 +1081,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             onRestored={restored}
           />
         ) : (
-        <div data-testid="chat-header" className={cx("@container flex min-h-[44px] items-center border-b border-border-subtle py-1.5", docked ? "gap-1.5 pl-3 pr-2" : "gap-2.5 px-6")}>
+        <div data-testid="chat-header" className={cx("@container flex min-h-[44px] items-center border-b border-border-subtle py-1.5", docked ? "gap-1.5 pl-3 pr-2" : "gap-2.5 pl-3 pr-6")}>
+          {/* Back and forward lead the page; a dock's chat sits beside a page that has its own. */}
+          {!docked && <HistoryNav />}
           {group ? <PersonaStack personas={participants} size={22} /> : <HeaderPersona persona={persona} personaId={c.persona?.id} fresh={fresh} onSwitch={switchPersona} disabled={locked || create.isPending} compact={docked} />}
           {c.space && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}

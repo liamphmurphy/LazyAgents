@@ -13,10 +13,11 @@ function historyApi(): HistoryApi | undefined {
 }
 
 /**
- * Back and forward on the rail, under the mark: every screen has the rail, so following a link from
- * a run to its ticket, a chat to a page or Settings to a design keeps your place one click away,
- * whichever header the screen draws. Where the browser can say whether there is anywhere to go
- * (the Navigation API), the buttons disable at either end; elsewhere they stay on.
+ * Back and forward at the top left of the page's content, first in every header (TopBar,
+ * PageHeader, an editor's bar, the chat header, Knowledge's tabs): following a link from a run to
+ * its ticket, a chat to a page or Settings to a design keeps your place one click away. Where the
+ * browser can say whether there is anywhere to go (the Navigation API), the buttons disable at
+ * either end; elsewhere they stay on. Phones hide them: they have the system's back gesture.
  */
 export function HistoryNav({ className }: { className?: string }) {
   const router = useRouter();
@@ -34,9 +35,9 @@ export function HistoryNav({ className }: { className?: string }) {
     api.addEventListener("currententrychange", update);
     return () => api.removeEventListener("currententrychange", update);
   }, []);
-  const button = "grid size-[30px] flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
+  const button = "grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
   return (
-    <div role="group" aria-label="History" data-testid="history-nav" className={cx("flex flex-none flex-col items-center", className)}>
+    <div role="group" aria-label="History" data-testid="history-nav" className={cx("flex flex-none items-center max-md:hidden", className)}>
       <button type="button" aria-label="Go back" title="Back" disabled={!can.back} onClick={() => router.back()} className={button}>
         <Icon name="chevr" size={14} className="rotate-180" />
       </button>

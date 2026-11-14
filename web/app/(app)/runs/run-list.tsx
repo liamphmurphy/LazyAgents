@@ -12,7 +12,6 @@ import type { Schemas } from "@/lib/api/client";
 import { useBootstrap, useCosts, useInbox, useRunnerStatus, useRunPages } from "@/lib/api/hooks";
 import { presetRange, spendLabel } from "@/lib/costs";
 import { cx } from "@/lib/cx";
-import { NAVIGATOR_WIDTH } from "@/lib/navigator";
 import { absoluteTime, ago } from "@/lib/format";
 import { KIND, trayItems, waited } from "@/lib/inbox";
 import { DOT_LABEL, groupRuns, itemHref, matchesItem, matchesRun, runDot, runLine, runTitle, type Dot } from "@/lib/run-list";
@@ -258,11 +257,11 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
   return (
     <aside
       aria-label="Runs"
-      className={cx("flex min-h-0 flex-col gap-2 bg-sidebar/40 pt-3", fill ? "flex-1 px-2 pt-safe" : cx(NAVIGATOR_WIDTH, "flex-none border-r border-border-subtle px-1.5"))}
+      className={cx("flex min-h-0 flex-1 flex-col gap-2", fill ? "px-2 pt-safe" : "px-1.5")}
     >
       <div className="flex flex-col gap-2 px-1">
         <div className="flex items-center gap-2 px-1.5">
-          <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-15")}>Runs</h1>
+          <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-13")}>Runs</h1>
         </div>
         <StatusLine project={data.project} />
         <div className="relative px-1">

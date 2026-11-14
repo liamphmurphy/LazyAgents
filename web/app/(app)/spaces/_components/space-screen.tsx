@@ -1,5 +1,6 @@
 "use client";
 
+import { HistoryNav } from "@/components/shell/history-nav";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog, DropdownMenu } from "radix-ui";
@@ -543,7 +544,11 @@ export function SpaceScreen({ id }: { id: string }) {
   }
   return (
     <div className="h-app overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[1048px] flex-col pb-[48px] pl-[48px] pr-[40px] pt-[40px] max-md:px-[20px]">
+      {/* No bar of its own, but back and forward still lead the page, where a bar's would be. */}
+      <div className="flex h-[44px] items-center pl-3">
+        <HistoryNav />
+      </div>
+      <div className="mx-auto flex w-full max-w-[1048px] flex-col pb-[48px] pl-[48px] pr-[40px] pt-[4px] max-md:px-[20px]">
         <header className="flex items-start gap-[12px]">
           {editing ? (
             <HeaderEditor space={space} onDone={() => setEditing(false)} />

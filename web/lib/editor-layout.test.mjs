@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claimEditorRail, dockKey, dockReducer, dockShortcut, editorRailActive, loadDock, saveDock, subscribeEditorRail } from "./editor-layout.ts";
+import { dockKey, dockReducer, dockShortcut, loadDock, saveDock } from "./editor-layout.ts";
 
 const open = { open: true, tab: "chat", hidden: false };
 const memory = () => {
@@ -73,17 +73,3 @@ test("persistence: open state and tab per app, survive a reload, never the ⌘. 
   assert.doesNotThrow(() => saveDock(full, "docs", open));
 });
 
-test("the sidebar rail override is held while any layout is mounted", () => {
-  let calls = 0;
-  const off = subscribeEditorRail(() => calls++);
-  assert.equal(editorRailActive(), false);
-  const a = claimEditorRail();
-  const b = claimEditorRail();
-  a();
-  a(); // releasing twice is harmless
-  assert.equal(editorRailActive(), true);
-  b();
-  assert.equal(editorRailActive(), false);
-  assert.equal(calls, 4); // two claims, two releases; the repeat release is a no-op
-  off();
-});

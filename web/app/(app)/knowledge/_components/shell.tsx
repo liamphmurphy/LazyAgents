@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { claimEditorRail } from "@/lib/editor-layout";
 import { cx } from "@/lib/cx";
-import { NAVIGATOR_WIDTH } from "@/lib/navigator";
 import { ancestors, buildTree, closeTab, folderPaths, isoDay, joinPath, movedPath, nameOf, openTab, pageHref, parentOf, type Tab, type TreeFolder, type TreeRow } from "@/lib/knowledge";
 import { useAllPages, useCreatePage, useDaily, useDeleteFolder, useDeletePage, useMoveFolder, useMovePage, usePage } from "@/lib/api/knowledge-hooks";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Kbd, Skeleton } from "@/components/ui/primitives";
 import { useToday } from "./kit";
 import { isTyping } from "@/components/shell/shortcuts";
+import { NavigatorPortal } from "@/components/shell/navigator-slot";
+import { HistoryNav } from "@/components/shell/history-nav";
 import { QuickSwitcher } from "./switcher";
 import { CaptureDialog } from "./capture";
 import { ImportDialog } from "./import-dialog";
@@ -130,7 +130,6 @@ export function tabHref(t: Tab): string {
  * it's open, as it does for the other apps.
  */
 export function KnowledgeShell({ children }: { children: ReactNode }) {
-  useEffect(() => claimEditorRail(), []);
   const router = useRouter();
   const pathname = usePathname();
   const view = useStore(viewStore);
@@ -216,7 +215,9 @@ export function KnowledgeShell({ children }: { children: ReactNode }) {
       <div className="relative flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none bg-bg md:h-dvh">
         <Explorer pathname={pathname} />
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* Back and forward lead the page; the tabs stay one tablist beside them. */}
           <div className="flex flex-none items-center border-b border-border-subtle bg-panel">
+            <HistoryNav className="pl-2" />
             <TabStrip tabs={tabs} active={active} onClose={close} />
           </div>
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -479,13 +480,16 @@ function Explorer({ pathname }: { pathname: string }) {
 
 
   return (
-    <aside aria-label="Knowledge explorer" className={cx(NAVIGATOR_WIDTH, "hidden flex-none flex-col border-r border-border-subtle bg-sidebar md:flex")}>
-      <div className="flex h-10 flex-none items-center gap-1 px-3">
-        <span className="flex-1 text-14 font-semibold text-fg">Knowledge</span>
-        <ExplorerButton icon="edit" label="New page" onClick={newPage} />
+    // The explorer is the left column's list on Knowledge screens, not a second sidebar beside it.
+    <NavigatorPortal>
+    <aside aria-label="Knowledge explorer" className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-8 flex-none items-center gap-1 pl-4 pr-2.5">
+        <span className="flex-1 text-13 font-semibold text-fg">Knowledge</span>
         <ExplorerButton icon="graph" label="Graph view" href="/knowledge/graph" />
         <ExplorerButton icon="link" label="Keep notes connected" href="/knowledge/connect" />
         <ExplorerButton icon="shrink" label="Collapse all folders" onClick={collapseAll} />
+        {/* Last and in the accent, like Chats' New chat: every list in the column ends its title row with its own +. */}
+        <ExplorerButton icon="plus" label="New page" onClick={newPage} accent />
       </div>
       <div role="radiogroup" aria-label="Which knowledge" className="mx-3 flex h-7 flex-none rounded-md border border-border-subtle bg-surface-sunken p-0.5">
         {(
@@ -581,6 +585,7 @@ function Explorer({ pathname }: { pathname: string }) {
       )}
       {dialog?.kind === "folder" && <NewFolderDialog parent={dialog.parent} pending={create.isPending} error={create.error?.message} onCreate={(n) => newFolder(dialog.parent, n)} onClose={closeDialog} />}
     </aside>
+    </NavigatorPortal>
   );
 }
 
@@ -598,8 +603,8 @@ type TreeActions = {
 // The row whose menu is open stays highlighted, as in Obsidian.
 const menuRow = "rounded-md data-[state=open]:bg-hover";
 
-function ExplorerButton({ icon, label, onClick, href }: { icon: IconName; label: string; onClick?: () => void; href?: string }) {
-  const cls = "grid size-7 place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg-secondary";
+function ExplorerButton({ icon, label, onClick, href, accent }: { icon: IconName; label: string; onClick?: () => void; href?: string; accent?: boolean }) {
+  const cls = cx("grid size-7 place-items-center rounded-md hover:bg-hover", accent ? "text-accent" : "text-fg-tertiary hover:text-fg-secondary");
   return href ? (
     <Link href={href} aria-label={label} title={label} className={cls}>
       <Icon name={icon} size={14} />

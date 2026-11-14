@@ -22,10 +22,10 @@ type Item = Schemas["InboxItem"];
 
 /**
  * The Needs you pill and its tray (LAZYAGENTS-162): one queue of what waits on
- * the person, answerable from any page. It sits on the rail as an icon with a
- * badge, and as a tab in the compact bar. The badge is the bootstrap's needs_you count (live over SSE).
+ * the person, answerable from any page. It is a full-width pill at the top of the
+ * left column, an icon with a badge in its collapsed strip, and a tab in the compact bar. The badge is the bootstrap's needs_you count (live over SSE).
  */
-export function NeedsYou({ variant, count }: { variant: "rail" | "tab"; count: number }) {
+export function NeedsYou({ variant, count }: { variant: "pill" | "rail" | "tab"; count: number }) {
   const [open, setOpen] = useState(false);
   // Dispatch opens a dialog, which has to live outside the popover it closes.
   const [dispatchKey, setDispatchKey] = useState<string>();
@@ -34,7 +34,23 @@ export function NeedsYou({ variant, count }: { variant: "rail" | "tab"; count: n
   const badge = count > 99 ? "99+" : count;
 
   const trigger =
-    variant === "rail" ? (
+    variant === "pill" ? (
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        data-needs-you
+        className={cx(
+          "flex h-[28px] w-full items-center gap-2 rounded-lg px-2.5 text-12 font-semibold",
+          count > 0 ? "bg-pill-human-bg text-pill-human-fg hover:brightness-110" : "text-fg-tertiary hover:bg-hover hover:text-fg",
+          open && "ring-1 ring-state-human/50",
+        )}
+      >
+        <span aria-hidden className={cx("size-1.5 flex-none rounded-full", count > 0 ? "bg-state-human" : "bg-fg-tertiary/50")} />
+        <span className="flex-1 text-left">Needs you</span>
+        {count > 0 && <span ref={pulse} aria-hidden className="font-bold tabular-nums">{badge}</span>}
+      </button>
+    ) : variant === "rail" ? (
       <button
         type="button"
         aria-label={label}
