@@ -132,7 +132,22 @@ test("the rail's Chat entry opens the chats, where the remembered Chats navigato
   await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
 });
 
-test("the pane bar's back and forward keep your place across layouts", async ({ page }) => {
+test("back and forward live on the rail, so every screen has them, whatever its header", async ({ page }) => {
+  await installBoardApi(page);
+  // Settings draws a PageHeader, not a TopBar: the controls must still be there.
+  await page.goto("/settings");
+  const history = page.getByRole("complementary", { name: "Main menu" }).getByRole("group", { name: "History" });
+  await expect(history).toHaveCount(1);
+  await expect(page.getByRole("group", { name: "History" })).toHaveCount(1);
+  await nav(page).getByRole("link", { name: "Reports", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports/);
+  await history.getByRole("button", { name: "Back" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await history.getByRole("button", { name: "Forward" }).click();
+  await expect(page).toHaveURL(/\/reports/);
+});
+
+test("back and forward keep your place across Tickets layouts", async ({ page }) => {
   await installBoardApi(page);
   await page.goto("/tickets?layout=board&project=WEB");
   const history = page.getByRole("group", { name: "History" });

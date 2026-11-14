@@ -18,6 +18,7 @@ import { AppsMenu } from "./apps-menu";
 import { useEditorRail, useReadingFocus } from "./editor-layout";
 import { NeedsYou } from "./needs-you";
 import { HarnessFooter } from "./harness-footer";
+import { HistoryNav } from "./history-nav";
 import { useAppearance } from "./theme";
 
 function NavLink({ href, active, label, children }: { href: string; active: boolean; label?: string; children: ReactNode }) {
@@ -162,6 +163,8 @@ export function Sidebar() {
           <span title="Vesper" className="grid size-[30px] place-items-center">
             <Mark />
           </span>
+          {/* In the shell, not in each screen's header, so every screen has it: chat, Runs, Settings, an editor. */}
+          <HistoryNav />
           <div className="flex flex-col items-center gap-1">
             {area && <ToggleButton expanded={navigator} onToggle={() => toggle(!navigator)} />}
             <NewConversationButton id={viewed ?? undefined} rail />
