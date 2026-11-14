@@ -447,13 +447,14 @@ export function Composer({
               open={sheet}
               onOpenChange={setSheet}
               // "header" options join the menu only where the caller passes their control: the Welcome has no header.
-              options={options.filter((o) => o.place !== "actions" && o.id !== "send-mode" && (controls[o.id] || o.id === "context" || o.id === "attach" || o.id === "code"))}
+              options={options.filter((o) => o.place !== "actions" && o.id !== "send-mode" && o.id !== "persona" && (controls[o.id] || o.id === "context" || o.id === "attach" || o.id === "code"))}
               control={sheetControl}
               counts={{ context: chips.length, attach: files.items.length, code: snippets.items.length }}
               disabled={disabled}
             />
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden" data-testid="composer-modes">
-              {options.filter((o) => o.opens === "toggle" && o.on).map(control)}
+              {/* Before the first message, who answers is the choice that matters most, so the persona stays in view. */}
+              {options.filter((o) => o.id === "persona" || (o.opens === "toggle" && o.on)).map(control)}
             </div>
             <div className="flex flex-none items-center gap-1">
               {options.filter((o) => o.place === "actions" || o.id === "send-mode").map(control)}

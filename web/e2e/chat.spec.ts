@@ -140,7 +140,7 @@ test("effort is picked per message, kept on the chat, and limited to what the mo
   expect(mock.unhandled).toEqual([]);
 });
 
-test("Send stays at the composer's bottom right when the options wrap", async ({ page }) => {
+test("Send stays at the composer's bottom right, level with the model, at every width", async ({ page }) => {
   // A persona adds its switcher to a new chat's options, which is what pushes them past one line.
   await installChatApi(page, { personas: [persona(1, { name: "VesperBot", tone: "direct", color: "#4fd1c5", is_default: true })] });
   await page.goto("/chat?project=WEB");
@@ -149,6 +149,9 @@ test("Send stays at the composer's bottom right when the options wrap", async ({
   // Whether Send lands alone on a line depends on how much room the last line has left, so sweep widths.
   for (let width = 760; width <= 1400; width += 20) {
     await page.setViewportSize({ width, height: 800 });
+    // Around 780px the composer swaps between its compact and desktop rows: measure the row that settled.
+    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+    await expect(effort(page)).toBeVisible();
     const form = await composer(page).locator("xpath=ancestor::form").boundingBox();
     const sendBox = await page.getByRole("button", { name: "Send" }).boundingBox();
     const last = await effort(page).boundingBox();
