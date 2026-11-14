@@ -523,7 +523,7 @@ func (s *Server) UpdateChat(ctx context.Context, req api.UpdateChatRequestObject
 	if req.Body.Revision < 1 || req.Body.Revision > 2147483647 {
 		return nil, apperr.Invalid("revision", "invalid revision")
 	}
-	c, err := s.Runs.UpdateChat(ctx, ws, u.ID, req.Id, runs.ChatPatchInput{Revision: int32(req.Body.Revision), Title: req.Body.Title, Archived: req.Body.Archived, Project: req.Body.Project})
+	c, err := s.Runs.UpdateChat(ctx, ws, u.ID, req.Id, runs.ChatPatchInput{Revision: int32(req.Body.Revision), Title: req.Body.Title, Archived: req.Body.Archived, Project: req.Body.Project, Space: req.Body.SpaceId})
 	if err != nil {
 		return nil, err
 	}

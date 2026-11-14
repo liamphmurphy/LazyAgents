@@ -358,7 +358,11 @@ func TestProjectAndDependencyWorkspaceBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Create(ctx, foreign.ID, "OUT", projects.Config{Name: "Private", Color: "#112233"}); err != nil {
+	stranger, err := q.CreateUser(ctx, store.CreateUserParams{WorkspaceID: foreign.ID, Name: "Stranger", Email: "s@example.com", Initials: "ST"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Create(ctx, foreign.ID, stranger.ID, "OUT", projects.Config{Name: "Private", Color: "#112233"}); err != nil {
 		t.Fatal(err)
 	}
 	private, err := tr.Create(ctx, foreign.ID, tracker.Actor{Type: "system"}, tracker.NewTicket{ProjectKey: "OUT", Title: "Private task"})

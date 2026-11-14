@@ -127,7 +127,8 @@ func TestChatSpacesAndTheirChats(t *testing.T) {
 	}
 	e.invalid("PATCH", "/chat-spaces/"+id, map[string]any{"persona_id": "nope"}, "persona_id", "persona id")
 	e.want("PATCH", "/chat-spaces/"+uuid.NewString(), map[string]any{"name": "X"}, http.StatusNotFound)
-	if list := e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any); len(list) != 1 {
+	// The seeded projects' spaces (they track work) are listed too; Health is the one without.
+	if list := e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any); len(slices.DeleteFunc(list, func(v any) bool { return v.(map[string]any)["work"] != nil })) != 1 {
 		t.Fatalf("list %v", list)
 	}
 

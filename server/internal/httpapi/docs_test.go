@@ -39,7 +39,8 @@ func TestCreateDoc(t *testing.T) {
 	if a, b := e.want("GET", "/chats/"+chat, nil, http.StatusOK)["space"], e.want("GET", "/chats/"+untitled["chat_id"].(string), nil, http.StatusOK)["space"]; a == nil || a.(map[string]any)["id"] != b.(map[string]any)["id"] {
 		t.Fatalf("spaces %v %v", a, b)
 	}
-	if spaces := e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any); len(spaces) != 0 {
+	// Only the seeded projects' spaces (they track work) are listed.
+	if spaces := e.want("GET", "/chat-spaces", nil, http.StatusOK)["spaces"].([]any); len(slices.DeleteFunc(spaces, func(v any) bool { return v.(map[string]any)["work"] != nil })) != 0 {
 		t.Fatalf("Spaces list %v", spaces)
 	}
 	for _, c := range e.want("GET", "/chats", nil, http.StatusOK)["chats"].([]any) {

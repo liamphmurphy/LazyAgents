@@ -1080,6 +1080,9 @@ type ChatPatchInput struct {
 	Archived *bool
 	// Project attaches this project's key to the chat; "" detaches. nil leaves it.
 	Project *string
+	// Space moves the chat into one of the person's spaces; "" takes it out. nil leaves it.
+	// Unless Project is given too, the chat then files tickets where the space does.
+	Space *string
 }
 
 // UpdateChat renames, archives or restores a chat, or changes its project. Archiving ends the chat's
@@ -1102,14 +1105,19 @@ func (s *Service) UpdateChat(ctx context.Context, ws, user, id uuid.UUID, in Cha
 		if in.Archived != nil {
 			archived = *in.Archived
 		}
-		if in.Title == nil && in.Archived == nil && in.Project == nil {
-			return apperr.Invalid("title", "provide a title, archived or project")
+		if in.Title == nil && in.Archived == nil && in.Project == nil && in.Space == nil {
+			return apperr.Invalid("title", "provide a title, archived, project or space_id")
 		}
 		if chat.Revision != in.Revision {
 			return apperr.Conflict("the chat changed; reload and try again")
 		}
 		if chat.State == "running" {
 			return apperr.Conflict("a turn is still running")
+		}
+		if in.Space != nil {
+			if chat, err = moveChatToSpace(ctx, q, ws, user, chat, *in.Space, &in); err != nil {
+				return err
+			}
 		}
 		if in.Project != nil {
 			var projectID *uuid.UUID
@@ -1206,6 +1214,53 @@ func lockAttachableProject(ctx context.Context, q *store.Queries, ws uuid.UUID, 
 		return p, apperr.Conflict("restore the archived project before attaching it to a chat")
 	}
 	return p, nil
+}
+
+// moveChatToSpace puts the chat in one of the person's spaces (raw "" for none). A space's
+// instructions, sources and memory are in the chat's segment, so a move starts a fresh one.
+// Without a project in the same patch, in.Project becomes the space's (an archived one is
+// skipped, as for a new chat). An app's chat stays in its app's space.
+func moveChatToSpace(ctx context.Context, q *store.Queries, ws, user uuid.UUID, chat store.ChatSession, raw string, in *ChatPatchInput) (store.ChatSession, error) {
+	if cur, err := ChatSpaceOf(ctx, q, chat); err != nil {
+		return chat, err
+	} else if cur != nil && cur.App != nil {
+		return chat, apperr.Conflict("this chat belongs to an app")
+	}
+	var to *uuid.UUID
+	if raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return chat, apperr.Invalid("space_id", "must be a space id, or empty for none")
+		}
+		sp, err := q.GetChatSpace(ctx, store.GetChatSpaceParams{ID: id, WorkspaceID: ws, UserID: user})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return chat, apperr.Invalid("space_id", "unknown space")
+		}
+		if err != nil {
+			return chat, err
+		}
+		if sp.App != nil {
+			return chat, apperr.Invalid("space_id", "that space belongs to an app")
+		}
+		to = &sp.ID
+		if in.Project == nil && sp.ProjectID != nil {
+			p, err := q.GetProject(ctx, store.GetProjectParams{ID: *sp.ProjectID, WorkspaceID: ws})
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return chat, err
+			}
+			if err == nil && !p.Archived {
+				in.Project = &p.Key
+			}
+		}
+	}
+	if sameProject(chat.SpaceID, to) {
+		return chat, nil
+	}
+	chat, err := endChatSegment(ctx, q, chat, "The chat's space changed.")
+	if err != nil {
+		return chat, err
+	}
+	return q.SetChatSpace(ctx, store.SetChatSpaceParams{ID: chat.ID, SpaceID: to})
 }
 
 func sameProject(a, b *uuid.UUID) bool {

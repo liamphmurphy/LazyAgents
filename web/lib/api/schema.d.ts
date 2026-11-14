@@ -3689,7 +3689,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a space
-         * @description Its sources and its memories go with it. Its chats stay, outside any space.
+         * @description Its sources and its memories go with it. Its chats stay, outside any space. 409 while it tracks work.
          */
         delete: operations["deleteChatSpace"];
         options?: never;
@@ -3699,6 +3699,34 @@ export interface paths {
          * @description Chats in the space see new instructions, sources and memory settings on their next turn; the defaults apply to chats started after.
          */
         patch: operations["updateChatSpace"];
+        trace?: never;
+    };
+    "/chat-spaces/{spaceId}/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a space track work
+         * @description Gives the space a key, tickets, epics, runs and a repository, named and colored as the
+         *     space is. New chats in the space file tickets there. 409 if it already tracks work or the
+         *     key is taken; 422 for an invalid key, repository or branch, or an app's space.
+         */
+        put: operations["trackSpaceWork"];
+        post?: never;
+        /**
+         * Stop tracking work in a space
+         * @description Only while the work has no tickets or live runs (409 otherwise). The work is archived and its key stays taken.
+         */
+        delete: operations["stopSpaceWork"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/chat-spaces/{spaceId}/sources": {
@@ -4930,6 +4958,11 @@ export interface components {
             default_branch: string;
             archived: boolean;
             revision: number;
+            /**
+             * Format: uuid
+             * @description The space whose work this is (LAZYAGENTS-213); absent only for work a space stopped tracking (then archived)
+             */
+            space_id?: string;
         };
         /**
          * @description main agents are assigned tickets and may delegate parts of them; sub agents only run when a main agent delegates to them; the assistant is the workspace's Personal Assistant, which every chat runs as (it can't be created, edited, deleted or assigned tickets)
@@ -5422,8 +5455,9 @@ export interface components {
              * @description Persona new chats start with; absent: the default persona
              */
             persona_id?: string;
-            /** @description Key of the project new chats get; absent: none */
+            /** @description Key new chats here file tickets under: the space's own work, or another space's when this one doesn't track work; absent: none */
             project?: string;
+            work?: components["schemas"]["SpaceWork"];
             /** @description Connectors chats here may use; empty is none */
             connector_ids: string[];
             /** @description What the assistant saves about the person in this space stays here */
@@ -5439,6 +5473,22 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @description The work a space tracks (its tickets, epics, runs and repository); absent when the space doesn't track work */
+        SpaceWork: {
+            /** @description Ticket key prefix, e.g. LAZYAGENTS */
+            key: string;
+            repo_url?: string;
+            default_branch: string;
+            archived: boolean;
+            /** @description For PUT /projects/{key}, which edits the repository, branch and archiving */
+            revision: number;
+        };
+        SpaceWorkInput: {
+            /** @description 2–10 letters or digits, starting with a letter; upper-cased */
+            key: string;
+            repo_url?: string;
+            default_branch?: string;
         };
         /** @description The space a chat is in, as the chat shows it */
         ChatSpaceRef: {
@@ -5458,6 +5508,7 @@ export interface components {
             /** Format: uuid */
             persona_id?: string;
             project?: string;
+            work?: components["schemas"]["SpaceWorkInput"];
             connector_ids?: string[];
             /** @default true */
             space_memory: boolean;
@@ -7774,6 +7825,8 @@ export interface components {
             archived?: boolean;
             /** @description Key of the project to attach; empty detaches. The next message starts a fresh session with the conversation handed off. */
             project?: string;
+            /** @description Move the chat into one of your spaces (not an app's), or empty for none. Its instructions, sources and memory reach the chat from the next message, and the chat files tickets where the space does unless project is given too. */
+            space_id?: string;
         };
         NewChatMessage: {
             /** @description Ask for a research plan to approve instead of an answer */
@@ -15446,6 +15499,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
@@ -15475,6 +15529,61 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    trackSpaceWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceWorkInput"];
+            };
+        };
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpace"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    stopSpaceWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The space */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSpace"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/liamphmurphy/vesper/server/internal/apperr"
+	"github.com/liamphmurphy/vesper/server/internal/projects"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -99,6 +100,9 @@ type SpaceInput struct {
 	Project                                *string
 	ConnectorIDs                           *[]uuid.UUID
 	SpaceMemory                            *bool
+	// Then runs in CreateSpace's transaction once the space exists (making it track work), so
+	// a failure there leaves no space behind.
+	Then func(q *store.Queries, sp store.ChatSpace) error
 }
 
 // spaceFields is a validated SpaceInput.
@@ -207,8 +211,10 @@ func (s *Service) CreateSpace(ctx context.Context, ws, user uuid.UUID, in SpaceI
 		if f.instructions != nil {
 			arg.Instructions = *f.instructions
 		}
-		out, err = q.CreateChatSpace(ctx, arg)
-		return err
+		if out, err = q.CreateChatSpace(ctx, arg); err != nil || in.Then == nil {
+			return err
+		}
+		return in.Then(q, out)
 	})
 	return out, err
 }
@@ -222,13 +228,32 @@ func (s *Service) UpdateSpace(ctx context.Context, ws, user, id uuid.UUID, in Sp
 		if err != nil {
 			return err
 		}
+		if in.Project != nil {
+			// Theirs first, so the message below never names another person's key.
+			if _, err := q.GetChatSpace(ctx, store.GetChatSpaceParams{ID: id, WorkspaceID: ws, UserID: user}); errors.Is(err, pgx.ErrNoRows) {
+				return apperr.ErrNotFound
+			} else if err != nil {
+				return err
+			}
+			own, err := q.GetProjectBySpace(ctx, &id)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if err == nil && (f.project == nil || *f.project != own.ID) {
+				return apperr.Invalid("project", "a space that tracks work files tickets under its own key, %s", own.Key)
+			}
+		}
 		out, err = q.UpdateChatSpace(ctx, store.UpdateChatSpaceParams{ID: id, WorkspaceID: ws, UserID: user, Name: f.name, Description: f.description, Color: f.color,
 			Instructions: f.instructions, PersonaID: f.persona, ClearPersona: in.ClearPersona, ProjectID: f.project, ClearProject: f.clearProject,
 			ConnectorIds: f.connectors, SpaceMemory: in.SpaceMemory})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.ErrNotFound
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		// A space and the work it tracks are one thing: its name and color are the work's too.
+		return q.SyncProjectFromSpace(ctx, store.SyncProjectFromSpaceParams{Name: out.Name, Color: projects.SpaceColorHex[out.Color], SpaceID: &out.ID})
 	})
 	return out, err
 }
