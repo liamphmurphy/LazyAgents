@@ -64,12 +64,11 @@ test.describe("@design-review", () => {
 
     // 1. The persona's patch waits as a suggestion; the design is untouched.
     await say("Tidy the Start screen");
-    // It announces itself in the chat (a card with Review), not on the canvas.
-    const card = chat.getByTestId("suggestion-card");
-    const open = card.getByRole("button", { name: "Review", exact: true });
+    // It announces itself on the editor's bar (a Review pill beside the save state), not on the canvas or in the chat.
+    const open = page.getByTestId("suggestion-card");
     await expect(open).toBeVisible({ timeout: 120_000 });
-    await expect(card).toContainText("3 suggested changes");
-    await expect(page.getByRole("button", { name: /Review \d+ suggestion/ })).toHaveCount(0);
+    await expect(open).toHaveAccessibleName("Review 3 suggested changes");
+    await expect(chat.getByTestId("suggestion-card")).toHaveCount(0);
     await expect(chat.getByText("I suggested 3 changes.")).toBeVisible();
     expect((await get(`/designs/${id}`)).seq).toBe(first.seq);
     expect((await get(`/designs/${id}`)).pending_proposals).toBe(1);

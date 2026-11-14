@@ -10,8 +10,8 @@ import { useBoard, useBoardMoves, useTicketEditorDetail, type BoardFilters } fro
 import { BOARD_STATUSES, onlyBlocked, withBoardMoves, type Board, type BoardCard, type BoardStatus } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { useCompact } from "@/lib/viewport";
-import { TopBar } from "@/components/shell/topbar";
-import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
+import { ButtonLink } from "@/components/ui/button";
+import { ProjectScopeState, useProjectScope } from "@/components/shell/project-scope";
 import { PriorityGlyph, StatusGlyph } from "@/components/domain/glyphs";
 import { PRIORITY_NAME, STATUS_NAME } from "@/components/domain/meta";
 import { FilterMenu, floatPanel } from "@/components/domain/pickers";
@@ -21,7 +21,7 @@ import { DependencyMap } from "@/components/domain/dependency-map";
 import { useMotionList } from "@/components/ui/motion";
 import { Toggle } from "@/components/ui/controls";
 import { ticketsHref } from "@/lib/tickets-layout";
-import { ChipScroller, TicketsLayoutBar } from "./layout-bar";
+import { ChipScroller, TicketsLayoutBar, TicketsTopBar } from "./layout-bar";
 import { AssigneeAvatar, EpicChip, StateText } from "./ticket-row";
 
 export function BoardScreen() {
@@ -69,13 +69,19 @@ export function BoardScreen() {
   );
   return (
     <div data-testid="board-screen" className="flex min-h-0 flex-1 flex-col">
-      {!compact && <TopBar crumbs={projectCrumbs(project, "Tickets")} actions={boardFilters} />}
+      {!compact && <TicketsTopBar layout="board" action={
+        <ButtonLink href={project ? `/tickets/new?project=${encodeURIComponent(project.key)}` : "/tickets/new"} variant="primary" icon="plus" hint="C">New ticket</ButtonLink>
+      } />}
       <TicketsLayoutBar layout="board" />
       {compact && boardFilters && <ChipScroller label="Board filters">{boardFilters}</ChipScroller>}
-      {project && <nav aria-label="Board views" className="flex gap-5 border-b border-border px-5 py-3 text-14">
-        <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
-        <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
-      </nav>}
+      {/* The board's views, with its filters at the row's end (the top bar holds only the header). */}
+      {project && <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-border px-5 py-2 text-14">
+        <nav aria-label="Board views" className="flex gap-5">
+          <button aria-current={!map ? "page" : undefined} className={!map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "")}>Board</button>
+          <button aria-current={map ? "page" : undefined} className={map ? "font-semibold text-accent" : ""} onClick={() => setParam("tab", "map")}>Map</button>
+        </nav>
+        {!compact && <div role="group" aria-label="Board filters" className="ml-auto flex flex-wrap items-center gap-2">{boardFilters}</div>}
+      </div>}
       {!project ? <ProjectScopeState base="/tickets" scope={scope} />
         : map ? <div className="p-5"><DependencyMap key={JSON.stringify([project.key, filters])} project={project.key} epic={filters.epic} assignee={filters.assignee} includeCanceled={filters.include_canceled} onOpen={setTicket} /></div>
         : <BoardView key={JSON.stringify([project.key, filters])} project={project.key} filters={filters} blockedOnly={blockedOnly} onOpen={setTicket} />}

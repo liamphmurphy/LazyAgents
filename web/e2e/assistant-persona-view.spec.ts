@@ -193,13 +193,13 @@ test("the left column keeps its width whatever the titles and persona filter", a
 
   const menu = page.getByRole("complementary", { name: "Main menu" });
   const width = async () => (await menu.boundingBox())!.width;
-  expect(await width()).toBe(264);
+  expect(await width()).toBe(248);
   await pick(page, "All personas");
   await expect(picked(page)).toHaveAccessibleName("All personas");
-  expect(await width()).toBe(264);
+  expect(await width()).toBe(248);
   await pick(page, /^Atlas/);
   await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
-  expect(await width()).toBe(264);
+  expect(await width()).toBe(248);
 });
 
 test("the header names the chat's persona: it switches an empty chat, then starts a new chat once there are messages", async ({ page }) => {

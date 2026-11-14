@@ -47,7 +47,7 @@ test("the chat starts folded to a rail on Home, opens from it, and a general cha
   await expect(dock(page)).toHaveCount(0);
 
   await rail(page).getByRole("button", { name: /^Open Chat/ }).click();
-  await expect(dock(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: /^Chat/ }).first()).toBeVisible();
   await dock(page).getByRole("button", { name: "Start a chat", exact: true }).click();
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeVisible();
 
@@ -421,7 +421,7 @@ test("a page's Links, Outline, Calendar and History are dock tabs beside Chat, a
   await rail(page).getByRole("button", { name: "Open Links" }).click();
   await expect(dock(page).getByRole("tab", { name: "Links" })).toHaveAttribute("aria-selected", "true");
   await dock(page).getByRole("tab", { name: /Chat/ }).click();
-  await expect(dock(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: /^Chat/ }).first()).toBeVisible();
 
   await page.getByRole("button", { name: /suggests changes|edits directly|paused/ }).click();
   await expect(dock(page).getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");

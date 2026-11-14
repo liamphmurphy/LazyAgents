@@ -149,9 +149,10 @@ export function AppsMenu({ rail, counts, onNewSpace }: { rail?: boolean; counts:
       aria-current={current && !open ? "page" : undefined}
       onClick={rail || wide ? undefined : () => setOpen(!open)}
       className={cx(
-        "relative flex h-[30px] w-full items-center gap-2.5 rounded-sm text-13 font-medium",
-        rail ? "justify-center px-0" : "px-2",
-        open || current ? "bg-selected text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
+        "relative flex h-[30px] w-full items-center gap-2.5 text-13 font-medium",
+        // On the column's area row it is one more area icon, styled like its neighbours.
+        rail ? "justify-center rounded-lg px-0" : "rounded-sm px-2",
+        open || current ? cx("bg-selected", rail ? "text-accent" : "text-fg") : cx(rail ? "text-fg-tertiary" : "text-fg-secondary", "hover:bg-hover hover:text-fg"),
       )}
     >
       <Icon name="dashboard" />

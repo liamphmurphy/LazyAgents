@@ -697,15 +697,15 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const fetchError = ref.error ?? head.error;
   const selectionLabel = design && selected.length === 1 ? find(design, selected[0])?.node : undefined;
 
-  // ---- The dock (full editor only): Review opens from the chat's suggestion card; Chat is unread while hidden.
-  // Each review that starts (the card, ?review=1 once suggestions load) brings the Review tab up.
+  // ---- The dock (full editor only): Review opens from the header's Review pill; Chat is unread while hidden.
+  // Each review that starts (the pill, ?review=1 once suggestions load) brings the Review tab up.
   const [showReview, setShowReview] = useState(0);
   const [reviewShown, setReviewShown] = useState(false);
   if (reviewing !== reviewShown) {
     setReviewShown(reviewing);
     if (reviewing) setShowReview((n) => n + 1);
   }
-  /** The card's Review: starts the review, or brings its tab back up if it is already going. */
+  /** The pill's Review: starts the review, or brings its tab back up if it is already going. */
   const startReview = () => {
     if (reviewing) setShowReview((n) => n + 1);
     else setReviewing(true);
@@ -958,6 +958,15 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
     ),
+    // What waits on the design sits with the design, beside its save state, not in the chat.
+    status: pending && (
+      <SuggestionsPill
+        changes={pending.ops.length}
+        pages={pendingPages}
+        more={proposalCount - 1}
+        onReview={startReview}
+      />
+    ),
     saveState: doc && (
       <span data-testid="design-save-state" title={saveState.message} className={cx("flex items-center gap-1.5", saveBad && "text-pill-blocked-fg")}>
         <span aria-hidden className={cx("size-1.5 rounded-full", saveBad ? "bg-pill-blocked-fg" : saveState.s === "saved" ? "bg-state-done" : "bg-fg-tertiary")} />
@@ -1034,16 +1043,6 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   );
   const chatPanel = (
     <div data-design-chat className="flex min-h-0 flex-1 flex-col">
-      {pending && (
-        <div data-testid="suggestion-card" role="status" className="m-3 mb-0 flex flex-none flex-col gap-1 rounded-[10px] border border-border-float bg-surface-raised p-3 text-13">
-          <span className="font-semibold text-fg">
-            {pending.ops.length} suggested {pending.ops.length === 1 ? "change" : "changes"}
-            {pendingPages.length > 0 && ` · ${pendingPages.join(", ")}`}
-          </span>
-          <span className="text-fg-secondary">Nothing changes until you accept.{proposalCount > 1 ? ` ${proposalCount - 1} more waiting after this.` : ""}</span>
-          <Button variant="approve" className="mt-1 self-start" onClick={startReview}>Review</Button>
-        </div>
-      )}
       {chatId && <Conversation key={chatId} id={chatId} docked actions={editMode} onNew={() => router.push("/apps/designs")} />}
     </div>
   );
@@ -1124,5 +1123,19 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
       main={failed ?? canvas ?? <div aria-busy="true" className="flex min-h-0 flex-1 p-3"><Skeleton className="flex-1" /></div>}
       dock={dockTabs}
     />
+  );
+}
+
+/** The editor bar's "Review N": the persona's waiting suggestions, one click from review. Nothing changes until they're accepted. */
+function SuggestionsPill({ changes, pages, more, onReview }: { changes: number; pages: string[]; more: number; onReview: () => void }) {
+  const what = `${changes} suggested ${changes === 1 ? "change" : "changes"}`;
+  const detail = [what + (pages.length ? ` · ${pages.join(", ")}` : ""), "Nothing changes until you accept.", more > 0 ? `${more} more waiting after this.` : ""].filter(Boolean).join(" ");
+  return (
+    <button type="button" data-testid="suggestion-card" aria-label={`Review ${what}`} title={detail} onClick={onReview}
+      className="flex h-[26px] flex-none items-center gap-1.5 rounded-full bg-pill-review-bg px-2.5 text-12 font-medium text-pill-review-fg hover:brightness-95">
+      <Icon name="check" size={12} />
+      Review
+      <span className="rounded-full bg-surface/60 px-1.5 text-11 tabular-nums">{changes}</span>
+    </button>
   );
 }

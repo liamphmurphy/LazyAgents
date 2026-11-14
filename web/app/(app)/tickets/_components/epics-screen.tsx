@@ -13,8 +13,8 @@ import {
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/controls";
-import { Content, TopBar } from "@/components/shell/topbar";
-import { ProjectScopeState, projectCrumbs, useProjectScope } from "@/components/shell/project-scope";
+import { Content } from "@/components/shell/topbar";
+import { ProjectScopeState, useProjectScope } from "@/components/shell/project-scope";
 import { HealthPill, type EpicOverview } from "@/components/domain/overview";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { SmallPill } from "@/components/domain/labels";
@@ -22,7 +22,7 @@ import { StackedBar } from "@/components/domain/data";
 import { cx } from "@/lib/cx";
 import { FilterMenu } from "@/components/domain/pickers";
 import { ticketsHref } from "@/lib/tickets-layout";
-import { TicketsLayoutBar } from "./layout-bar";
+import { TicketsLayoutBar, TicketsTopBar } from "./layout-bar";
 
 function Timeline({
   epics,
@@ -247,9 +247,9 @@ export function EpicsScreen() {
   return (
     <>
       {/* Compact: the layout bar is the header, with its own + button. */}
-      {!compact && <TopBar
-        crumbs={projectCrumbs(current, "Tickets")}
-        actions={
+      {!compact && <TicketsTopBar
+        layout="epics"
+        action={
           <ButtonLink href={project ? `/tickets/new?project=${encodeURIComponent(project)}` : "/tickets/new"} variant="primary" icon="plus">
             New ticket
           </ButtonLink>

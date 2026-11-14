@@ -172,7 +172,8 @@ test("with a design open, the dock collapses to its rail and reopens, and the UR
   await dockTab(page, "Design").click();
   await page.getByTestId("design-panel").getByRole("button", { name: "Close the design" }).click();
   await expect(dockTab(page, "Design")).toHaveCount(0);
-  await expect(dockTab(page, "Activity")).toHaveAttribute("aria-selected", "true");
+  // Activity is then the only tab: no tab strip, its panel under the dock's header.
+  await expect(page.getByRole("complementary", { name: "Panel" }).getByRole("tabpanel", { name: "Activity" })).toBeVisible();
 });
 
 test("⌘. hides the Vesper sidebar and the dock, and restores both without touching the preference", async ({ page }) => {
@@ -342,4 +343,40 @@ test("pending suggestions show as ghosts on the canvas until the review opens", 
   await page.getByTestId("design-chat-card").first().getByRole("button", { name: "Review", exact: true }).click();
   await expect(panel.getByTestId("review-pill")).toBeVisible();
   await expect(panel.getByTestId("suggestion-ghosts")).toHaveCount(0);
+});
+
+// One bar: what waits on a design sits on the editor's bar beside its save state, not as a card
+// stacked over the chat in the dock (whose first row is the chat's header).
+test("in the Designs app, waiting suggestions are a Review pill on the editor's bar that opens the review", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const s = await install(page);
+  s.created = true;
+  s.pending = 1;
+  s.proposals = [
+    {
+      id: "77777777-7777-4777-8777-777777777777",
+      agent_id: "a",
+      base_seq: 1,
+      summary: "Retitle the cart",
+      status: "pending",
+      decisions: [],
+      created_at: at,
+      ops: [
+        { op: "set_text", id: "n_cart_title", text: "Your cart", why: "Says whose cart it is" },
+        { op: "set_text", id: "n_cart_title", text: "Your basket", why: "Matches the copy deck" },
+      ],
+    },
+  ];
+  await page.goto(`/apps/designs/${D}`);
+  const pill = page.getByTestId("suggestion-card");
+  await expect(pill).toHaveAccessibleName("Review 2 suggested changes");
+  // On the editor's bar, level with the dock's first row (the chat's header; one-bar.spec checks that).
+  const bar = (await page.locator("header").filter({ has: pill }).boundingBox())!;
+  const dockRow = (await page.getByTestId("dock-header").boundingBox())!;
+  expect(Math.abs(bar.y - dockRow.y)).toBeLessThan(1);
+  expect(Math.abs(bar.height - dockRow.height)).toBeLessThan(1);
+  await expect(page.locator("[data-design-chat]").getByTestId("suggestion-card")).toHaveCount(0);
+
+  await pill.click();
+  await expect(page.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: /^Review/ })).toHaveAttribute("aria-selected", "true");
 });

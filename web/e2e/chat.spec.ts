@@ -863,7 +863,7 @@ test("a narrated decision shows on its step, tagged, and links to the thinking i
   await expect(page.getByTestId("chat-steps").getByTestId("intent-tag")).toHaveText("surprise");
   await expect(page.getByTestId("trace-thinking")).toBeHidden();
   await page.getByTestId("view-reasoning").click();
-  await expect(page.getByRole("tab", { name: "Activity", selected: true })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Panel" }).getByRole("tabpanel", { name: "Activity" })).toBeVisible();
   await expect(page.getByTestId("trace-thinking")).toHaveText("It fails on main as well, so the test races the backoff.");
   await expect(page.getByTestId("trace-intent")).toHaveText("It fails on main too, so it's the test.");
   await page.getByRole("button", { name: "Stop" }).click();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { cx } from "@/lib/cx";
@@ -43,6 +43,8 @@ export type EditorHeader = {
   /** The ▾ menu beside the title (rename, duplicate, …). */
   titleMenu?: ReactNode;
   saveState?: ReactNode;
+  /** Beside the save state: what waits on the document, e.g. Designs' "Review 3" pill. */
+  status?: ReactNode;
   presence?: ReactNode;
   /** Up to two primary actions. */
   actions?: [ReactNode, ReactNode?];
@@ -179,7 +181,6 @@ export function EditorLayout({
 
   return (
     <div data-editor-layout={app} className="flex h-[calc(100dvh-var(--tab-bar-h,0px))] min-h-0 min-w-0 flex-none flex-col bg-bg md:h-dvh">
-      <Header {...header} backInColumn={!!left} />
       <div className="relative flex min-h-0 flex-1">
         {/* The structure is the left column's list, under the way back to the app and the document's name. */}
         {showLeft && (
@@ -193,7 +194,12 @@ export function EditorLayout({
             </aside>
           </NavigatorPortal>
         )}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
+        {/* The editor's bar spans only the work; the dock is a full-height column whose own first row,
+            the same height, continues the bar: its header (the chat's, for Chat) is the top of the dock. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Header {...header} backInColumn={!!left} />
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-bg">{main}</div>
+        </div>
         {/* An app's panels unmount while the dock is collapsed, as they always have. */}
         {docked && <Dock uid={uid} tabs={dock} state={state} dispatch={dispatch} panels={state.open && !state.hidden ? panels : null} railOnly={compact} />}
       </div>
@@ -208,25 +214,41 @@ export function EditorLayout({
 
 /** The tab panels of a dock, one per tab, only the active one shown. Kept mounted so switching tabs or collapsing keeps their state. */
 export function dockPanels(uid: string, tabs: DockTab[], activeId: string | undefined, compact = false): ReactNode {
+  // A lone tab has no tab to be labelled by (the dock shows tabs only when there is a choice).
+  const labelled = !compact && tabs.length > 1;
   return tabs.map((t) => (
     <div
       key={t.id}
       role="tabpanel"
       id={`${uid}-panel-${t.id}`}
-      aria-labelledby={compact ? undefined : `${uid}-tab-${t.id}`}
-      aria-label={compact ? t.label : undefined}
+      aria-labelledby={labelled ? `${uid}-tab-${t.id}` : undefined}
+      aria-label={labelled ? undefined : t.label}
       data-dock-panel={`${uid}:${t.id}`}
       hidden={t.id !== activeId}
       className="flex min-h-0 flex-1 flex-col"
     >
-      {t.content}
+      <DockTabContext.Provider value={t.id}>{t.content}</DockTabContext.Provider>
     </div>
   ));
 }
 
+// The dock's first row is its active tab's header. A panel renders its header into its slot (useDockHeaderSlot);
+// each tab has its own slot (only the active one shows), so a hidden panel's header stays hidden.
+const DockTabContext = createContext<string | undefined>(undefined);
+const DockSlotsContext = createContext<Record<string, HTMLElement | null> | undefined>(undefined);
+
+/** The element a docked panel's header renders into, or null outside a dock (a phone's sheet, the chat page): render it inline then. */
+export function useDockHeaderSlot(): HTMLElement | null {
+  const tab = useContext(DockTabContext);
+  const slots = useContext(DockSlotsContext);
+  return (tab && slots?.[tab]) || null;
+}
+
 /**
- * The desktop dock on the right of an EditorLayout or the chat: a tab strip with ⇥ over the active
- * tab's panel, or, collapsed, a 44px rail of tab icons in the same place. Controlled: the owner
+ * The desktop dock on the right of an EditorLayout or the chat: a full-height column whose first
+ * row, as tall as the page's top bar beside it, holds the active tab's header (the chat's own, via
+ * useDockHeaderSlot; else the tab's name), the tabs as icons when there is more than one, and ⇥;
+ * the active tab's panel below. Collapsed, a 44px rail of tab icons in the same place. Controlled: the owner
  * keeps the state (EditorLayout in localStorage, the chat in the URL). By default the panels stay
  * mounted while collapsed (the chat's playground shouldn't reload). `overlay` is the breakpoint below which the open dock floats over the content.
  */
@@ -250,6 +272,18 @@ export function Dock({
   railOnly?: boolean;
 }) {
   const active = tabs.find((t) => t.id === state.tab) ?? tabs[0];
+  const [slots, setSlots] = useState<Record<string, HTMLElement | null>>({});
+  // One stable ref callback per tab: a new function each render would detach and reattach the slot,
+  // setting state on every render.
+  const [slotRefs] = useState(() => new Map<string, (el: HTMLElement | null) => void>());
+  const slotRef = (id: string) => {
+    let ref = slotRefs.get(id);
+    if (!ref) {
+      ref = (el) => setSlots((s) => (s[id] === el ? s : { ...s, [id]: el }));
+      slotRefs.set(id, ref);
+    }
+    return ref;
+  };
   if (!tabs.length) return null;
   // ⌘. hides the dock but keeps its panels mounted (the owner passes null panels to unmount them).
   const shown = state.open && !state.hidden;
@@ -267,41 +301,54 @@ export function Dock({
           !shown && "hidden",
         )}
       >
-        <div className="flex h-10 flex-none items-center gap-1 border-b border-border-subtle bg-sidebar px-2">
-          <div role="tablist" aria-label="Panel tabs" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+        {/* One row, as tall as the page's top bar it continues: the active tab's header (the chat's, for
+            Chat; else the tab's name), the other tabs as icons when there is a choice, then collapse. */}
+        <div data-testid="dock-header" className="flex h-[44px] flex-none items-center gap-1 border-b border-border-subtle bg-surface pl-1 pr-2">
+          <div className="flex min-w-0 flex-1 items-center">
             {tabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                id={`${uid}-tab-${t.id}`}
-                aria-selected={t.id === active?.id}
-                aria-controls={`${uid}-panel-${t.id}`}
-                title={t.id === active?.id ? `${t.label}: click to collapse` : t.label}
-                onClick={() => dispatch({ type: "select", tab: t.id })}
-                className={cx(
-                  "relative flex h-7 flex-none items-center gap-1.5 rounded-md px-2 text-13",
-                  t.id === active?.id ? "bg-selected font-medium text-fg" : "text-fg-secondary hover:bg-hover hover:text-fg",
-                )}
-              >
-                <TabIcon tab={t} />
-                {/* Past three tabs the strip runs out of room: the others show their icon, and the label stays for screen readers. */}
-                <span className={cx(tabs.length > 3 && t.id !== active?.id && "sr-only")}>{t.label}</span>
-                {t.badge}
-              </button>
+              <div key={t.id} ref={slotRef(t.id)} data-dock-header={t.id} hidden={t.id !== active?.id}
+                className={cx("min-w-0 flex-1 items-center", t.id === active?.id && "peer flex empty:hidden")} />
             ))}
+            <span className="hidden min-w-0 flex-1 truncate px-2 text-13 font-semibold text-fg peer-empty:block">{active?.label}</span>
           </div>
+          {tabs.length > 1 && (
+            <div role="tablist" aria-label="Panel tabs" className="flex flex-none items-center gap-0.5">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  id={`${uid}-tab-${t.id}`}
+                  aria-selected={t.id === active?.id}
+                  aria-controls={`${uid}-panel-${t.id}`}
+                  title={t.id === active?.id ? `${t.label}: click to collapse` : t.label}
+                  onClick={() => dispatch({ type: "select", tab: t.id })}
+                  className={cx(
+                    "relative flex h-7 flex-none items-center gap-1 rounded-md px-1.5 text-12",
+                    t.id === active?.id ? "bg-selected text-fg" : "text-fg-tertiary hover:bg-hover hover:text-fg",
+                  )}
+                >
+                  {/* The header beside it already shows the persona, so Chat is its plain icon here. */}
+                  <TabIcon tab={{ ...t, avatar: undefined }} />
+                  <span className="sr-only">{t.label}</span>
+                  {t.badge}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             aria-label="Collapse panel"
             title="Collapse panel (⌘\)"
             onClick={() => dispatch({ type: "collapse" })}
-            className="grid size-7 flex-none place-items-center rounded-md border border-border text-fg-secondary hover:bg-hover hover:text-fg"
+            className="grid size-7 flex-none place-items-center rounded-md text-fg-tertiary hover:bg-hover hover:text-fg"
           >
             <span aria-hidden>⇥</span>
           </button>
         </div>
+        <DockSlotsContext.Provider value={slots}>
         {panels === undefined ? dockPanels(uid, tabs, active?.id) : panels}
+        </DockSlotsContext.Provider>
       </aside>}
       {!state.hidden && (railOnly || !state.open) && (
         <nav aria-label="Panel rail" className="flex w-[44px] flex-none flex-col items-center gap-2 border-l border-border-subtle bg-sidebar py-2.5">
@@ -346,10 +393,10 @@ function TabIcon({ tab, size = 14 }: { tab: DockTab; size?: number }) {
 }
 
 /** The editor's bar: back and forward first, as on every page, then the title; the way up to the app is in the left column when the structure is. */
-function Header({ back, title, titleMenu, saveState, presence, actions, overflow, backInColumn }: EditorHeader & { backInColumn: boolean }) {
+function Header({ back, title, titleMenu, saveState, status, presence, actions, overflow, backInColumn }: EditorHeader & { backInColumn: boolean }) {
   return (
-    <header className="flex h-12 flex-none items-center gap-3 border-b border-border-subtle bg-surface px-4">
-      <HistoryNav className="-ml-1.5 max-md:hidden" />
+    <header className="flex h-[44px] flex-none items-center gap-3 border-b border-border-subtle bg-surface pl-3 pr-4">
+      <HistoryNav className="max-md:hidden" />
       {/* Phones have no left column, so the way up stays here for them. */}
       <Link href={back.href} className={cx("flex flex-none items-center gap-1 text-13 text-fg-secondary hover:text-fg", backInColumn && "md:hidden")}>
         <span aria-hidden>←</span>
@@ -360,6 +407,7 @@ function Header({ back, title, titleMenu, saveState, presence, actions, overflow
         {titleMenu}
       </div>
       {saveState && <span className="flex-none text-12 text-fg-tertiary" aria-live="polite">{saveState}</span>}
+      {status}
       <div className="flex-1" />
       {presence && <div className="flex flex-none items-center max-md:hidden">{presence}</div>}
       {actions && <div className="flex flex-none items-center gap-2">{actions}</div>}
