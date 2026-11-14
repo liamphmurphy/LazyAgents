@@ -169,6 +169,7 @@ test("each tool call maps to the kind of scene it shows", () => {
     [{ tool: "set_playground_openapi", input: {} }, "playground"],
     [{ tool: "mcp__lazyagents__search_repositories", input: { query: "secret" } }, "repo-search"],
     [{ tool: "use_repository", input: {} }, "repo-attach"],
+    [{ tool: "request_push", input: {} }, "repo-attach"],
     [{ tool: "start_video", input: {} }, "video-render"],
     [{ tool: "update_video", input: {} }, "video-render"],
     [{ tool: "finish_video", input: {} }, "video-render"],
