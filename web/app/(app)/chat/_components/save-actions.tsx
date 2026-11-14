@@ -80,13 +80,18 @@ function SaveDialog({
 }
 
 /** Save an assistant reply as a wiki page or a report, with a link back to the chat. */
-export function SaveActions({ chat, body }: Props) {
-  const [mode, setMode] = useState<"wiki" | "artifact" | null>(null);
+export type SaveMode = "wiki" | "artifact";
+
+/**
+ * Saving a reply to the wiki or as an artifact: the dialog for the mode the person picked (from the
+ * message's ⋯ menu), and where it went once saved.
+ */
+export function SaveDialogs({ chat, body, mode, onClose }: Props & { mode: SaveMode | null; onClose: () => void }) {
   const page = useCreateWikiPage();
   const artifact = useCreateArtifact();
   const md = withChatBacklink(body, chat.id, chat.title);
   const close = () => {
-    setMode(null);
+    onClose();
     page.reset();
     artifact.reset();
   };
@@ -94,9 +99,7 @@ export function SaveActions({ chat, body }: Props) {
   const savedArtifact = artifact.data;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-12">
-      <Button variant="ghost" icon="wiki" onClick={() => setMode("wiki")}>Save to wiki</Button>
-      <Button variant="ghost" icon="artifacts" onClick={() => setMode("artifact")}>Save as artifact</Button>
+    <>
       {mode === "wiki" && (
         <SaveDialog
           open
@@ -132,6 +135,6 @@ export function SaveActions({ chat, body }: Props) {
           onClose={close}
         />
       )}
-    </div>
+    </>
   );
 }

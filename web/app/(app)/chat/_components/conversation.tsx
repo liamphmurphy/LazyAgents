@@ -52,10 +52,10 @@ import { Banner, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { ChatMarkdown } from "./chat-markdown";
 import { CodeChanges } from "./code-changes";
 import { SentChips } from "./context-chips";
-import { SaveActions } from "./save-actions";
+import { MessageActionsContext, MessageToolbar, type MessageActions } from "./message-toolbar";
 import { Sources } from "./sources";
 import { splitSourceList } from "@/lib/chat-sources";
-import { AskAboutSelection, CopyButton, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
+import { AskAboutSelection, quoteForComposer, ResearchToggle, TemporaryToggle } from "./reply-tools";
 import { ChatSuggestions } from "./suggestions";
 import { Composer, type CommandRun } from "./composer";
 import { RecommendActions, SaveSummary, VideoPlayers } from "@/components/domain/recommend-fence";
@@ -96,7 +96,6 @@ import { needsCommitEmailPick } from "@/lib/commit-email";
 import { onComposerDrop } from "@/lib/playground-report";
 import { SpaceBreadcrumb, SpaceContextChips } from "@/app/(app)/spaces/_components/space-chat";
 import Link from "next/link";
-import { hoverReveal } from "@/lib/reveal";
 import { confirmAction } from "@/components/ui/confirm";
 
 type Message = Schemas["ChatMessage"];
@@ -116,7 +115,6 @@ function Tag({ groups, m }: { groups: Groups; m: Message }) {
 }
 
 // Actions that stay out of the way until the message is hovered or focused.
-const REVEAL = cx(hoverReveal("msg"), "transition-opacity focus-within:opacity-100");
 const LONG_REPLY = 1500;
 /** What the status card's "Ask what it's doing" sends as an aside when a turn has gone quiet. */
 const QUIET_CHECK_IN = "What are you working on right now, and is anything holding you up?";
@@ -170,7 +168,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
   const author = m.persona ? personaLook(m.persona) : persona;
   return (
     <>
-    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
+    <li ref={self} id={`msg-${m.id}`} data-author={m.persona?.name} data-author-id={m.persona?.id} className={cx("group/msg relative flex scroll-mt-4 flex-col gap-1 rounded-xl transition-shadow", mine ? "items-end" : "items-start", highlighted && "ring-2 ring-accent ring-offset-4 ring-offset-bg")} data-enter-key={m.id} data-enter={m.role} data-testid={`${m.role}-message`}>
       {/* Your messages need no name: the bubble on the right is you. */}
       {mine ? null : (
         // Assistant replies carry the avatar of the persona that wrote them (the chat's host
@@ -225,21 +223,17 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
         // A design's selection rides along with every message sent from the editor.
         return r.kind === "canvas" && r.selection ? { ...chip, label: r.selection.nodes.length ? `Design · ${r.selection.nodes.length} selected` : "Design" } : chip;
       })} />}
-      {mine && editable && !editing && (
-        <div className={REVEAL}>
-          <Button variant="ghost" icon="edit" onClick={() => { setDraft(m.body_md); setEditing(true); }}>Edit</Button>
-        </div>
+      {mine && !editing && m.body_md.trim() && (
+        <MessageToolbar messageId={m.id} body={m.body_md} mine chat={chat} testId="message-actions"
+          onEdit={editable ? () => { setDraft(m.body_md); setEditing(true); } : undefined} />
       )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
       {!mine && asides}
       {!mine && saveable && summaryUrl && <SaveSummary messageId={m.id} url={summaryUrl} />}
       {!mine && saveable && m.body_md.trim() && (
-        <div className={cx("flex flex-wrap items-center gap-1.5", REVEAL)} data-testid="reply-actions">
-          <CopyButton text={m.body_md} />
-          {m.body_md.length > LONG_REPLY && <Button variant="ghost" onClick={() => self.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Top of reply</Button>}
-          {onRetry && <Button variant="ghost" onClick={async () => { if (await confirmAction({ title: "Replace this reply with a new one?", body: "The current reply is discarded.", confirmLabel: "Retry" })) onRetry(); }}>Retry</Button>}
-          <SaveActions chat={chat} body={m.body_md} />
-        </div>
+        <MessageToolbar messageId={m.id} body={m.body_md} authorId={m.persona?.id} author={author.name} mine={false} chat={chat} testId="reply-actions"
+          onTop={m.body_md.length > LONG_REPLY ? () => self.current?.scrollIntoView({ block: "start", behavior: "smooth" }) : undefined}
+          onRetry={onRetry && (async () => { if (await confirmAction({ title: "Replace this reply with a new one?", body: "The current reply is discarded.", confirmLabel: "Retry" })) onRetry(); })} />
       )}
     </li>
     {mine && endedSteps}
@@ -725,6 +719,19 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
     return true;
   };
 
+  // A message's Reply quotes it into the box, above whatever is already drafted, and puts the caret after it.
+  const replyTo = useRef<(body: string, authorId?: string, author?: string) => void>(() => {});
+  replyTo.current = (body, authorId, author) => {
+    const quote = quoteForComposer(body, authorId && authorId !== (c?.speaker ?? c?.persona)?.id ? author : undefined);
+    setText((t) => quote + t);
+    requestAnimationFrame(() => {
+      const el = area.current;
+      el?.focus();
+      el?.setSelectionRange(quote.length, quote.length);
+    });
+  };
+  const messageActions = useMemo<MessageActions>(() => ({ reply: (body, authorId, author) => replyTo.current(body, authorId, author) }), []);
+
   function submit(body: string) {
     if (!body.trim() || locked || unavailable || files.pending || commitPickRequired) return;
     cancel.reset();
@@ -1063,6 +1070,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             <VideoPlayers.Provider value={players}>
             <ReplyActions list={list} chat={c} running={running} disabled={running || locked || !!unavailable || c.archived} agent={(c.speaker ?? c.persona)?.name ?? "Assistant"} ask={askAuthor} researchMore={researchMore}>
             <OpenTurnStep.Provider value={openTurnStep}>
+            <MessageActionsContext.Provider value={c.archived ? null : messageActions}>
             <ol ref={log} aria-label="Conversation" role="log" aria-live="polite" className="mx-auto flex max-w-[768px] flex-col gap-6">
               {messages.data?.has_more && <Divider>Earlier messages are not shown</Divider>}
               <BubbleList list={list} chat={c} persona={persona} speakerName={speaker.name} names={names} highlight={highlight} running={running} since={since}
@@ -1104,6 +1112,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
               )}
               <li ref={end} aria-hidden />
             </ol>
+            </MessageActionsContext.Provider>
             </OpenTurnStep.Provider>
             </ReplyActions>
             </VideoPlayers.Provider>

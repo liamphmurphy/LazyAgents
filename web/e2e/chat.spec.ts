@@ -480,7 +480,8 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
 
-  await page.getByRole("button", { name: "Save to wiki" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save to wiki" }).click();
   const path = page.getByRole("textbox", { name: "Page path" });
   await expect(path).toHaveValue("Chats/plain");
   await path.fill("Notes/From chat");
@@ -494,7 +495,8 @@ test("save a reply to the wiki with a link back to the chat", async ({ page }) =
   await page.getByRole("button", { name: "Done" }).click();
 
   // A taken path shows the server's error and keeps the dialog open.
-  await page.getByRole("button", { name: "Save to wiki" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save to wiki" }).click();
   await page.getByRole("textbox", { name: "Page path" }).fill("Notes/From chat");
   await page.getByRole("button", { name: "Save page" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "already exists" })).toBeVisible();
@@ -506,7 +508,8 @@ test("save a reply as a report artifact with a link back to the chat", async ({ 
   await newChat(page);
   await send(page, "plain");
   await expect(page.getByTestId("assistant-message")).toContainText("Echo: plain");
-  await page.getByRole("button", { name: "Save as artifact" }).click();
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Save as artifact" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Plain answer");
   await page.getByRole("button", { name: "Save report" }).click();
   await expect(page.getByRole("link", { name: "Open Plain answer" })).toHaveAttribute("href", "/artifacts/66666666-6666-4666-8666-666666666666");

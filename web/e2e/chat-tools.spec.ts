@@ -47,8 +47,12 @@ test("Retry asks first, and only the newest reply offers it", async ({ page }) =
   await open(page);
   await say(page, "second");
   await expect(page.getByTestId("assistant-message")).toHaveCount(2);
-  await expect(page.getByTestId("assistant-message").first().getByRole("button", { name: "Retry" })).toHaveCount(0);
-  await page.getByTestId("assistant-message").last().getByRole("button", { name: "Retry" }).click();
+  // Retry is in the newest reply's ⋯ menu only.
+  await page.getByTestId("assistant-message").first().getByRole("button", { name: "More message actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Retry" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByTestId("assistant-message").last().getByRole("button", { name: "More message actions" }).click();
+  await page.getByRole("menuitem", { name: "Retry" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("assistant-message").last()).toContainText("Redone: second");
 });
@@ -133,4 +137,26 @@ test("a reply arriving while scrolled up offers a New reply pill instead of movi
   expect(await panel.evaluate((el) => el.scrollTop)).toBeLessThan(50);
   await pill.click();
   await expect(pill).toHaveCount(0);
+});
+
+test("each message has one toolbar: Reply quotes it into the box, Copy and ⋯ for the rest", async ({ page }) => {
+  await open(page);
+  await box(page).fill("my draft");
+  const reply = page.getByTestId("assistant-message").first();
+  await reply.hover();
+  const bar = reply.getByRole("toolbar", { name: "Message actions" });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("button")).toHaveCount(3);
+  await bar.getByRole("button", { name: "Reply" }).click();
+  await expect(box(page)).toBeFocused();
+  await expect(box(page)).toHaveValue(/^> .+\n\nmy draft$/s);
+  // Your own message: Reply, Copy and Edit; no Save.
+  const mine = page.getByTestId("user-message").last();
+  await mine.hover();
+  await expect(mine.getByRole("toolbar").getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(mine.getByRole("button", { name: "More message actions" })).toHaveCount(0);
+  // Save lives in ⋯.
+  await reply.hover();
+  await bar.getByRole("button", { name: "More message actions" }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Retry", "Save to wiki", "Save as artifact"]);
 });
