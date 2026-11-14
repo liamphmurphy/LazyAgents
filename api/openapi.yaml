@@ -3921,6 +3921,90 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TicketChangeRequest" }
         default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/code-review:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: getChatCodeReview
+      summary: Each repository's branch against its default branch, as the runner last read it
+      description: |
+        Committed and uncommitted work, kept after the chat's workspace is
+        cleaned up. live is set while a turn is changing it.
+      tags: [chats]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CodeReviewList" }
+        default: { $ref: "#/components/responses/Error" }
+  /chats/{id}/push-requests:
+    parameters:
+      - { $ref: "#/components/parameters/ChatId" }
+    get:
+      operationId: listPushRequests
+      summary: Branches a persona asked to push from this chat, open ones and the latest decided
+      tags: [chats]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushRequestList" }
+        default: { $ref: "#/components/responses/Error" }
+  /push-requests/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: decidePushRequest
+      summary: Push and open the pull request once, always for this repository, or decline
+      description: |
+        Approving points the branch at the commit the card showed (staged on
+        GitHub when the persona's turn ended, so the chat's workspace isn't
+        needed) and opens the pull request, or reports the one already open.
+        It never force-pushes: a branch that moved since is refused, and the
+        request is marked failed with why.
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushRequestDecision" }
+      responses:
+        "200":
+          description: Decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PushRequest" }
+        default: { $ref: "#/components/responses/Error" }
+  /repository-push-policies:
+    get:
+      operationId: listRepositoryPushPolicies
+      summary: Repositories whose pushes the person always allows
+      tags: [chats]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryPushPolicyList" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setRepositoryPushPolicy
+      summary: Always allow a repository's pushes, or ask again
+      tags: [chats]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RepositoryPushPolicy" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryPushPolicy" }
+        default: { $ref: "#/components/responses/Error" }
   /chats/{id}/connector-proposals:
     parameters:
       - { $ref: "#/components/parameters/ChatId" }
@@ -9456,6 +9540,77 @@ components:
         binary: { type: boolean, description: "Binary files have no patch" }
         patch: { type: string, description: "The file's unified diff hunks (from the first @@ line; no diff --git header), at most 40 KB; absent for binary files or when the turn's total budget (200 KB) ran out" }
         truncated: { type: boolean, description: The patch was cut short or left out to stay within the limits }
+    CodeCommit:
+      type: object
+      required: [sha, subject]
+      properties:
+        sha: { type: string }
+        subject: { type: string }
+    CodeReview:
+      type: object
+      required: [repository, commits, files, dirty, live, updated_at]
+      properties:
+        repository: { type: string, description: Repository URL }
+        branch: { type: string, description: "The checked-out branch; absent when detached" }
+        base_sha: { type: string, description: Where the branch leaves the default branch }
+        head_sha: { type: string }
+        commits: { type: array, items: { $ref: "#/components/schemas/CodeCommit" }, description: "Commits on the branch, newest first, at most 100" }
+        files: { type: array, items: { $ref: "#/components/schemas/ChatCodeChange" }, description: "Committed and uncommitted changes against base_sha, within the same limits as a turn's changes" }
+        dirty: { type: boolean, description: There are uncommitted changes }
+        live: { type: boolean, description: A turn is running and may still change it }
+        updated_at: { type: string, format: date-time }
+    CodeReviewList:
+      type: object
+      required: [repositories]
+      properties:
+        repositories: { type: array, items: { $ref: "#/components/schemas/CodeReview" } }
+    PushRequest:
+      type: object
+      required: [id, repository, branch, commits, files, title, body, draft, state, auto, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        repository: { type: string }
+        branch: { type: string }
+        base_branch: { type: string, description: "The pull request's base, the repository's default branch" }
+        base_sha: { type: string }
+        head_sha: { type: string, description: The exact commit that ships }
+        commits: { type: array, items: { $ref: "#/components/schemas/CodeCommit" }, description: "What the push adds to GitHub, newest first" }
+        files: { type: array, items: { $ref: "#/components/schemas/ChatCodeChange" } }
+        title: { type: string }
+        body: { type: string }
+        draft: { type: boolean }
+        state: { type: string, enum: [staging, pending, pushing, pushed, declined, failed], description: "staging until the persona's turn ends; pending waits for the person" }
+        auto: { type: boolean, description: Pushed because the person always allows the repository }
+        pr_url: { type: string }
+        pr_number: { type: integer }
+        error: { type: string, description: Why it failed or was replaced }
+        persona: { $ref: "#/components/schemas/PersonaSummary" }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+    PushRequestList:
+      type: object
+      required: [requests]
+      properties:
+        requests: { type: array, items: { $ref: "#/components/schemas/PushRequest" } }
+    PushRequestDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [push, always, deny], description: "push pushes once; always pushes and lets later requests for this repository push without asking; deny declines it" }
+        title: { type: string, minLength: 1, maxLength: 200, description: "The pull request's title, if the person edited it" }
+        body: { type: string, maxLength: 60000 }
+        draft: { type: boolean }
+    RepositoryPushPolicy:
+      type: object
+      required: [repository, auto_push]
+      properties:
+        repository: { type: string }
+        auto_push: { type: boolean }
+    RepositoryPushPolicyList:
+      type: object
+      required: [policies]
+      properties:
+        policies: { type: array, items: { $ref: "#/components/schemas/RepositoryPushPolicy" } }
     ChatModel:
       type: object
       required: [id, label, default, efforts]

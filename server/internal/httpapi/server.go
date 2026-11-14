@@ -70,6 +70,9 @@ type Server struct {
 	// Tests only: agent containers can reach the API, so a real server must
 	// never trust a request just because it arrived.
 	AnonymousAPI bool
+	// GitHubAPIURL is GitHub's REST API for shipping approved pushes;
+	// api.github.com when empty (tests point elsewhere).
+	GitHubAPIURL string
 
 	logins loginLimiter
 }
