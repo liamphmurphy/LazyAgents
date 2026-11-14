@@ -234,16 +234,26 @@ func normalizeLocalModels(models []Model) []Model {
 }
 
 // agyModelSlug is what `agy models` leads a line with: a model slug such as
-// gemini-3.8-flash-medium. Headings, blank lines and prose don't match.
-var agyModelSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+// gemini-4-carbon-medium. Headings, blank lines and prose don't match.
+var (
+	agyModelSlug   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	agyLabelEffort = regexp.MustCompile(`(?i)\s*\((low|medium|high|xhigh|extra\s*high|max)\)$`)
+)
 
-// ParseAgyModels reads the output of `agy models`: one model per line, its slug
-// first, an optional description after it (a leading bullet or "*" marks the
-// default). The listing's format is documented only as "list slugs with agy
-// models", so anything that isn't slug-first is skipped rather than guessed at.
+// ParseAgyModels reads the output of `agy models`: one variant per line, its
+// slug first (often `<base>-<effort>` such as `gemini-4-carbon-medium`), then an
+// optional description (e.g. `Gemini 4 Carbon (Medium)`). Effort variants share
+// one base model ID in `agy -p --model <base> --effort <level>` and are merged
+// into a single Model with Efforts so Vesper's model and effort selectors match
+// the CLI.
 func ParseAgyModels(r io.Reader) ([]Model, error) {
-	out := []Model{}
-	seen := map[string]bool{}
+	type agyGroup struct {
+		model   Model
+		efforts []string
+	}
+	var groups []*agyGroup
+	byID := map[string]*agyGroup{}
+	seenSlugs := map[string]bool{}
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -253,18 +263,44 @@ func ParseAgyModels(r io.Reader) ([]Model, error) {
 		if i := strings.IndexAny(line, " \t"); i >= 0 {
 			slug, rest = line[:i], strings.TrimSpace(line[i+1:])
 		}
-		if !agyModelSlug.MatchString(slug) || !strings.ContainsAny(slug, "-0123456789") || seen[slug] {
+		if !agyModelSlug.MatchString(slug) || !strings.ContainsAny(slug, "-0123456789") || seenSlugs[slug] {
 			continue
 		}
-		seen[slug] = true
+		seenSlugs[slug] = true
+		id, effort, hasEffort := agentdef.CutEffortSuffix(slug)
 		label := strings.TrimSpace(strings.ReplaceAll(rest, "(default)", ""))
-		out = append(out, Model{ID: slug, Label: label, Default: isDefault})
+		if hasEffort {
+			label = strings.TrimSpace(agyLabelEffort.ReplaceAllString(label, ""))
+		}
+		g := byID[id]
+		if g == nil {
+			g = &agyGroup{model: Model{ID: id, Label: label}}
+			byID[id] = g
+			groups = append(groups, g)
+		} else if g.model.Label == "" && label != "" {
+			g.model.Label = label
+		}
+		if isDefault {
+			g.model.Default = true
+			if hasEffort && g.model.DefaultEffort == "" {
+				g.model.DefaultEffort = effort
+			}
+		}
+		if hasEffort {
+			g.efforts = append(g.efforts, effort)
+		}
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	if len(out) == 0 {
+	if len(groups) == 0 {
 		return nil, fmt.Errorf("agy listed no models")
+	}
+	out := make([]Model, len(groups))
+	for i, g := range groups {
+		m := g.model
+		m.Efforts = knownEfforts(g.efforts)
+		out[i] = m
 	}
 	return normalizeLocalModels(out), nil
 }

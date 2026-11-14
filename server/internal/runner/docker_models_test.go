@@ -333,10 +333,12 @@ func TestDockerListModelsAntigravityAndStderr(t *testing.T) {
 
 	f, d := startModelsEngine(t)
 	f.agyMode = true
-	f.agyOut = "gemini-4-carbon-medium\tGemini 4 Carbon (Medium)\nclaude-opus-5-5-low\tClaude Opus 5.5 (Low)"
+	f.agyOut = "gemini-4-carbon-medium\tGemini 4 Carbon (Medium)\ngemini-4-carbon-high\tGemini 4 Carbon (High)\nclaude-opus-5-5-low\tClaude Opus 5.5 (Low)"
 	f.agyErr = "\r⠋ Fetching available models...\r⠙ Fetching available models..."
 	models, err := d.ListModels(context.Background(), "claim-agy", agentdef.HarnessAntigravity, agyLogin, "scope")
-	if err != nil || len(models) != 2 || models[0].ID != "gemini-4-carbon-medium" || !models[0].Default || models[1].ID != "claude-opus-5-5-low" {
+	if err != nil || len(models) != 2 ||
+		models[0].ID != "gemini-4-carbon" || models[0].Label != "Gemini 4 Carbon" || !models[0].Default || !slices.Equal(models[0].Efforts, []string{"medium", "high"}) ||
+		models[1].ID != "claude-opus-5-5" || models[1].Label != "Claude Opus 5.5" || !slices.Equal(models[1].Efforts, []string{"low"}) {
 		t.Fatalf("models %+v err %v", models, err)
 	}
 	if f.archive[homePath+"|.gemini/antigravity-cli/antigravity-oauth-token"] != "tok" {

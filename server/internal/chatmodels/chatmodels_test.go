@@ -121,15 +121,36 @@ func TestKnownEffortsDropsUltra(t *testing.T) {
 }
 
 func TestParseAgyModels(t *testing.T) {
-	got, err := ParseAgyModels(strings.NewReader("Available models:\n\ngemini-4-carbon-medium\tGemini 4 Carbon (Medium)\n* gemini-3.8-flash-medium  Fast\n  gemini-4-hydrogen-high\n- gemini-4-hydrogen-high duplicate\nnote: these change\n"))
+	raw := "Available models:\n\n" +
+		"gemini-4-carbon-medium\tGemini 4 Carbon (Medium)\n" +
+		"gemini-4-carbon-high\tGemini 4 Carbon (High)\n" +
+		"gemini-4-carbon-low\tGemini 4 Carbon (Low)\n" +
+		"gemini-pro-orchestrator\tOrchestrator (Carbon)\n" +
+		"* gemini-3.8-flash-medium  Gemini 3.8 Flash (Medium)\n" +
+		"gemini-4-hydrogen-xhigh\tGemini 4 Hydrogen (XHigh)\n" +
+		"  gemini-4-hydrogen-high\n" +
+		"- gemini-4-hydrogen-high duplicate\n" +
+		"gpt-oss-120b-medium\tGPT-OSS 120B (Medium)\n" +
+		"note: these change\n"
+	got, err := ParseAgyModels(strings.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 ||
-		got[0].ID != "gemini-4-carbon-medium" || got[0].Label != "Gemini 4 Carbon (Medium)" || got[0].Default ||
-		got[1].ID != "gemini-3.8-flash-medium" || !got[1].Default || got[1].Label != "Fast" ||
-		got[2].ID != "gemini-4-hydrogen-high" || got[2].Default {
-		t.Fatalf("models = %+v", got)
+	want := []Model{
+		{ID: "gemini-4-carbon", Label: "Gemini 4 Carbon", Efforts: []string{"low", "medium", "high"}},
+		{ID: "gemini-pro-orchestrator", Label: "Orchestrator (Carbon)", Efforts: []string{}},
+		{ID: "gemini-3.8-flash", Label: "Gemini 3.8 Flash", Default: true, Efforts: []string{"medium"}, DefaultEffort: "medium"},
+		{ID: "gemini-4-hydrogen", Label: "Gemini 4 Hydrogen", Efforts: []string{"high", "xhigh"}},
+		{ID: "gpt-oss-120b", Label: "GPT-OSS 120B", Efforts: []string{"medium"}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d models: %+v", len(got), got)
+	}
+	for i := range want {
+		if got[i].ID != want[i].ID || got[i].Label != want[i].Label || got[i].Default != want[i].Default ||
+			!slices.Equal(got[i].Efforts, want[i].Efforts) || got[i].DefaultEffort != want[i].DefaultEffort {
+			t.Fatalf("model[%d] = %+v, want %+v", i, got[i], want[i])
+		}
 	}
 	if _, err := ParseAgyModels(strings.NewReader("ERROR: authentication required\n")); err == nil {
 		t.Fatal("a listing with no model slugs must be an error, not an empty catalog")

@@ -169,7 +169,7 @@ func TestVerifyHarnessAgainstFakeHarness(t *testing.T) {
 	t.Setenv("RUNNER_ANTIGRAVITY_BIN", agy)
 	out := e.want("POST", "/harness/antigravity/verify", nil, http.StatusOK)
 	models, _ := out["models"].([]any)
-	if out["ok"] != true || len(models) != 2 || models[0].(map[string]any)["id"] != "gemini-3.8-flash-medium" {
+	if out["ok"] != true || len(models) != 2 || models[0].(map[string]any)["id"] != "gemini-3.8-flash" {
 		t.Fatalf("antigravity: %v", out)
 	}
 	t.Setenv("RUNNER_ANTIGRAVITY_BIN", "")
