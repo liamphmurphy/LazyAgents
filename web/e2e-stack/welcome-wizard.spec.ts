@@ -37,7 +37,7 @@ test("Welcome Wizard: from a fresh install to a first chat", async ({ page, requ
   await expect(page).toHaveURL(/\/chat\?new$/);
   const wizard = await wizardCard(page);
   await expect(wizard.getByRole("heading", { name: "Assistant" })).toBeVisible();
-  await page.getByRole("button", { name: "Expand menu" }).click().catch(() => undefined);
+  await page.getByRole("button", { name: "Show chats" }).click().catch(() => undefined);
   const checklist = page.getByRole("region", { name: "Getting set up" });
   await expect(checklist).toBeVisible();
   await wizard.getByRole("button", { name: "Let’s begin" }).click();
