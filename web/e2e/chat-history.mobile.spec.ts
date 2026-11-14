@@ -123,3 +123,16 @@ test("Repository in the chat menu opens the composer's repository picker", async
   await box.press("Enter");
   await expect(header(page).getByTestId("chat-subtitle")).toHaveText("Coder · acme/app");
 });
+
+test("the drawer's foot shows the harness characters a phone has no rail for, opening usage above", async ({ page }) => {
+  await installChatApi(page);
+  await page.route("**/api/v1/persona-dock", (route) => route.fulfill({ json: { personas: [], space_chats: [], harnesses: [
+    { harness: "claude-code", label: "Claude", connected: true, running: 1, usage_available: false, usage_checking: false, windows: [] },
+  ] } }));
+  await chatAbout(page, "first chat");
+  await header(page).getByRole("button", { name: "Chat history" }).click();
+  const footer = drawer(page).getByRole("region", { name: "Harness activity" });
+  await expect(footer).toHaveAttribute("data-rail", "false");
+  await footer.getByRole("button", { name: /Claude, working/ }).click();
+  await expect(page.getByRole("dialog", { name: "Claude usage" })).toBeVisible();
+});

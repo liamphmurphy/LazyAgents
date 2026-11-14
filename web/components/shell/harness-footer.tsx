@@ -38,14 +38,19 @@ function UsageBubble({ h, all, onNavigate }: { h: HarnessActivity; all: HarnessA
   );
 }
 
-/** The harnesses that can run here, stacked at the foot of the rail; each character opens its own usage bubble to the right. */
-export function HarnessFooter() {
+/**
+ * The harnesses that can run here; each character opens its own usage bubble. Stacked at the foot
+ * of the rail on wide screens (the bubble opens to the right); a row on phones, which have no rail
+ * (the bubble opens above).
+ */
+export function HarnessFooter({ layout = "rail" }: { layout?: "rail" | "row" }) {
+  const rail = layout === "rail";
   const dock = usePersonaDock();
   const harnesses = connectedHarnesses(dock.data?.harnesses ?? []);
   const [open, setOpen] = useState<string | null>(null);
   if (!harnesses.length) return null;
   return (
-    <div role="region" aria-label="Harness activity" className="harness-footer" data-rail="true">
+    <div role="region" aria-label="Harness activity" className="harness-footer" data-rail={rail}>
       <div className="harness-characters">
         {harnesses.map((h) => (
           <Popover.Root key={h.harness} open={open === h.harness} onOpenChange={(next) => setOpen(next ? h.harness : null)}>
@@ -59,7 +64,7 @@ export function HarnessFooter() {
               </button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content side="right" sideOffset={6} collisionPadding={8} aria-label={`${h.label} usage`} className="harness-bubble">
+              <Popover.Content side={rail ? "right" : "top"} sideOffset={6} collisionPadding={8} aria-label={`${h.label} usage`} className="harness-bubble">
                 <UsageBubble h={h} all={harnesses} onNavigate={() => setOpen(null)} />
                 <Popover.Arrow className="harness-bubble-arrow" width={14} height={7} />
               </Popover.Content>

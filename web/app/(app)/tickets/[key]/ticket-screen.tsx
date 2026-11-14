@@ -32,7 +32,7 @@ import { RunsHistory } from "./runs-history";
 import { ConflictBanner, useTicketSave, type SaveTicket, type TicketSaver } from "./ticket-save";
 import { Composer, Timeline } from "./timeline";
 import { PanelTabs, useChatTab } from "@/components/shell/context-panel";
-import { WorkChat } from "@/components/domain/work-chat";
+import { WorkChat, WorkChatSheet } from "@/components/domain/work-chat";
 
 function TitleEditor({ t, save }: { t: Ticket; save: SaveTicket }) {
   const [editing, setEditing] = useState(false);
@@ -220,6 +220,7 @@ function CompactDetails({ t, boot, saver }: { t: Ticket; boot: Bootstrap; saver:
  */
 function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Ticket; boot: Bootstrap; saver: TicketSaver; reloading: boolean; activity: ReturnType<typeof useActivity>; onEdit: () => void }) {
   const [commenting, setCommenting] = useState(false);
+  const [chatting, setChatting] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const dispatch = needsDispatch(t) && !t.project.archived;
   return (
@@ -265,6 +266,10 @@ function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Tic
         <Button variant="outline" icon="msg" onClick={() => setCommenting(true)} className="h-[44px] flex-1 justify-center">
           Comment
         </Button>
+        <button type="button" aria-label="Chat with your persona about this ticket" onClick={() => setChatting(true)}
+          className="grid size-[44px] flex-none place-items-center rounded-md border border-border-strong bg-btn-outline text-fg-2 hover:bg-hover">
+          <Icon name="bulb" size={18} />
+        </button>
         <Button variant="approve" icon="play" disabled={!dispatch} onClick={() => setDispatching(true)} className="h-[44px] flex-1 justify-center">
           Start run
         </Button>
@@ -275,6 +280,7 @@ function CompactTicket({ t, boot, saver, reloading, activity, onEdit }: { t: Tic
         </div>
       </Sheet>
       {dispatching && <DispatchDialog keys={[t.key]} open onOpenChange={setDispatching} />}
+      <WorkChatSheet subject={{ kind: "ticket", key: t.key, title: t.title }} open={chatting} onOpenChange={setChatting} />
     </>
   );
 }

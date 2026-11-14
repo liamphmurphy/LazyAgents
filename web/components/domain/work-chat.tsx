@@ -6,6 +6,7 @@ import { personaLook } from "@/app/(app)/chat/_components/persona";
 import { DockChatSwitcher } from "@/components/domain/dock-chat-switcher";
 import { DockContext, dockContextChip } from "@/components/domain/dock-context";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { Icon } from "@/components/ui/icon";
 import { useAddDockChat, useDockChats, type DockScope } from "@/lib/api/dock-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
@@ -171,5 +172,14 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
         {create.error && <p role="alert" className="text-12 text-state-blocked">{create.error.message}</p>}
       </div>
     </div>
+  );
+}
+
+/** The work chat on a phone: a full-height sheet over the run or ticket, which has no side panel there. */
+export function WorkChatSheet({ subject, open, onOpenChange }: { subject: WorkSubject; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} title="Chat" className="h-[85dvh]">
+      <div className="flex h-full min-h-0 flex-col">{open && <WorkChat subject={subject} />}</div>
+    </Sheet>
   );
 }

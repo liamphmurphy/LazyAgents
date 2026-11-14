@@ -1,5 +1,6 @@
 "use client";
 
+import { HarnessFooter } from "@/components/shell/harness-footer";
 import Link from "next/link";
 import { HumanAvatar } from "@/components/domain/avatars";
 import { Icon } from "@/components/ui/icon";
@@ -166,6 +167,12 @@ export default function Page() {
             ),
           )}
           <Spaces />
+          <section aria-labelledby="more-harnesses">
+            <h2 id="more-harnesses" className={heading}>Harnesses</h2>
+            <div className={cx(card, "overflow-hidden px-2.5")}>
+              <HarnessFooter layout="row" />
+            </div>
+          </section>
         </div>
       </Content>
     </>

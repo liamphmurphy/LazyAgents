@@ -91,3 +91,15 @@ test("criteria actions show without hover", async ({ page }) => {
   expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
   await expect(page.getByRole("button", { name: "Remove criterion: Works" })).toHaveCSS("opacity", "1");
 });
+
+test("the ticket's Chat opens your persona's work chat in a sheet, naming the ticket", async ({ page }) => {
+  await installBoardApi(page);
+  await page.route("**/api/v1/dock-chats?*", (route) => route.fulfill({ json: { chats: [] } }));
+  await page.goto("/tickets/WEB-1");
+  const open = page.getByRole("button", { name: "Chat with your persona about this ticket" });
+  expect((await open.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await open.click();
+  const sheet = page.getByRole("dialog", { name: "Chat" });
+  await expect(sheet.getByTestId("work-chat-subject")).toContainText("Viewing: WEB-1 · Build ticket modal");
+  await expect(sheet.getByRole("button", { name: "Start a chat" })).toBeVisible();
+});

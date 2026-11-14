@@ -139,3 +139,13 @@ test("a run waiting on an approval shows it inline in the log", async ({ page })
   await expect(page.getByRole("form", { name: /Reply to/ })).toHaveCount(0);
   await page.screenshot({ path: "test-results/run-approval-mobile.png" });
 });
+
+test("a run's Chat button opens your persona's work chat in a sheet, beside the reply to the agent", async ({ page }) => {
+  await installRuns(page);
+  await page.route("**/api/v1/dock-chats?*", (route) => route.fulfill({ json: { chats: [] } }));
+  await page.goto(`/runs/${APPROVING}`);
+  await page.getByRole("button", { name: "Chat with your persona about this run" }).click();
+  const sheet = page.getByRole("dialog", { name: "Chat" });
+  await expect(sheet.getByTestId("work-chat-subject")).toContainText("Viewing:");
+  await expect(sheet.getByTestId("dock-chat-to")).toBeVisible();
+});
