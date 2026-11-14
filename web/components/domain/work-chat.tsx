@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Conversation, type ConversationContext, type DockWelcome } from "@/app/(app)/chat/_components/conversation";
+import { personaLook } from "@/app/(app)/chat/_components/persona";
 import { DockChatSwitcher } from "@/components/domain/dock-chat-switcher";
+import { DockContext, dockContextChip } from "@/components/domain/dock-context";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useAddDockChat, useDockChats, type DockScope } from "@/lib/api/dock-hooks";
@@ -15,19 +17,15 @@ const SCOPE: DockScope = "app:work";
 /** The chat the panel opened last, in any run or ticket. */
 const CURRENT_KEY = "vesper.work.chat";
 
-const chip = "inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border px-2 text-12";
-
 /** Whom the next message goes to and what it carries: the persona, and the item in the main pane. */
 function Chips({ persona, subject }: { persona?: string; subject: WorkSubject }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5" aria-label="Message context" data-testid="work-chat-context">
-      <span className="text-12 text-fg-tertiary">To</span>
-      <span data-testid="work-chat-to" className={`${chip} border-accent/35 bg-accent-soft font-medium text-accent`}>{persona ?? "your persona"}</span>
-      <span data-testid="work-chat-subject" className={`${chip} border-border bg-surface text-fg-secondary`} title={workSubjectLabel(subject)}>
+    <DockContext persona={persona} label="Message context">
+      <span data-testid="work-chat-subject" className={dockContextChip} title={workSubjectLabel(subject)}>
         <Icon name={subject.kind === "run" ? "play" : "tickets"} size={12} className="flex-none text-fg-tertiary" />
         <span className="truncate">Viewing: {workSubjectLabel(subject)}</span>
       </span>
-    </div>
+    </DockContext>
   );
 }
 
@@ -96,7 +94,8 @@ export function WorkChat({ subject }: { subject: WorkSubject }) {
     />
   );
 
-  const persona = (chat?.speaker ?? chat?.persona)?.name;
+  // Named as the conversation names it: a chat with no persona of its own is the built-in Assistant.
+  const persona = chat ? personaLook(chat.speaker ?? chat.persona).name : undefined;
   const context: ConversationContext = {
     hidden: true,
     composer: <Chips persona={persona} subject={subject} />,

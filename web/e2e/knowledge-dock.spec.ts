@@ -110,6 +110,9 @@ test("every message carries the viewed page, including after the page changes", 
   await dock(page).getByRole("button", { name: "Start a chat about this page" }).click();
   const input = dock(page).getByRole("combobox", { name: "Message" });
   await expect(dock(page).getByText("Viewing: Reading list", { exact: true })).toBeVisible();
+  // The dock always talks to a persona, named beside what the message carries.
+  await expect(dock(page).getByTestId("dock-chat-to")).not.toHaveText("your persona");
+  await expect(dock(page).getByTestId("dock-chat-to")).not.toBeEmpty();
   expect(s.chat.posted).toHaveLength(0);
   for (const question of ["Summarise this", "What changed?"]) {
     await input.fill(question);

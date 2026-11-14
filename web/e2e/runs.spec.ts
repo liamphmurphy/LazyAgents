@@ -240,6 +240,7 @@ test("the side panel's Chat talks to your persona about the run; the run's compo
   await expect.poll(() => api.created.length).toBe(1);
   expect(api.created[0].hidden).toBe(true);
   await expect(panel.getByTestId("work-chat-subject")).toHaveText("Viewing: WEB-9 · Search index");
+  await expect(panel.getByTestId("dock-chat-to")).not.toHaveText("your persona");
   const box = panel.getByRole("combobox", { name: "Message" });
   await box.fill("Is this safe to merge?");
   await box.press("Enter");
@@ -253,6 +254,8 @@ test("the side panel's Chat talks to your persona about the run; the run's compo
   await page.goto(`/runs/${DONE}`);
   await expect(tabs.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
   await expect(panel.getByTestId("work-chat-subject")).toHaveText("Viewing: WEB-3 · Session refresh");
+  // The reloaded conversation is ready to send, not still loading the chat.
+  await expect(panel.getByRole("button", { name: "Send", exact: true })).toBeVisible();
   await panel.getByRole("combobox", { name: "Message" }).fill("And this one?");
   await panel.getByRole("combobox", { name: "Message" }).press("Enter");
   await expect.poll(() => api.posted.length).toBe(2);
