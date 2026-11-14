@@ -556,9 +556,11 @@ func sensitiveEnv(env map[string]string) map[string]string {
 		out["codex_access"], out["codex_refresh"], out["codex_id"] = auth.Tokens.AccessToken, auth.Tokens.RefreshToken, auth.Tokens.IDToken
 	}
 	if auth, ok := chatmodels.ParseAntigravityAuth(env[AntigravityAuthEnv]); ok {
-		for rel, content := range auth.Files {
-			if len(content) >= 16 {
-				out["agy:"+rel] = content
+		if files, ok := auth.DecodeFiles(); ok {
+			for rel, content := range files {
+				if len(content) >= 16 {
+					out["agy:"+rel] = string(content)
+				}
 			}
 		}
 	}

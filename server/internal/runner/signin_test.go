@@ -354,6 +354,17 @@ func (f *fakeSignInProc) ReadFile(_ context.Context, path string) ([]byte, error
 	}
 	return b, nil
 }
+func (f *fakeSignInProc) ReadHomeFiles(_ context.Context, keep func(rel string, size int64) bool) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	prefix := homePath + "/"
+	for p, b := range f.files {
+		rel := strings.TrimPrefix(p, prefix)
+		if rel != p && keep(rel, int64(len(b))) {
+			out[rel] = b
+		}
+	}
+	return out, nil
+}
 func (f *fakeSignInProc) Wait() (int, error) { return 0, nil }
 func (f *fakeSignInProc) Kill() error        { return nil }
 func (f *fakeSignInProc) Close()             {}
@@ -368,19 +379,26 @@ func TestAntigravitySignInProvider(t *testing.T) {
 		t.Fatalf("prompt = (%q, %q, %v)", link, code, ready)
 	}
 	proc := &fakeSignInProc{files: map[string][]byte{
-		homePath + "/.config/antigravity/plugin-secrets.json": []byte(`{"token":"secret"}`),
-		homePath + "/.gemini/config/config.json":              []byte(`{"ok":true}`),
+		homePath + "/.gemini/antigravity-cli/oauth_creds.bin":           {0xff, 0x00, 0x01, 0x02},
+		homePath + "/.gemini/config/config.json":                        []byte(`{"ok":true}`),
+		homePath + "/.gemini/antigravity-cli/log/acp-login.log":         []byte("noisy log"),
+		homePath + "/.gemini/antigravity-cli/conversation_summaries.db": []byte("sqlite"),
+		homePath + "/.gemini/antigravity-cli/builtin/keep.txt":          []byte("builtin"),
+		homePath + "/.bashrc":                                           []byte("export PATH="),
 	}}
 	val, err := prov.login(context.Background(), proc, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	parsed, ok := chatmodels.ParseAntigravityAuth(val)
-	if !ok || parsed.Files[".gemini/config/config.json"] != `{"ok":true}` {
+	if !ok || parsed.Files[".gemini/config/config.json"] != `{"ok":true}` || parsed.FilesB64[".gemini/antigravity-cli/oauth_creds.bin"] == "" {
 		t.Fatalf("parsed bundle = %+v %v", parsed, ok)
 	}
+	if _, hasLog := parsed.Files[".gemini/antigravity-cli/log/acp-login.log"]; hasLog {
+		t.Fatalf("log file should be excluded: %+v", parsed)
+	}
 	if _, err := prov.login(context.Background(), &fakeSignInProc{}, "", 0); err == nil {
-		t.Fatal("missing plugin-secrets.json must fail")
+		t.Fatal("empty login files must fail")
 	}
 }
 

@@ -474,9 +474,9 @@ func antigravityAuthTar(raw string) (io.Reader, error) {
 	if !ok {
 		return nil, fmt.Errorf("runner: invalid Antigravity login")
 	}
-	files := make(map[string][]byte, len(auth.Files))
-	for rel, content := range auth.Files {
-		files[rel] = []byte(content)
+	files, ok := auth.DecodeFiles()
+	if !ok {
+		return nil, fmt.Errorf("runner: invalid Antigravity login")
 	}
 	return tarFiles(files)
 }

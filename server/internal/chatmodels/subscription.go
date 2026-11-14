@@ -1,6 +1,7 @@
 package chatmodels
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"path"
 	"strings"
@@ -49,33 +50,58 @@ func CodexAuthRefreshed(current, next string) bool {
 
 // AntigravityAuth is the serialized container login state produced by
 // `agy acp --login`, stored in harness:google and restored into a run
-// container's $HOME before starting `agy`.
+// container's $HOME before starting `agy`. Non-UTF-8 files are base64-encoded
+// in FilesB64 so the secret remains valid UTF-8 JSON.
 type AntigravityAuth struct {
-	Version int               `json:"v"`
-	Files   map[string]string `json:"files"`
+	Version  int               `json:"v"`
+	Files    map[string]string `json:"files,omitempty"`
+	FilesB64 map[string]string `json:"files_b64,omitempty"`
 }
 
-// AntigravitySecretsRelPath is the file-based credential store `agy` writes
-// when no D-Bus session bus is present inside headless Linux containers.
-const AntigravitySecretsRelPath = ".config/antigravity/plugin-secrets.json"
-
-// CleanAntigravityRelPath validates that rel is a safe relative path under
-// either .config/antigravity or .gemini with no traversal components.
+// CleanAntigravityRelPath validates that rel is a safe relative path under an
+// Antigravity config/state directory (.config/, .gemini/, .local/, or
+// .antigravity/) with no traversal components.
 func CleanAntigravityRelPath(rel string) (string, bool) {
 	if rel == "" || strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") || strings.ContainsRune(rel, 0) {
 		return "", false
 	}
 	cleaned := path.Clean(rel)
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || cleaned != rel {
 		return "", false
 	}
-	if cleaned != rel {
-		return "", false
+	for _, prefix := range []string{".config/", ".gemini/", ".local/", ".antigravity/"} {
+		if strings.HasPrefix(cleaned, prefix) {
+			return cleaned, true
+		}
 	}
-	if !strings.HasPrefix(cleaned, ".config/antigravity/") && !strings.HasPrefix(cleaned, ".gemini/") {
-		return "", false
+	return "", false
+}
+
+// DecodeFiles validates and decodes all text and base64-encoded files in the bundle.
+func (a AntigravityAuth) DecodeFiles() (map[string][]byte, bool) {
+	if a.Version != 1 || len(a.Files)+len(a.FilesB64) == 0 {
+		return nil, false
 	}
-	return cleaned, true
+	out := make(map[string][]byte, len(a.Files)+len(a.FilesB64))
+	for rel, content := range a.Files {
+		cleaned, ok := CleanAntigravityRelPath(rel)
+		if !ok || content == "" {
+			return nil, false
+		}
+		out[cleaned] = []byte(content)
+	}
+	for rel, b64 := range a.FilesB64 {
+		cleaned, ok := CleanAntigravityRelPath(rel)
+		if !ok || b64 == "" {
+			return nil, false
+		}
+		raw, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil || len(raw) == 0 {
+			return nil, false
+		}
+		out[cleaned] = raw
+	}
+	return out, true
 }
 
 // ParseAntigravityAuth reports whether a harness:google value is a native
@@ -85,15 +111,7 @@ func ParseAntigravityAuth(v string) (AntigravityAuth, bool) {
 	if !strings.HasPrefix(strings.TrimSpace(v), "{") || json.Unmarshal([]byte(v), &a) != nil {
 		return a, false
 	}
-	if a.Version != 1 || len(a.Files) == 0 {
-		return AntigravityAuth{}, false
-	}
-	for rel, content := range a.Files {
-		if _, ok := CleanAntigravityRelPath(rel); !ok || content == "" {
-			return AntigravityAuth{}, false
-		}
-	}
-	if a.Files[AntigravitySecretsRelPath] == "" {
+	if _, ok := a.DecodeFiles(); !ok {
 		return AntigravityAuth{}, false
 	}
 	return a, true

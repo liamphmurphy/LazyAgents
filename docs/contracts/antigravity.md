@@ -31,10 +31,10 @@ Vesper signs Antigravity in natively via `agy acp --login` (inside a throwaway
 sign-in container, or using the host's `agy` login in local/no-key mode).
 
 - The saved login bundle is stored encrypted as `harness:google`
-  (`chatmodels.KeySecret`) containing `.config/antigravity/plugin-secrets.json`
-  and small `.gemini` state files (`chatmodels.ParseAntigravityAuth`), never
-  passed in environment variables (`runner.AntigravityAuthEnv` unpacks into
-  `$HOME` in Docker containers).
+  (`chatmodels.KeySecret`) containing the auth/config files captured from `$HOME`
+  after `agy acp --login` (`chatmodels.ParseAntigravityAuth`, with non-UTF-8
+  files base64-encoded in `files_b64`), never passed in environment variables
+  (`runner.AntigravityAuthEnv` unpacks into `$HOME` in Docker containers).
 - `agy_launch.py` strips any stale `modelProvider` key so `agy` runs with its
   native Antigravity provider rather than AI Studio.
 - Only `kind: "subscription"` is accepted (`httpapi.checkHarnessCredential`),
