@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"maps"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -94,7 +95,7 @@ func (s *Server) ReadInboxItem(ctx context.Context, req api.ReadInboxItemRequest
 func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.SearchResponseObject, error) {
 	ctx = pageview.IncludeAgents(ctx, deref(req.Params.IncludeAgent))
 	u, _, ws := me(ctx)
-	out := api.Search200JSONResponse{Hits: []api.SearchHit{}}
+	out := api.Search200JSONResponse{Hits: []api.SearchHit{}, Counts: map[string]int{}}
 	text := strings.TrimSpace(req.Params.Q)
 	if text == "" {
 		return out, nil
@@ -113,36 +114,69 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 		}
 		project = &p
 	}
-	// Reuse full-text ranking and snippets, and name matching for everything else.
+	// Each type is capped so a common one can't push the rest out of the
+	// palette; asking for one type lifts the cap so its chip can list them all.
+	kind := ""
+	if req.Params.Kind != nil {
+		if !req.Params.Kind.Valid() {
+			return nil, &tracker.ValidationError{Field: "kind", Msg: "unknown type"}
+		}
+		kind = string(*req.Params.Kind)
+	}
+	perKind := 8
+	if kind != "" {
+		perKind = 50
+	}
 	var projectID *uuid.UUID
 	if project != nil {
 		projectID = &project.ID
 	}
-	hits, err := wiki.SearchFuzzy(ctx, s.Q, ws, text, projectID, 30)
-	if err != nil {
-		return nil, err
-	}
-	for _, h := range hits {
-		out.Hits = append(out.Hits, api.SearchHit{Target: toTarget(h.Target), Snippet: h.Snippet, Score: float32(h.Score)})
-	}
-	targets, err := s.Q.SearchAttentionTargets(ctx, store.SearchAttentionTargetsParams{WorkspaceID: ws, UserID: u.ID, Q: text, Project: req.Params.Project})
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range targets {
-		id, href := t.ID, t.Href
-		target := api.LinkTarget{Kind: api.LinkTargetKind(t.Kind), Id: &id, Title: t.Title, Href: &href}
-		if t.Status != "" {
-			status := t.Status
-			target.Status = &status
+	if kind == "" || kind == "ticket" || kind == "page" || kind == "artifact" {
+		var groups []string
+		if kind != "" {
+			groups = []string{kind}
 		}
-		out.Hits = append(out.Hits, api.SearchHit{Target: target, Snippet: "", Score: float32(t.Score)})
+		hits, counts, err := wiki.SearchPalette(ctx, s.Q, ws, text, groups, projectID, perKind)
+		if err != nil {
+			return nil, err
+		}
+		for _, h := range hits {
+			out.Hits = append(out.Hits, api.SearchHit{Target: toTarget(h.Target), Snippet: h.Snippet, Score: float32(h.Score), Detail: nonEmpty(h.Detail), UpdatedAt: &h.UpdatedAt})
+		}
+		maps.Copy(out.Counts, counts)
+	}
+	// Chats matched by title, so a chat whose messages also match is counted once.
+	titled := map[uuid.UUID]bool{}
+	if kind != "ticket" && kind != "page" && kind != "artifact" {
+		var only *string
+		if kind != "" {
+			only = &kind
+		}
+		targets, err := s.Q.SearchAttentionTargets(ctx, store.SearchAttentionTargetsParams{
+			WorkspaceID: ws, UserID: u.ID, Q: text, Project: req.Params.Project, OnlyKind: only, PerKind: int32(perKind), Lim: int32(5 * perKind),
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range targets {
+			id, href, at := t.ID, t.Href, t.At
+			target := api.LinkTarget{Kind: api.LinkTargetKind(t.Kind), Id: &id, Title: t.Title, Href: &href}
+			if t.Status != "" {
+				status := t.Status
+				target.Status = &status
+			}
+			out.Hits = append(out.Hits, api.SearchHit{Target: target, Snippet: "", Score: float32(t.Score), Detail: nonEmpty(t.Detail), UpdatedAt: &at})
+			out.Counts[t.Kind] = int(t.Total)
+			if t.Kind == "chat" {
+				titled[t.ID] = true
+			}
+		}
 	}
 	// Message text is the costliest search, so it waits for a real word.
-	if len(text) < 3 {
+	if len(text) < 3 || (kind != "" && kind != "chat") {
 		return out, nil
 	}
-	messages, err := s.Q.SearchChatMessages(ctx, store.SearchChatMessagesParams{Query: text, WorkspaceID: ws, UserID: u.ID, RowLimit: 8})
+	messages, err := s.Q.SearchChatMessages(ctx, store.SearchChatMessagesParams{Query: text, WorkspaceID: ws, UserID: u.ID, RowLimit: int32(perKind)})
 	if err != nil {
 		return nil, err
 	}
@@ -150,10 +184,26 @@ func (s *Server) Search(ctx context.Context, req api.SearchRequestObject) (api.S
 		if m.Archived || (project != nil && (m.ProjectKey == nil || *m.ProjectKey != project.Key)) {
 			continue
 		}
-		id, href := m.ID, "/chat/"+m.SessionID.String()+"?message="+m.ID.String()
+		// The chat is the target and the message its anchor, so the palette can
+		// list a chat's matching messages under it.
+		chatID, anchor, href, at := m.SessionID, m.ID.String(), "/chat/"+m.SessionID.String()+"?message="+m.ID.String(), m.CreatedAt
 		snippet := strings.NewReplacer("\ue000", "«", "\ue001", "»").Replace(m.Snippet)
+		author := "You"
+		if m.Role != "user" {
+			author = "Assistant"
+			if m.PersonaName != nil {
+				author = *m.PersonaName
+			}
+		}
+		if !titled[chatID] {
+			titled[chatID] = true
+			out.Counts["chat"]++
+		}
 		// Below title matches: a word somewhere in a conversation is weak evidence.
-		out.Hits = append(out.Hits, api.SearchHit{Target: api.LinkTarget{Kind: api.LinkTargetKind("chat"), Id: &id, Title: m.ChatTitle, Href: &href}, Snippet: snippet, Score: 0.05})
+		out.Hits = append(out.Hits, api.SearchHit{
+			Target:  api.LinkTarget{Kind: api.LinkTargetKind("chat"), Id: &chatID, Anchor: &anchor, Title: m.ChatTitle, Href: &href},
+			Snippet: snippet, Score: 0.05, Detail: &author, UpdatedAt: &at,
+		})
 	}
 	return out, nil
 }
