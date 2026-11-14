@@ -98,6 +98,8 @@ const editor = (page: Page) => page.getByTestId("doc-editor");
 const dock = (page: Page) => page.getByRole("complementary", { name: "Panel", exact: true });
 const rail = (page: Page) => page.getByRole("navigation", { name: "Panel rail" });
 const dockTab = (page: Page, name: string) => dock(page).getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: new RegExp(`^${name}`) });
+// Chat alone shows no tab strip: its panel, under the chat header in the dock\'s first row, is what shows.
+const chatShown = (page: Page) => dock(page).getByRole("tabpanel", { name: /^Chat/ }).first();
 const mod = process.platform === "darwin" ? "Meta" : "Control";
 
 /**
@@ -264,19 +266,19 @@ test("the dock collapses and reopens, with ⌘\\, ⌘J and ⌘., and the outline
   await page.goto(`/apps/docs/${DOC}`);
   await expect(editor(page)).toContainText("Lisbon");
 
-  // Header: back, title, save state, Share; the chat is the dock's Chat tab.
+  // Header: back, title, save state, Share; the chat is the dock's one tab, its header the dock's first row.
   await expect(page.getByRole("link", { name: "Docs" }).first()).toHaveAttribute("href", "/apps/docs");
   await expect(page.getByRole("heading", { name: "Trip plan", level: 1 }).first()).toBeVisible();
-  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
+  await expect(chatShown(page)).toBeVisible();
   await expect(dock(page).getByTestId("doc-chat")).toBeVisible();
 
-  // ⇥ collapses to the rail; the rail reopens it; clicking the active tab collapses again.
+  // ⇥ collapses to the rail; the rail reopens it.
   await dock(page).getByRole("button", { name: "Collapse panel" }).click();
   await expect(dock(page)).toHaveCount(0);
   await expect(rail(page)).toBeVisible();
   await rail(page).getByRole("button", { name: "Open Chat" }).click();
-  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
-  await dockTab(page, "Chat").click();
+  await expect(chatShown(page)).toBeVisible();
+  await dock(page).getByRole("button", { name: "Collapse panel" }).click();
   await expect(rail(page)).toBeVisible();
 
   // ⌘\ reopens it; ⌘J brings Chat up with its composer focused.
@@ -287,7 +289,7 @@ test("the dock collapses and reopens, with ⌘\\, ⌘J and ⌘., and the outline
   await page.keyboard.press(`${mod}+Backslash`);
   await expect(rail(page)).toBeVisible();
   await page.keyboard.press(`${mod}+j`);
-  await expect(dockTab(page, "Chat")).toHaveAttribute("aria-selected", "true");
+  await expect(chatShown(page)).toBeVisible();
   await expect(dock(page).getByLabel("Message", { exact: true })).toBeFocused();
 
   // ⌘. hides every panel and pressing it again restores them.

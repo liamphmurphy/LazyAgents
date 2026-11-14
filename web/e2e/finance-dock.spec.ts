@@ -40,9 +40,10 @@ test("Finance's Ask is the dock's Chat tab, with the privacy note, and collapses
   await install(page);
   await page.goto("/apps/finance");
   await expect(page.locator('[data-editor-layout="finance"]')).toBeVisible();
-  // No left panel; one Chat tab.
+  // No left panel; one Chat tab, so no tab strip: the chat's header is the dock's first row.
   await expect(page.getByRole("complementary", { name: "Structure" })).toHaveCount(0);
-  await expect(tabs(page).getByRole("tab")).toHaveText(["Chat"]);
+  await expect(tabs(page)).toHaveCount(0);
+  await expect(dock(page).getByRole("tabpanel", { name: "Chat" })).toBeVisible();
   await expect(dock(page).getByText(PRIVACY)).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
@@ -50,7 +51,7 @@ test("Finance's Ask is the dock's Chat tab, with the privacy note, and collapses
   await dock(page).getByRole("button", { name: "Collapse panel" }).click();
   await expect(rail(page)).toBeVisible();
   await page.getByRole("button", { name: "✦ Ask" }).click();
-  await expect(tabs(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: "Chat" })).toBeVisible();
 
   // Collapsed state is remembered across a reload; ⌘J opens Chat and focuses the composer.
   await dock(page).getByRole("button", { name: "Collapse panel" }).click();
@@ -70,7 +71,7 @@ test("asking about a spending section sends it to the Finance chat in the Chat t
 
   const question = /What made up my Groceries spending in November\?/;
   await page.getByRole("button", { name: /Groceries/ }).first().click();
-  await expect(tabs(page).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: "Chat" })).toBeVisible();
   await expect.poll(() => api.posted.map((p) => p.body.body)).toEqual([expect.stringMatching(question)]);
   expect(api.created).toEqual([expect.objectContaining({ space_id: overview.space_id })]);
   // The inactive Activity tab stays mounted (hidden) and also lists the prompt: look in the conversation.

@@ -87,5 +87,6 @@ test("while a reply runs, the header says what the persona is doing and opens Ac
   expect(await overflowing(header(page))).toEqual([]);
   await presence.click();
   await expect(page).toHaveURL(/[?&]panel=activity/);
-  await expect(page.getByRole("tab", { name: /Activity/ })).toHaveAttribute("aria-selected", "true");
+  // Activity is the dock's only tab, so there is no tab strip: its panel shows under the dock's header.
+  await expect(page.getByRole("complementary", { name: "Panel" }).getByRole("tabpanel", { name: "Activity" })).toBeVisible();
 });

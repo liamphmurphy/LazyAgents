@@ -48,7 +48,7 @@ test("the deck renders in the editor layout and its dock collapses and reopens",
 
   // Thumbnails on the left, chat in the dock, no Hide chat.
   await expect(page.getByRole("complementary", { name: "Structure" }).getByRole("navigation", { name: "Slides" })).toBeVisible();
-  await expect(tabs(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: /^Chat/ }).first()).toBeVisible();
   await expect(tabs(page).getByRole("tab", { name: /Review/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Hide chat/ })).toHaveCount(0);
   await expect(page.getByTestId("deck-save-state")).toHaveText(/Saved · v1/);
@@ -57,7 +57,7 @@ test("the deck renders in the editor layout and its dock collapses and reopens",
   await expect(dock(page)).toHaveCount(0);
   await expect(rail(page)).toBeVisible();
   await rail(page).getByRole("button", { name: "Expand panel" }).click();
-  await expect(tabs(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: /^Chat/ }).first()).toBeVisible();
 
   await page.locator("body").click();
   await page.keyboard.press(`${mod}+Backslash`);
@@ -67,7 +67,7 @@ test("the deck renders in the editor layout and its dock collapses and reopens",
   await expect(dock(page).getByRole("combobox", { name: "Message" })).toBeFocused();
 
   // The collapsed state is remembered across a reload.
-  await tabs(page).getByRole("tab", { name: /Chat/ }).click();
+  await dock(page).getByRole("button", { name: "Collapse panel" }).click();
   await expect(rail(page)).toBeVisible();
   await page.reload();
   await expect(page.getByTestId("deck-save-state")).toBeVisible();
@@ -131,6 +131,6 @@ test("accepting every suggestion marks the review done without a new version", a
   expect(s.versions).toHaveLength(2);
   // The review ends: the dock is back on Chat and the slide is editable.
   await expect(tabs(page).getByRole("tab", { name: /Review/ })).toHaveCount(0);
-  await expect(tabs(page).getByRole("tab", { name: /Chat/ })).toHaveAttribute("aria-selected", "true");
+  await expect(dock(page).getByRole("tabpanel", { name: /^Chat/ }).first()).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Slide formatting" }).getByRole("button", { name: "T Text" })).toBeEnabled();
 });

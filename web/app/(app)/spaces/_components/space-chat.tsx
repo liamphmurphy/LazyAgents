@@ -26,11 +26,12 @@ export function SpaceBreadcrumb({ space }: { space: SpaceRef }) {
 const chip = "inline-flex h-[26px] flex-none items-center rounded-full border px-[12px] text-12";
 
 /** What the space gives this chat: its instructions, sources and memory, plus the project (mockup 2). */
-export function SpaceContextChips({ space, chat, disabled }: { space: SpaceRef; chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean }) {
+/** `dense`: a narrow dock, where the chips sit tight under its header instead of centred over a page. */
+export function SpaceContextChips({ space, chat, disabled, dense }: { space: SpaceRef; chat: { id: string; project?: string; revision: number; archived: boolean }; disabled: boolean; dense?: boolean }) {
   const [sources, setSources] = useState(false);
   const hex = spaceHex(space.color);
   return (
-    <div className="px-6 pt-[16px]">
+    <div className={dense ? "px-3 pt-2" : "px-6 pt-[16px]"}>
       <div aria-label={`From ${space.name}`} role="group" className="mx-auto flex max-w-[860px] flex-wrap items-center gap-[8px]">
         {space.has_instructions && (
           <Link

@@ -4,6 +4,8 @@ import { canvasFenceIds } from "@/lib/chat-canvas";
 import { DOC_DRAFT, designRequest, type CreateKind } from "@/lib/chat-commands";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import { useDockHeaderSlot } from "@/components/shell/editor-layout";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
 import { useEntrances } from "@/components/ui/motion";
@@ -510,9 +512,16 @@ export type ConversationContext = {
 export type DockStarter = { icon: IconName; title: string; prompt: string };
 export type DockWelcome = { where: string; intro: string; label: string; starters: DockStarter[] };
 
+/** Renders `children` into `slot` when there is one (the dock's header row), else in place. */
+function InSlot({ slot, children }: { slot: HTMLElement | null; children: ReactNode }) {
+  return slot ? createPortal(children, slot) : <>{children}</>;
+}
+
 /** `docked`: the conversation sits in an app's or a side panel's dock, narrow beside the work, so a live reply's steps start folded. */
 export function Conversation({ id, onNew, actions, activityInDock = false, docked = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; docked?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
   const chat = useChat(id);
+  // In an app's dock the chat's header is the dock's first row, which continues the page's top bar.
+  const headerSlot = useDockHeaderSlot();
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
   const messages = useChatMessages(id, target ? 1000 : 200);
@@ -1081,11 +1090,16 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
             onRestored={restored}
           />
         ) : (
-        <div data-testid="chat-header" className={cx("@container flex min-h-[44px] items-center border-b border-border-subtle py-1.5", docked ? "gap-1.5 pl-3 pr-2" : "gap-2.5 pl-3 pr-6")}>
+        <InSlot slot={headerSlot}>
+        <div data-testid="chat-header" className={cx(
+          "@container flex min-w-0 items-center",
+          headerSlot ? "h-full flex-1 gap-1.5 pl-1" : cx("min-h-[44px] border-b border-border-subtle py-1.5", docked ? "gap-1.5 pl-3 pr-2" : "gap-2.5 pl-3 pr-6"),
+        )}>
           {/* Back and forward lead the page; a dock's chat sits beside a page that has its own. */}
           {!docked && <HistoryNav />}
           {group ? <PersonaStack personas={participants} size={22} /> : <HeaderPersona persona={persona} personaId={c.persona?.id} fresh={fresh} onSwitch={switchPersona} disabled={locked || create.isPending} compact={docked} />}
-          {c.space && <SpaceBreadcrumb space={c.space} />}
+          {/* In an app's dock the app is the page around it, so the header doesn't name it again. */}
+          {c.space && !docked && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
             <ChatTitleMenu
@@ -1123,9 +1137,10 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
           {c.archived && <RestoreChat chat={c} onRestored={restored} />}
           {actions}
         </div>
+        </InSlot>
         )}
         {dockActivity && view === "chat" && <LinkedRow items={linked} label={linkedLabel} onOpen={openLinked} />}
-        {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} />}
+        {c.space && view === "chat" && <SpaceContextChips space={c.space} chat={c} disabled={running} dense={docked} />}
         {/* Mounted while hidden so memory notices still refresh. On the chat page's desktop dock Activity is its own tab (ChatActivity). */}
         {!dockActivity && (
           <div role="tabpanel" aria-label="Activity" hidden={tab !== "activity"} className="flex-1 overflow-y-auto px-6 py-5">
