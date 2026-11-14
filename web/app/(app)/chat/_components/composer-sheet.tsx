@@ -102,12 +102,18 @@ export function ComposerSheet({
   );
 }
 
-/** One row per option with its current value and its own control, whose trigger is stretched over the row. */
+/**
+ * One row per option: its icon, label and current value. The option's own control is still there,
+ * so a tap opens the same picker, but its trigger is stretched invisibly over the row: the row
+ * already says what the control's pill would, and the pill only squeezed the value (a repository
+ * name) into a few characters. A segmented choice keeps its own visible buttons.
+ */
 function OptionRows({ options, control, counts, dense }: { options: ComposerOption[]; control: (o: ComposerOption) => ReactNode; counts: SheetCounts; dense?: boolean }) {
   return (
     <ul className="flex min-h-0 flex-col overflow-y-auto pb-2">
       {options.map((o) => {
         const value = shownValue(o, counts);
+        const segmented = o.opens === "segmented";
         return (
           <li
             key={o.id}
@@ -115,11 +121,12 @@ function OptionRows({ options, control, counts, dense }: { options: ComposerOpti
             data-option={o.id}
             className={cx(
               dense ? "relative flex min-h-[40px] flex-none items-center gap-3 rounded-md px-3 hover:bg-hover" : "relative flex min-h-[56px] flex-none items-center gap-3 px-4 active:bg-hover",
-              // Stretch the control's trigger over the row; a segmented choice keeps its own buttons.
-              o.opens !== "segmented" && "[&_.relative]:static [&_button]:after:absolute [&_button]:after:inset-0 [&_button]:after:content-['']",
+              // The hidden trigger can't show its own focus ring or disabled look, so the row does.
+              !segmented &&
+                "[&_.relative]:static [&_button]:absolute [&_button]:inset-0 [&_button]:size-full [&_button]:max-w-none [&_button]:opacity-0 has-[button:focus-visible]:outline-2 has-[button:focus-visible]:-outline-offset-2 has-[button:focus-visible]:outline-accent has-[button:disabled]:opacity-50",
             )}
           >
-            <span className="flex-none text-fg-secondary">
+            <span className={cx("flex-none", o.on ? "text-accent" : "text-fg-secondary")}>
               <RowIcon icon={o.icon} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
@@ -130,7 +137,7 @@ function OptionRows({ options, control, counts, dense }: { options: ComposerOpti
                 </span>
               )}
             </span>
-            <span className="flex max-w-[45%] flex-none items-center justify-end">{control(o)}</span>
+            {segmented ? <span className="flex max-w-[45%] flex-none items-center justify-end">{control(o)}</span> : control(o)}
           </li>
         );
       })}
