@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ancestors, buildTree, closeTab, folderPaths, joinPath, monthGrid, movedPath, moveTargets, nameError, nameOf, openTab, outline, pageHref, parentOf, slug, visibleProperties, wordCount } from "./knowledge.ts";
+import { ancestors, buildTree, closeTab, folderPaths, joinPath, kindHref, monthGrid, movedPath, moveTargets, nameError, nameOf, openTab, outline, pageHref, parentOf, parseKind, slug, startTab, startTabKind, visibleProperties, wordCount } from "./knowledge.ts";
 
 test("the explorer tree puts folders first, counts pages and lists daily notes newest first", () => {
   const t = buildTree([
@@ -133,4 +133,14 @@ test("a page's icon says what it holds", async () => {
   assert.equal(pageIcon({ kind: "design" }), "designs");
   assert.equal(pageIcon({ kind: "document", properties: { query: "tag:x" } }), "board");
   assert.equal(pageIcon({}), "artifacts");
+});
+
+test("a start page's address names its kind, and anything else is Knowledge Home", () => {
+  assert.equal(parseKind("deck"), "deck");
+  assert.equal(parseKind(["design", "deck"]), "design");
+  for (const v of [undefined, "", "slides", "Deck", ["slides"]]) assert.equal(parseKind(v), undefined);
+  assert.equal(kindHref("document"), "/knowledge?kind=document");
+  // One tab for every kind: switching kinds retitles it, and its title leads back to the kind.
+  assert.equal(startTab("deck").id, startTab("design").id);
+  for (const k of ["document", "deck", "design"]) assert.equal(startTabKind(startTab(k)), k);
 });
