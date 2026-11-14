@@ -66,7 +66,7 @@ func (s *Server) StartChatAside(ctx context.Context, req api.StartChatAsideReque
 	if req.Body == nil {
 		return nil, apperr.Invalid("body", "required")
 	}
-	aside, err := s.Runs.StartChatAside(ctx, ws, u.ID, req.Id, req.Body.Body)
+	aside, err := s.Runs.StartChatAside(ctx, ws, u.ID, req.Id, req.Body.Body, req.Body.AnchorMessageId)
 	if err != nil {
 		return nil, err
 	}

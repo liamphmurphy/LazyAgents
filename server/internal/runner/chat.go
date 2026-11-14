@@ -453,6 +453,11 @@ func (r *Runner) finishChatTurn(ctx context.Context, c runCtx, turn store.RunTur
 			return nil
 		}
 		if chat.ParentChatID != nil {
+			// A thread waits for the person's next reply, like a chat, but hands
+			// nothing on to other personas.
+			if chat.AnchorMessageID != nil {
+				return nil
+			}
 			// An aside answers one question: it hands nothing on and keeps no
 			// workspace once it has answered (or was stopped).
 			return runs.EndAside(ctx, q, chat.ID)

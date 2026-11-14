@@ -367,6 +367,7 @@ type ChatSession struct {
 	PendingRepoUrl     *string
 	ParentChatID       *uuid.UUID
 	AutoModel          bool
+	AnchorMessageID    *uuid.UUID
 }
 
 type ChatSpace struct {

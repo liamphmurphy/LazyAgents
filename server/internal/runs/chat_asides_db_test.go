@@ -2,10 +2,12 @@ package runs
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/liamphmurphy/vesper/server/internal/agentdef"
+	"github.com/liamphmurphy/vesper/server/internal/apperr"
 	"github.com/liamphmurphy/vesper/server/internal/store"
 )
 
@@ -17,7 +19,7 @@ func TestChatAside(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "   "); err == nil {
+	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "   ", nil); err == nil {
 		t.Fatal("an empty aside was accepted")
 	}
 
@@ -37,7 +39,7 @@ func TestChatAside(t *testing.T) {
 		}
 	}
 
-	aside, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "how many runs failed so far?")
+	aside, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "how many runs failed so far?", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,11 +109,11 @@ func TestChatAside(t *testing.T) {
 
 	// At most MaxLiveAsides answer at once.
 	for i := 1; i < MaxLiveAsides; i++ {
-		if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "still there?"); err != nil {
+		if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "still there?", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "one too many"); !isConflict(err) {
+	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "one too many", nil); !isConflict(err) {
 		t.Fatalf("aside past the limit: %v", err)
 	}
 
@@ -126,7 +128,7 @@ func TestChatAside(t *testing.T) {
 
 	// Nothing running: there's nothing to ask about.
 	f.endTurn(t, parent.ID, "idle")
-	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "and now?"); !isConflict(err) {
+	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "and now?", nil); !isConflict(err) {
 		t.Fatalf("aside on an idle chat: %v", err)
 	}
 
@@ -136,5 +138,75 @@ func TestChatAside(t *testing.T) {
 	}
 	if _, err := f.q.GetChatSession(f.ctx, store.GetChatSessionParams{ID: aside.ID, WorkspaceID: f.ws}); err == nil {
 		t.Fatal("the aside outlived its chat")
+	}
+}
+
+// A thread is an aside anchored to one message: it can start while nothing
+// runs, its first turn sees that message, and the person can keep replying.
+func TestChatThread(t *testing.T) {
+	f := newChatFixture(t)
+	parent, err := f.rs.StartChat(f.ctx, f.ws, f.user, ChatInput{Message: &ChatMessageInput{Body: "compare kokoro and piper for local tts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.endTurn(t, parent.ID, "idle")
+	msgs, err := f.q.ListChatMessages(f.ctx, store.ListChatMessagesParams{SessionID: parent.ID, Limit: 10})
+	if err != nil || len(msgs) == 0 {
+		t.Fatalf("parent messages %d, %v", len(msgs), err)
+	}
+	anchor := msgs[0].ID
+
+	// Without an anchor an idle chat has nothing to ask about; with one it does.
+	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "why these two?", nil); !isConflict(err) {
+		t.Fatalf("unanchored aside on an idle chat: %v", err)
+	}
+	thread, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "why these two?", &anchor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thread.AnchorMessageID == nil || *thread.AnchorMessageID != anchor || thread.ParentChatID == nil || !thread.Hidden {
+		t.Fatalf("thread chat %+v", thread)
+	}
+	if !strings.HasPrefix(thread.Title, "Thread: ") {
+		t.Errorf("thread titled %q", thread.Title)
+	}
+	turns, err := f.q.ListTurns(f.ctx, *thread.CurrentRunID)
+	if err != nil || len(turns) != 1 {
+		t.Fatalf("thread turns %d, %v", len(turns), err)
+	}
+	prompt := turns[0].InputMessage
+	for _, want := range []string{"The message this thread is about", "compare kokoro and piper", "this is a thread", "why these two?"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("thread prompt lacks %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "still running") {
+		t.Error("a thread on an idle chat was told about a running reply")
+	}
+	if got := f.userMessages(t, parent.ID); len(got) != 1 {
+		t.Fatalf("the thread reached the parent's conversation: %q", got)
+	}
+
+	// The person keeps replying in it once it has answered: its run waits, as a chat's does.
+	f.endTurn(t, thread.ID, "idle")
+	if _, err := f.rs.PostChatMessage(f.ctx, f.ws, f.user, thread.ID, ChatMessageInput{Body: "and for long texts?"}); err != nil {
+		t.Fatalf("replying in a thread: %v", err)
+	}
+	if got := f.userMessages(t, thread.ID); len(got) != 2 || got[1] != "and for long texts?" {
+		t.Fatalf("thread messages %q", got)
+	}
+
+	// The anchor must be a person's or persona's message of this very chat.
+	other, err := f.rs.StartChat(f.ctx, f.ws, f.user, ChatInput{Message: &ChatMessageInput{Body: "unrelated"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := f.q.ListChatMessages(f.ctx, store.ListChatMessagesParams{SessionID: other.ID, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invalid *apperr.ValidationError
+	if _, err := f.rs.StartChatAside(f.ctx, f.ws, f.user, parent.ID, "?", &foreign[0].ID); !errors.As(err, &invalid) {
+		t.Fatalf("thread on another chat's message: %v", err)
 	}
 }
