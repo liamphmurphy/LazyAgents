@@ -1156,6 +1156,25 @@ export function mockWav(seconds = 1): Buffer {
 }
 
 /**
+ * Answers a request for the mock WAV the way the real server does, including one byte range
+ * (206): without ranges Chromium can't seek until the whole file has arrived, which makes any
+ * test that scrubs depend on timing.
+ */
+export async function fulfillWav(route: Route, seconds = 1): Promise<void> {
+  const body = mockWav(seconds);
+  const range = /^bytes=(\d*)-(\d*)$/.exec(route.request().headers()["range"] ?? "");
+  if (!range) return route.fulfill({ status: 200, contentType: "audio/wav", headers: { "accept-ranges": "bytes" }, body });
+  const start = range[1] === "" ? Math.max(0, body.length - Number(range[2])) : Number(range[1]);
+  const end = range[1] === "" || range[2] === "" ? body.length - 1 : Math.min(Number(range[2]), body.length - 1);
+  if (start >= body.length) return route.fulfill({ status: 416, headers: { "content-range": `bytes */${body.length}` } });
+  return route.fulfill({
+    status: 206, contentType: "audio/wav",
+    headers: { "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${body.length}` },
+    body: body.subarray(start, end + 1),
+  });
+}
+
+/**
  * Chat audio at one state: compose, render, check, save, done, failed or stopped, with the
  * progress, checks and waveform the card shows at that point.
  */
