@@ -138,7 +138,44 @@ func chatRepositoryNote(ctx context.Context, q *store.Queries, chat store.ChatSe
 		b.WriteString("- Saved " + kind + ": " + source.Name + "\n")
 	}
 	if len(repos) == 0 {
-		b.WriteString("No repository selected yet. You can use_repository now; coding credentials are available.\n")
+		b.WriteString("No repository selected yet. You can use_repository now.\n")
+	}
+	b.WriteString("Pushing waits for the person: your turn has no credential that can push, so git push and gh writes fail. Commit on a work branch, then call request_push; the person approves the push and pull request on a card. A private repository attached during a turn is cloned for you when the next message starts.\n")
+	pushes, err := q.ChatPushRequests(ctx, chat.ID)
+	if err != nil {
+		return "", err
+	}
+	if len(pushes) > 0 {
+		b.WriteString("Push requests in this chat, oldest first:\n")
+		for _, p := range pushes {
+			b.WriteString("- " + p.Branch + " in " + p.RepoUrl + ": " + pushStateNote(p) + "\n")
+		}
 	}
 	return b.String(), nil
+}
+
+// pushStateNote says how a push request went, for the persona's next turn.
+func pushStateNote(p store.PushRequest) string {
+	switch p.State {
+	case "staging":
+		return "staged when this turn ends"
+	case "pending":
+		return "waiting for the person to approve"
+	case "pushing":
+		return "being pushed"
+	case "pushed":
+		if p.PrUrl != nil {
+			return "pushed; pull request " + *p.PrUrl
+		}
+		return "pushed"
+	case "declined":
+		if p.Error != nil {
+			return "declined (" + *p.Error + ")"
+		}
+		return "declined by the person"
+	}
+	if p.Error != nil {
+		return "failed: " + *p.Error
+	}
+	return p.State
 }
