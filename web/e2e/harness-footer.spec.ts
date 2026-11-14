@@ -43,7 +43,7 @@ async function refresh(page: Page) {
 const footer = (page: Page) => page.getByRole("region", { name: "Harness activity" });
 const bubble = (page: Page, label: string) => page.getByRole("dialog", { name: `${label} usage` });
 
-test("the flat footer replaces the profile and floating orb; settings sit beside collapse", async ({ page }) => {
+test("the rail's foot holds the characters under Settings, replacing the profile and floating orb", async ({ page }) => {
   await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses() } });
   await page.goto("/board?project=WEB");
   await expect(footer(page).getByRole("button", { name: /show usage/ })).toHaveCount(3);
@@ -53,17 +53,16 @@ test("the flat footer replaces the profile and floating orb; settings sit beside
   await expect(page.locator(".orb-root")).toHaveCount(0);
   const menu = page.getByRole("complementary", { name: "Main menu" });
   await expect(menu.getByText("Liam", { exact: true })).toHaveCount(0);
-  const settings = await menu.getByRole("link", { name: "Settings", exact: true }).boundingBox();
-  const customization = await menu.getByRole("link", { name: "Customization", exact: true }).boundingBox();
-  const collapse = await menu.getByRole("button", { name: "Collapse menu" }).boundingBox();
-  expect(Math.abs(settings!.y - collapse!.y)).toBeLessThan(5);
-  expect(Math.abs(customization!.y - collapse!.y)).toBeLessThan(5);
-  const bounds = await menu.boundingBox();
-  const bottom = await footer(page).boundingBox();
-  expect(Math.abs(bottom!.x - bounds!.x)).toBeLessThan(1);
-  expect(Math.abs(bottom!.y + bottom!.height - bounds!.y - bounds!.height)).toBeLessThan(1);
+  const settings = (await menu.getByRole("link", { name: "Settings", exact: true }).boundingBox())!;
+  const customization = (await menu.getByRole("link", { name: "Customization", exact: true }).boundingBox())!;
+  const bounds = (await menu.boundingBox())!;
+  const bottom = (await footer(page).boundingBox())!;
+  // Settings and Customization sit just above the characters, which close the rail.
+  expect(customization.y).toBeLessThan(settings.y);
+  expect(settings.y + settings.height).toBeLessThanOrEqual(bottom.y);
+  expect(Math.abs(bottom.y + bottom.height - bounds.y - bounds.height)).toBeLessThan(1);
   expect(await footer(page).evaluate((el) => getComputedStyle(el).borderRadius)).toBe("0px");
-  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "35px");
+  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "24px");
 });
 
 test("only connected harnesses show, and the row fits however many there are", async ({ page }) => {
@@ -101,14 +100,14 @@ test("a character opens a bubble with its own usage beside it; Escape restores f
   await expect(codex).toContainText(/5h · resets/);
   await expect(codex.getByRole("progressbar", { name: "Claude allowance used" })).toHaveCount(0);
   await expect(codex.getByRole("link", { name: "Usage settings →" })).toHaveAttribute("href", "/settings/runner");
-  // A bubble, not a panel: small, and sitting just above the character it belongs to.
+  // A bubble, not a panel: small, and sitting just right of the character it belongs to.
   await expect.poll(async () => (await codex.boundingBox())!.height).toBeLessThan(200);
   const at = (await trigger.boundingBox())!, box = (await codex.boundingBox())!;
   expect(box.width).toBeLessThan(260);
-  expect(box.y + box.height).toBeLessThanOrEqual(at.y);
-  expect(at.y - (box.y + box.height)).toBeLessThan(20);
-  expect(box.x).toBeLessThan(at.x + at.width);
-  expect(box.x + box.width).toBeGreaterThan(at.x);
+  expect(box.x).toBeGreaterThanOrEqual(at.x + at.width);
+  expect(box.x - (at.x + at.width)).toBeLessThan(20);
+  expect(box.y).toBeLessThan(at.y + at.height);
+  expect(box.y + box.height).toBeGreaterThan(at.y);
   await page.keyboard.press("Escape");
   await expect(codex).toBeHidden();
   await expect(trigger).toBeFocused();
@@ -167,7 +166,7 @@ test("zero, unavailable, checking, warning and limited readings stay distinct", 
   await expect(claude).toHaveAttribute("data-tone", "warn");
 });
 
-test("the collapsed rail keeps the footer and opens the bubble to the right, inside the viewport", async ({ page }) => {
+test("on a short window the bubble still opens to the right, inside the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 650 });
   await installFooter(page, { dock: { personas: [], space_chats: [], harnesses: harnesses({ claude: { running: 0 }, codex: { running: 0 } }) } }, false);
   await page.goto("/board?project=WEB");
@@ -186,9 +185,7 @@ test("the collapsed rail keeps the footer and opens the bubble to the right, ins
   expect(bounds.y).toBeGreaterThanOrEqual(7);
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(643);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Expand menu", exact: true }).click();
-  await expect(footer(page)).toHaveAttribute("data-rail", "false");
-  await expect(footer(page).locator(".harness-character").first()).toHaveCSS("width", "35px");
+  await expect(agy).toBeHidden();
 });
 
 test("reduced motion holds all three characters still and opens the bubble without animation", async ({ page }) => {

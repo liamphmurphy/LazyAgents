@@ -1,7 +1,24 @@
 // Pure logic for chat context chips and the Sources footer (LAZYAGENTS-13).
 // Kept free of React so `npm run test:unit` covers it.
 
+import { WORK_CONTEXT_MARKER } from "./work-context.ts";
+
 export const MAX_CONTEXT_REFS = 20;
+
+/** Knowledge appends the page in view after this marker (knowledge-dock.tsx); the server cuts request text at it. */
+export const KNOWLEDGE_CONTEXT_MARKER = "\n\n<!-- vesper:knowledge-context -->\n";
+
+/**
+ * What the person typed, without the context a dock appended for the persona. Their bubble shows
+ * this; the context still reaches the persona, and the chips under the bubble say what it carried.
+ */
+export function typedText(body: string): string {
+  for (const marker of [KNOWLEDGE_CONTEXT_MARKER, WORK_CONTEXT_MARKER]) {
+    const at = body.indexOf(marker);
+    if (at >= 0) body = body.slice(0, at);
+  }
+  return body;
+}
 
 export type ContextRef = {
   kind: "artifact" | "section" | "ticket" | "page" | "canvas";

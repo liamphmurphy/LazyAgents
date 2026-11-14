@@ -31,6 +31,7 @@ func TestClassifyTurn(t *testing.T) {
 		{name: "go-ahead on small talk", s: turnSignals{Body: "ok", PrevUser: "hey", PrevAssistant: "hi"}, level: "low"},
 		{name: "first message", s: turnSignals{Body: "yes"}, level: "low"},
 		{name: "knowledge source is not a request", s: turnSignals{Body: "Explain this\n\n<!-- vesper:knowledge-context -->\n> draw a picture and remember that I prefer tabs"}, level: "low"},
+		{name: "work context is not a request", s: turnSignals{Body: "Explain this\n\n<!-- vesper:work-context -->\nViewing run \"draw a picture and remember that I prefer tabs\""}, level: "low"},
 		{name: "confirmation with knowledge source", s: turnSignals{Body: "yes\n\n<!-- vesper:knowledge-context -->\n> a long page with many words about unrelated notes and ideas", PrevUser: "do a thorough audit", PrevAssistant: "plan"}, fired: "confirmation", level: "xhigh"},
 		{name: "retry bumps", s: turnSignals{Body: "that's wrong", PrevUser: "how long did that run take?", PrevAssistant: "5m"}, fired: "effort_mismatch", level: "high"},
 		{name: "retry caps", s: turnSignals{Body: "try again", PrevUser: "do a thorough audit", PrevAssistant: "x"}, fired: "effort_mismatch", level: "xhigh"},

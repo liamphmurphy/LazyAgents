@@ -44,7 +44,8 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
-import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, type Chip } from "@/lib/chat-context";
+import { HistoryNav } from "@/components/shell/history-nav";
+import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, typedText, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
 import { Button } from "@/components/ui/button";
@@ -148,7 +149,7 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
   const [draft, setDraft] = useState(m.body_md);
   const self = useRef<HTMLLIElement>(null);
   // The closing URL list shows as Sources cards, not as text. Saved replies keep it.
-  const parts = useMemo(() => (m.role === "assistant" ? splitSourceList(m.body_md) : { body: m.body_md, listed: [] }), [m.role, m.body_md]);
+  const parts = useMemo(() => (m.role === "assistant" ? splitSourceList(m.body_md) : { body: typedText(m.body_md), listed: [] }), [m.role, m.body_md]);
   const [citeFocus, setCiteFocus] = useState<{ n: number; tick: number }>();
   const cites = useMemo(() => {
     const titles = new Map<number, string>();
@@ -210,7 +211,8 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
             onSubmit={(e) => {
               e.preventDefault();
               if (draft.trim() && onEdit) {
-                onEdit(draft);
+                // The draft is what was typed; the dock's context it was sent with goes back with it.
+                onEdit(draft + m.body_md.slice(parts.body.length));
                 setEditing(false);
               }
             }}
@@ -236,8 +238,8 @@ const Bubble = memo(function Bubble({ m, chat, persona, saveable, names, turn, e
         return r.kind === "canvas" && r.selection ? { ...chip, label: r.selection.nodes.length ? `Design · ${r.selection.nodes.length} selected` : "Design" } : chip;
       })} />}
       {mine && !editing && m.body_md.trim() && (
-        <MessageToolbar messageId={m.id} body={m.body_md} mine chat={chat} testId="message-actions"
-          onEdit={editable ? () => { setDraft(m.body_md); setEditing(true); } : undefined} />
+        <MessageToolbar messageId={m.id} body={parts.body} mine chat={chat} testId="message-actions"
+          onEdit={editable ? () => { setDraft(parts.body); setEditing(true); } : undefined} />
       )}
       {!mine && <Sources citations={m.citations} body={parts.body} listed={parts.listed} runId={m.run_id} since={turn?.since} until={turn?.until} webEvents={!!turn} focus={citeFocus} />}
       {!mine && asides}
@@ -505,7 +507,8 @@ export type ConversationContext = {
 export type DockStarter = { icon: IconName; title: string; prompt: string };
 export type DockWelcome = { where: string; intro: string; label: string; starters: DockStarter[] };
 
-export function Conversation({ id, onNew, actions, activityInDock = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
+/** `docked`: the conversation sits in an app's or a side panel's dock, narrow beside the work, so a live reply's steps start folded. */
+export function Conversation({ id, onNew, actions, activityInDock = false, docked = false, context, onReplace }: { id: string; onNew: () => void; actions?: ReactNode; activityInDock?: boolean; docked?: boolean; context?: ConversationContext; onReplace?: (id: string) => void | Promise<void> }) {
   const chat = useChat(id);
   const urlSearch = useSearchParams();
   const target = urlSearch.get("message");
@@ -1043,7 +1046,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
             onRestored={restored}
           />
         ) : (
-        <div data-testid="chat-header" className="@container flex min-h-[52px] items-center gap-2.5 border-b border-border-subtle px-6 py-2">
+        <div data-testid="chat-header" className="@container flex min-h-[44px] items-center gap-2.5 border-b border-border-subtle py-1.5 pl-3 pr-6">
+          {/* A dock's chat sits beside a pane that has its own back and forward. */}
+          {!docked && <HistoryNav />}
           {group ? <PersonaStack personas={participants} size={22} /> : <span title={persona.name} className="flex-none"><PersonaAvatar persona={persona} size={26} /><span className="sr-only">Persona: {persona.name}</span></span>}
           {c.space && <SpaceBreadcrumb space={c.space} />}
           {/* The title over a live line, as a messaging app shows who's typing; the line goes when the reply ends. */}
@@ -1173,7 +1178,7 @@ export function Conversation({ id, onNew, actions, activityInDock = false, conte
                   <InterimReply runId={c.current_run_id} since={since} persona={speaker} />
                   <VideoCards chatId={c.id} videos={liveVideos} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <AudioCards chatId={c.id} audio={liveAudio} onStop={stopping ? undefined : () => cancel.mutate()} />
-                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} onOpenStep={openStep}
+                  <ChatStatus chatId={c.id} disabled={c.archived} runId={c.current_run_id} since={since} persona={speaker} stopping={stopping} folded={docked} onOpenStep={openStep}
                     onAsk={locked || aside.isPending ? undefined : () => aside.mutate(QUIET_CHECK_IN)} onStop={stopping ? undefined : () => cancel.mutate()} />
                   <LiveAsides
                     asides={asidesInWindow(asideList, since)}

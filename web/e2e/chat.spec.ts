@@ -842,6 +842,8 @@ test("a running turn lists its plan in a rail that collapses to a strip", async 
   await expect(rail.locator("li")).toHaveText(["Read the code", /^Fix the snapshot\s*added$/, "Run tests"]);
   await expect(rail.locator('[data-step-state="active"]')).toContainText("Fix the snapshot");
   await expect(page.getByTestId("chat-status-card")).toContainText("Step 2 of 3");
+  // The main chat has room: the rail starts open.
+  await expect(page.getByTestId("chat-status-card")).not.toHaveAttribute("data-folded");
   await page.getByRole("button", { name: "Hide steps" }).click();
   await expect(rail).toHaveCount(0);
   await page.getByRole("button", { name: "Show steps" }).click();

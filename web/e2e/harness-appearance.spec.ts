@@ -16,16 +16,14 @@ async function install(page: Page) {
   ] } }));
 }
 
-test("the Appearance switch reclaims history space, persists and survives palette import/reset", async ({ page }) => {
+test("the Appearance switch hides the rail's characters, persists and survives palette import/reset", async ({ page }) => {
   await install(page);
   await page.goto("/settings#appearance");
   await expect(toggle(page)).toBeChecked();
-  await expect(footer(page)).toBeVisible();
-  const history = page.getByRole("navigation", { name: "Chats", exact: true });
-  const before = (await history.boundingBox())!.height;
+  // The characters live at the foot of the rail on every screen.
+  await expect(footer(page)).toHaveAttribute("data-rail", "true");
   await toggle(page).click();
   await expect(footer(page)).toHaveCount(0);
-  await expect.poll(async () => (await history.boundingBox())!.height).toBeGreaterThan(before + 50);
   await page.getByRole("radio", { name: "Nord", exact: true }).check();
   await page.getByRole("button", { name: "Reset palette", exact: true }).click();
   await expect(toggle(page)).not.toBeChecked();
@@ -40,8 +38,6 @@ test("the Appearance switch reclaims history space, persists and survives palett
   await expect(footer(page)).toHaveCount(0);
   await page.goto("/settings#appearance");
   await toggle(page).click();
-  await expect(footer(page)).toBeVisible();
-  await page.getByRole("button", { name: "Collapse menu", exact: true }).click();
   await expect(footer(page)).toHaveAttribute("data-rail", "true");
   await toggle(page).click();
   await expect(footer(page)).toHaveCount(0);

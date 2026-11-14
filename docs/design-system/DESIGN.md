@@ -190,26 +190,46 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 ## 3. App shell
 
 ```
-┌────────────┬──────────────────────────────────────────────┐
-│  Sidebar   │  Top bar (52px): breadcrumb ········ actions  │
-│  232px     ├──────────────────────────────────────────────┤
-│            │  [optional view/filter bar]                   │
-│            │  Content (max 1180, padding 32/28)            │
-│            │                          [optional right panel│
-│            │                           ~300–340px]         │
-└────────────┴──────────────────────────────────────────────┘
+┌──────┬────────────┬────────────────────────────────────┬──────────────┐
+│ Rail │ Navigator  │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
+│ 52px │ 264px      ├────────────────────────────────────┤ (dock)       │
+│      │ (the area's│ [optional view/filter bar]         │ facts | Chat │
+│      │ own list)  │ Content (max 1180, padding 32/28)  │ ~320–360px   │
+└──────┴────────────┴────────────────────────────────────┴──────────────┘
 ```
 
-**Sidebar** (`--bg-sidebar`, right border `--border-subtle`, padding 12/10, 20px between groups):
-1. Workspace switcher: 22px accent square with the "H" mark, workspace name 13.5/600, chevron. On the right is a 30px outlined "new ticket" icon button.
-2. Search button: 32px tall, `--surface` fill, placeholder "Search…", `⌘K` keycap on the right (mono 11px, 1px border, radius 4).
-3. Primary nav: Dashboard, Inbox (amber count badge: it is a person needing to act), Tickets, Epics, Agents (green dot plus live count), Artifacts. Items are 30px tall, radius 6, 16px stroke icons at 1.5px. The active item uses `--selected` with `--text`; inactive items use `--text-secondary`.
-4. Projects: a 12px/500 tertiary label with a "+" button, then project rows with a 10px rounded-square color swatch.
-5. Footer: agent-capacity card (Dashboard only), showing 8 segments with N lit in accent, then the user row (circle avatar, name, role, settings icon).
+The shell is a workbench: one rail switches areas, the navigator beside it lists what the current
+area holds, the main pane shows the open item, and the side panel holds its facts and a chat with
+your persona.
 
-**Top bar:** breadcrumb on the left (tertiary separators, current item in `--text` 500). Actions on the right go secondary buttons first and the primary button last.
+**Rail** (`components/shell/sidebar.tsx`, 52px, `--bg-sidebar`, always shown at `COMPACT` and wider):
+the mark; the Chats toggle (chat screens only); New chat, Search (⌘K) and Needs you (count badge);
+the areas as 30px icon links (Chat, Runs with a live dot, Tickets, Reports) and the Apps flyout;
+the persona and space shortcuts while the Chats navigator is hidden; Customization and Settings at
+the foot; and the harness characters under them, each opening its usage bubble to the right.
 
-**Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the sidebar beside the content.
+**Navigator** (264px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`): one width whoever draws it, so the
+content edge doesn't move between areas. On chat screens the shell draws the Chats navigator (New
+chat, spaces, history, setup progress), shown or hidden from the rail and remembered per browser.
+Runs draws its run list, Knowledge its explorer and an app editor its structure panel in the same
+place; Tickets and the index screens have none. Two lists never stack.
+
+**Side panel and who you're talking to.** The main pane's composer talks to what the pane shows
+(a run's composer to its agent: "To Builder · WEB-9"); the side panel's Chat always talks to your
+persona. A run's Context panel and a ticket's Properties switch between their facts and that Chat
+(`PanelTabs`, remembered per panel). The work chat (`components/domain/work-chat.tsx`) is one list
+shared by every run and ticket, so the conversation follows you; each message carries the item in
+view after `<!-- vesper:work-context -->`, as Knowledge's carries the page after its own marker.
+Dock composers lead with a "To <persona>" chip, then what the message carries (`DockContext`). The
+person's bubble shows only what they typed.
+
+**Live activity in a dock.** A conversation marked `docked` starts its live card folded: the scene,
+status, progress segments and the step under way ("Fix the snapshot · 2 of 3"); Show steps opens the
+full list. The main chat starts it open.
+
+**Pane bar** (`TopBar`, 44px): back and forward (`HistoryNav`; disabled at either end where the browser has the Navigation API, hidden below md), then the breadcrumb (tertiary separators, current item in `--text` 500). Actions on the right go secondary buttons first and the primary button last. The chat header and the Knowledge tab strip lead with the same back and forward; a docked chat's header doesn't repeat them.
+
+**Responsive:** at `COMPACT` (768px, `lib/viewport.ts`) and wider, the shell is a wrapping flex row with the rail (and any navigator) beside the content.
 
 *Compact shell (below 768px).* The content runs full width, with no sidebar or icon rail. A bottom tab bar (`components/shell/tab-bar.tsx`, rules in `lib/tab-bar.ts`) is fixed to the bottom edge on `--sidebar`, above a `--border-subtle` top rule. Its tabs are Chat, Inbox, Runs, Tickets and More. Each tab is at least 44px tall: an 18px icon in a 48×28 pill, with an 11px label under it. The current tab's pill fills with `--selected` and its label turns `--text`. Inactive tabs are `--text-tertiary`. Inbox shows the unread count as an amber (`--state-human`) badge, and Runs shows a green (`--state-done`) dot while runs are live. Both read `useNavCounts()`, as the sidebar does, and the counts reach screen readers through the link name ("Inbox 3 unread"). The bar is 56px tall plus the bottom safe-area inset (`pb-safe`), and it publishes that height as `--tab-bar-h`, which is 0 when there is no bar. The shell pads its content by `--tab-bar-h`. Screens sized to the viewport use `h-app` (100dvh less the bar) instead of `h-dvh`, and the activity orb stays above the bar. Detail screens (a run, a ticket, the ticket composer) hide the bar and take the whole screen. Pages the bar has no tab for (apps, tools, Customization, Settings) are listed under More (`/more`), and More stays current while one of them is open. More is built from `NAV_GROUPS` (`moreSections()` in `lib/tab-bar.ts`) and `useNavCounts()`, so it can't drift from the sidebar. From the top it has a search field, your profile row with Customization and Settings buttons (Settings gets an amber dot when a setting runs need is missing), the Apps as a three-column grid of tiles, the Tools as a list that keeps the sidebar's badges, and Spaces. Every row is at least 44px tall. The search field opens the command menu, which fills the screen below `COMPACT`: it has no radius or border and is padded for the safe areas. Its input is 16px, its results are at least 44px tall, the close button is 44px, and the keyboard hints are hidden.
 

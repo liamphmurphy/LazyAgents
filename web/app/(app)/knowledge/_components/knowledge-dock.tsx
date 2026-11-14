@@ -10,12 +10,13 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/primitives";
 import { isTyping } from "@/components/shell/shortcuts";
 import { DockChatSwitcher, type DockChatSection } from "@/components/domain/dock-chat-switcher";
+import { DockContext, dockContextChip } from "@/components/domain/dock-context";
 import { useAddDockChat, useDockChats, type DockScope } from "@/lib/api/dock-hooks";
 import { provideChatRefs, useChat, useCreateChat } from "@/lib/api/hooks";
 import { fetchPage, useAttachChat, usePage, type Page } from "@/lib/api/knowledge-hooks";
 import { ApiError, type Schemas } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { refKey } from "@/lib/chat-context";
+import { KNOWLEDGE_CONTEXT_MARKER, refKey } from "@/lib/chat-context";
 import { dockReducer, dockShortcut, loadDock, saveDock, type DockAction, type DockState } from "@/lib/editor-layout";
 import { isFolder, useKnowledgeChat, type FolderAttachment, type PageAttachment } from "./chat-context";
 import { SIDE_TABS, SidePanel } from "./page-side";
@@ -167,6 +168,8 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   const { attachments, request, remove, readDraft, claimRequest } = useKnowledgeChat();
   const [created, setCreated] = useState<string>();
   const id = created ?? chatId;
+  const open = useChat(id).data;
+  const persona = open ? personaLook(open.speaker ?? open.persona).name : undefined;
   const host = useRef<HTMLDivElement>(null);
   const pageScope: DockScope | undefined = page ? `page:${page.id}` : undefined;
   const pageChats = useDockChats(pageScope);
@@ -232,30 +235,30 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
     const viewing = page ? [`Currently viewing Knowledge page ${label(page)}.`] : screen ? [`On the Knowledge ${screen} screen, not viewing a page.`] : [];
     const blocks = [...viewing, ...passages, ...folderBlocks, ...snapshots];
     // The server excludes this source material when interpreting persona mentions and hand-off limits.
-    const suffix = `\n\n<!-- vesper:knowledge-context -->\n${blocks.join("\n\n")}`;
+    const suffix = `${KNOWLEDGE_CONTEXT_MARKER}${blocks.join("\n\n")}`;
     return blocks.length && !body.endsWith(suffix) ? `${body}${suffix}` : body;
   };
   const context: ConversationContext = {
     hidden: true,
     composer: (
-      <div className="flex flex-wrap gap-1.5 text-12 text-fg-secondary" aria-label="Knowledge context">
-        {page && <span className="max-w-full truncate rounded-md border border-border bg-surface px-2 py-1" title={page.path ?? page.title}>Viewing: {page.title}</span>}
-        {!page && screen && <span className="rounded-md border border-border bg-surface px-2 py-1">On: {screen}</span>}
+      <DockContext persona={persona} label="Knowledge context">
+        {page && <span className={dockContextChip} title={page.path ?? page.title}><Icon name="wiki" size={12} className="flex-none text-fg-tertiary" /><span className="truncate">Viewing: {page.title}</span></span>}
+        {!page && screen && <span className={dockContextChip}>On: {screen}</span>}
         {folders.map((f) => (
-          <span key={f.key} className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface px-2 py-1" title={f.path}>
+          <span key={f.key} className={dockContextChip} title={f.path}>
             <Icon name="folder" size={12} />
             <span className="truncate">{f.path}/</span>
             <button aria-label={`Remove folder ${f.path}`} onClick={() => remove([f.key])} className="grid size-4 flex-none place-items-center rounded hover:bg-hover"><Icon name="x" size={11} /></button>
           </span>
         ))}
         {pages.map((a) => (
-          <span key={a.key} className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-surface px-2 py-1" title={a.quote ?? a.path ?? a.title}>
+          <span key={a.key} className={dockContextChip} title={a.quote ?? a.path ?? a.title}>
             <Icon name={a.quote === undefined ? "wiki" : "msg"} size={12} />
             <span className="truncate">{a.title}{a.quote === undefined ? "" : " · selection"}</span>
             <button aria-label={`Remove ${a.quote === undefined ? a.title : `selection from ${a.title}`}`} onClick={() => remove([a.key])} className="grid size-4 flex-none place-items-center rounded hover:bg-hover"><Icon name="x" size={11} /></button>
           </span>
         ))}
-      </div>
+      </DockContext>
     ),
     prepare: async (input) => {
       const draft = page && readDraft(page.id);
@@ -283,7 +286,7 @@ function ChatBody({ chatId, page, screen, loadingPage, onGeneral }: { chatId?: s
   if (id) return (
     <div ref={host} className="flex min-h-0 flex-1 flex-col">
       {attach.error && <p role="alert" className="p-2 text-12 text-state-blocked">Couldn’t link this chat to the page. <button className="underline" onClick={() => attach.mutate(id)}>Retry</button></p>}
-      <Conversation key={id} id={id} onNew={start} onReplace={selectChat} context={context} actions={switcher} />
+      <Conversation key={id} id={id} docked onNew={start} onReplace={selectChat} context={context} actions={switcher} />
     </div>
   );
   return (

@@ -22,11 +22,10 @@ type Item = Schemas["InboxItem"];
 
 /**
  * The Needs you pill and its tray (LAZYAGENTS-162): one queue of what waits on
- * the person, answerable from any page. The pill sits under New chat in the
- * expanded menu, as an icon with a badge on the rail, and as a tab in the
- * compact bar. The badge is the bootstrap's needs_you count (live over SSE).
+ * the person, answerable from any page. It sits on the rail as an icon with a
+ * badge, and as a tab in the compact bar. The badge is the bootstrap's needs_you count (live over SSE).
  */
-export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "tab"; count: number }) {
+export function NeedsYou({ variant, count }: { variant: "rail" | "tab"; count: number }) {
   const [open, setOpen] = useState(false);
   // Dispatch opens a dialog, which has to live outside the popover it closes.
   const [dispatchKey, setDispatchKey] = useState<string>();
@@ -35,27 +34,7 @@ export function NeedsYou({ variant, count }: { variant: "expanded" | "rail" | "t
   const badge = count > 99 ? "99+" : count;
 
   const trigger =
-    variant === "expanded" ? (
-      <button
-        type="button"
-        aria-label={label}
-        aria-expanded={open}
-        data-needs-you
-        className={cx(
-          "flex h-[32px] w-full items-center gap-2 rounded-[9px] px-2.5 text-13 font-medium",
-          count > 0 ? "bg-pill-human-bg text-pill-human-fg hover:brightness-110" : "text-fg-secondary hover:bg-hover hover:text-fg",
-          open && "ring-1 ring-state-human/50",
-        )}
-      >
-        <span aria-hidden className={cx("size-2 flex-none rounded-full", count > 0 ? "bg-state-human" : "bg-fg-tertiary/50")} />
-        <span className="flex-1 text-left">Needs you</span>
-        {count > 0 && (
-          <span ref={pulse} aria-hidden className="grid h-[18px] min-w-[18px] place-items-center rounded-[9px] bg-state-human px-[5px] text-12 font-semibold text-approve-fg">
-            {badge}
-          </span>
-        )}
-      </button>
-    ) : variant === "rail" ? (
+    variant === "rail" ? (
       <button
         type="button"
         aria-label={label}

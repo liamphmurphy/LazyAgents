@@ -74,7 +74,7 @@ test("the dock's state persists per app across a reload, and the menu shows its 
   await page.goto("/dev/editor-layout");
   const menu = page.getByRole("complementary", { name: "Main menu" });
   await expect(menu).not.toHaveAttribute("data-expanded");
-  await expect(menu.getByRole("button", { name: "Expand menu" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: "Show chats" })).toHaveCount(0);
 
   await dock(page).getByRole("tab", { name: "Comments" }).click();
   await dock(page).getByRole("tab", { name: "Comments" }).click();
@@ -87,9 +87,10 @@ test("the dock's state persists per app across a reload, and the menu shows its 
   await expect(dock(page).getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "true");
 
   expect(await page.evaluate(() => localStorage.getItem("lazyagents.sidebar-expanded"))).toBe("1");
-  // Leaving the editor restores the remembered expanded menu.
-  await page.goto("/tickets");
+  // Leaving the editor for a chat restores the remembered Chats navigator.
+  await page.goto("/chat");
   await expect(page.getByRole("complementary", { name: "Main menu" })).toHaveAttribute("data-expanded");
+  await expect(page.getByRole("complementary", { name: "Chats" })).toBeVisible();
 });
 
 test("the busy and unread marks show on the Chat tab", async ({ page }) => {

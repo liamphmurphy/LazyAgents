@@ -11,11 +11,12 @@ import type { Schemas } from "@/lib/api/client";
 import { useEpicOverviews, useTicket } from "@/lib/api/hooks";
 import { cx } from "@/lib/cx";
 import { absoluteTime, ago, compact, duration } from "@/lib/format";
-import { runnerSlot } from "@/lib/run-list";
+import { runnerSlot, runTitle } from "@/lib/run-list";
 import { PURPOSE_LABEL, type RunViewMode } from "@/lib/run-view";
 import { Button } from "@/components/ui/button";
-import { ContextPanel, ContextSection as Section, useContextPanel } from "@/components/shell/context-panel";
+import { ContextPanel, ContextSection as Section, PanelTabs, useChatTab, useContextPanel } from "@/components/shell/context-panel";
 import { Icon } from "@/components/ui/icon";
+import { WorkChat } from "@/components/domain/work-chat";
 import { WorkspaceFolderChip } from "@/components/domain/workspace-folder";
 import { CostValue } from "./run-thread";
 import { LoadingLines } from "@/components/ui/loading";
@@ -26,6 +27,9 @@ type RunDetail = Schemas["RunDetail"];
 const CONTEXT_KEY = "lazyagents.runs.context";
 
 export const useRunContextPanel = () => useContextPanel(CONTEXT_KEY);
+
+/** Which side of the panel shows: the run's facts, or the work chat with your persona. Remembered per browser. */
+const useRunPanelTab = () => useChatTab("lazyagents.runs.panel-tab");
 
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
@@ -123,8 +127,16 @@ export function RunContext({ d, mode, setMode, onClose }: { d: RunDetail; mode: 
       {label}
     </Button>
   );
+  const [tab, setTab] = useRunPanelTab();
+  const header = <PanelTabs first="Context" chat={tab} onChat={setTab} />;
+  if (tab)
+    return (
+      <ContextPanel onClose={onClose} header={header} fill>
+        <WorkChat subject={{ kind: "run", id: run.id, title: runTitle(run), agent: run.agent.name, ticketKey: run.ticket_key ?? undefined }} />
+      </ContextPanel>
+    );
   return (
-    <ContextPanel onClose={onClose}>
+    <ContextPanel onClose={onClose} header={header}>
       {run.purpose === "ticket" && run.ticket_key ? <TicketSection ticketKey={run.ticket_key} run={run} /> : <CodeSection branch={run.branch} runPr={{ number: run.pr_number, url: run.pr_url }} />}
       <Section title="Run">
         <dl className="flex flex-col gap-1">

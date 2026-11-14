@@ -181,7 +181,7 @@ test("a new conversation opens at once, without waiting for the lists to refresh
   await expect(page).toHaveURL(/\/chat\?new/, { timeout: 2500 });
 });
 
-test("the menu keeps its width whatever the titles and persona filter", async ({ page }) => {
+test("the Chats navigator keeps its width whatever the titles and persona filter", async ({ page }) => {
   const mock = await installChatApi(page, { personas: [ATLAS, NOVA] });
   await page.goto("/chat?project=WEB");
   await page.getByRole("combobox", { name: "Message" }).fill("hello atlas");
@@ -192,15 +192,15 @@ test("the menu keeps its width whatever the titles and persona filter", async ({
   await page.reload();
   await expect(history(page).getByRole("link", { name: /A title still being generated/ })).toBeVisible();
 
-  const menu = page.getByRole("complementary", { name: "Main menu" });
+  const menu = page.getByRole("complementary", { name: "Chats" });
   const width = async () => (await menu.boundingBox())!.width;
-  expect(await width()).toBe(232);
+  expect(await width()).toBe(264);
   await pick(page, "All personas");
   await expect(picked(page)).toHaveAccessibleName("All personas");
-  expect(await width()).toBe(232);
+  expect(await width()).toBe(264);
   await pick(page, /^Atlas/);
   await expect(picked(page)).toHaveAccessibleName("Atlas (default)");
-  expect(await width()).toBe(232);
+  expect(await width()).toBe(264);
 });
 
 test("the welcome's carousel slides between personas and keeps focus on the arrow keys", async ({ page }) => {

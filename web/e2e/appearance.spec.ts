@@ -36,8 +36,6 @@ test("the Vesper logo follows presets, mode and custom colors without reloading"
   await page.getByRole("button", { name: "Reset palette", exact: true }).click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await expect(accent).toHaveCSS("stop-color", "rgb(155, 140, 255)");
-  await page.getByRole("button", { name: "Expand menu", exact: true }).click();
-  await expect(accent).toHaveCSS("stop-color", "rgb(155, 140, 255)");
 });
 
 test("ten palettes work independently of mode, persist, and remain usable on mobile", async ({ page }) => {

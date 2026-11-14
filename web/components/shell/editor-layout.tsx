@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, 
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { cx } from "@/lib/cx";
+import { NAVIGATOR_WIDTH } from "@/lib/navigator";
 import {
   claimEditorRail,
   dockReducer,
@@ -187,7 +188,7 @@ export function EditorLayout({
       <Header {...header} />
       <div className="relative flex min-h-0 flex-1">
         {showLeft && (
-          <aside aria-label="Structure" className="flex w-[240px] flex-none flex-col overflow-y-auto border-r border-border-subtle bg-sidebar max-md:hidden">
+          <aside aria-label="Structure" className={cx(NAVIGATOR_WIDTH, "flex flex-none flex-col overflow-y-auto border-r border-border-subtle bg-sidebar max-md:hidden")}>
             {left}
           </aside>
         )}

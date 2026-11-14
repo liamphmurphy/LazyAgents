@@ -317,7 +317,7 @@ export function DocScreen({ id }: { id: string }) {
       content: (
         <div data-testid="doc-chat" aria-label={`Chat with ${persona}`} className="flex min-h-0 flex-1 flex-col">
           {/* A document keeps its one chat: /new starts another document instead. */}
-          {chatId && <Conversation key={chatId} id={chatId} onNew={() => router.push("/apps/docs")} />}
+          {chatId && <Conversation key={chatId} id={chatId} docked onNew={() => router.push("/apps/docs")} />}
         </div>
       ),
     },

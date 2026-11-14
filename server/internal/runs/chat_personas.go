@@ -88,12 +88,20 @@ func PersonaMentions(body string, ps []store.Persona) []uuid.UUID {
 
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
 
-// Knowledge appends page context after this marker. It is source material,
-// so mentions and hand-off instructions there must not change chat controls.
-// Keep the marker aligned with knowledge-dock.tsx.
+// contextMarkers start the context a dock appends to a message: Knowledge's
+// page context (knowledge-dock.tsx) and the run or ticket beside the work chat
+// (web/lib/work-context.ts). It is source material, so mentions and hand-off
+// instructions there must not change chat controls.
+var contextMarkers = []string{
+	"\n\n<!-- vesper:knowledge-context -->\n",
+	"\n\n<!-- vesper:work-context -->\n",
+}
+
 func chatRequestText(body string) string {
-	request, _, _ := strings.Cut(body, "\n\n<!-- vesper:knowledge-context -->\n")
-	return request
+	for _, marker := range contextMarkers {
+		body, _, _ = strings.Cut(body, marker)
+	}
+	return body
 }
 
 var (
