@@ -1082,6 +1082,7 @@ type Persona struct {
 	CanCreateConnectors bool
 	ImageEngine         string
 	TicketEdits         string
+	InChatList          bool
 }
 
 type PersonaProposal struct {
