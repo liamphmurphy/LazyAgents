@@ -23,8 +23,7 @@ import { useAppearance } from "./theme";
 /** The areas on the icon row, in order; Apps (the flyout of the other apps and tools) follows them. */
 const AREAS: { area: Exclude<Area, "apps">; href: string; label: string; icon: IconName; badge?: NavBadge }[] = [
   { area: "chat", href: "/chat", label: "Chat", icon: "msg" },
-  { area: "runs", href: "/runs", label: "Runs", icon: "play", badge: "runs" },
-  { area: "tickets", href: "/tickets", label: "Tickets", icon: "tickets" },
+  { area: "work", href: "/work", label: "Work", icon: "tickets", badge: "runs" },
   { area: "knowledge", href: "/knowledge", label: "Knowledge", icon: "wiki", badge: "wiki" },
 ];
 

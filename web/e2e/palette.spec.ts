@@ -48,7 +48,7 @@ async function install(page: Page) {
 test("⌘K opens from any screen, Esc closes it and focus returns", async ({ page }) => {
   await install(page);
   await page.goto("/board?project=WEB");
-  const tickets = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tickets", exact: true });
+  const tickets = page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Work", exact: true });
   await tickets.focus();
   await openPalette(page);
   await expect(palette(page)).toBeVisible();

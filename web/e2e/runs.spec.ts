@@ -114,8 +114,8 @@ const list = (page: Page) => page.getByRole("complementary", { name: "Runs" });
 test("the list groups runs beside the selected run, and the URL keeps the selection", async ({ page }) => {
   await installRuns(page);
   await page.goto("/runs");
-  // /runs opens the first Needs you run in place.
-  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}$`));
+  // /runs opens Work's Activity, the first Needs you run selected.
+  await expect(page).toHaveURL(/\/work\?view=activity$/);
   const needs = list(page).getByRole("region", { name: "Needs you" });
   await expect(needs.getByRole("listitem")).toHaveText([/Partition ledger entries/, /Payout retries/, /Billing plan/]);
   await expect(needs.getByRole("link", { name: /Billing plan/ })).toHaveAttribute("href", "/plans/p1");
@@ -131,14 +131,14 @@ test("the list groups runs beside the selected run, and the URL keeps the select
   const tray = page.getByRole("dialog", { name: "Needs you" });
   await expect(tray.locator("[data-tray-row]")).toHaveCount(3);
   for (const t of ["Partition ledger entries", "Payout retries", "Billing plan"]) await expect(tray.locator("[data-tray-row]").filter({ hasText: t })).toHaveCount(1);
-  // Open all lands on /runs with Needs you in view.
+  // Open all lands on Work with Needs you in view.
   await tray.getByRole("link", { name: "Open all →" }).click();
-  await expect(page).toHaveURL(new RegExp(`/runs/${APPROVING}#needs-you$`));
+  await expect(page).toHaveURL(/\/work(\?[^#]*)?#needs-you$/);
   await expect(needs).toBeInViewport();
 
   // Selecting a row updates the URL; a reload restores the selection.
   await list(page).getByRole("link", { name: /Search index/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/runs/${RUNNING}$`));
+  await expect(page).toHaveURL(new RegExp(`/work\\?run=${RUNNING}&view=activity$`));
   await expect(page.getByRole("heading", { name: "Search index" })).toBeVisible();
   await page.reload();
   await expect(list(page).locator("a[aria-current=page]")).toContainText("Search index");
@@ -147,9 +147,10 @@ test("the list groups runs beside the selected run, and the URL keeps the select
   // Search and Hide done narrow the list; "/" focuses search.
   await page.locator("body").click({ position: { x: 900, y: 5 } });
   await page.keyboard.press("/");
-  await expect(list(page).getByRole("searchbox", { name: "Search runs" })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Search work" })).toBeFocused();
   await page.keyboard.type("session");
   await expect(list(page).getByRole("link", { name: /Session refresh/ })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Search work" })).toHaveValue("session");
   await expect(list(page).getByRole("link", { name: /Search index/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await list(page).getByRole("button", { name: "Hide done" }).click();

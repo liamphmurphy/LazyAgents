@@ -5,8 +5,8 @@ import { NAV_GROUPS } from "./project-scope.ts";
 
 const counts = { inbox: 0, runs: 0, scheduled: 0, wiki: 0, settings: 0 };
 
-test("the bar has Chat, Needs you (the tray), Runs, Tickets and More", () => {
-  assert.deepEqual(TABS.map((t) => t.label), ["Chat", "Needs you", "Runs", "Tickets", "More"]);
+test("the bar has Chat, Needs you, Work and More", () => {
+  assert.deepEqual(TABS.map((t) => t.label), ["Chat", "Needs you", "Work", "More"]);
 });
 
 test("a path selects its section's tab, and anything else selects More", () => {
@@ -14,7 +14,7 @@ test("a path selects its section's tab, and anything else selects More", () => {
   assert.equal(currentTab("/chat/abc"), "chat");
   assert.equal(currentTab("/inbox"), "needs");
   assert.equal(currentTab("/runs"), "runs");
-  assert.equal(currentTab("/tickets"), "tickets");
+  assert.equal(currentTab("/tickets"), "runs");
   assert.equal(currentTab("/more"), "more");
   assert.equal(currentTab("/apps/docs"), "more");
   assert.equal(currentTab("/settings"), "more");
@@ -27,6 +27,7 @@ test("run and ticket detail screens hide the bar; their lists keep it", () => {
   assert.equal(hidesTabBar("/tickets/new"), true);
   assert.equal(hidesTabBar("/runs"), false);
   assert.equal(hidesTabBar("/tickets"), false);
+  assert.equal(hidesTabBar("/work"), false);
   assert.equal(hidesTabBar("/chat/abc"), false);
 });
 

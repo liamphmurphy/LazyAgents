@@ -167,7 +167,7 @@ test("Updates: FYI items with an unread dot and no count, and Mark all read", as
   await expect(page).toHaveURL(/\/tickets\/WEB-3$/);
   await pill(page).click();
   await tray(page).getByRole("link", { name: "Open all →" }).click();
-  await expect(page).toHaveURL(/\/runs(\/[^#]+)?#needs-you$/);
+  await expect(page).toHaveURL(/\/work(\?[^#]*)?#needs-you$/);
   await expect(tray(page)).toHaveCount(0);
   await expect(page.getByRole("complementary", { name: "Runs" }).getByRole("region", { name: "Needs you" })).toBeInViewport();
 });

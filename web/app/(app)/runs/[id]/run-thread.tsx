@@ -7,6 +7,8 @@
 // composer. The raw log, graph and files open from the Context panel.
 
 import Link from "next/link";
+import { chatStatus, toolCalls } from "@/lib/chat-ui";
+import { ActivityScene } from "../../chat/_components/activity-scene";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
@@ -57,7 +59,7 @@ export function WorkLink({ run }: { run: Run }) {
 }
 
 /** Now · step N of M, with a thin progress bar under it. */
-function NowLine({ d }: { d: RunDetail }) {
+function NowLine({ d, unified }: { d: RunDetail; unified?: boolean }) {
   const run = d.run;
   const p = stepProgress(run);
   // The step is shown on its own, so the Now text leaves it out.
@@ -66,11 +68,22 @@ function NowLine({ d }: { d: RunDetail }) {
   const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   return (
     <div className="flex flex-none flex-col gap-1.5 border-b border-border-subtle py-2.5">
-      <p className={cx(COLUMN, "flex items-baseline gap-3 text-13")}>
+      {unified && (
+        <div className={cx(COLUMN, "flex items-center gap-4")}>
+          <ActivityScene current={chatStatus(toolCalls(d.events)).kind} stopping={RUN_ENDED.includes(run.state)} />
+          <span role="status" className="text-13">
+            {p.current?.text ?? now}
+            <small className="block text-11 text-fg-tertiary">
+              {run.harness}{p.total > 0 && ` · step ${p.current?.position ?? p.done} of ${p.total}`}
+            </small>
+          </span>
+        </div>
+      )}
+      {!unified && <p className={cx(COLUMN, "flex items-baseline gap-3 text-13")}>
         <span className="flex-none text-11 font-semibold uppercase tracking-wide text-fg-tertiary">{now ? "Now" : "Plan"}</span>
         {p.total > 0 && <span title={p.current?.text} className="flex-none font-mono text-12 text-fg-tertiary">Step {p.current?.position ?? p.done} of {p.total}</span>}
         <span role="status" className="min-w-0 flex-1 truncate text-fg-2">{now ?? (p.done === p.total ? "All steps done" : p.current?.text)}</span>
-      </p>
+      </p>}
       {p.total > 0 && (
         <div className={COLUMN}>
           <div
@@ -251,7 +264,7 @@ function NextLine({ next, query }: { next: Schemas["InboxItem"]; query: string }
  * `human_reply` resumes with it; a working agent reads it from the ticket.
  * The run API has no aside or interrupt, so this is Follow-up only.
  */
-function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
+function Composer({ run, lastSeq, unified }: { run: Run; lastSeq: number; unified?: boolean }) {
   const { comment, body, setBody, sent, again, submit } = useReply(run, lastSeq);
   const ref = useRef<HTMLTextAreaElement>(null);
   const waiting = waitsForReply(run);
@@ -277,19 +290,19 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
       ) : (
         <>
         {/* The main pane talks to what it shows: this run's agent. Your persona is in the side panel's Chat. */}
-        <div data-testid="run-composer-to" className="flex items-center gap-1.5 px-1">
+        {!unified && <div data-testid="run-composer-to" className="flex items-center gap-1.5 px-1">
           <span className="text-12 text-fg-tertiary">To</span>
           <span className="inline-flex h-[24px] items-center gap-1.5 rounded-md border border-border bg-surface pl-0.5 pr-2 text-12 font-medium text-fg-2">
             <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} size="sm" />
             {run.agent.name}{run.ticket_key ? ` · ${run.ticket_key}` : ""}
           </span>
-        </div>
+        </div>}
         <div className={cx("flex items-end gap-2 rounded-xl border bg-surface p-2 focus-within:border-accent", waiting ? "border-state-human/60" : "border-border-strong")}>
           <label className="sr-only" htmlFor="run-composer">{label}</label>
           <TextArea
             ref={ref}
             id="run-composer"
-            rows={1}
+            rows={unified ? 2 : 1}
             value={body}
             placeholder={waiting ? `Reply to ${run.agent.name}…` : `Follow up with ${run.agent.name}…`}
             onChange={(e) => setBody(e.target.value)}
@@ -299,7 +312,7 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
                 submit();
               }
             }}
-            className="max-h-48 min-h-9 flex-1 resize-none border-0 bg-transparent py-1.5 text-14 shadow-none focus:ring-0"
+            className="max-h-48 min-h-9 flex-1 resize-none border-0 bg-transparent py-1.5 text-14 shadow-none focus:ring-0 focus-visible:outline-none"
           />
           <Button type="submit" variant={waiting ? "approve" : "primary"} disabled={!body.trim() || comment.isPending}>
             {comment.isPending ? "Sending…" : "Send"}
@@ -308,13 +321,13 @@ function Composer({ run, lastSeq }: { run: Run; lastSeq: number }) {
         </>
       )}
       <p className="px-1 text-11 text-fg-tertiary">
-        {waiting ? "Your reply resumes the run." : `Goes to ${run.agent.name} as a comment on ${run.ticket_key}; it reads it on its next look at the ticket.`}
+        {unified ? `Reply to ${run.agent.name} · ${waiting ? "Reply" : "Follow-up"}` : waiting ? "Your reply resumes the run." : `Goes to ${run.agent.name} as a comment on ${run.ticket_key}; it reads it on its next look at the ticket.`}
       </p>
     </form>
   );
 }
 
-export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: number) => void }) {
+export function RunThread({ d, onOpenTurn, unified, workLinks }: { d: RunDetail; onOpenTurn: (turn: number) => void; unified?: boolean; workLinks?: ReactNode }) {
   const run = d.run;
   const params = useSearchParams();
   const query = listQuery(params);
@@ -341,13 +354,14 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-12 text-fg-tertiary">
             {run.agent.name}
             <span aria-hidden>·</span>
-            <WorkLink run={run} />
+            {unified ? <span>{run.state} · {duration(run.started_at, run.ended_at)} · {runCost(run.cost_usd, run.cost_source)}</span> : <WorkLink run={run} />}
             {run.parent_run_id && <><span aria-hidden>·</span><Link href={`/runs/${run.parent_run_id}`} className="text-accent hover:underline">Delegated by ↗</Link></>}
           </span>
         </div>
         <StatusPill run={run} />
       </div>
-      <NowLine d={d} />
+      {workLinks}
+      <NowLine d={d} unified={unified} />
       <div
         ref={scroller}
         role="log"
@@ -377,7 +391,7 @@ export function RunThread({ d, onOpenTurn }: { d: RunDetail; onOpenTurn: (turn: 
         </div>
       </div>
       {canWrite ? (
-        <Composer run={run} lastSeq={d.events.at(-1)?.seq ?? 0} />
+        <Composer run={run} unified={unified} lastSeq={d.events.at(-1)?.seq ?? 0} />
       ) : !ended && (run.purpose === "planning" || run.purpose === "chat") && workHref(run) ? (
         <p className={cx(COLUMN, "flex-none pb-4 pt-2 text-12 text-fg-tertiary")}>
           Write to {run.agent.name} in the {run.purpose === "planning" ? <Link href={workHref(run)!} className="text-accent hover:underline">plan</Link> : <Link href={workHref(run)!} className="text-accent hover:underline">chat</Link>}.

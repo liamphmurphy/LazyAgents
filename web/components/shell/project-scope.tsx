@@ -96,7 +96,8 @@ export function useProjectScope(mode: ProjectMode, { skip = false }: { skip?: bo
     if (!redirect) return;
     const next = new URLSearchParams(window.location.search);
     next.set("project", redirect);
-    router.replace(`${pathname}?${next}`);
+    // Keep the hash: links like the tray's /work#needs-you scroll to it after this.
+    router.replace(`${pathname}?${next}${window.location.hash}`);
   }, [redirect, pathname, router]);
 
   if (skip) return { status: "ready" };

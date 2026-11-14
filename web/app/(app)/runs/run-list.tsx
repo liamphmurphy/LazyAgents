@@ -112,7 +112,7 @@ function StatusDot({ dot }: { dot: Dot }) {
 const rowClass = (active: boolean) =>
   cx("flex min-h-[44px] items-start gap-2.5 rounded-[10px] px-2.5 py-2 outline-none focus-visible:ring-1 focus-visible:ring-accent/60", active ? "bg-selected" : "hover:bg-hover");
 
-function RunRow({ run, active, query }: { run: Run; active: boolean; query: string }) {
+function RunRow({ run, active, query, embedded }: { run: Run; active: boolean; query: string; embedded?: boolean }) {
   return (
     <li>
       <Link
@@ -125,7 +125,8 @@ function RunRow({ run, active, query }: { run: Run; active: boolean; query: stri
         <AgentAvatar name={run.agent.name} colorIndex={run.agent.color_index} label={false} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-13 text-fg">{runTitle(run)}</span>
-          <span className="truncate text-12 text-fg-tertiary">{runLine(run)}</span>
+          <span className="truncate text-12 text-fg-tertiary">{embedded ? [run.ticket_key, run.agent.name].filter(Boolean).join(" · ") : runLine(run)}</span>
+          {embedded && <span className="mt-2 truncate text-11 text-state-done">● {run.plan.find(s => s.state === "current")?.text ?? DOT_LABEL[runDot(run)]}</span>}
         </span>
         <span className="flex flex-none flex-col items-end gap-1.5 pt-0.5">
           <time dateTime={run.started_at} className="text-11 text-fg-tertiary">{ago(run.started_at)}</time>
@@ -191,7 +192,7 @@ function StatusLine({ project }: { project?: string }) {
   );
 }
 
-function Chips({ project, agent, hideDone }: { project?: string; agent?: string; hideDone: boolean }) {
+function Chips({ project, agent, hideDone, doneOnly = false }: { project?: string; agent?: string; hideDone: boolean; doneOnly?: boolean }) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -207,10 +208,11 @@ function Chips({ project, agent, hideDone }: { project?: string; agent?: string;
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-1">
       {/* "All spaces" stays explicit (?project=), so the shell's project doesn't come back. */}
-      <FilterMenu label="Space" value={project ?? ""} onChange={(v) => set("project", v)}
-        options={[{ value: "", label: "All spaces" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />
-      <FilterMenu label="Persona" value={agent ?? ""} onChange={(v) => set("agent", v || undefined)}
-        options={[{ value: "", label: "All personas" }, ...agents.map((a) => ({ value: a.handle, label: a.name }))]} />
+      {/* Work has its own Space and Persona filters above the list, so it only takes Hide done. */}
+      {!doneOnly && <FilterMenu label="Space" value={project ?? ""} onChange={(v) => set("project", v)}
+        options={[{ value: "", label: "All spaces" }, ...projects.map((p) => ({ value: p.key, label: p.name }))]} />}
+      {!doneOnly && <FilterMenu label="Persona" value={agent ?? ""} onChange={(v) => set("agent", v || undefined)}
+        options={[{ value: "", label: "All personas" }, ...agents.map((a) => ({ value: a.handle, label: a.name }))]} />}
       <button
         type="button"
         aria-pressed={hideDone}
@@ -225,10 +227,10 @@ function Chips({ project, agent, hideDone }: { project?: string; agent?: string;
 }
 
 /** The grouped list. `selected` is the run (or Needs you run) open beside it. */
-export function RunList({ selected, fill }: { selected?: string; fill?: boolean }) {
+export function RunList({ selected, fill, embedded = false, search: workSearch }: { selected?: string; fill?: boolean; embedded?: boolean; search?: string }) {
   const params = useSearchParams();
   const [search, setSearch] = useState("");
-  const data = useRunList(search);
+  const data = useRunList(workSearch ?? search);
   const query = listQuery(params);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -244,7 +246,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // The tray's "Open all" lands on /runs#needs-you: bring the group into view once it's there.
+  // The tray's "Open all" lands on /work#needs-you: bring the group into view once it's there.
   // Also on a path change: Open all from /runs/X goes to /runs, which opens a run with the hash kept.
   const hasNeeds = data.shownNeeds.length > 0;
   const path = usePathname();
@@ -259,7 +261,13 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
       aria-label="Runs"
       className={cx("flex min-h-0 flex-1 flex-col gap-2", fill ? "px-2 pt-safe" : "px-1.5")}
     >
-      <div className="flex flex-col gap-2 px-1">
+      {embedded && (
+        <div className="flex flex-col gap-2 px-1">
+          <StatusLine project={data.project} />
+          <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} doneOnly />
+        </div>
+      )}
+      {!embedded && <div className="flex flex-col gap-2 px-1">
         <div className="flex items-center gap-2 px-1.5">
           <h1 className={cx("flex-1 font-semibold", fill ? "type-display" : "text-13")}>Runs</h1>
         </div>
@@ -278,7 +286,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
           {!search && <Kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 pointer-coarse:hidden">/</Kbd>}
         </div>
         <Chips project={data.project} agent={data.agent} hideDone={data.hideDone} />
-      </div>
+      </div>}
       {/* Contain absolute screen-reader labels as well as the visible rows. */}
       <div ref={listRef} className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-3">
         {data.shownNeeds.length > 0 && (
@@ -303,7 +311,7 @@ export function RunList({ selected, fill }: { selected?: string; fill?: boolean 
           <>
             {data.groups.map((g) => (
               <Group key={g.key} id={`runs-${g.key.replace(/\W+/g, "-")}`} label={g.label} count={g.key === "running" || g.key === "queued" ? g.runs.length : undefined}>
-                {g.runs.map((r) => <RunRow key={r.id} run={r} active={r.id === selected && !selectedNeeds} query={query} />)}
+                {g.runs.map((r) => <RunRow key={r.id} run={r} active={r.id === selected && !selectedNeeds} query={query} embedded={embedded} />)}
               </Group>
             ))}
             {data.hasMore && (

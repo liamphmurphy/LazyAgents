@@ -34,7 +34,7 @@ test("renders agreed columns, card anatomy, navigation and empty states", async 
   await expect(card(page).getByRole("link", { name: "Build ticket modal" })).toBeVisible();
   // The old /board URL is Tickets' board layout.
   await expect(page).toHaveURL(/\/tickets\?(?=.*layout=board)(?=.*project=WEB)/);
-  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Tickets", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Work", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("navigation", { name: "Tickets layout" }).getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   await switchProject(page, "Operations");
   await expect(screen(page).getByText("No tickets", { exact: true })).toHaveCount(5);
