@@ -56,9 +56,10 @@ test("the search field opens the command menu full screen, usable by touch", asy
 
   await main(page).getByRole("button", { name: "Search" }).tap();
   await dialog.getByRole("combobox", { name: "Search everything" }).fill("knowledge");
-  const option = dialog.getByRole("option", { name: /^Go to Knowledge/ });
-  expect(Math.round((await option.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
+  const option = dialog.getByRole("option", { name: /^Knowledge/ });
+  // Polled: the option renders at once, inside the dialog's 100ms scale-in.
+  await expect.poll(async () => Math.round((await option.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
   await option.tap();
-  await expect(page).toHaveURL(/\/wiki/);
+  await expect(page).toHaveURL(/\/knowledge$/);
   await expect(dialog).toHaveCount(0);
 });

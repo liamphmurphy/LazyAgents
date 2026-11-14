@@ -8,10 +8,12 @@ import { IconButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Kbd } from "@/components/ui/primitives";
 import { artifactTitle } from "@/components/domain/artifacts";
+import { usePersonas } from "@/lib/api/persona-hooks";
 import { cx } from "@/lib/cx";
 import { useCompact } from "@/lib/viewport";
 import { attachQuery, type ContextRef } from "@/lib/chat-context";
 import {
+  appMatches,
   linkFromTarget,
   matchParts,
   matchesWords,
@@ -19,6 +21,7 @@ import {
   parseFilters,
   parseRecent,
   passesFilters,
+  personaMatches,
   promoteTop,
   projectOfKey,
   pushRecent,
@@ -30,7 +33,7 @@ import {
   RECENT_KEY,
   type PaletteLink,
 } from "@/lib/command-palette";
-import { NAV_GROUPS, projectSection, switchHref, withProject } from "@/lib/project-scope";
+import { APP_ITEMS, NAV_GROUPS, TOOL_ITEMS, projectSection, switchHref, withProject } from "@/lib/project-scope";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
 
@@ -50,6 +53,8 @@ const GLYPH: Partial<Record<PaletteGroup, string>> = {
   Running: "▶",
   Continue: "◌",
   "Jump to": "↵",
+  "Start a chat": "☺",
+  Apps: "⊞",
   "Switch project": "⇄",
 };
 
@@ -69,6 +74,8 @@ type Item = {
   fallback?: boolean;
   /** Only offered once asked for: too specific, or too consequential, for the opening list. */
   onDemand?: boolean;
+  /** Matched here rather than by the server, so ↵ may take it while a search is still on its way. */
+  local?: boolean;
 };
 
 const MARK = "rounded-[3px] bg-accent-soft text-fg underline decoration-accent decoration-2 underline-offset-4";
@@ -116,6 +123,7 @@ export function CommandMenu() {
   const createChat = useCreateChat();
   const askChat = useAskChat();
   const remembered = useRememberedProject();
+  const personas = usePersonas();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [project, setProject] = useState<string>();
@@ -217,20 +225,51 @@ export function CommandMenu() {
         recent: { id: `jump-${key}`, title: key, meta: key, href: `/tickets/${key}`, kind: "Tickets" } }]
     : [];
 
-  const hits: Item[] = searchText
-    ? promoteTop(
-        sortByGroup(
-          (search.data ?? []).flatMap((h) => {
-            const link = linkFromTarget(h.target);
-            if (!link) return [];
-            const group = link.kind as PaletteGroup;
-            if (!passesFilters({ group, status: link.status }, filters)) return [];
-            const meta = [link.meta, link.status?.replaceAll("_", " ")].filter(Boolean).join(" · ");
-            return [{ id: link.id, title: link.title, meta, group, glyph: GLYPH[group], href: link.href, recent: link, snippet: h.snippet, score: h.score }];
-          }),
-        ),
+  // Typing a persona's name offers a new chat with them first; an app's name, the app.
+  // Matched here, from lists the shell already has, so they don't wait on the search.
+  const offers = (group: PaletteGroup) => !commands && mode === "root" && (!filters.groups.length || filters.groups.includes(group));
+  const chatWith: Item[] = offers("Personas")
+    ? personaMatches(personas.data?.personas ?? [], filters.text).map((p) => ({
+        id: `chat-with-${p.id}`,
+        title: `Chat with ${p.name}`,
+        meta: "new chat",
+        group: "Start a chat" as const,
+        glyph: GLYPH["Start a chat"],
+        href: `/chat?new&persona=${encodeURIComponent(p.id)}`,
+        local: true,
+      }))
+    : [];
+  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
+  // is:app on its own lists every app.
+  const appsWanted = filters.text ? appMatches(appsMenu, filters.text) : filters.groups.includes("Apps") ? appsMenu : [];
+  const apps: Item[] = offers("Apps")
+    ? appsWanted.map((a) => ({
+        id: `app-${a.href}`,
+        title: a.label,
+        meta: a.kind,
+        group: "Apps" as const,
+        glyph: GLYPH.Apps,
+        href: withProject(a.href, remembered),
+        recent: { id: `app-${a.href}`, title: a.label, meta: a.kind, href: withProject(a.href, remembered), kind: "Apps" },
+        local: true,
+      }))
+    : [];
+  // The best local match leads; the server's best hit is lifted only when nothing here matched.
+  const local = [...chatWith, ...apps].map((item, i) => (i === 0 ? { ...item, group: "Top result" as const } : item));
+
+  const ranked: Item[] = searchText
+    ? sortByGroup(
+        (search.data ?? []).flatMap((h) => {
+          const link = linkFromTarget(h.target);
+          if (!link) return [];
+          const group = link.kind as PaletteGroup;
+          if (!passesFilters({ group, status: link.status }, filters)) return [];
+          const meta = [link.meta, link.status?.replaceAll("_", " ")].filter(Boolean).join(" · ");
+          return [{ id: link.id, title: link.title, meta, group, glyph: GLYPH[group], href: link.href, recent: link, snippet: h.snippet, score: h.score }];
+        }),
       )
     : [];
+  const hits = local.length ? ranked : promoteTop(ranked);
 
   const recentItems: Item[] =
     mode === "root" && !query.trim()
@@ -386,12 +425,15 @@ export function CommandMenu() {
       href: withProject(i.href, remembered),
       group: "Go to" as const,
     })),
-  ).filter((i) => (title ? matchesWords(i.title, title) : commands));
+  )
+    .filter((i) => (title ? matchesWords(i.title, title) : commands))
+    // An app already offered above isn't offered again here.
+    .filter((i) => !apps.some((a) => a.href === i.href));
 
   const items: Item[] =
     mode === "projects"
       ? projectItems
-      : [...needsYou, ...running, ...resume, ...recentItems, ...jump, ...hits, ...shownActions, ...(commands && title ? projectItems : []), ...goTo];
+      : [...needsYou, ...running, ...resume, ...recentItems, ...jump, ...local, ...hits, ...shownActions, ...(commands && title ? projectItems : []), ...goTo];
   const index = Math.max(0, Math.min(active, items.length - 1));
   const activeId = items.length ? `command-${index}` : undefined;
 
@@ -542,7 +584,7 @@ export function CommandMenu() {
                   setActive(items.length - 1);
                 }
                 // While results are stale, ↵ must not fall through to an action or an old hit.
-                if (e.key === "Enter" && items[index] && (!pending || items[index].group === "Jump to")) {
+                if (e.key === "Enter" && items[index] && (!pending || items[index].local || items[index].group === "Jump to")) {
                   e.preventDefault();
                   go(items[index], e.metaKey || e.ctrlKey);
                 }
@@ -601,7 +643,7 @@ export function CommandMenu() {
                 That action didn’t go through. Try again.
               </p>
             )}
-            {searchText && !pending && hits.length === 0 && !key && (
+            {searchText && !pending && hits.length === 0 && local.length === 0 && !key && (
               <p className="px-3 py-8 text-center text-14 text-fg-tertiary">No results for “{query.trim()}”.</p>
             )}
             {mode === "projects" && items.length === 0 && (
