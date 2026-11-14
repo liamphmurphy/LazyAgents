@@ -191,15 +191,16 @@ Apply `font-feature-settings: "cv11","ss01","ss03"` to Inter globally. Inline co
 
 ```
 ┌──────────────────┬────────────────────────────────────┬──────────────┐
-│ Column (248px)   │ Pane bar (44px): ‹ › crumb ·· acts │ Side panel   │
-│ fixed top        ├────────────────────────────────────┤ (dock)       │
-│ the area's list  │ [optional view/filter bar]         │ facts | Chat │
-│ fixed foot       │ Content (max 1180, padding 32/28)  │ ~320–360px   │
+│ Column (248px)   │ Pane bar (44px): ‹ › crumb ·· acts │ Companion    │
+│ fixed top        ├────────────────────────────────────┤ (dock, 360px │
+│ the area's list  │ [optional view/filter bar]         │ or 44px rail)│
+│ fixed foot       │ Content (max 1180, padding 32/28)  │ facts · Chat │
 └──────────────────┴────────────────────────────────────┴──────────────┘
 ```
 
 The shell is one left column, the same on every screen, then the main pane with the open item, then
-the side panel with its facts and a chat with your persona.
+the companion: one right-hand panel beside every page, with the page's facts and a chat with your
+persona.
 
 **Column** (`components/shell/sidebar.tsx`, 248px, `NAVIGATOR_WIDTH` in `lib/navigator.ts`,
 `--bg-sidebar`, shown at `COMPACT` and wider). Its top never changes: the mark and "Vesper", the
@@ -210,8 +211,8 @@ current on any of them. Its foot never changes either: the harness characters in
 its usage bubble above it, then Customization and Settings.
 
 **The area's list.** Between top and foot sits one list. By default it is Chats (title, an accent +
-for New chat, the persona filter, the history, spaces, setup progress); personas and spaces appear
-here and nowhere else in navigation. A screen with a list of its own puts it there instead with
+for New chat, the persona filter chip, the history, spaces, setup progress); personas and spaces
+appear here and nowhere else in navigation. A screen with a list of its own puts it there instead with
 `NavigatorPortal` (`components/shell/navigator-slot.tsx`): Runs its run list, Knowledge its explorer,
 an app editor its structure (the way back to the app's index, the item's name, then pages and
 layers), Learn its lessons, the wiki its tree. Each list's title row ends with its own +. Two lists
@@ -229,17 +230,39 @@ whatever that bar is (a `TopBar` breadcrumb, the chat header, an editor header, 
 welcome screen's bar). Never in the column, and exactly once per screen
 (`e2e/history-everywhere.spec.ts` sweeps every route for it).
 
-**Side panel and who you're talking to.** The main pane's composer talks to what the pane shows
-(a run's composer to its agent: "To Builder · WEB-9"); the side panel's Chat always talks to your
-persona. A run's Context panel and a ticket's Properties switch between their facts and that Chat
-(`PanelTabs`, remembered per panel). The work chat (`components/domain/work-chat.tsx`) is one list
-shared by every run and ticket, so the conversation follows you; each message carries the item in
-view after `<!-- vesper:work-context -->`, as Knowledge's carries the page after its own marker.
+**The companion.** The shell's right-hand column (`components/shell/companion.tsx`, `lib/companion.ts`)
+holds one panel beside every page on wide screens, filled like the left column's middle: a page with a
+panel of its own renders its `Dock` into the column through `CompanionPortal` (an editor's tabs,
+Knowledge's, a run's Context and Chat, a ticket's Properties and Chat, an epic's Context and Chat);
+any other page gets the default companion, the work chat, folded to its 44px rail until opened. It is
+always 360px wide (wider for a document or a review), sticky to the viewport, and below `xl` floats
+over the page from the right edge. One open state is shared by every dock
+(`lazyagents.companion-open`) and changes only when you open or fold one (`actOnDock`), so the panel
+stays as you left it from page to page; each dock keeps its own tab. Knowledge is the exception that
+starts each new browser tab folded. The chat page claims the column (`useClaimCompanion`): the
+conversation is the page, and its own dock beside it holds its canvases, activity and linked items.
+A document's chat is its own (a design's, a deck's, a doc's): canvases belong to the chat that made
+them, so the companion shows the item's chat where the item has one, and the work chat elsewhere.
+
+**Who you're talking to.** The main pane's composer talks to what the pane shows (a run's composer
+to its agent: "To Builder · WEB-9"); the companion's Chat always talks to your persona. The work chat
+(`components/domain/work-chat.tsx`) is one list shared by every page, so the conversation follows
+you; each message carries the run or ticket in view after `<!-- vesper:work-context -->`, as
+Knowledge's carries the page after its own marker; beside a page with neither, only what's pinned.
 A Pin on the Viewing chip keeps an item attached as you move between runs and tickets: messages
 then name both ("Pinned …", "Viewing …"), until it is unpinned. Dock composers lead with a
 "To <persona>" chip, then what the message carries (`DockContext`). The person's bubble shows only
 what they typed. On phones the run's header and the ticket's action bar open the same work chat in
 a full-height sheet.
+
+**Personas** are who you're talking to, never where you are. A persona shows in a conversation (the
+header's persona control and the composer's "To" chip) and as attribution (who wrote, suggested or
+asked for something: a reply's identity, a suggestion's author, a Needs you item), and filters lists
+of conversations or their output with one chip (`PersonaFilter` on Chats: All personas by default,
+a menu with each persona's chat count and what it is doing, ✕ to clear, and "New chat with …" while
+filtered). Never on the area row, the column's fixed top, an app's list or the collapsed strip. A
+dock's new chat (the work chat, Knowledge's) starts with the persona last used there
+(`useDockPersona`), and its empty state names that persona.
 
 **Linked items.** Under the main chat's header, a Linked row lists what the conversation links to:
 the tickets and pages its messages carried, then its runs. Each opens read-only in the chat page's
@@ -302,6 +325,8 @@ Tables and the ticket list sit in `overflow-x: auto` containers with a min-width
 **Index screen header.** Every index screen (Designs, Slides, Learn, Library, Reports, Scheduled, Workflows, Settings and its sub-screens, Setup, Wiki) opens with `PageHeader` from `components/ui/page-header.tsx`: `type-display` title, a 14px secondary description at most 720px wide, primary actions on the right, and an optional row of tabs, switches and pickers under it. Detail screens (a ticket, run, epic, agent or page) and the dense work toolbars (Runs, Tickets) keep their own headers.
 
 **Empty states.** A screen or section with nothing in it uses `EmptyState` (`compact` in trays, cards and panel sections): icon, heading, one line on how things get here, and the action that adds the first one. A one-line hint inside a side panel ("No headings yet.") stays plain tertiary text.
+
+**Visual regression.** `web/e2e/visual.spec.ts` snapshots the shell's key screens (chat, a chat with personas, runs and a run, the Tickets layouts and a ticket, Settings, Library, Knowledge, Designs, a Slides editor) in Dusk light and Gruvbox dark, with a fixed clock, reduced motion, relative times masked and at most 100 pixels of difference. A layout change updates them on purpose (`--update-snapshots`), and the diff in review shows what moved.
 
 ## 4. Components
 
