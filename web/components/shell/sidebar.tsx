@@ -93,7 +93,7 @@ function Areas({ vertical, counts, onNewSpace }: { vertical: boolean; counts: Re
   const pathname = usePathname();
   const current = currentArea(pathname);
   return (
-    <div role="list" aria-label="Areas" className={cx("flex", vertical ? "w-full flex-col gap-px" : "items-center gap-1")}>
+    <div role="list" aria-label="Areas" className={cx("flex w-full", vertical ? "flex-col gap-px" : "items-center justify-between")}>
       {AREAS.map((a) => {
         const on = current === a.area;
         const dot = !!a.badge && counts[a.badge] > 0;

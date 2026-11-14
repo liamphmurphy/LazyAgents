@@ -9,7 +9,7 @@ import { inAppsMenu, isActive } from "./project-scope.ts";
  * Every list in the column has the same width, whoever draws it: Chats, the Runs list, the
  * Knowledge explorer, an editor's pages and layers. A literal class so Tailwind finds it.
  */
-export const NAVIGATOR_WIDTH = "w-[264px]";
+export const NAVIGATOR_WIDTH = "w-[248px]";
 
 /** The areas on the column's icon row, in order. Apps is the flyout of the other apps and tools. */
 export type Area = "chat" | "runs" | "tickets" | "knowledge" | "designs" | "apps";
