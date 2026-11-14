@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -148,6 +150,47 @@ func (p *dockerLogin) ReadFile(ctx context.Context, file string) ([]byte, error)
 		return nil, fmt.Errorf("%s is larger than %d bytes", file, maxLoginFile)
 	}
 	return b, nil
+}
+
+// ReadHomeFiles streams homePath out of the container archive and returns each
+// regular file matching keep, keyed by path relative to homePath.
+func (p *dockerLogin) ReadHomeFiles(ctx context.Context, keep func(rel string, size int64) bool) (map[string][]byte, error) {
+	res, err := p.d.do(ctx, "GET", "/containers/"+p.id+"/archive?path="+url.QueryEscape(homePath), nil, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	prefix := path.Base(homePath) + "/"
+	tr := tar.NewReader(bufio.NewReader(res.Body))
+	out := map[string][]byte{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return out, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		trimmed := strings.TrimPrefix(hdr.Name, "./")
+		if !strings.HasPrefix(trimmed, prefix) {
+			continue
+		}
+		rel := strings.TrimPrefix(trimmed, prefix)
+		if !keep(rel, hdr.Size) {
+			continue
+		}
+		b, err := io.ReadAll(io.LimitReader(tr, maxLoginFile+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(b) > maxLoginFile {
+			continue
+		}
+		out[rel] = b
+	}
 }
 
 func (p *dockerLogin) Close() {

@@ -83,6 +83,26 @@ func TestAntigravityAuthTarIsOwnedByTheAgentUser(t *testing.T) {
 	if !slices.Equal(files, []string{".config/antigravity/plugin-secrets.json"}) {
 		t.Fatalf("files = %v", files)
 	}
+	b64Tar, err := antigravityAuthTar(`{"v":1,"files_b64":{".gemini/antigravity-cli/tok.bin":"AQID"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr2 := tar.NewReader(b64Tar)
+	for {
+		h, err := tr2.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			b, _ := io.ReadAll(tr2)
+			if h.Name != ".gemini/antigravity-cli/tok.bin" || string(b) != "\x01\x02\x03" {
+				t.Fatalf("binary entry %s = %x", h.Name, b)
+			}
+		}
+	}
 }
 
 func TestSecretEnvDeliversPlanLogins(t *testing.T) {

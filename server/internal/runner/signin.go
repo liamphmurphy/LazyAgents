@@ -2,12 +2,15 @@ package runner
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -87,12 +90,71 @@ var (
 	antigravityURLRe = regexp.MustCompile(`https://accounts\.google\.com/o/oauth2/[^\s"'<>]+`)
 )
 
-// antigravityOptionalFiles are small non-secret state/config files included
-// alongside plugin-secrets.json when capturing an Antigravity login.
-var antigravityOptionalFiles = []string{
-	".gemini/antigravity-cli/jetski_state.pbtxt",
-	".gemini/antigravity-cli/installation_id",
-	".gemini/config/config.json",
+type homeFilesReader interface {
+	ReadHomeFiles(ctx context.Context, keep func(rel string, size int64) bool) (map[string][]byte, error)
+}
+
+func isAntigravityLoginFile(rel string, size int64) bool {
+	if size <= 0 || size > 12<<10 {
+		return false
+	}
+	if _, ok := chatmodels.CleanAntigravityRelPath(rel); !ok {
+		return false
+	}
+	for _, seg := range strings.Split(rel, "/") {
+		switch seg {
+		case "builtin", "log", "logs", "cache", "crashes", "conversations", "brain", "annotations", "presence", "implicit", "persistent_terminals", "updater":
+			return false
+		}
+	}
+	base := path.Base(rel)
+	switch base {
+	case "mcp_config.json", "hooks.json", "settings.json", ".migrated", "default_project_id.txt", "default-cli-project.json", "last_check.timestamp":
+		return false
+	}
+	for _, ext := range []string{".log", ".db", ".db-wal", ".db-shm", ".lock", ".tmp"} {
+		if strings.HasSuffix(base, ext) {
+			return false
+		}
+	}
+	return true
+}
+
+func buildAntigravityAuthBundle(files map[string][]byte) (string, error) {
+	names := make([]string, 0, len(files))
+	for rel, b := range files {
+		if len(b) == 0 || !isAntigravityLoginFile(rel, int64(len(b))) {
+			continue
+		}
+		names = append(names, rel)
+	}
+	if len(names) == 0 {
+		return "", errors.New("Antigravity didn't save any login files")
+	}
+	sort.Strings(names)
+	bundle := chatmodels.AntigravityAuth{Version: 1}
+	for _, rel := range names {
+		b := files[rel]
+		if utf8.Valid(b) {
+			if bundle.Files == nil {
+				bundle.Files = map[string]string{}
+			}
+			bundle.Files[rel] = string(b)
+		} else {
+			if bundle.FilesB64 == nil {
+				bundle.FilesB64 = map[string]string{}
+			}
+			bundle.FilesB64[rel] = base64.StdEncoding.EncodeToString(b)
+		}
+	}
+	raw, err := json.Marshal(bundle)
+	if err != nil {
+		return "", err
+	}
+	if len(raw) > 16<<10 {
+		return "", errors.New("Antigravity login exceeds 16 KB secret limit")
+	}
+	return string(raw), nil
 }
 
 // codexAuthFile is where `codex login` writes its login in the container.
@@ -178,38 +240,15 @@ var signInProviders = map[string]signInProvider{
 			if exit != 0 {
 				return "", fmt.Errorf("antigravity login exited with %d", exit)
 			}
-			sec, err := p.ReadFile(ctx, homePath+"/"+chatmodels.AntigravitySecretsRelPath)
+			hr, ok := p.(homeFilesReader)
+			if !ok {
+				return "", errors.New("sign-in backend can't capture container home files")
+			}
+			files, err := hr.ReadHomeFiles(ctx, isAntigravityLoginFile)
 			if err != nil {
 				return "", fmt.Errorf("read the Antigravity login: %w", err)
 			}
-			if len(sec) == 0 || !utf8.Valid(sec) {
-				return "", errors.New("Antigravity didn't save a valid login")
-			}
-			bundle := chatmodels.AntigravityAuth{
-				Version: 1,
-				Files:   map[string]string{chatmodels.AntigravitySecretsRelPath: string(sec)},
-			}
-			raw, err := json.Marshal(bundle)
-			if err != nil {
-				return "", err
-			}
-			if len(raw) > 16<<10 {
-				return "", errors.New("Antigravity login exceeds 16 KB secret limit")
-			}
-			for _, rel := range antigravityOptionalFiles {
-				b, err := p.ReadFile(ctx, homePath+"/"+rel)
-				if err != nil || len(b) == 0 || !utf8.Valid(b) {
-					continue
-				}
-				bundle.Files[rel] = string(b)
-				next, err := json.Marshal(bundle)
-				if err != nil || len(next) > 16<<10 {
-					delete(bundle.Files, rel)
-					continue
-				}
-				raw = next
-			}
-			return string(raw), nil
+			return buildAntigravityAuthBundle(files)
 		},
 	},
 }

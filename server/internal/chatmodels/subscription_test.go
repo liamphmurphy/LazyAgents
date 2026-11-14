@@ -51,16 +51,19 @@ func TestClaudeOAuthToken(t *testing.T) {
 }
 
 func TestParseAntigravityAuth(t *testing.T) {
-	valid := `{"v":1,"files":{".config/antigravity/plugin-secrets.json":"{\"token\":\"secret\"}",".gemini/antigravity-cli/installation_id":"id-1"}}`
+	valid := `{"v":1,"files":{".gemini/antigravity-cli/installation_id":"id-1",".gemini/antigravity-cli/jetski_state.pbtxt":"state"}}`
+	validB64 := `{"v":1,"files_b64":{".local/share/antigravity/token.bin":"AQID"}}`
 	for name, tc := range map[string]struct {
 		v    string
 		want bool
 	}{
 		"valid bundle":      {valid, true},
+		"valid b64 bundle":  {validB64, true},
 		"legacy gemini key": {"AIzaSyTestKey", false},
 		"wrong version":     {`{"v":2,"files":{".config/antigravity/plugin-secrets.json":"x"}}`, false},
-		"missing secrets":   {`{"v":1,"files":{".gemini/config/config.json":"{}"}}`, false},
-		"empty secret file": {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":""}}`, false},
+		"empty bundle":      {`{"v":1,"files":{}}`, false},
+		"empty file value":  {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":""}}`, false},
+		"invalid base64":    {`{"v":1,"files_b64":{".gemini/token.bin":"!!!not-b64"}}`, false},
 		"path traversal":    {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x",".gemini/../.ssh/id_rsa":"k"}}`, false},
 		"absolute path":     {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x","/etc/passwd":"k"}}`, false},
 		"disallowed dotdir": {`{"v":1,"files":{".config/antigravity/plugin-secrets.json":"x",".ssh/authorized_keys":"k"}}`, false},
