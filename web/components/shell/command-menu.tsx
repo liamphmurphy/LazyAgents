@@ -16,6 +16,7 @@ import { approvalId, KIND as INBOX_KIND } from "@/lib/inbox";
 import { attachQuery, chipFromTarget, type ContextRef } from "@/lib/chat-context";
 import {
   CHIP_TYPES,
+  KIND_JUMPS,
   MORE_TYPES,
   RECENT_KEY,
   TYPE,
@@ -423,7 +424,7 @@ export function CommandMenu() {
         mark: true,
       }))
     : [];
-  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
+  const appsMenu = [...APP_ITEMS.map((i) => ({ ...i, kind: "app" })), ...KIND_JUMPS.map((i) => ({ ...i, kind: "in Knowledge" })), ...TOOL_ITEMS.map((i) => ({ ...i, kind: "tool" }))];
   // is:app on its own lists every app.
   const appsWanted = filters.text ? appMatches(appsMenu, filters.text) : oneType === "app" ? appsMenu : [];
   const apps: Row[] = offers("app")

@@ -22,6 +22,11 @@ export const designKeys = {
   version: (id: string, seq: number) => ["design-versions", id, seq] as const,
 };
 
+/** The person's designs with their current seq: the Designs start page draws its cards from them. */
+export function useDesigns() {
+  return useQuery({ queryKey: designKeys.list, queryFn: () => unwrap(api.GET("/designs")), select: (d) => d.designs });
+}
+
 /** One design: its chat, current seq, switches and pending suggestions. */
 export function useDesign(id: string) {
   return useQuery({ queryKey: designKeys.one(id), queryFn: () => unwrap(api.GET("/designs/{canvasId}", { params: { path: { canvasId: id } } })) });

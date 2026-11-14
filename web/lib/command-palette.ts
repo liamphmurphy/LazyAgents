@@ -1,6 +1,8 @@
 // Pure logic for the ⌘K command palette (LAZYAGENTS-43). Kept free of React so
 // `npm run test:unit` covers it; the component is components/shell/command-menu.tsx.
 
+import { kindHref } from "./knowledge.ts";
+
 /**
  * A searchable type: a chip (or a row under More), an `is:` filter, and the
  * /search kinds it covers. People are personas and agents together.
@@ -410,11 +412,21 @@ export function personaMatches<P extends { name: string }>(personas: P[], query:
  * Apps the typed text names, in menu order. "app" or "apps" lists them all; a leading
  * "open" or "go to" is the intent, not part of the name.
  */
-export function appMatches<A extends { label: string }>(apps: A[], query: string): A[] {
+export function appMatches<A extends { label: string; aliases?: string }>(apps: A[], query: string): A[] {
   const q = query.trim().replace(/^(?:open|go\s+to)\s+/i, "");
   if (!q) return [];
-  return apps.filter((a) => startsWords(`${a.label} apps`, q));
+  return apps.filter((a) => startsWords(`${a.label} ${a.aliases ?? ""} apps`, q));
 }
+
+/**
+ * The start pages of what used to be apps of their own (LAZYAGENTS-212): their names still find
+ * them, in Knowledge. Not in APP_ITEMS, which is also the Apps flyout they've left.
+ */
+export const KIND_JUMPS: { href: string; label: string; aliases?: string }[] = [
+  { href: kindHref("document"), label: "Documents", aliases: "docs" },
+  { href: kindHref("deck"), label: "Slides", aliases: "decks" },
+  { href: kindHref("design"), label: "Designs" },
+];
 
 export const MAX_RECENT = 6;
 
