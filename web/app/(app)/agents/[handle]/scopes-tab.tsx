@@ -69,7 +69,7 @@ export function ScopesTab({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-13 text-fg-tertiary">Effective in</span>
         <ProjectPicker label="Effective in" projects={projects} value={project} onChange={onProject} className="w-48" />
-        <span className="text-12 text-fg-tertiary">follows the project you&apos;re in · switch to compare</span>
+        <span className="text-12 text-fg-tertiary">follows the space you&apos;re in · switch to compare</span>
         <form
           className="ml-auto flex items-center gap-1.5"
           onSubmit={(e) => {
@@ -109,7 +109,7 @@ export function ScopesTab({
           <span className="flex items-center gap-1.5"><LevelTag mode="allowed" /> no prompt</span>
           <span className="flex items-center gap-1.5"><LevelTag mode="requires_approval" /> each use waits for a person</span>
           <span className="flex items-center gap-1.5"><LevelTag mode="denied" /> never</span>
-          <span className="flex items-center gap-1.5"><MonoChip variant="outline">project</MonoChip> set by this project&apos;s override · hover a chip for how it&apos;s enforced</span>
+          <span className="flex items-center gap-1.5"><MonoChip variant="outline">space</MonoChip> set by this space&apos;s override · hover a chip for how it&apos;s enforced</span>
         </div>
       </div>
       <p className="text-12 text-fg-tertiary">Edits stay in this browser until you review and save them. Each run keeps the definition it started with.</p>
@@ -161,7 +161,7 @@ function Row({
       <td className="px-2 py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <LevelTag mode={r.effective.mode} />
-          {fromProject && <MonoChip variant="outline">project</MonoChip>}
+          {fromProject && <MonoChip variant="outline">space</MonoChip>}
           {changed && !fromProject && <span className="text-11 text-fg-tertiary">after save</span>}
         </div>
         {fromProject && project && (

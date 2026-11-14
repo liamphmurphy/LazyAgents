@@ -214,7 +214,7 @@ export function DefinitionEditor({ detail, draft, onChange }: { detail: AgentDet
               onChange={(h) => set({ harness: h })}
               options={detail.harnesses.map((h) => ({ value: h.name, label: h.label }))}
             />
-            <span className="text-12 text-fg-tertiary">Projects can switch harness in an override</span>
+            <span className="text-12 text-fg-tertiary">Spaces can switch harness in an override</span>
           </div>
           {harness && (
             <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-13">

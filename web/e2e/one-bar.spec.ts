@@ -39,11 +39,11 @@ test("Tickets has one bar: the project is a pill in the breadcrumb, New ticket a
   for (const layout of ["", "&layout=board", "&layout=epics"]) {
     await page.goto(`/tickets?project=WEB${layout}`);
     const bar = page.locator("header").filter({ has: page.getByRole("navigation", { name: "Breadcrumb" }) });
-    await expect(bar.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "Switch project, current: Web app" })).toBeVisible();
+    await expect(bar.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "Switch space, current: Web app" })).toBeVisible();
     await expect(bar.getByRole("navigation", { name: "Tickets layout" })).toBeVisible();
     await expect(bar.getByRole("link", { name: /New ticket/ })).toBeVisible();
     // Nothing else holds the switcher: no second row for it.
-    await expect(page.getByRole("button", { name: /^Switch project/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /^Switch space/ })).toHaveCount(1);
   }
 });
 

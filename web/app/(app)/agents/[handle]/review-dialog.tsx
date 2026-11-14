@@ -201,7 +201,7 @@ export function ReviewDialog({
             <Field label="Version note" htmlFor="review-note">
               <TextInput id="review-note" value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
             </Field>
-            {held.length > 0 && <p className="-mt-3 text-12 text-fg-tertiary">Project overrides still apply on top: {held.join("; ")}.</p>}
+            {held.length > 0 && <p className="-mt-3 text-12 text-fg-tertiary">Space overrides still apply on top: {held.join("; ")}.</p>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-track bg-surface-sunken px-[18px] py-3">
             {error ? (

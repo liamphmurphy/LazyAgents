@@ -116,7 +116,7 @@ export function OverrideDialog({
             </Dialog.Close>
           </div>
           <div className="flex flex-col gap-4 overflow-y-auto px-[18px] pb-4 pt-3">
-            <p className="text-13 text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this project. Permissions can only get stricter.</p>
+            <p className="text-13 text-fg-tertiary">Overrides merge over the agent&apos;s definition for runs in this space. Permissions can only get stricter.</p>
             <Field label="Harness" htmlFor="ov-h">
               <Segmented
                 label="Harness"
@@ -200,13 +200,13 @@ export function OverrideDialog({
               </form>
             </div>
             <section aria-labelledby="ov-skills-title" className="flex flex-col gap-3">
-              <h3 id="ov-skills-title" className="font-medium">Project skills</h3>
+              <h3 id="ov-skills-title" className="font-medium">Space skills</h3>
               <p className="text-12 text-fg-tertiary">Removals apply first, then additions. Unknown removals do nothing. To replace a default skill, remove its name and add the replacement. Future agent updates still flow through.</p>
               <Field label="Remove agent skills" htmlFor="ov-skills-remove" hint="Skill names separated by spaces, commas or new lines. Leave empty to keep all defaults.">
                 <TextArea id="ov-skills-remove" mono rows={2} value={skillsRemove} aria-invalid={!removalsValid} onChange={(e) => setSkillsRemove(e.target.value)} />
               </Field>
               {!removalsValid && <p role="alert" className="text-12 text-pill-blocked-fg">Use unique skill names: lowercase letters, digits or hyphens, up to 64 characters.</p>}
-              {!skillsAdd.length && <p className="text-12 text-fg-tertiary">No project skills added. The agent’s remaining defaults are used.</p>}
+              {!skillsAdd.length && <p className="text-12 text-fg-tertiary">No space skills added. The agent’s remaining defaults are used.</p>}
               <ul className="space-y-2">{skillsAdd.map((s, i) => <li key={s.name} className="flex items-center gap-2 text-14"><span className="font-mono">{s.name}</span><span className="flex-1 text-fg-secondary">{s.description}</span><IconButton icon="trash" label={`Remove added skill ${s.name}`} onClick={() => setSkillsAdd(skillsAdd.filter((_, j) => i !== j))} /></li>)}</ul>
               <Field label="Added skill name" htmlFor="ov-skill-name"><TextInput id="ov-skill-name" mono maxLength={64} value={skill.name} onChange={(e) => setSkill({ ...skill, name: e.target.value })} /></Field>
               <Field label="When to use this skill" htmlFor="ov-skill-description"><TextInput id="ov-skill-description" maxLength={1024} value={skill.description} onChange={(e) => setSkill({ ...skill, description: e.target.value })} /></Field>
@@ -214,7 +214,7 @@ export function OverrideDialog({
               {skillBodyTooLong && <p role="alert" className="text-12 text-pill-blocked-fg">Skill instructions are over 64 KiB. Shorten them before adding.</p>}
               <p className="text-12 text-fg-tertiary">Up to 30 added skills. The resolved result keeps agent skills first and caps the total at 30. Add the draft skill or clear it before saving.</p>
               {(skill.name || skill.description || skill.body) && <Button variant="ghost" onClick={() => setSkill({ name: "", description: "", body: "" })}>Clear skill draft</Button>}
-              <Button variant="outline" disabled={!canAddSkill} onClick={() => { setSkillsAdd([...skillsAdd, { name: skill.name.trim(), description: skill.description.trim(), body: skill.body.trim() }]); setSkill({ name: "", description: "", body: "" }); }}>Add project skill</Button>
+              <Button variant="outline" disabled={!canAddSkill} onClick={() => { setSkillsAdd([...skillsAdd, { name: skill.name.trim(), description: skill.description.trim(), body: skill.body.trim() }]); setSkill({ name: "", description: "", body: "" }); }}>Add space skill</Button>
             </section>
             <Field label="Setup commands" htmlFor="ov-setup" hint="One per line. Run in the workspace after cloning (Phase 5).">
               <TextArea id="ov-setup" mono rows={2} value={setup} onChange={(e) => setSetup(e.target.value)} placeholder="make deps" />

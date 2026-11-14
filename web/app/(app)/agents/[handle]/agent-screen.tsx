@@ -49,7 +49,7 @@ const STATUS: Record<AgentDetail["agent"]["status"], { tone: PillTone; label: st
 
 function ResolvedPanel({ detail, projects, project, onProject }: { detail: AgentDetail; projects: Schemas["Project"][]; project?: string; onProject: (key: string) => void }) {
   const r = useResolved(detail.agent.handle, project);
-  const fromProject = (f: string) => r.data?.provenance[f] === "project" && <MonoChip variant="outline">project</MonoChip>;
+  const fromProject = (f: string) => r.data?.provenance[f] === "project" && <MonoChip variant="outline">space</MonoChip>;
   const extraLines = r.data ? r.data.instructions.trim().split("\n").length - detail.spec.instructions.trim().split("\n").length : 0;
 
   return (
@@ -104,7 +104,7 @@ function OverridesPanel({ detail, onEdit }: { detail: AgentDetail; onEdit: (key:
   return (
     <section className="flex flex-col gap-1">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-13 text-fg-tertiary">Project overrides</h2>
+        <h2 className="text-13 text-fg-tertiary">Space overrides</h2>
         {without.length > 0 && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>

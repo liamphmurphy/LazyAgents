@@ -101,7 +101,7 @@ export function AllClear({ project, done, onShowDone }: { project: string; done:
       </span>
       <h2 className="type-title text-fg">All clear</h2>
       <p className="text-13 text-fg-secondary">
-        No approvals, questions, mockups, proposals or failed runs need you in {project || "All projects"}.
+        No approvals, questions, mockups, proposals or failed runs need you in {project || "All spaces"}.
       </p>
       {done > 0 && (
         <button type="button" onClick={onShowDone} className="text-13 text-accent hover:underline">
@@ -273,7 +273,7 @@ function DesktopInbox() {
               options={[{ value: "oldest", label: "Longest wait first" }, { value: "newest", label: "Newest first" }]} />
             <span className="ml-auto flex items-center gap-1.5 text-12 text-fg-tertiary">
               Project
-              <FilterMenu label="Filter project" value={project} onChange={setProject}
+              <FilterMenu label="Filter space" value={project} onChange={setProject}
                 options={[{ value: "", label: "All" }, ...(bootstrap?.projects ?? []).filter((p) => !p.archived).map((p) => ({ value: p.key, label: p.name }))]} />
             </span>
           </div>

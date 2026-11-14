@@ -72,7 +72,7 @@ export function ProjectDocs() {
   const [dragging, setDragging] = useState(false);
   const [mockup, setMockup] = useState(false);
 
-  // ?project= or the remembered project; "All projects" lists every artifact.
+  // ?project= or the remembered project; "All spaces" lists every artifact.
   const scope = useProjectScope("optional");
   const list = useArtifacts({ type, q: q || undefined, project });
 
@@ -107,7 +107,7 @@ export function ProjectDocs() {
   return (
     <>
       <TopBar
-        crumbs={[{ label: "Library", href: "/library" }, { label: "From projects" }]}
+        crumbs={[{ label: "Library", href: "/library" }, { label: "From spaces" }]}
         actions={
           <>
             <Button variant="outline" icon="plus" onClick={() => setMockup(true)}>
