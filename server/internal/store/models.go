@@ -1176,6 +1176,7 @@ type Project struct {
 	UpdatedAt     time.Time
 	Archived      bool
 	Revision      int32
+	SpaceID       *uuid.UUID
 }
 
 type ProviderLimit struct {
