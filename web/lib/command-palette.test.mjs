@@ -13,6 +13,8 @@ import {
   projectOfKey,
   promoteTop,
   pushRecent,
+  RECENT_KEY,
+  recordRecent,
   removeToken,
   snippetParts,
   sortByGroup,
@@ -116,4 +118,15 @@ test("the best hit is promoted only when grouping buried it", () => {
   assert.deepEqual(promoteTop([first, page]), [first, page]);
   const best = { group: "Agents", score: 5 };
   assert.deepEqual(promoteTop([first, best]), [{ ...best, group: "Top result" }, first]);
+});
+
+test("opening an item records it as recent, newest first, once per href", () => {
+  const m = new Map();
+  const store = { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) };
+  recordRecent(store, { id: "r1", title: "Search index", href: "/runs/r1", kind: "Runs" });
+  recordRecent(store, { id: "p1", title: "Reading list", href: "/knowledge/p1", kind: "Pages" });
+  recordRecent(store, { id: "r1", title: "Search index", href: "/runs/r1", kind: "Runs" });
+  assert.deepEqual(parseRecent(m.get(RECENT_KEY)).map((r) => r.href), ["/runs/r1", "/knowledge/p1"]);
+  // Blocked storage is skipped, not thrown.
+  assert.doesNotThrow(() => recordRecent({ getItem: () => { throw new Error("blocked"); }, setItem: () => {} }, { id: "x", title: "x", href: "/x", kind: "Runs" }));
 });

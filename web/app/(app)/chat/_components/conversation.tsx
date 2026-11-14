@@ -44,6 +44,7 @@ import { Tabs } from "@/components/ui/controls";
 import { focusActivityStep, useActivityFocus } from "./activity-focus";
 import { openThread, setDock } from "@/lib/chat-panels";
 import { isTyping } from "@/components/shell/shortcuts";
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import { addChip, chipFromRef, chipFromTarget, parseAttach, toContextRefs, typedText, type Chip } from "@/lib/chat-context";
 import { chatTitle, endedTurns, needsSwitchConfirm, runningSince, turnWindows, type EndedTurn, type TurnWindow } from "@/lib/chat-ui";
 import { cx } from "@/lib/cx";
@@ -599,6 +600,9 @@ export function Conversation({ id, onNew, actions, activityInDock = false, docke
   const followups = useChatFollowups(id).data ?? [];
 
   const c = chat.data;
+  // A chat you open on the chat page is a place to come back to; a dock's chat belongs to the page it sits beside.
+  useRecordVisit(c && !docked && !context?.hidden && c.message_count > 0
+    ? { id: `chat-${c.id}`, title: c.title || "Untitled chat", meta: (c.speaker ?? c.persona)?.name ?? "Assistant", href: `/chat/${c.id}`, kind: "Chats" } : undefined);
   const loaded = !!c;
   const running = c?.state === "running";
   // Videos sit on the reply their turn stored; the running turn's show live under it.

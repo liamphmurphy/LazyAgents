@@ -1,5 +1,6 @@
 "use client";
 
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DropdownMenu, Popover } from "radix-ui";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -128,6 +129,7 @@ export function DesignEditor({ id, beside }: { id: string; beside?: Beside }) {
   const router = useRouter();
   const search = useSearchParams();
   const ref = useDesign(id);
+  useRecordVisit(ref.data ? { id: `design-${id}`, title: ref.data.title || "Design", meta: "Design", href: `/apps/designs/${id}`, kind: "Designs" } : undefined);
   const chatId = ref.data?.chat_id ?? "";
   const chat = useChat(chatId || undefined).data;
   const persona = (chat?.speaker ?? chat?.persona)?.name ?? "Assistant";

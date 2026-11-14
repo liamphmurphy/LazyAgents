@@ -1,5 +1,7 @@
 "use client";
 
+import { useRecordVisit } from "@/components/shell/use-record-visit";
+import { runTitle } from "@/lib/run-list";
 import { TokenUsage } from "@/components/domain/token-usage";
 import { eventTokenUsage, tokenBreakdown } from "@/lib/token-usage";
 import { runCost } from "@/lib/format";
@@ -352,6 +354,7 @@ function Header({ d }: { d: RunDetail }) {
 
 export function RunLogScreen({ id }: { id: string }) {
   const { data: d, isError, error } = useRunLog(id);
+  useRecordVisit(d ? { id: `run-${id}`, title: runTitle(d.run), meta: [d.run.ticket_key, d.run.agent.name].filter(Boolean).join(" · "), href: `/runs/${id}`, kind: "Runs" } : undefined);
   const children = useDelegatedRunLogs(d?.child_runs ?? []);
   const router = useRouter();
   const control = useControlRunById(id);

@@ -240,6 +240,24 @@ export function parseRecent(raw: string | null): PaletteLink[] {
   }
 }
 
+/** Where ⌘K keeps its Recent list (localStorage). */
+export const RECENT_KEY = "la:palette-recent";
+
+type RecentStore = Pick<Storage, "getItem" | "setItem">;
+
+/**
+ * Remembers an opened item as recent, as picking it in ⌘K does: back and forward cover the last
+ * few steps, Recent the places you have been. Blocked or full storage just skips it.
+ */
+export function recordRecent(store: RecentStore, item: PaletteLink): void {
+  try {
+    const next = pushRecent(parseRecent(store.getItem(RECENT_KEY)), item);
+    store.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* Recents are a nicety. */
+  }
+}
+
 /** What the current page is about, for "New chat with … attached" and "Go to run". */
 export type PageContext =
   | { kind: "ticket"; key: string }

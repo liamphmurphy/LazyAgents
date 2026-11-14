@@ -74,6 +74,15 @@ test("a ticket key jumps to it and is listed under Recent next time", async ({ p
   await expect(results(page).getByRole("group", { name: "Recent" }).getByRole("option")).toHaveText([/WEB-3/]);
 });
 
+test("an item opened any way, not only from ⌘K, is listed under Recent", async ({ page }) => {
+  await install(page);
+  await page.goto("/tickets/WEB-1");
+  await expect(page.getByRole("heading", { name: "Build ticket modal" })).toBeVisible();
+  await page.goto("/settings");
+  await openPalette(page);
+  await expect(results(page).getByRole("group", { name: "Recent" }).getByRole("option")).toHaveText([/Build ticket modal/]);
+});
+
 test("free text returns grouped results from the server with keyboard navigation", async ({ page }) => {
   const { searches } = await install(page);
   await page.goto("/board?project=WEB");

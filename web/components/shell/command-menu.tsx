@@ -27,12 +27,12 @@ import {
   sortByGroup,
   ticketKeyFrom,
   type PaletteGroup,
+  RECENT_KEY,
   type PaletteLink,
 } from "@/lib/command-palette";
 import { NAV_GROUPS, projectSection, switchHref, withProject } from "@/lib/project-scope";
 import { rememberProject, useRememberedProject } from "./project-scope";
 
-const RECENT_KEY = "la:palette-recent";
 
 const GLYPH: Partial<Record<PaletteGroup, string>> = {
   Tickets: "◇",

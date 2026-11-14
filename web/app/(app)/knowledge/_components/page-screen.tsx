@@ -1,5 +1,6 @@
 "use client";
 
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ContextMenu, DropdownMenu } from "radix-ui";
@@ -29,6 +30,7 @@ export function PageScreen({ id }: { id: string }) {
   const q = usePage(id);
   const p = q.data;
   useKnowledgeTab(p ? { id: p.id, title: p.title, kind: "page" } : undefined);
+  useRecordVisit(p ? { id: `page-${p.id}`, title: p.title || "Untitled", meta: p.path ?? undefined, href: pageHref(p.id, p.title), kind: "Pages" } : undefined);
   if (q.error)
     return (
       <div className="p-8">

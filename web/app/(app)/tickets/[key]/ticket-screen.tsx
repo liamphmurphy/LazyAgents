@@ -1,5 +1,6 @@
 "use client";
 
+import { useRecordVisit } from "@/components/shell/use-record-visit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, ViewTransition } from "react";
@@ -301,6 +302,7 @@ export function TicketScreen({ ticketKey }: { ticketKey: string }) {
   const activity = useActivity(ticketKey, hasLiveRun(ticket.data));
   const boot = useBootstrap();
   const t = ticket.data;
+  useRecordVisit(t ? { id: `ticket-${t.key}`, title: t.title, meta: t.key, href: `/tickets/${t.key}`, kind: "Tickets" } : undefined);
   const pager = usePager(t);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
