@@ -612,6 +612,7 @@ type DesignProposal struct {
 	ResultSeq  *int32
 	CreatedAt  time.Time
 	ResolvedAt *time.Time
+	TurnID     *uuid.UUID
 }
 
 type DesignSetting struct {
