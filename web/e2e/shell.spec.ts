@@ -74,7 +74,7 @@ test("one rail switches areas; only chat screens add the Chats navigator beside 
   await expect(page.getByRole("link", { name: "Chats & personas" })).toHaveCount(0);
   const work = nav(page);
   // The areas, then Apps; Inbox left the menu: the Needs you button opens the tray instead.
-  for (const name of ["Chat", /^Runs/, "Tickets", "Reports"]) await expect(work.getByRole("link", { name, exact: typeof name === "string" })).toBeVisible();
+  for (const name of ["Chat", /^Runs/, "Tickets", "Reports", "Knowledge", "Designs"]) await expect(work.getByRole("link", { name, exact: typeof name === "string" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Needs you/ })).toBeVisible();
   const menu = page.getByRole("complementary", { name: "Main menu" });
   await expect(menu.getByRole("link", { name: "Customization" })).toHaveAttribute("href", "/customization");

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type TransitionEvent } from "react";
 import { cx } from "@/lib/cx";
 import { useNavCounts } from "@/lib/use-nav-counts";
-import { WORK_ITEMS, isActive } from "@/lib/project-scope";
+import { RAIL_APP_ITEMS, WORK_ITEMS, isActive } from "@/lib/project-scope";
 import { inChats, navigatorArea } from "@/lib/navigator";
 import { badgeLabel } from "@/lib/tab-bar";
 import { viewedChatId } from "@/lib/persona-dock";
@@ -184,7 +184,7 @@ export function Sidebar() {
               <NavLink label="Chat" href="/chat" active={inChats(pathname)}>
                 <Icon name="msg" />
               </NavLink>
-              {WORK_ITEMS.map((n) => (
+              {[...WORK_ITEMS, ...RAIL_APP_ITEMS].map((n) => (
                 <NavLink key={n.href} label={badgeLabel(n.label, n.badge, counts)} href={n.href} active={navActive(n.href)}>
                   <Icon name={n.icon} />
                   {n.badge && counts[n.badge] > 0 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
