@@ -1,7 +1,7 @@
 "use client";
 
 import { CopyButton } from "./reply-tools";
-import { useId, useMemo, useState } from "react";
+import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 import { changeTotals, filesStartOpen, langFromPath, parsePatch, STATUS_BADGE, type DiffRow } from "@/lib/code-diff";
 import { useHighlighted, type Tok } from "@/lib/highlight";
@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/icon";
 
 type Change = Schemas["ChatCodeChange"];
 
-function Counts({ additions, deletions }: { additions: number; deletions: number }) {
+export function Counts({ additions, deletions }: { additions: number; deletions: number }) {
   return (
     <span className="flex flex-none items-center gap-1.5 font-mono text-12 tabular-nums">
       <span className="text-state-done">+{additions}</span>
@@ -41,7 +41,13 @@ function Code({ text, toks }: { text: string; toks?: Tok[] }) {
   );
 }
 
-function Diff({ patch, path, active }: { patch: string; path: string; active: boolean }) {
+type LineRow = Extract<DiffRow, { kind: "add" | "del" | "ctx" }>;
+
+/**
+ * A file's highlighted diff. With `onLine`, each line gets a button to comment on it (the Code
+ * dock), and `below` renders what sits under a line (its comment).
+ */
+export function Diff({ patch, path, active, onLine, below, tall }: { patch: string; path: string; active: boolean; onLine?: (row: LineRow) => void; below?: (row: LineRow) => ReactNode; tall?: boolean }) {
   const rows = useMemo(() => parsePatch(patch), [patch]);
   // One snippet per hunk, so multi-line constructs tokenize together; `index` maps tokens back to rows.
   const hunks = useMemo(() => {
@@ -61,23 +67,37 @@ function Diff({ patch, path, active }: { patch: string; path: string; active: bo
   const byRow = new Map<number, Tok[]>();
   hunks.forEach((h, hi) => h.index.forEach((ri, li) => toks?.[hi]?.[li] && byRow.set(ri, toks[hi][li])));
   return (
-    <div className="max-h-[480px] overflow-auto" tabIndex={0} role="region" aria-label={`Diff of ${path}`}>
+    <div className={cx("overflow-auto", !tall && "max-h-[480px]")} tabIndex={0} role="region" aria-label={`Diff of ${path}`}>
       <div className="min-w-max font-mono text-12 leading-[1.55]">
         {rows.map((r, i) => (
-          <div key={i} className={cx("flex", ROW_CLASS[r.kind])} data-diff-row={r.kind}>
-            {r.kind === "hunk" || r.kind === "meta" ? (
-              <span className="whitespace-pre px-3 py-px">{r.text}</span>
-            ) : (
-              <>
-                <span aria-hidden className="w-10 flex-none select-none pr-2 text-right text-fg-tertiary">{r.oldNo}</span>
-                <span aria-hidden className="w-10 flex-none select-none pr-2 text-right text-fg-tertiary">{r.newNo}</span>
-                <span aria-hidden className="w-4 flex-none select-none text-center text-fg-tertiary">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
-                <span className="whitespace-pre pr-3 text-fg-2">
-                  <Code text={r.text} toks={byRow.get(i)} />
-                </span>
-              </>
-            )}
-          </div>
+          <Fragment key={i}>
+            <div className={cx("group/line flex", ROW_CLASS[r.kind])} data-diff-row={r.kind}>
+              {r.kind === "hunk" || r.kind === "meta" ? (
+                <span className="whitespace-pre px-3 py-px">{r.text}</span>
+              ) : (
+                <>
+                  {onLine && (
+                    <button
+                      type="button"
+                      aria-label={`Comment on line ${r.newNo ?? r.oldNo}`}
+                      title="Comment on this line"
+                      onClick={() => onLine(r)}
+                      className="w-5 flex-none select-none text-center text-accent opacity-0 hover:opacity-100 focus-visible:opacity-100 group-hover/line:opacity-100"
+                    >
+                      +
+                    </button>
+                  )}
+                  <span aria-hidden className="w-10 flex-none select-none pr-2 text-right text-fg-tertiary">{r.oldNo}</span>
+                  <span aria-hidden className="w-10 flex-none select-none pr-2 text-right text-fg-tertiary">{r.newNo}</span>
+                  <span aria-hidden className="w-4 flex-none select-none text-center text-fg-tertiary">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
+                  <span className="whitespace-pre pr-3 text-fg-2">
+                    <Code text={r.text} toks={byRow.get(i)} />
+                  </span>
+                </>
+              )}
+            </div>
+            {below && r.kind !== "hunk" && r.kind !== "meta" && below(r)}
+          </Fragment>
         ))}
       </div>
     </div>
@@ -147,7 +167,7 @@ function FileRow({ c, open, onToggle, active }: { c: Change; open: boolean; onTo
 }
 
 /** Files an assistant reply changed in the persona's repo: collapsed by default, a highlighted diff per file. */
-export function CodeChanges({ changes }: { changes?: Change[] }) {
+export function CodeChanges({ changes, onReview }: { changes?: Change[]; onReview?: () => void }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   // Per-file overrides of the default (few files start open).
@@ -172,9 +192,16 @@ export function CodeChanges({ changes }: { changes?: Change[] }) {
           <Counts {...totals} />
         </span>
       </button>
-      {open && changes.some((c) => c.patch) && (
-        <div className="flex justify-end border-t border-border-subtle px-2 py-1">
-          <CopyButton label="Copy diff" text={changes.flatMap((c) => (c.patch ? [`--- ${c.path}\n+++ ${c.path}\n${c.patch}`] : [])).join("\n")} />
+      {open && (changes.some((c) => c.patch) || onReview) && (
+        <div className="flex justify-end gap-1 border-t border-border-subtle px-2 py-1">
+          {onReview && (
+            <button type="button" onClick={onReview} className="rounded px-2 py-0.5 text-12 text-accent hover:bg-hover" data-testid="review-branch">
+              Review branch
+            </button>
+          )}
+          {changes.some((c) => c.patch) && (
+            <CopyButton label="Copy diff" text={changes.flatMap((c) => (c.patch ? [`--- ${c.path}\n+++ ${c.path}\n${c.patch}`] : [])).join("\n")} />
+          )}
         </div>
       )}
       {open && (

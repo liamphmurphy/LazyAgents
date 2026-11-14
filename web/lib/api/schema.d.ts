@@ -3201,6 +3201,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chats/{id}/code-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Each repository's branch against its default branch, as the runner last read it
+         * @description Committed and uncommitted work, kept after the chat's workspace is
+         *     cleaned up. live is set while a turn is changing it.
+         */
+        get: operations["getChatCodeReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chats/{id}/push-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        /** Branches a persona asked to push from this chat, open ones and the latest decided */
+        get: operations["listPushRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push and open the pull request once, always for this repository, or decline
+         * @description Approving points the branch at the commit the card showed (staged on
+         *     GitHub when the persona's turn ended, so the chat's workspace isn't
+         *     needed) and opens the pull request, or reports the one already open.
+         *     It never force-pushes: a branch that moved since is refused, and the
+         *     request is marked failed with why.
+         */
+        post: operations["decidePushRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repository-push-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Repositories whose pushes the person always allows */
+        get: operations["listRepositoryPushPolicies"];
+        /** Always allow a repository's pushes, or ask again */
+        put: operations["setRepositoryPushPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats/{id}/connector-proposals": {
         parameters: {
             query?: never;
@@ -8782,6 +8868,86 @@ export interface components {
             patch?: string;
             /** @description The patch was cut short or left out to stay within the limits */
             truncated: boolean;
+        };
+        CodeCommit: {
+            sha: string;
+            subject: string;
+        };
+        CodeReview: {
+            /** @description Repository URL */
+            repository: string;
+            /** @description The checked-out branch; absent when detached */
+            branch?: string;
+            /** @description Where the branch leaves the default branch */
+            base_sha?: string;
+            head_sha?: string;
+            /** @description Commits on the branch, newest first, at most 100 */
+            commits: components["schemas"]["CodeCommit"][];
+            /** @description Committed and uncommitted changes against base_sha, within the same limits as a turn's changes */
+            files: components["schemas"]["ChatCodeChange"][];
+            /** @description There are uncommitted changes */
+            dirty: boolean;
+            /** @description A turn is running and may still change it */
+            live: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CodeReviewList: {
+            repositories: components["schemas"]["CodeReview"][];
+        };
+        PushRequest: {
+            /** Format: uuid */
+            id: string;
+            repository: string;
+            branch: string;
+            /** @description The pull request's base, the repository's default branch */
+            base_branch?: string;
+            base_sha?: string;
+            /** @description The exact commit that ships */
+            head_sha?: string;
+            /** @description What the push adds to GitHub, newest first */
+            commits: components["schemas"]["CodeCommit"][];
+            files: components["schemas"]["ChatCodeChange"][];
+            title: string;
+            body: string;
+            draft: boolean;
+            /**
+             * @description staging until the persona's turn ends; pending waits for the person
+             * @enum {string}
+             */
+            state: "staging" | "pending" | "pushing" | "pushed" | "declined" | "failed";
+            /** @description Pushed because the person always allows the repository */
+            auto: boolean;
+            pr_url?: string;
+            pr_number?: number;
+            /** @description Why it failed or was replaced */
+            error?: string;
+            persona?: components["schemas"]["PersonaSummary"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            decided_at?: string;
+        };
+        PushRequestList: {
+            requests: components["schemas"]["PushRequest"][];
+        };
+        PushRequestDecision: {
+            /**
+             * @description push pushes once; always pushes and lets later requests for this repository push without asking; deny declines it
+             * @enum {string}
+             */
+            decision: "push" | "always" | "deny";
+            /** @description The pull request's title, if the person edited it */
+            title?: string;
+            body?: string;
+            draft?: boolean;
+        };
+        RepositoryPushPolicy: {
+            repository: string;
+            auto_push: boolean;
+        };
+        RepositoryPushPolicyList: {
+            policies: components["schemas"]["RepositoryPushPolicy"][];
         };
         ChatModel: {
             /** @description Value for the model field, e.g. opus-5.5 or gpt-5-codex */
@@ -14729,6 +14895,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketChangeRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatCodeReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeReviewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPushRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushRequestList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decidePushRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushRequestDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRepositoryPushPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryPushPolicyList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setRepositoryPushPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositoryPushPolicy"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryPushPolicy"];
                 };
             };
             default: components["responses"]["Error"];

@@ -25,6 +25,10 @@ const prefixes: Record<string, string[]> = {
   audio: ["audio"],
   // A chat's playground starting, resetting or stopping on the runner.
   playground: ["playgrounds"],
+  // A coding chat's Code dock, refreshed while a turn edits the workspace.
+  code_review: ["code-review"],
+  // A persona's push request staged, approved, pushed or failed.
+  push_request: ["push-requests"],
   // A persona edit changes the name, color and avatar every chat using it embeds.
   persona: ["personas", "chats", "dock"],
 };
@@ -33,5 +37,6 @@ const prefixes: Record<string, string[]> = {
 export function invalidatedBy(type: string): string[] {
   if (type === "run.events") return ["runs"];
   const keys = prefixes[type.split(".")[0]] ?? [];
-  return type === "video.updated" || type === "audio.updated" ? keys : [...keys, "dashboard", "epics", "agent-overviews"];
+  const quiet = ["video.updated", "audio.updated", "code_review.updated", "push_request.updated"];
+  return quiet.includes(type) ? keys : [...keys, "dashboard", "epics", "agent-overviews"];
 }

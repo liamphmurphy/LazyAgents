@@ -3,12 +3,12 @@
 // links and reloads behave as before; `panel` only picks which open panel a sheet shows.
 // Kept free of React so `npm run test:unit` covers it.
 
-export type ChatPanel = "design" | "canvas" | "playground";
+export type ChatPanel = "design" | "canvas" | "playground" | "code";
 
 /** How the host lays its panels out: beside the chat (desktop) or as one full-height sheet with a switch (compact). */
 export type PanelLayout = "side" | "sheet";
 
-export const PANELS: ChatPanel[] = ["design", "canvas", "playground"];
+export const PANELS: ChatPanel[] = ["design", "canvas", "playground", "code"];
 
 /** A tab in the desktop dock: the open panels, a thread or linked item while one is open, and Activity, which is always there. */
 export type DockTabId = ChatPanel | "thread" | "item" | "activity";
@@ -25,14 +25,15 @@ export function openPanels(q: Query, designIds: readonly string[]): ChatPanel[] 
   if (!full && focus && focus !== "none" && designIds.includes(focus)) open.push("design");
   if (full) open.push("canvas");
   if (pg === "open" || pg === "full") open.push("playground");
+  if (q.get("code") === "open") open.push("code");
   return open;
 }
 
-/** The one panel a sheet shows: the one switched to, if it's still open, else the frontmost (a fullscreen canvas, then the playground, then a design). */
+/** The one panel a sheet shows: the one switched to, if it's still open, else the frontmost (a fullscreen canvas, then the playground, then the code, then a design). */
 export function activePanel(q: Query, open: readonly ChatPanel[]): ChatPanel | undefined {
   const picked = q.get("panel") as ChatPanel | null;
   if (picked && open.includes(picked)) return picked;
-  return (["canvas", "playground", "design"] as const).find((p) => open.includes(p));
+  return (["canvas", "playground", "code", "design"] as const).find((p) => open.includes(p));
 }
 
 /** The query that shows `panel`, opening it if it's closed. A design needs the id to open; without one the query is unchanged. */
@@ -44,6 +45,8 @@ export function switchPanel(q: URLSearchParams, panel: ChatPanel, opts: { design
     next.delete("canvas_view");
   } else if (panel === "canvas") {
     next.set("canvas_view", "full");
+  } else if (panel === "code") {
+    next.set("code", "open");
   } else if (next.get("playground") !== "open" && next.get("playground") !== "full") {
     next.set("playground", "open");
   }
@@ -69,6 +72,7 @@ export function closePanel(q: URLSearchParams, panel: ChatPanel): URLSearchParam
   const next = new URLSearchParams(q.toString());
   if (panel === "design") next.set("canvas", "none");
   else if (panel === "canvas") next.delete("canvas_view");
+  else if (panel === "code") next.delete("code");
   else {
     next.delete("playground");
     next.delete("playground_tab");
